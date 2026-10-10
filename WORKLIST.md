@@ -93,7 +93,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
   in `src/` refers to designs A, B or C.
 
 ### CL.3 — Remove comparison tooling and unused packages
-- **Status:** doing (agent: abf095122f60a9a6f)
+- **Status:** done
 - **Depends on:** CL.2
 - **Files:** `package.json`, `package-lock.json`, `scripts/**`, `tsconfig*.json`,
   `src/manual/fonts/**`, `docs/**`, `.claude/launch.json`, `.gitignore`
@@ -108,7 +108,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
   remains (check package.json against actual imports).
 
 ### CL.4 — One design doc, updated docs
-- **Status:** todo
+- **Status:** doing (agent: ac33b68e4e9393c98)
 - **Depends on:** CL.3
 - **Files:** `DESIGN.md`, `DESIGN_RULES.md`, `README.md`, `CLAUDE.md`, `src/manual/README.md`
 - **Do:**
@@ -219,8 +219,8 @@ model**.
   identical to before; nothing reader-specific is in `src/ui/`.
 
 ### LB.2 — Library data and a scripted agent
-- **Status:** todo
-- **Depends on:** CL.5
+- **Status:** doing (agent: a2f0d613630994b75)
+- **Depends on:** CL.3 (its folders are new, so it doesn't need to wait for the docs)
 - **Files:** `src/library/**`, `src/agent/**`, `package.json` (scripts only)
 - **Do:**
   - **`src/library/`:**
