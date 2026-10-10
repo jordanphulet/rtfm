@@ -1,0 +1,312 @@
+.library-b .panel {
+  --panel-inset: max(var(--hang), var(--space-4));
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: min(
+    var(--panel-max),
+    100dvh - var(--space-8) - var(--space-4) - var(--bar-height) - var(--library-peek)
+  );
+  border: 1px solid var(--rule-strong);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+  background: var(--ground-raised);
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--space-2)));
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out),
+    visibility 0s linear var(--dur-base);
+}
+
+.library-b .panel[data-open] {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.library-b .panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The cue stack */
+
+.library-b .cues {
+  margin: 0;
+  padding: var(--space-4) var(--space-4) var(--space-5) var(--panel-inset);
+  list-style: none;
+}
+
+.library-b .cue-earlier + .cue-earlier {
+  margin-top: var(--space-1);
+}
+
+.library-b .cue-current,
+.library-b .cue-earlier[data-unfolded] + .cue-earlier {
+  margin-top: var(--space-4);
+}
+
+.library-b .cue-current:first-child {
+  margin-top: 0;
+}
+
+.library-b .cue-ask,
+.library-b .cue-toggle,
+.library-b .cue-reply {
+  max-width: var(--measure);
+}
+
+.library-b .cue-ask {
+  position: relative;
+  margin: 0;
+  font: 500 var(--text-reply) / var(--leading-reply) var(--font-sans);
+  color: var(--ink-strong);
+  text-wrap: pretty;
+}
+
+.library-b .cue-number {
+  position: absolute;
+  right: calc(100% + var(--space-4));
+  font: 500 var(--text-reply) / var(--leading-reply) var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.library-b .cue-reply {
+  margin-top: var(--space-2);
+}
+
+.library-b .cue-reply[hidden] {
+  display: none;
+}
+
+/* An earlier exchange: one line that unfolds its reply */
+
+.library-b .cue-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: calc(100% + 2 * var(--space-2));
+  margin-inline: calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: none;
+  font: 400 var(--text-reply) / var(--leading-reply) var(--font-sans);
+  color: var(--ink-muted);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--dur-quick) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out);
+}
+
+.library-b .cue-toggle .cue-number {
+  right: calc(100% + var(--space-4) - var(--space-2));
+}
+
+.library-b .cue-toggle:hover {
+  color: var(--ink-strong);
+  background: var(--ground-tint);
+}
+
+.library-b .cue-toggle-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-b .cue-earlier[data-unfolded] .cue-toggle {
+  font-weight: 500;
+  color: var(--ink-strong);
+}
+
+.library-b .cue-earlier[data-unfolded] .cue-toggle-text {
+  white-space: normal;
+  text-wrap: pretty;
+}
+
+.library-b .chevron {
+  flex: none;
+  width: var(--chevron-size);
+  height: var(--chevron-size);
+  margin: 0 var(--space-1) calc(var(--chevron-size) / 2);
+  border: solid var(--ink-faint);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.library-b .cue-earlier[data-unfolded] .chevron {
+  transform: rotate(45deg);
+}
+
+.library-b .cue-earlier .cue-reply {
+  animation: cue-reply-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes cue-reply-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Thinking, and the write head on the live reply */
+
+.library-b .thinking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--leading-reply);
+  margin: 0;
+  font: 400 var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--cue);
+}
+
+.library-b .cue-current :is(.reply > *, .thinking) {
+  position: relative;
+}
+
+.library-b .cue-current :is(.reply > :last-child, .thinking)::after {
+  content: "";
+  position: absolute;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  left: calc(-1 * var(--write-head-offset));
+  width: var(--write-head-width);
+  background: var(--cue);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform var(--dur-settle) var(--ease-in-out);
+}
+
+.library-b .cue-current[data-live] :is(.reply > :last-child, .thinking)::after {
+  transform: scaleY(1);
+  transform-origin: top;
+  animation: cue-write-head-in var(--dur-quick) var(--ease-out);
+}
+
+.library-b .cue-current[data-live] :is(.reply > :last-child, .thinking)::before {
+  content: "";
+  position: absolute;
+  bottom: var(--space-1);
+  left: calc(-1 * var(--write-head-offset) - var(--write-head-lamp-inset));
+  width: var(--write-head-lamp);
+  height: var(--write-head-lamp);
+  background: var(--cue);
+  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
+}
+
+@keyframes cue-write-head-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+/* The foot */
+
+.library-b .panel-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--space-10);
+  padding: 0 var(--space-4) 0 var(--panel-inset);
+  border-top: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.library-b .panel-hide {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  font: 500 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+}
+
+.library-b .panel-hint {
+  font: 400 var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.library-b .panel-hint::before {
+  content: "·";
+  margin-right: var(--space-2);
+}
+
+.library-b .panel-latest {
+  margin-left: auto;
+  margin-right: calc(-1 * var(--space-2));
+  font: 400 var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: inherit;
+  visibility: hidden;
+}
+
+.library-b .panel-latest[data-visible] {
+  visibility: visible;
+}
+
+@media not ((hover: hover) and (pointer: fine)), (max-width: 767px) {
+  .library-b .panel-foot .keycap,
+  .library-b .panel-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .library-b .cue-number,
+  .library-b .cue-toggle .cue-number {
+    position: static;
+    margin-right: var(--space-2);
+  }
+
+  .library-b .cue-toggle .cue-number {
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .library-b .panel {
+    top: calc(100% + var(--space-2));
+    left: calc(-1 * var(--page-inline));
+    right: calc(-1 * var(--page-inline));
+    max-height: calc(100dvh - var(--bar-height) - 2 * var(--space-2) - var(--space-16));
+    border-inline: 0;
+    border-top: 1px solid var(--rule-strong);
+    border-radius: 0;
+  }
+
+  .library-b .cues {
+    padding-inline: var(--page-inline);
+  }
+
+  .library-b .panel-foot {
+    height: var(--tap);
+    padding-inline: var(--page-inline);
+  }
+
+  .library-b .panel-hide {
+    min-height: var(--tap);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-b .cue-current[data-live] :is(.reply > :last-child, .thinking)::after,
+  .library-b .cue-current[data-live] :is(.reply > :last-child, .thinking)::before,
+  .library-b .cue-earlier .cue-reply {
+    animation: none;
+  }
+}

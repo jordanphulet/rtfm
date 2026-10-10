@@ -1,117 +1,82 @@
-import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
-import { useAgent } from "../../agent";
-import { deleteManual, formatLastOpened, useLibrary, type LibraryManual } from "../../library";
-import { ReplyMarkdown, Sheet } from "../../ui";
-import "./library.css";
+import { useLayoutEffect, useRef, useState } from "react";
+import { deleteManual, useLibrary, type LibraryManual } from "../../library";
+import { CueLine, type CueLineHandle } from "./CueLine";
+import { DeleteConfirmation } from "./DeleteConfirmation";
+import { Shelf } from "./Shelf";
+import "../../ui";
+import "./tokens.css";
+import "./page.css";
+
+type FocusAfterDelete = { manualId: string } | "empty-state";
 
 export default function Library() {
+  const manuals = useLibrary();
   const [toDelete, setToDelete] = useState<LibraryManual | null>(null);
+  const [leavingId, setLeavingId] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const cueLineRef = useRef<CueLineHandle>(null);
+  const emptyStartRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const focusAfterDeleteRef = useRef<FocusAfterDelete | null>(null);
+
+  useLayoutEffect(() => {
+    if (toDelete !== null || !openerRef.current) return;
+    openerRef.current.focus();
+    openerRef.current = null;
+  }, [toDelete]);
+
+  useLayoutEffect(() => {
+    const target = focusAfterDeleteRef.current;
+    if (!target) return;
+    focusAfterDeleteRef.current = null;
+    if (target === "empty-state") emptyStartRef.current?.focus();
+    else rootRef.current?.querySelector<HTMLElement>(`[data-manual-id="${target.manualId}"] .row-link`)?.focus();
+  }, [manuals]);
+
+  function askToDelete(manual: LibraryManual, opener: HTMLElement) {
+    openerRef.current = opener;
+    setToDelete(manual);
+  }
+
+  function confirmDelete() {
+    if (!toDelete) return;
+    const index = manuals.indexOf(toDelete);
+    const neighbour = manuals[index + 1] ?? manuals[index - 1];
+    focusAfterDeleteRef.current = neighbour ? { manualId: neighbour.id } : "empty-state";
+    openerRef.current = null;
+    setToDelete(null);
+    setLeavingId(toDelete.id);
+  }
+
+  function finishDelete(manual: LibraryManual) {
+    deleteManual(manual.id);
+    setLeavingId(null);
+    setAnnouncement(`Deleted “${manual.title}”. ${manualsLeft(manuals.length - 1)}`);
+  }
 
   return (
-    <div className="ui library-b">
-      <main inert={toDelete !== null}>
-        <h1>Library</h1>
-        <Conversation />
-        <Manuals onDelete={setToDelete} />
-      </main>
-      <DeleteConfirmation manual={toDelete} onClose={() => setToDelete(null)} />
+    <div ref={rootRef} className="ui library-b">
+      <div className="page" inert={toDelete !== null}>
+        <CueLine ref={cueLineRef} libraryIsEmpty={manuals.length === 0} />
+        <Shelf
+          manuals={manuals}
+          leavingId={leavingId}
+          emptyStartRef={emptyStartRef}
+          onDelete={askToDelete}
+          onCollapsed={finishDelete}
+          onStartNewManual={() => cueLineRef.current?.startNewManual()}
+        />
+      </div>
+      <DeleteConfirmation manual={toDelete} onKeep={() => setToDelete(null)} onDelete={confirmDelete} />
+      <p className="visually-hidden" aria-live="polite">
+        {announcement}
+      </p>
     </div>
   );
 }
 
-function Conversation() {
-  const { messages, status, send } = useAgent();
-  const [draft, setDraft] = useState("");
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (status !== "idle") return;
-    send(draft);
-    setDraft("");
-  }
-
-  return (
-    <section aria-label="Conversation">
-      {messages.map((message, index) => (
-        <article key={message.id}>
-          <strong>{message.role === "user" ? "You" : "Librarian"}</strong>
-          {message.role === "user" ? (
-            <p>{message.text}</p>
-          ) : (
-            <ReplyMarkdown>{message.text}</ReplyMarkdown>
-          )}
-          {status === "streaming" && index === messages.length - 1 && <span>▍</span>}
-        </article>
-      ))}
-      {status === "thinking" && <p>Thinking…</p>}
-      <form onSubmit={submit}>
-        <input
-          data-shot="agent-input"
-          aria-label="Ask the librarian"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <button type="submit" disabled={status !== "idle"}>
-          Send
-        </button>
-      </form>
-    </section>
-  );
-}
-
-function Manuals({ onDelete }: { onDelete: (manual: LibraryManual) => void }) {
-  const manuals = useLibrary();
-  if (manuals.length === 0) return <p>No manuals.</p>;
-
-  return (
-    <ul>
-      {manuals.map((manual) => (
-        <li key={manual.id}>
-          <Link to="/read" className="link">
-            {manual.title}
-          </Link>
-          <p>{manual.subtitle}</p>
-          <p>
-            {manual.writtenCount} of {manual.sectionCount} sections written · opened{" "}
-            {formatLastOpened(manual.lastOpenedAt)}
-          </p>
-          <button type="button" data-shot="delete" onClick={() => onDelete(manual)}>
-            Delete<span className="visually-hidden"> {manual.title}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-interface DeleteConfirmationProps {
-  manual: LibraryManual | null;
-  onClose: () => void;
-}
-
-function DeleteConfirmation({ manual, onClose }: DeleteConfirmationProps) {
-  function confirm() {
-    if (manual) deleteManual(manual.id);
-    onClose();
-  }
-
-  return (
-    <Sheet
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="delete-title"
-      open={manual !== null}
-      onClose={onClose}
-      className="confirm"
-    >
-      <h2 id="delete-title">Delete {manual?.title}?</h2>
-      <button type="button" onClick={onClose}>
-        Keep it
-      </button>
-      <button type="button" onClick={confirm}>
-        Delete
-      </button>
-    </Sheet>
-  );
+function manualsLeft(count: number): string {
+  if (count === 0) return "No manuals left.";
+  return count === 1 ? "1 manual left." : `${count} manuals left.`;
 }
