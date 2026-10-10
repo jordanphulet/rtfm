@@ -51,7 +51,7 @@ of any existing task that must now wait for it.
 - **Only the orchestrator commits.** Agents never run git commands that change anything.
 - **Agents never edit this file.** They report back, and the orchestrator updates statuses.
 - Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
-  `src/manual/README.md` (`src/shared/README.md` until CL.2 renames it). It asks the agent to report back with the files it changed, how it
+  `src/manual/README.md`. It asks the agent to report back with the files it changed, how it
   checked its work, and anything left unresolved.
 - Agents work in the same checkout at the same time, so they **must stay inside their task's
   Files**. Two tasks that touch the same file never run at the same time.
@@ -108,7 +108,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
   remains (check package.json against actual imports).
 
 ### CL.4 — One design doc, updated docs
-- **Status:** doing (agent: ac33b68e4e9393c98)
+- **Status:** done
 - **Depends on:** CL.3
 - **Files:** `DESIGN.md`, `DESIGN_RULES.md`, `README.md`, `CLAUDE.md`, `src/manual/README.md`
 - **Do:**
@@ -129,7 +129,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
   comparison, or deleted files.
 
 ### CL.5 — Final check
-- **Status:** todo
+- **Status:** doing (agent: a7beaf44d6bc1ba57)
 - **Depends on:** CL.4
 - **Files:** anything, for small fixes only
 - **Do:**
