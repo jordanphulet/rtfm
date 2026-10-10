@@ -21,14 +21,20 @@ export function streamBody(
   onProgress: (shownLength: number) => void,
   onDone: () => void,
 ) {
-  const ends = chunkEnds(body);
   const freeze = freezeFromUrl();
-
   if (freeze !== undefined) {
-    onProgress(ends.findLast((end) => end <= freeze * body.length) ?? 0);
+    onProgress(frozenLength(body, freeze));
     return;
   }
+  setTimeout(() => streamChunks(body, onProgress, onDone), FIRST_CHUNK_DELAY_MS);
+}
 
+export function streamChunks(
+  text: string,
+  onProgress: (shownLength: number) => void,
+  onDone: () => void,
+) {
+  const ends = chunkEnds(text);
   let index = 0;
   const sendNextChunk = () => {
     onProgress(ends[index]);
@@ -36,7 +42,11 @@ export function streamBody(
     if (index < ends.length) setTimeout(sendNextChunk, CHUNK_INTERVAL_MS);
     else onDone();
   };
-  setTimeout(sendNextChunk, FIRST_CHUNK_DELAY_MS);
+  sendNextChunk();
+}
+
+export function frozenLength(text: string, fraction: number): number {
+  return chunkEnds(text).findLast((end) => end <= fraction * text.length) ?? 0;
 }
 
 function freezeFromUrl(): number | undefined {
