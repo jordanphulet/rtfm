@@ -303,7 +303,7 @@ Screenshot caveats to include in every design agent's brief:
   accounted for.
 
 ### P3.switcher — Move the dev design switcher
-- **Status:** doing (agent: ac8d30f9625d01062)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `src/App.tsx`
 - **Do:** move the A | B | C switcher so it never covers a design's controls at any width, and
