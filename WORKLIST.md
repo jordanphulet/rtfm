@@ -289,7 +289,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P3 — Fix (one round only)
 
 ### P3.A.fix · P3.B.fix · P3.C.fix
-- **Status:** A: done · B: done · C: doing (agent: a395da211fdfd8ec3)
+- **Status:** A: done · B: done · C: done
 - **Depends on:** the matching P2.x.review
 - **Agent:** the builder from P1.x.build if it's still available (`SendMessage`); otherwise a new
   agent given the same brief
@@ -315,7 +315,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P4 — Hand-off
 
 ### P4.1 — Comparison
-- **Status:** todo
+- **Status:** doing (agent: a3dc879b588bab46d)
 - **Depends on:** P3.A.fix, P3.B.fix, P3.C.fix, P3.switcher
 - **Files:** `docs/comparison/**`, `docs/COMPARISON.md`
 - **Do:**
