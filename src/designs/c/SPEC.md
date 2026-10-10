@@ -54,9 +54,11 @@ for you.
 
 ## Tokens
 
-There is one source, `src/designs/c/tokens.ts`. It exports the values and a `cssVariables` object
-that is set as custom properties on the design root. CSS, the WebGL scene and the developing-text
-hook all read from it.
+There is one source, `src/designs/c/tokens.ts`. It exports the values, plus `tokenStylesheet`,
+which the design renders as one `<style>` that declares every custom property on `:root`, with the
+phone overrides in a `max-width: 600px` block. CSS, the WebGL scene and the developing-text hook
+all read from it. Media-query breakpoints are written as literals in CSS, because custom
+properties can’t be used in media queries.
 
 ### Typefaces
 
@@ -77,7 +79,8 @@ sit only one to three steps above the body, so the running text dominates.
 | Token | Desktop px/lh | Phone px/lh | Face | Use |
 | --- | --- | --- | --- | --- |
 | `--size-micro` | 12/16 | 12/16 | Sans 600, uppercase, +0.06em | Eyebrows (“Next”, “Footnotes”), table headers, H4 |
-| `--size-small` | 15/24 | 13/20 | Sans 400 | Meta line, UI rows, previews, captions |
+| `--size-caption` | 13/20 | 13/20 | Sans 400 | Drawer summaries, legend, lamp count, preview state |
+| `--size-small` | 15/24 | 13/20 | Sans 400 | Meta line, UI rows, previews, house caption |
 | `--size-summary` | 18/28 | 16/24 | Sans 400, `--ink-2` | The section summary under the title; start-page summaries |
 | `--size-data` | 18/28 | 16/24 | Sans 400, `tnum` | Tables |
 | `--size-note` | 18/28 | 16/26 | Literata, `--ink-2` | Footnotes |
@@ -129,9 +132,10 @@ Contrast is against `--bg`, with the value on `--bg-hover` in brackets.
 | `--lamp` | `#E0A85E` | **Being written**: writing marks, the flickering window | 9.1 |
 | `--fresh-1/2/3` | `color-mix(in oklab, var(--ink) 30% / 55% / 80%, var(--bg))` | The developing tail | — |
 
-House-only tokens: `--wall #141B23`, `--trim #1C2530`, `--roof #0F151B`, `--glass #111922`
-(an unwritten window), `--moon #9AA8B8` (key light), `--sky #2A3644` (hemisphere fill). Warm colour
-appears only in windows and state marks.
+House-only colours (in `tokens.ts`, used only by the scene, so they are not CSS variables):
+`wall #2A3542`, `trim #344252`, `roof #1F2833`, `glass #0C1219` (an unwritten window), `moon
+#B4C3D4` (key light), `sky #3A4A5C` (hemisphere fill). They are set lighter than the page, because
+the dim moonlight darkens them on screen. Warm colour appears only in windows and state marks.
 
 ### Radii, timing, layers
 
@@ -255,7 +259,7 @@ narrow layouts keep the bottom bar).
   - The manual title (Literata 21, linking to `/c`).
   - A lamp count: a lit-window mark followed by “7 of 18 rooms lit” (small, `--ink-3`, `tnum`).
   - A 40×40 close button labelled “Close contents”.
-- **Rows:** small sans at 15px, 36px tall (44px on phone), laid out as `[window mark] 12px [label,
+- **Rows:** small sans at 15px, 40px tall (48px on phone), laid out as `[window mark] 12px [label,
   3.5ch, tnum, --ink-3] [title]`. Chapter headings are Literata 15/24 at weight 600, 24px above
   their group.
 - **Appendices:** 32px of space, a 1px `--line-strong` **ground line**, the eyebrow “APPENDICES ·
@@ -267,8 +271,11 @@ narrow layouts keep the bottom bar).
 - **Behaviour:**
   - `role="dialog"` with `aria-modal="true"`.
   - Everything outside the drawer gets `inert`, which is the focus trap.
-  - On open, focus goes to the current row, scrolled to the middle.
-  - Escape, a scrim click, close or choosing a section closes it, and focus returns to the toggle.
+  - On open, focus goes to the current row, scrolled into view if needed. The panel itself has
+    `tabIndex={-1}`, so clicking plain text inside it keeps focus in the drawer.
+  - Escape (listened for on the document while open), a scrim click, close or choosing a section
+    closes it. Focus returns to the toggle after `inert` is lifted.
+  - The shell stays mounted across navigation. Only `SectionPage` is keyed by section id.
 
 ### Previous and next
 
@@ -278,8 +285,10 @@ narrow layouts keep the bottom bar).
   21). Next also shows its summary (sans 15, `--ink-3`).
 - **Eyebrows** name the boundary being crossed: “NEXT CHAPTER · 3”, “APPENDIX A”, “START” before
   1.1, and “BACK TO THE START” after B.2.
-- **Keyboard:** ← and → step between sections when the drawer is closed, no modifier is held and
-  focus isn’t in a text field.
+- **Keyboard:** ← and → step between sections when the drawer is closed and no modifier is held.
+  Auto-repeat and already-handled events are ignored, so a held key moves one section and doesn’t
+  open every section it passes. The keys are left alone in form fields and in the focusable
+  `.c-wide` table and code wrappers, which need them for sideways scrolling.
 - **Navigating** resets the scroll to the top. There is no route transition.
 
 ### Keyboard and focus
@@ -318,12 +327,15 @@ narrow layouts keep the bottom bar).
 **The head never changes size.** The meta line, title and summary render in every state. The first
 paragraph replaces the waiting line at the same y position.
 
-**The developing tail.** `useDevelopingText(proseRef, status)` uses the CSS Custom Highlight API,
+**The developing tail.** `useDevelopingText(proseRef, status, text)` uses the CSS Custom Highlight API,
 and works by **position**, not by timer, so a frozen screenshot shows it.
 - **When:** after each render while `status === "writing"` (in `useLayoutEffect`).
-- **What it measures:** it walks the **rendered** text nodes of the prose with a `TreeWalker` that
-  skips `section[data-footnotes]`. The footnotes block is the prose’s last child and sits after
-  the live edge.
+- **What it measures:** it walks **backwards** from the end of the prose with a `TreeWalker`
+  (`previousNode()`), collecting rendered text nodes until it has about 200 characters. It skips
+  `section[data-footnotes]` (the prose’s last child, which sits after the live edge) and hidden
+  text. Level boundaries move forward to the next word start, and a new block (paragraph, list
+  item, cell…) counts as a word start.
+- **Support:** if `CSS.highlights` is missing, the hook does nothing and words simply appear.
 - **The three levels, from the end:**
 
   | Characters from the end | Highlight | Ink |
@@ -366,11 +378,16 @@ never render partially, so they always use `balance`.
 - **When it shows:** **Follow the writing** fades in over `--t-base` while the section is writing
   and the end of the prose is more than one line below the viewport.
 - **Look:** 36px tall, `--bg-raised`, 1px `--line-strong` border, 2px radius, small sans in
-  `--ink-2`, with the lamp mark and the down-arrow glyph. It is fixed 32px from the bottom and
-  centred on the column (16px above the bar on narrow widths).
+  `--ink-2`, with the lamp mark and the down-arrow glyph.
+- **Position:** it sits in the column right after the prose, `position: sticky` 32px from the
+  viewport bottom (16px above the bar on narrow widths), centred on the column. It is rendered only
+  while the section is writing. The space it frees is below the live edge.
+- **The threshold** is the prose’s computed line-height, so it is right on phone too. While the
+  button has focus it stays shown, so it is never made `inert` under the keyboard.
 - **Click:** scrolls the newest line to two-thirds of the way down the viewport, then follows it as
   chunks arrive. The label becomes “Following · stop”.
-- **Stopping:** any upward scroll, PageUp, Home, a second click, or the end of writing.
+- **Stopping:** an upward wheel, any touch scroll, ArrowUp, PageUp, Home, a second click, or the
+  end of writing.
 
 ## Markdown elements
 
@@ -414,7 +431,7 @@ React 19 logs that as an error and the screenshot script fails on console errors
   24px to the left so the code aligns with the prose, scroll inside themselves, and have no syntax
   colour.
 - **Inline code:** 0.84em mono on `--bg-raised`, padded 0.1em × 0.3em.
-- **Horizontal rules:** 64 × 1px in `--line-strong`, flush left, 56px above and below.
+- **Horizontal rules:** 64 × 1px in `--line-strong`, flush left, 64px above and below.
 - **Footnotes:**
   - References are sans 12 `tnum` in `--ink-2`, with a 24px hit area. On hover or focus they open
     a preview in the lane (wide) or a popover (desktop).
@@ -436,7 +453,10 @@ React 19 logs that as an error and the screenshot script fails on console errors
 - **Preview behaviour:**
   - Previews sit level with the link and stay inside the viewport.
   - They fade in over `--t-fast` after a 120ms hover delay, or immediately on focus.
-  - They close when the pointer or focus leaves both the link and the preview.
+  - They are informational only (`pointer-events: none`). They close when the pointer or focus
+    leaves the link, on Escape (WCAG 1.4.13), and on scroll or resize.
+  - While open, the trigger’s `aria-describedby` gains the preview’s id (`c-preview`). The
+    renderer’s own value, such as `footnote-label`, is kept and restored.
   - A footnote preview clones the rendered note with its `id`s and back-link removed, so there is
     no second `<Markdown>`.
 
@@ -509,24 +529,28 @@ floors.
 - **Why it serves reading:** it is the one view of the whole manual. At a glance it shows what can
   be read now without waiting, how the manual is organised (floors are chapters, the basement is
   reference), and where to go. It is a clickable index, mirrored one-to-one by the accessible HTML
-  list beside it. The canvas is `aria-hidden`.
+  list beside it. The stage (canvas and caption) is `aria-hidden`.
+- **If WebGL isn’t available** (the renderer throws, or the chunk fails to load), the stage is
+  removed and the start page is text only. The caption never describes windows that aren’t there.
 
 **Where the effort goes:**
-1. **Silhouette.** A steep gable with deep eaves and a chimney stack, giving a strong roofline
-   against the night.
+1. **Silhouette.** A steep gable with deep eaves, and a chimney stack running up the side wall that
+   faces the camera, giving a strong profile against the night. An areaway railing runs in front
+   of the basement.
 2. **Window proportions.** Tall sashes about 1:1.8, **inset** 0.15 units into the wall, with a sill
    and lintel, and upper and lower sashes with glazing bars (mullions). Basement windows are
    landscape, about 1.6:1.
-3. **Moonlight.** One cool `DirectionalLight` (`--moon`, about 0.6) from the upper left, raking
-   across the façade so sills, string courses and the window reveals catch edges and cast the
-   inset into shadow. A `HemisphereLight` (`--sky` over `--bg`, about 0.4) fills the rest.
+3. **Moonlight.** One cool `DirectionalLight` (`moon`, intensity 2.4) from the upper left and
+   front, so the side wall, sills, string courses and the window reveals catch light while the
+   façade stays dim. A `HemisphereLight` (`sky` over `--bg`, intensity 1.1) fills the rest.
 
 **Build** (Three.js, loaded with `import()` only by the start page):
 - **Geometry:**
   - Walls, string courses, sills, lintels, roof and chimney are `BoxGeometry` and
     `ExtrudeGeometry` (for the gable), merged into one mesh per material.
   - The glass is one `InstancedMesh` with per-instance colour. Frames and bars are one merged mesh.
-  - The ground line is a thin `--line-strong` strip across the façade at grade.
+  - The ground line is a deeper string course at grade, with the railing in front of it. There
+    is no ground plane: a lit ground read as a slab with a visible edge.
 - **Materials:**
   - `MeshLambertMaterial` for walls, trim and roof.
   - `MeshBasicMaterial` for the glass (flat, unlit).
@@ -540,16 +564,25 @@ floors.
   door. The hovered window’s frame lightens to `--ink-2` and the cursor becomes a pointer.
 
 **Budget:**
-- At most 6 draw calls and 6,000 triangles.
+- At most 5 draw calls (wall, trim, roof, glass, hover outline) and about 6,000 triangles. The
+  door’s click target is invisible and never drawn.
 - `devicePixelRatio` capped at 1.5 on desktop and 2 on phone.
 - Under 3ms of GPU time per frame on integrated graphics.
-- The loop runs only while something moves (pointer easing or a flickering window), capped at
-  30fps. Otherwise it renders on demand.
+- The `requestAnimationFrame` loop runs only while something moves (pointer easing, a flickering
+  window, a colour easing), capped at 30fps.
+- One-off frames (first paint, resize, state change, hover) are coalesced into a single render
+  per microtask. They render even while the tab reports itself hidden (one frame, not a loop),
+  because Claude’s browser pane reports `hidden` while it is on screen.
+- No per-frame allocation: target and displayed colours are written into module-level and scratch
+  `Color`s.
 - The first frame arrives within 150ms of the module loading.
 
-**Pausing:** the loop runs only while an `IntersectionObserver` reports the canvas on screen **and**
-`document.visibilityState` is `"visible"`. A `ResizeObserver` resizes the renderer. Everything is
-disposed on unmount.
+**Pausing:** the animation loop runs only while an `IntersectionObserver` reports the canvas on screen **and**
+`document.visibilityState` is `"visible"`. A `ResizeObserver` resizes the renderer. The scene is
+created once per canvas. Reduced motion is a live setter, not a reason to rebuild it. On unmount,
+the geometries, the `InstancedMesh`, the materials and the renderer are disposed, and
+`forceContextLoss()` releases the WebGL context, so revisiting the start page doesn’t pile up
+contexts.
 
 **Reduced motion: a still frame.** Screenshots don’t freeze WebGL, so under `reduce` the scene
 **never starts a loop**:
@@ -582,8 +615,11 @@ Hover colour changes keep their 150ms transition. The state marks never animate.
   `color-scheme: dark`. The design switcher reloads the document, so this can’t leak into A or B.
 - **Fonts:** import `literata`, `instrumentSans` and `jetbrainsMono` from `src/shared/fonts/`.
 - **Files** in `src/designs/c/`:
-  - `index.tsx` and `tokens.ts`
-  - `base.css` and `prose.css`
+  - `index.tsx`, `Shell.tsx` (drawer state, ←/→ keys) and `tokens.ts`
+  - `base.css`, then one stylesheet beside each component: `chrome.css`, `contents.css`,
+    `drawer.css`, `section.css`, `prose.css`, `preview.css`, `follow-control.css`,
+    `prev-next.css`, `start.css`, `window-mark.css` and `house/house.css`
+  - `manualParts.ts` and `useReducedMotion.ts`
   - `Glyph.tsx` and `WindowMark.tsx`
   - `CornerMark.tsx` and `BottomBar.tsx`
   - `ContentsDrawer.tsx`, plus `ContentsList.tsx` (shared by the drawer and the start page)
@@ -592,11 +628,13 @@ Hover colour changes keep their 150ms transition. The state marks never animate.
   - `useDevelopingText.ts` and `FollowControl.tsx`
   - `Preview.tsx` (portal) and `PrevNext.tsx`
   - `StartPage.tsx`
-  - `house/House.tsx` and `house/scene.ts`
+  - `house/House.tsx`, `house/plan.ts` (manual → storeys), `house/model.ts` (geometry) and
+    `house/scene.ts` (renderer, loop, picking)
 - **Check in screenshots:**
   - About 69 characters per line at 1440, and at least 45 at 375.
   - The `toc` shot shows the window marks and the current-row bar.
-  - The `streaming` shot shows a three-level faint tail, and the reduced shot shows none.
+  - The developing tail is below the fold in the frozen `streaming` shot, because the page never
+    scrolls itself. `streaming-full-*` shows the three levels. The reduced shot shows none.
   - The reduced `start` shot shows a still house with lit windows.
   - No console errors.
   - The corner mark never overlaps text between 1100 and 1279.

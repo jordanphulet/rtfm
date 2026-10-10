@@ -1,0 +1,20 @@
+.c-window-mark {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 9px;
+  border: 1px solid var(--lit);
+  background: var(--lit);
+  vertical-align: baseline;
+}
+
+.c-window-mark[data-status="unwritten"] {
+  border-color: var(--ink-4);
+  background: transparent;
+}
+
+.c-window-mark[data-status="writing"] {
+  border-color: var(--lamp);
+  background: transparent;
+  box-shadow: inset 0 -4px 0 var(--lamp);
+}
