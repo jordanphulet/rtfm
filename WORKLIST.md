@@ -60,283 +60,106 @@ of any existing task that must now wait for it.
 
 ---
 
-## Adopt design A
+## Adopt library variant A
 
-Design A (the show-control desk) won the comparison. This phase turns the three-design comparison
-into a single reader. **Cleanup only:** no new features and no design changes.
+Library variant A ("The prompt corner": the agent docked beside the library) won the
+comparison. This phase makes it the landing page and removes the prototype scaffolding.
+**Cleanup only:** no new features and no design changes. The one exception is removing the
+duplicated code the review flagged for after a winner was chosen (AL.3). The library rules and
+the comparison live at the `library-comparison` tag.
 
-### CL.1 — Tag the comparison
-- **Status:** done
+### AL.1 — Tag the comparison
+- **Status:** todo
 - **Owner:** orchestrator (a git operation)
 - **Depends on:** —
-- **Do:** tag commit `438fd36` (all three designs plus the comparison) as `design-comparison`,
-  so the other designs can be checked out later.
-- **Done when:** `git tag` lists `design-comparison` pointing at `438fd36`.
+- **Do:** tag commit `55bda41` (all three library variants plus their comparison) as
+  `library-comparison`.
+- **Done when:** `git tag` lists `library-comparison` pointing at `55bda41`.
 
-### CL.2 — Promote A to the reader
-- **Status:** done
-- **Depends on:** CL.1
-- **Files:** `src/**`, `DESIGN.md`
+### AL.2 — Promote A to the landing page
+- **Status:** todo
+- **Depends on:** AL.1
+- **Files:** `src/**` (except `src/ui/`, `src/manual/`, `src/library/` and `src/agent/`, whose
+  READMEs AL.5 updates), `DESIGN.md`
 - **Do:**
-  - Move design A from `src/designs/a/` to `src/reader/`, and delete `src/designs/`.
-  - Delete A's `NOTES.md` and `REVIEW.md`. Move A's `SPEC.md` unchanged to `DESIGN.md` at the
-    repo root (CL.4 rewrites it).
-  - Rename `src/shared/` to `src/manual/` (the manual's data, store, streaming and markdown),
-    and update every import. Leave the paths written inside its README for CL.4 to fix.
-  - Rename everything that still says "design A" (`design-a` class names, `Design` component
-    names, the `/a` paths) so the code reads as *the* reader.
-  - Simplify `src/App.tsx`: remove the design switcher, the per-design lazy loading and the
-    per-design error boundary. Routes become `/read` (the start page) and `/read/:sectionId`, and
-    `/` redirects to `/read`. `/` is kept free for the library, which will become the landing
-    page.
-- **Done when:** `npm run build` and `npm test` pass; `/read` and a section page render; nothing
-  in `src/` refers to designs A, B or C.
+  - Move `src/library-prototypes/a/` to `src/home/` (the landing page), and delete
+    `src/library-prototypes/`.
+  - Delete A's `NOTES.md` and `REVIEW.md`. Append A's `SPEC.md` unchanged to the end of
+    `DESIGN.md` under a "Library page (draft)" heading (AL.5 rewrites it).
+  - Rename everything that still says "variant A" or "prototype" (`library-a` class names and
+    keyframe prefixes, component names) so the code reads as *the* landing page.
+  - Simplify `src/App.tsx`: remove the `/library/*` routes, the switcher and the per-variant
+    error boundary. Routes become `/` (the landing page, lazy-loaded), `/read` and
+    `/read/:sectionId`, and anything unknown redirects to `/`.
+  - Keep the `data-shot` hooks the screenshot script uses.
+- **Done when:**
+  - `npm run build` and `npm test` pass;
+  - `/` renders the landing page and opening a manual still goes to `/read`;
+  - nothing in `src/` refers to variants, prototypes or `/library/`;
+  - the landing page looks exactly as variant A did (compare against `shots/library/a/`).
 
-### CL.3 — Remove comparison tooling and unused packages
-- **Status:** done
-- **Depends on:** CL.2
-- **Files:** `package.json`, `package-lock.json`, `scripts/**`, `tsconfig*.json`,
-  `src/manual/fonts/**`, `docs/**`, `.claude/launch.json`, `.gitignore`
+### AL.3 — Share what the reader and the landing page duplicate
+- **Status:** todo
+- **Depends on:** AL.2
+- **Files:** `src/ui/**`, `src/reader/**`, `src/home/**`
+- **Do:** move the pieces both the reader and the landing page now carry their own copies of into
+  `src/ui/`, with each using the shared one:
+  - the write head (bar, lamp, geometry, motion and its reduced-motion behaviour);
+  - stick-to-bottom scrolling;
+  - `useMediaQuery`;
+  - anything else the code review finds duplicated.
+
+  Update `src/ui/README.md` to match.
+- **Done when:**
+  - `npm run build` and `npm test` pass;
+  - the reader's screenshots and the landing page's screenshots are unchanged;
+  - no copy remains.
+
+### AL.4 — Remove the prototype tooling
+- **Status:** todo
+- **Depends on:** AL.2
+- **Files:** `package.json`, `scripts/**`, `docs/**`, `.gitignore`
 - **Do:**
-  - Uninstall `three`, `@types/three`, and every font package the reader doesn't use. Delete
-    their modules in `src/manual/fonts/`.
-  - Delete `scripts/check.ts`, `scripts/design-arg.ts`, `scripts/inspo.ts` and the `check`
-    script.
-  - Delete `docs/inspo/`, `docs/comparison/` and `docs/COMPARISON.md`.
-  - Simplify `npm run shot`: no design argument, one port, output to `shots/`. Keep every state.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; no unused dependency
-  remains (check package.json against actual imports).
+  - Delete `scripts/shot-library.ts`, `scripts/check-library.ts`, `scripts/library-variant.ts`
+    and their npm scripts.
+  - Extend `npm run shot` so one run captures the reader into `shots/reader/` and the landing
+    page's scenarios into `shots/home/`, keeping every state the library script had.
+  - Delete `docs/LIBRARY_COMPARISON.md` and `docs/library-comparison/`. Delete `docs/` if it's
+    then empty.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass, and no unused dependency or
+  script remains.
 
-### CL.4 — One design doc, updated docs
-- **Status:** done
-- **Depends on:** CL.3
-- **Files:** `DESIGN.md`, `DESIGN_RULES.md`, `README.md`, `CLAUDE.md`, `src/manual/README.md`
+### AL.5 — One design doc, updated docs
+- **Status:** todo
+- **Depends on:** AL.3, AL.4
+- **Files:** `DESIGN.md`, `README.md`, `CLAUDE.md`, `src/ui/README.md`, `src/manual/README.md`,
+  `src/library/README.md`, `src/agent/README.md`
 - **Do:**
-  - Merge `DESIGN_RULES.md` into `DESIGN.md` to make one design doc for the reader:
-    - what the reader is;
-    - the data model;
-    - the locked reader behavior;
-    - desktop first, phone too;
-    - the craft requirements and banned list;
-    - then A's concept, tokens, layout, section states, streaming, markdown styling and build
-      structure.
-  - Drop everything about three competing designs, directions B and C, screenshot-pass process
-    and per-design rules. Delete `DESIGN_RULES.md`.
-  - Update `README.md`, `CLAUDE.md` and `src/manual/README.md` for one reader. Fix paths, scripts,
-    fonts and wording, and remove references to designs, the switcher, `check` and the inspo
-    screenshots.
-- **Done when:** the docs match the code and each other; nothing refers to designs A, B or C, the
-  comparison, or deleted files.
+  - Turn `DESIGN.md` into the design doc for the whole product: the reader and the landing page.
+  - Fold in the library rules that still apply. Take them from WORKLIST.md at the
+    `library-comparison` tag, phrased for the one landing page (drop the variant, prototype and
+    screenshot-process rules).
+  - Rewrite the "Library page (draft)" section from A's spec, checked against the code, and
+    update the build structure.
+  - Update the README files and CLAUDE.md for the landing page at `/`. Remove references to
+    variants, prototypes, the switcher, `/library/<x>`, `shot:library` and `check:library`.
+- **Done when:** the docs match the code and each other; nothing refers to variants, prototypes,
+  the comparison or deleted files.
 
-### CL.5 — Final check
-- **Status:** done
-- **Depends on:** CL.4
+### AL.6 — Final check
+- **Status:** todo
+- **Depends on:** AL.5
 - **Files:** anything, for small fixes only
 - **Do:**
   - Run `npm run build`, `npm test` and `npm run shot`, and look at the screenshots.
-  - Stream an unwritten section live at 1440 and 375, and confirm the locked behavior still holds.
-  - Grep the repo for leftovers: `design-a`, `designs/`, `three`, `inspo`, `COMPARISON`,
-    `DESIGN_RULES`, `switcher`, `check --`.
-  - Read the repo as a newcomer would, and fix anything that still describes the comparison.
-- **Done when:** all commands pass, the greps come back clean, and the reader looks and behaves
-  as it did at `design-comparison`.
-
----
-
-## Library prototypes
-
-A landing page where you choose a manual to read, manage your manuals, or start a new one. Its
-primary interface is an agent you talk to ("let's create a new manual", "delete the manual about
-birthday parties"). As with the reader, three variants are built and compared, then one is chosen.
-**The visual style is fixed** (the reader's design system). The variants differ in **interaction
-model**.
-
-### Library rules
-
-**Locked**
-- **Visual system:** use only the shared design system from LB.1: dark only, the reader's tokens,
-  type and components. The banned list and craft requirements in `DESIGN.md` apply. Desktop
-  first, phone too (375px to 1440px+).
-- **Agent first:**
-  - The agent's input is the most prominent control, and it is always one click, tap or
-    keystroke away. A keyboard shortcut focuses it.
-  - Every action can also be done directly:
-    - open a manual (click it);
-    - delete a manual, with confirmation;
-    - start a new manual, which opens the agent with a starter prompt (creating a manual is out of
-      scope).
-- **The agent is simulated:**
-  - You type and send.
-  - A visible "thinking" state appears before the first words.
-  - The reply streams in as markdown.
-  - Replies are canned and **do nothing**: no actions, no changes to the library.
-  - The conversation stays while you're on the page.
-  - If you've scrolled up in the conversation, a new reply never pulls you back down.
-- **The library:**
-  - Each manual shows its title, subtitle, progress (n of m sections written) and when it was last
-    opened.
-  - Deleting directly removes the manual from the list (in memory; reload restores it).
-  - There is an empty state for when every manual is deleted.
-  - Opening any manual goes to the reader. The reader always shows the sample manual for now.
-- **Boundaries:**
-  - Each variant lives in `src/library-prototypes/<a|b|c>/`.
-  - Variants use only `src/ui`, `src/library` and `src/agent`. They add no packages.
-  - Each variant is reached at `/library/<a|b|c>`.
-- **Scenarios every variant must handle** (these are also the screenshot states):
-  1. first visit: an empty conversation, the full library;
-  2. typing a message;
-  3. the agent thinking;
-  4. a reply mid-stream;
-  5. a conversation several turns long;
-  6. a delete confirmation (direct);
-  7. a request the agent can't handle (fallback reply);
-  8. the empty library;
-  9. phone.
-
-**Open:** where the conversation lives, how replies are presented, how the library is laid out
-(list, grid, shelf), how the agent and the direct controls relate, and motion.
-
-**The three directions**
-- **A — Agent beside the library:** the library fills the page, and the agent sits in a docked
-  panel (like the reader's right column). Familiar, in the spirit of Claude Projects or Cursor.
-- **B — Command line first:** one prompt bar at the top of the library, like a stage manager's
-  cue line. Replies appear briefly under it, and the library stays in view. In the spirit of
-  Raycast or Linear's command menu.
-- **C — The conversation is the page:** a full-width conversation, with the library, confirmations
-  and suggestions shown as interactive cards inside it. The most agent-first of the three.
-
-### LB.1 — Extract the design system
-- **Status:** done
-- **Depends on:** CL.5
-- **Files:** `src/ui/**`, `src/reader/**`, `DESIGN.md`
-- **Do:**
-  - Move the reader's tokens, base type and focus styles, and the components that aren't specific
-    to the reader (state ring, buttons, links, sheet, scroll hints) into `src/ui/`.
-  - The reader imports them from there.
-  - Add a small `ReplyMarkdown` component to `src/ui/` for short markdown (paragraphs, bold and
-    italic, lists, inline code, links), styled with the reader's prose tokens. The library
-    variants render the agent's replies with it, so replies look the same in every variant.
-  - Write `src/ui/README.md`: the tokens, and each component with its props.
-  - Update the build structure in `DESIGN.md`.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the reader screenshots look
-  identical to before; nothing reader-specific is in `src/ui/`.
-
-### LB.2 — Library data and a scripted agent
-- **Status:** done
-- **Depends on:** CL.3 (its folders are new, so it doesn't need to wait for the docs)
-- **Files:** `src/library/**`, `src/agent/**`, `package.json` (scripts only)
-- **Do:**
-  - **`src/library/`:**
-    - About 7 seed manuals with varied titles, subtitles, sizes, progress and last-opened times.
-      Include *The Haunt That Listens* and a manual about birthday parties.
-    - An in-memory store: `useLibrary()` lists the manuals; `deleteManual(id)` removes one.
-  - **`src/agent/`:**
-    - `useAgent()` returns `{ messages, status, send }`.
-    - After a ~600ms thinking state, the reply streams in using the same pacing as the reader's
-      fake streamer.
-    - Canned replies by keyword: create or new, delete or remove, open or read, list (what do I
-      have), and help. Anything else gets a polite fallback ("I can't do that yet…").
-    - Replies are markdown and change nothing.
-  - URL options for screenshots:
-    - `?conversation=demo` preloads a several-turn conversation;
-    - `?agentFreeze=thinking` holds the next reply in its thinking state;
-    - `?agentFreeze=0.5` holds the next reply half-streamed;
-    - `?library=empty` starts with no manuals.
-  - Tests, and a README for each folder.
-- **Done when:** tests pass; the READMEs cover every export and URL option.
-
-### LB.3 — Prototype scaffold and screenshots
-- **Status:** done
-- **Depends on:** LB.1, LB.2
-- **Files:** `src/App.tsx`, `src/library-prototypes/**` (stubs and README), `scripts/**`, `package.json`, `README.md` (scripts table)
-- **Do:**
-  - Add routes `/library/<a|b|c>`. Load each variant lazily, behind its own error boundary. Load
-    the reader lazily too, so the build splits into chunks again (it currently warns about one
-    501 kB chunk).
-  - Add a small dev switcher, like the one in the comparison (see the `design-comparison` tag). It
-    stays clear of each variant's controls, and goes inert while a modal is open.
-  - Add `npm run shot:library -- <x>`, which captures every scenario at desktop and phone size
-    using the URL options, on a separate port per variant. Add `npm run check:library -- <x>`,
-    which type-checks one variant in isolation.
-- **Done when:** both commands work against a stub variant.
-
-### LB.2b — Typography in the library and agent data
-- **Status:** done
-- **Depends on:** LB.2
-- **Files:** `src/library/**`, `src/agent/**`
-- **Do:**
-  - Use curly apostrophes and quotes, real dashes and ellipses in every seed manual, canned reply
-    and demo message. DESIGN.md's typographic detail requires them.
-  - Make keyword matching accept both ’ and ' in what the user types.
-  - Keep `npm run shot:library`'s fallback wait working: it reads the reply text from
-    `replyTo()`.
-- **Done when:** `grep` finds no straight apostrophes or quotes in user-facing strings in
-  `src/library` and `src/agent`; tests pass, including one with a typed curly apostrophe.
-
-### LB.4 — Specs (A, B and C at the same time)
-- **Status:** A: done · B: done · C: done (approved with notes, folded in during the build)
-- **Depends on:** LB.3
-- **Files:** `src/library-prototypes/<x>/SPEC.md`
-- **Do:**
-  - Design the variant within the library rules and its direction.
-  - Cover:
-    - its layout at 1440 and 375;
-    - where the conversation lives;
-    - how replies, the thinking state and streaming look;
-    - how the library is presented;
-    - the direct controls, including the delete confirmation;
-    - the empty state;
-    - the fallback reply;
-    - keyboard use, including the focus shortcut;
-    - motion, and the reduced-motion fallback.
-  - Name what you take from the shared design system, and anything new you need from it.
-  - **No code.**
-- **Done when:** the spec covers every locked rule and scenario, and passes a joint review of all
-  three: each is distinct in interaction model, none is generic, and each is consistent with the
-  reader's design system.
-
-### LB.5 — Build (the same agent as the spec)
-- **Status:** A: done · B: done · C: done
-- **Depends on:** the matching LB.4
-- **Files:** `src/library-prototypes/<x>/**`
-- **Do:**
-  - Build the variant to its approved spec.
-  - Do at least 3 passes of screenshot → critique → fix, logged in `NOTES.md`.
-  - Check the conversation live: thinking, then streaming, then scrolling up during a reply.
-- **Done when:** `npm run check:library -- <x>` passes; every scenario screenshot renders; it
-  passes a code review.
-
-### LB.6 — Design review (a new agent)
-- **Status:** A: done · B: done · C: done
-- **Depends on:** the matching LB.5
-- **Files:** `src/library-prototypes/<x>/REVIEW.md`
-- **Do:**
-  - Check every locked rule (pass or fail, with evidence).
-  - Score 1–5 on:
-    - hierarchy;
-    - agent prominence;
-    - how easy direct controls are to find;
-    - conversation feel;
-    - library scanability;
-    - phone layout;
-    - consistency with the reader;
-    - "would a professional ship this".
-  - Write a prioritized fix list.
-- **Done when:** `REVIEW.md` covers every rule and has the scores and the fix list.
-
-### LB.7 — Fix (one round, by the builder)
-- **Status:** A: done · B: done · C: done
-- **Depends on:** the matching LB.6
-- **Files:** `src/library-prototypes/<x>/**` (except `REVIEW.md`)
-- **Do:** fix every rule failure and as many quality items as possible. Log a "Response to
-  review" section in `NOTES.md`.
-- **Done when:** `npm run check:library -- <x>` passes, and the fixes pass a code review.
-
-### LB.8 — Comparison
-- **Status:** needs-human (the user picks the winning interaction model)
-- **Depends on:** LB.7 (all three)
-- **Files:** `docs/LIBRARY_COMPARISON.md`, `docs/library-comparison/**`
-- **Do:** write a side-by-side comparison of every scenario, a paragraph per variant, a
-  recommendation, and ideas to combine.
-- **After approval:** the orchestrator commits, opens `/library/a` in the browser pane, sets this
-  task to `needs-human`, and stops the loop. The user picks a winner.
+  - Compare the landing page and reader shots against the `library-comparison` tag.
+  - Live, at 1440 and 375:
+    - stream a reply;
+    - scroll up during a reply;
+    - delete a manual;
+    - open a manual from `/` and come back.
+  - Grep the repo for leftovers: `library-prototypes`, `library-a`, `variant`, `prototype`,
+    `/library/`, `shot:library`, `check:library`, `LIBRARY_COMPARISON`, `switcher`.
+  - Read the repo as a newcomer would.
+- **Done when:** all commands pass, the greps come back clean, and the landing page and reader
+  look and behave as they did at `library-comparison`.
