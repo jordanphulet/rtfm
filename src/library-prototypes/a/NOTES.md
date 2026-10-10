@@ -131,6 +131,72 @@ All are now written into SPEC.md.
   - `useFocusShortcut` takes only the field;
   - the keyframes are prefixed `library-a-`.
 
+## Response to review
+
+Each item from `REVIEW.md`, in its order.
+
+1. **Done: the resting composer reads as the main control.**
+   - The field's border is `--ink-faint` at rest: 5.6:1 against the panel, up from 1.69:1, which
+     meets WCAG 1.4.11. Hover is `--ink-muted`.
+   - Send shows readiness: with a blank draft (or while busy) it is `aria-disabled` and quiet but
+     still focusable. With text it gets its full `--ink-strong` on `--ground-tint`, so typing, or
+     a cue loading, visibly lights it.
+   - Both the panel and the dock. Checked live: the border computes to `rgb(140, 146, 150)`, and
+     Send's `aria-disabled` drops when the draft has text.
+2. **Done: the hint no longer wraps.** The copy is `Enter sends · Shift+Enter, new line`, with
+   `white-space: nowrap`. Checked live at 1024 and 1279: one 16px line.
+3. **Done: the panel header has a job.** A shared `LibrarianHead` shows `Librarian ·` plus what it
+   is doing: `Try asking`, `6 messages`, or the writing ring with `Thinking…` / `Replying…`. These
+   are the dock's words, so desktop and phone match. The bottom-aligned intro is kept.
+4. **Done: the shelf mark is visible and attached.** It is a 2px `--ink-strong` bar on the row's
+   own left edge (the reader's current-item bar), still fading, never `--cue`.
+   - **Phone exception:** there it stays in the gutter, 8px left of the text, because phone rows
+     have no side padding and a bar at `left: 0` would touch the title. It is `--ink-strong` there
+     too, so it is no longer easy to miss.
+5. **Done: the empty library is an invitation.**
+   - No column header.
+   - One `--text-lead` sentence under the head's rule: `Your library is empty. Start a new manual,
+     or ask the librarian.`
+   - Both phrases are link buttons: Start uses the head's handler, and "ask the librarian" focuses
+     and flashes the field. Checked live.
+6. **Done: the phone sheet has a top and says "Thinking…" once in the dock.**
+   - The sheet opens with the same `LibrarianHead`, with its status and its hairline once
+     scrolled.
+   - While the sheet is open, the toggle names the other half (`Library · 7 manuals`, with
+     `Hide ↓`) instead of repeating the status. "Thinking…" still appears in the sheet's header
+     and on the lamp line, but those are at opposite ends of the screen, as the desktop panel's
+     header and thread are.
+7. **Done: no sticky hover on touch.**
+   - The variant's own hover rules (rows, title to cue, cues, Send, Delete manual, the field, the
+     dock toggle) only apply under `(hover: hover)`.
+   - For the shared `.link` and `.text-button` hovers, `page.css` has `(hover: none)` overrides
+     for the start link, the named and empty links, row Delete, Keep it and Newest. `src/ui` is
+     untouched.
+8. **Done: no sheet pop on resize.** The page records whether it loaded with a conversation and
+   whether it has ever been wide. The sheet opens on mount only when it loaded narrow, with a
+   conversation, and has never been wide. This is derived from state rather than a side-effecting
+   initializer, because StrictMode runs initializers twice. Checked live: 1440 → 800 after a reply
+   leaves the sheet closed; a phone load with a conversation still opens it.
+9. **Skipped (optional): lifting the ledger metadata.** The reviewer said to skip it if it cost
+   fixes 1–8. Brightening "today" and "yesterday" would mean matching `formatLastOpened`'s words,
+   which LB.2b is rewriting. Moving the readout to `--text-ui` would widen the Written column at
+   1024. Neither is worth the risk in this round.
+
+### Re-verified live after the fixes
+
+On port 5192, stopped by its handle:
+- Autofocus, and the newest message in view on load and after a send.
+- `/` focuses the field without typing.
+- Scrolling up 300px mid-reply holds the position while the reply grows, with `Replying ↓`;
+  `Newest ↓` returns to the bottom.
+- Start keeps a draft, or fills the starter with the caret at 31.
+- The named-link jump.
+- Delete: Keep it focused, the page inert, Escape back to that row's Delete, deleting focuses the
+  next row and announces it.
+- Reduced motion.
+- Phone: a send opens the sheet with focus in the field, the library's scroll is restored, the
+  named-link jump closes the sheet, and Escape goes back to the toggle.
+
 ## Known limits
 
 - `field-sizing: content` (the growing field) is Chromium-only today. Elsewhere the field keeps

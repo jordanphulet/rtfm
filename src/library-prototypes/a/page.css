@@ -44,3 +44,31 @@
     padding-top: var(--space-8);
   }
 }
+
+/* Touch: the shared link and text-button hovers would stick after a tap */
+
+@media (hover: none) {
+  .library-a .start-link:hover,
+  .library-a .named-link:hover {
+    color: var(--ink);
+    text-decoration-color: var(--cue-deep);
+  }
+
+  .library-a .empty-link:hover {
+    color: var(--ink-strong);
+    text-decoration-color: var(--cue-deep);
+  }
+
+  .library-a .text-button:hover {
+    background: none;
+  }
+
+  .library-a .row-delete:hover {
+    color: var(--ink-faint);
+  }
+
+  .library-a .confirm-keep:hover,
+  .library-a .newest:hover {
+    color: var(--ink-muted);
+  }
+}

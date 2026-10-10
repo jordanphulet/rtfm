@@ -79,8 +79,10 @@ html:has(.library-a .confirm[data-open]) {
   transition: color var(--dur-quick) var(--ease-out);
 }
 
-.library-a .confirm-delete:hover {
-  color: var(--cue);
+@media (hover: hover) {
+  .library-a .confirm-delete:hover {
+    color: var(--cue);
+  }
 }
 
 @media (max-width: 767px) {

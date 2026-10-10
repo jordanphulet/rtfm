@@ -12,12 +12,22 @@ interface ComposerProps {
   draft: string;
   onDraftChange: (draft: string) => void;
   onSend: () => void;
+  canSend: boolean;
   busy: boolean;
   fieldRef: RefObject<HTMLTextAreaElement | null>;
   newest?: NewestJump | null;
 }
 
-export function Composer({ layout, draft, onDraftChange, onSend, busy, fieldRef, newest }: ComposerProps) {
+export function Composer({
+  layout,
+  draft,
+  onDraftChange,
+  onSend,
+  canSend,
+  busy,
+  fieldRef,
+  newest,
+}: ComposerProps) {
   const [focused, setFocused] = useState(false);
 
   function submit(event: FormEvent) {
@@ -49,7 +59,7 @@ export function Composer({ layout, draft, onDraftChange, onSend, busy, fieldRef,
       />
       <div className="composer-row">
         {layout === "panel" && <Readout focused={focused} newest={newest ?? null} />}
-        <button type="submit" className="send" aria-disabled={busy || undefined}>
+        <button type="submit" className="send" aria-disabled={!canSend || undefined}>
           Send
           {busy && <span className="visually-hidden"> (waiting for the reply)</span>}
         </button>
@@ -60,7 +70,7 @@ export function Composer({ layout, draft, onDraftChange, onSend, busy, fieldRef,
 
 function Readout({ focused, newest }: { focused: boolean; newest: NewestJump | null }) {
   if (newest) return <NewestButton replying={newest.replying} onJump={newest.onJump} />;
-  if (focused) return <p className="readout">Enter sends · Shift+Enter for a new line</p>;
+  if (focused) return <p className="readout">Enter sends · Shift+Enter, new line</p>;
   return (
     <p className="readout readout-shortcut">
       Press <kbd>/</kbd> to ask

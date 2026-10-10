@@ -24,6 +24,9 @@ export default function Library() {
   const manuals = useLibrary();
   const agent = useAgent();
   const wide = useMediaQuery(WIDE);
+  const [loadedWithConversation] = useState(() => agent.messages.length > 0);
+  const [hasBeenWide, setHasBeenWide] = useState(wide);
+  if (wide && !hasBeenWide) setHasBeenWide(true);
   const [draft, setDraft] = useState("");
   const [toDelete, setToDelete] = useState<LibraryManual | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -59,8 +62,10 @@ export default function Library() {
     namedManuals(draft.trim() ? draft : lastSent, manuals).map((manual) => manual.id),
   );
 
+  const canSend = agent.status === "idle" && draft.trim() !== "";
+
   function sendDraft(): boolean {
-    if (agent.status !== "idle" || draft.trim() === "") return false;
+    if (!canSend) return false;
     agent.send(draft);
     setDraft("");
     return true;
@@ -119,7 +124,7 @@ export default function Library() {
   const side: AgentSideProps = {
     agent,
     manuals,
-    composer: { draft, onDraftChange: setDraft, onSend: sendDraft, fieldRef },
+    composer: { draft, onDraftChange: setDraft, onSend: sendDraft, canSend, fieldRef },
     onJump: jumpToManual,
     onHover: setHoveredId,
     onCue: loadPrompt,
@@ -147,10 +152,16 @@ export default function Library() {
               liftedId={toDelete?.id ?? null}
               onDelete={setToDelete}
               registerRow={registerRow}
+              onStartNewManual={startNewManual}
+              onAskLibrarian={focusField}
             />
           </div>
         </main>
-        {wide ? <LibrarianPanel {...side} /> : <PhoneAgent {...side} />}
+        {wide ? (
+          <LibrarianPanel {...side} />
+        ) : (
+          <PhoneAgent {...side} openOnMount={loadedWithConversation && !hasBeenWide} />
+        )}
       </div>
       <DeleteConfirmation manual={toDelete} findRow={findRow} onKeep={keep} onDelete={confirmDelete} />
     </div>

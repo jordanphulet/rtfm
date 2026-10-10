@@ -12,7 +12,7 @@
   resize: none;
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  border: var(--field-border) solid var(--rule-strong);
+  border: var(--field-border) solid var(--ink-faint);
   border-radius: var(--radius-m);
   background: var(--ground);
   font: var(--text-reply) / var(--leading-reply) var(--font-sans);
@@ -25,8 +25,10 @@
   opacity: 1;
 }
 
-.library-a .field:hover {
-  border-color: var(--ink-faint);
+@media (hover: hover) {
+  .library-a .field:hover {
+    border-color: var(--ink-muted);
+  }
 }
 
 .library-a .field[data-flash] {
@@ -50,6 +52,7 @@
 
 .library-a .readout {
   margin: 0;
+  white-space: nowrap;
   font: var(--text-micro) / var(--leading-micro) var(--font-mono);
   letter-spacing: 0.02em;
   color: var(--ink-faint);
@@ -88,8 +91,10 @@
     background-color var(--dur-quick) var(--ease-out);
 }
 
-.library-a .send:hover {
-  color: var(--cue);
+@media (hover: hover) {
+  .library-a .send:not([aria-disabled]):hover {
+    color: var(--cue);
+  }
 }
 
 .library-a .send[aria-disabled] {

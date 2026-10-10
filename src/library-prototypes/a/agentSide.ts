@@ -7,6 +7,7 @@ interface ComposerState {
   onDraftChange: (draft: string) => void;
   /** Sends the draft; returns whether it was sent. */
   onSend: () => boolean;
+  canSend: boolean;
   fieldRef: RefObject<HTMLTextAreaElement | null>;
 }
 

@@ -1,5 +1,6 @@
 import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
+import { LibrarianHead } from "./LibrarianHead";
 import type { AgentSideProps } from "./agentSide";
 import { useStickToBottom } from "./useStickToBottom";
 import "./librarian-panel.css";
@@ -14,9 +15,11 @@ export function LibrarianPanel({ agent, manuals, composer, onJump, onHover, onCu
 
   return (
     <aside className="panel" aria-labelledby="librarian-title">
-      <h2 id="librarian-title" className="panel-title" data-edge={stick.scrolledFromTop || undefined}>
-        Librarian
-      </h2>
+      <LibrarianHead
+        messageCount={agent.messages.length}
+        status={agent.status}
+        edge={stick.scrolledFromTop}
+      />
       <Conversation
         messages={agent.messages}
         status={agent.status}

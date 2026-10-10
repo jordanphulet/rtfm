@@ -46,7 +46,9 @@
     background-color var(--dur-quick) var(--ease-out);
 }
 
-.library-a .cue:hover {
-  background: var(--ground-hover);
-  color: var(--ink-strong);
+@media (hover: hover) {
+  .library-a .cue:hover {
+    background: var(--ground-hover);
+    color: var(--ink-strong);
+  }
 }

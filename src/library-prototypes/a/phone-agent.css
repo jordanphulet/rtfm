@@ -13,11 +13,15 @@
 
 .library-a .conversation-sheet {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   background: var(--ground-side);
   pointer-events: auto;
   transform: translateY(var(--space-2));
+}
+
+.library-a .conversation-sheet .librarian-head {
+  padding-top: var(--space-4);
 }
 
 .library-a .conversation-sheet .conversation {
@@ -63,19 +67,17 @@
   transition: background-color var(--dur-quick) var(--ease-out);
 }
 
-.library-a .dock-toggle:hover {
-  background: var(--ground-tint);
+@media (hover: hover) {
+  .library-a .dock-toggle:hover {
+    background: var(--ground-tint);
+  }
 }
 
-.library-a .dock-status {
-  min-width: 0;
-}
-
-.library-a .dock-status[data-live] {
+.library-a .dock-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--cue);
+  min-width: 0;
 }
 
 .library-a .dock-name {

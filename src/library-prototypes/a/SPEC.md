@@ -160,9 +160,11 @@ moves into the manual cell, 4px under the subtitle: `Opened yesterday`, `--text-
 - **Which manuals:** the ones named by **the draft in the input, if it isn't blank, or else the
   latest message you sent**. So typing "Delete the manual about birthday parties" marks *The
   Birthday Party Field Manual* as you type, and the mark stays after you send.
-- **The mark:** a `--mark` (2px) `--ink-muted` bar in the gutter, 8px left of the row, the row's
-  full height; plus a visually hidden ` — named in the conversation` on the title link. It fades
-  in and out over `--dur-base`. No tint, so "hover" stays unique.
+- **The mark:** a `--mark` (2px) `--ink-strong` bar on the row's own left edge, the row's full
+  height: the reader's current-item bar. The library has no "current" row, so it stays unique.
+  On phone, where rows have no side padding, it sits in the gutter, 8px left of the text. A
+  visually hidden ` — named in the conversation` is added to the title link. It fades in and
+  out over `--dur-base`. No tint, so "hover" stays unique, and never `--cue`.
 - **Matching** (`references.ts`, with a unit test on a small inline list of manuals):
   - Lower-case, split on anything that isn't a letter (so `’` and `'` both split), drop stop
     words (function words such as `the`, `one`, `through`, and request words such as `open`,
@@ -196,10 +198,18 @@ scrolls), composer.
 
 ### Header
 
-`Librarian` (`<h2 id="librarian-title">`), `--text-ui` 600 `--ink-strong`, padding 20px
-`--panel-pad` 12px `--panel-gutter` (aligned with the conversation's text). Nothing else: no
-avatar, no model name, no sparkle. Once the conversation is scrolled away from its top, a 1px
-`--rule` line appears under the header (`--dur-settle`), so text never slides under it unmarked.
+`LibrarianHead`: one line, `--text-ui` wdth 85, padding 20px `--panel-pad` 12px `--panel-gutter`
+(aligned with the conversation's text). `Librarian` (`<h2 id="librarian-title">`, 600
+`--ink-strong`), a `·`, then **what the librarian is doing**, in the same words as the phone dock:
+- empty: `Try asking`;
+- idle: `6 messages` (`--ink-muted`);
+- thinking: `StatusRing status="writing"` + `Thinking…` in `--cue`;
+- streaming: the ring + `Replying…`.
+
+So the corner always says what it's doing, even when the conversation is scrolled away from the
+live reply. The `·` is its own flex item, so the gaps on either side are equal. No avatar, no
+model name, no sparkle. Once the conversation is scrolled away from its top, a 1px `--rule` line
+appears under the header (`--dur-settle`), so text never slides under it unmarked.
 
 ### Conversation
 
@@ -271,20 +281,24 @@ above it (a job: it separates a scrolling log from a fixed control).
   once. Touch devices never get a keyboard they didn't ask for.
 - **The field:** a `<textarea>`, `data-shot="agent-input"`, `aria-label="Ask the librarian"`,
   placeholder `Ask the librarian…` (`--ink-faint`). It is the only text field on the page and the
-  only well: `--ground` (darker than the panel, an inset), 1px `--rule-strong` border, `--radius-m`,
-  padding 12px 16px, `--text-reply` `--ink-strong`. Two lines tall at rest (74px), growing with its
-  text to eight lines (`field-sizing: content`), then scrolling. Hover: border `--ink-faint`. Focus: the standard ring
-  (`--focus-ring` at `--focus-offset`, keeping `--radius-m`).
+  only well: `--ground` (darker than the panel, an inset), a 1px `--ink-faint` border (5.6:1
+  against the panel, so its boundary meets WCAG 1.4.11's 3:1 at rest), `--radius-m`, padding
+  12px 16px, `--text-reply` `--ink-strong`. Two lines tall at rest (74px), growing with its text
+  to eight lines (`field-sizing: content`), then scrolling. Hover (hover devices): border
+  `--ink-muted`. Focus: the standard ring (`--focus-ring` at `--focus-offset`, keeping
+  `--radius-m`).
 - **Below it, 8px**, one row:
   - Left, the **readout slot**, `--text-micro` mono `--ink-faint`: `Press / to ask` while the field
-    isn't focused (hover devices only; the `/` is set like inline code); `Enter sends · Shift+Enter
-    for a new line` while it is;
+    isn't focused (hover devices only; the `/` is set like inline code); `Enter sends · Shift+Enter,
+    new line` while it is (`nowrap`; 35 characters, so it fits beside Send in the 384px panel);
     `Newest ↓` when scrolled up (above).
-  - Right, **Send**: `--text-ui` 600 wdth 85, `--ink-strong` on `--ground-tint`, `--radius-s`,
-    padding 6px 12px (32px tall). While a reply is in progress it is
-    `aria-disabled`, `--ink-faint` on no fill, and its accessible name becomes `Send (waiting for
-    the reply)`. A flat fill, no gradient, no arrow icon. Hover: `--cue` text on the same
-    `--ground-tint` (actionable, in the GO green).
+  - Right, **Send**, which shows readiness: `--text-ui` 600 wdth 85, `--radius-s`, 32px tall.
+    - **Ready** (the draft has text and no reply is in progress): `--ink-strong` on
+      `--ground-tint`. Hover: `--cue` text on the same fill.
+    - **Not ready** (a blank draft, or a reply in progress): `aria-disabled` but still focusable,
+      `--ink-faint` on no fill, with no hover. While busy, its accessible name becomes `Send
+      (waiting for the reply)`.
+    - So typing, or a cue loading, visibly lights Send. A flat fill, no gradient, no arrow icon.
 - **Enter sends** (not during IME composition); Shift+Enter makes a new line. While a reply is in
   progress Enter does nothing and keeps your draft (`send` would ignore it anyway). After a send
   the field clears and keeps focus.
@@ -321,12 +335,13 @@ Fixed to the bottom, full width, `--ground-side`, 1px `--rule` line on top, padd
 `env(safe-area-inset-bottom)`. Two rows:
 
 1. **The conversation toggle**, a full-width button, 44px tall (`aria-expanded`,
-   `aria-controls`), `--text-ui` wdth 85: left, a status; right, `Show ↑` / `Hide ↓` in
-   `--ink-muted`.
-   - empty: `Librarian · Try asking` (`Librarian` 600 `--ink-strong`, the rest `--ink-muted`)
-   - idle: `Librarian · 6 messages`
-   - thinking: `StatusRing status="writing"` + `Thinking…` in `--cue`
-   - streaming: the ring + `Replying…` in `--cue`
+   `aria-controls`), `--text-ui` wdth 85. Right: `Show ↑` / `Hide ↓` in `--ink-muted`. Left: it
+   names the half you'd go to.
+   - Sheet closed: `Librarian` (600 `--ink-strong`) and the same status as the panel header
+     (`· Try asking`, `· 6 messages`, `· ◉ Thinking…`, `· ◉ Replying…`).
+   - Sheet open: `Library · 7 manuals` (`No manuals`, `1 manual`), `aria-hidden`, so the button's
+     accessible name is "Hide" with `aria-expanded`. The live status is already in the sheet's
+     own header, so it isn't said twice.
 2. **The composer:** the same field and Send, side by side: the field one line tall (44px), growing
    to four lines; Send 44 × 44 to its right. No readout slot (there's no `/` on touch).
 
@@ -335,7 +350,7 @@ At 768–1023 the dock's content is capped at 720px and aligned with the library
 ### The conversation sheet
 
 A `Sheet` from `src/ui`, used as a disclosure (like the reader's contents sheet, not a modal),
-`role="region"`, labelled `Conversation with the librarian`: fixed from the top of the viewport
+`role="region"`, labelled by its `Librarian` heading: fixed from the top of the viewport
 down to the top of the dock (the dock and sheet share one fixed grid, so the dock never moves),
 `--ground-side`, the conversation scrolling inside it.
 - **The library is hidden (`display: none`) while the sheet is open**, so the document is only
@@ -344,7 +359,9 @@ down to the top of the dock (the dock and sheet share one fixed grid, so the doc
   closes.
 - Its `focusScope` includes the dock, so Tab moves between the conversation, the toggle and the
   composer. Escape closes it and returns focus to the toggle.
-- Contents: the same conversation as the panel (intro and cues when empty), padding 16px
+- Contents: at the top, the panel's `LibrarianHead` (padding-top 16px), with its status and its
+  hairline once scrolled, so short conversations hang from a titled top instead of floating under
+  empty ground. Then the same conversation as the panel (intro and cues when empty), padding 16px
   `--panel-pad` 16px `--panel-gutter`, newest at the bottom. When you've scrolled up, `Newest ↓`
   (`Replying ↓` with the lamp while a reply streams) appears in a slot at the sheet's foot.
 - **Where focus goes when it opens** (`focusOnOpen`; `Sheet` always moves focus, and a `null`
@@ -355,7 +372,9 @@ down to the top of the dock (the dock and sheet share one fixed grid, so the doc
     takes focus and no ring appears.
 - It **opens by itself** when you send, so your message and the thinking line are in view, and
   **on load when the conversation isn't empty** (the URL options), so the newest message is in
-  view. The scrolling rules are the panel's.
+  view. That second case applies only to a page that loads narrow and has never been wide:
+  narrowing a desktop window with a conversation shows the library, not a sheet popping open. The
+  scrolling rules are the panel's.
 - It rises with the `Sheet`'s fade, overridden to `translateY(8px → 0)` because it comes from
   below.
 - A named-manual link closes the sheet first, then jumps to the row.
@@ -418,13 +437,15 @@ A true modal, anchored to the row it deletes, so you see exactly what's going.
 
 ## The empty library
 
-The page keeps its structure; only the shelf is empty.
+The page keeps its structure; the empty shelf becomes an invitation.
 
 - Head: `Library`, meta `No manuals`, **Start a new manual ›** in its usual place.
-- The ledger keeps its column header and line (so the page doesn't collapse into a centred void),
-  then one line, capped at `--measure`: `Your library is empty. Every manual you start is listed
-  here, with how much of it is written.` `--text-body` `--ink-muted`, `pretty`; then the closing
-  `--rule` line across the ledger. On phone, the same text between two `--rule` lines.
+- No column header: a sort arrow over nothing is noise. Under the head's `--rule-strong` line, one
+  sentence, `--text-lead` `--ink-muted`, capped at `--measure`: `Your library is empty. Start a new
+  manual, or ask the librarian.`
+  - Both phrases are `.link` buttons in `--ink-strong`. **Start a new manual** uses the head's
+    handler; **ask the librarian** focuses the field (and flashes it), as `/` does.
+  - Then the closing `--rule` line. On phone, the same.
 - No illustration, no icon, nothing centred.
 - The panel's cues drop the "Open …" cue: “Let’s start a new manual about…”, “What do I have?”,
   “How do I delete a manual?”.
@@ -459,7 +480,7 @@ named-manual line still appear, so even an unanswered question shows what it was
 
 | What | Motion | Reduced motion |
 | --- | --- | --- |
-| Hover colors | `--dur-quick` `--ease-out` | Instant (token) |
+| Hover colors (only under `(hover: hover)`, so nothing sticks after a tap on touch) | `--dur-quick` `--ease-out` | Instant (token) |
 | Thinking line appearing | Fade in, `--dur-base` | Appears |
 | Lamp | `breathe`, `--dur-breathe` | Steady lamp |
 | Write-head bar | Draw `scaleY(0 → 1)`, `--dur-quick`; retract on settle, `--dur-settle` | Present while streaming, gone when done |
@@ -541,8 +562,9 @@ In `src/library-prototypes/a/`:
   padding; `tokens.css` the sizes above.
 - One component per file, each importing its own stylesheet: `LibraryHead`, `Ledger`, `LedgerRow`
   (styled by `ledger.css`), `SectionStrip`, `DeleteConfirmation` (with the scrim),
-  `LibrarianPanel` (desktop), `PhoneAgent` (the dock and the conversation sheet), `Conversation`
-  (the log and the thinking line), `Turn`, `Cues`, `Composer`.
+  `LibrarianPanel` (desktop), `PhoneAgent` (the dock and the conversation sheet),
+  `LibrarianHead` (the title and status line both use, with `StatusDetail`), `NewestButton`,
+  `Conversation` (the log and the thinking line), `Turn`, `Cues`, `Composer`.
 - Helpers: `references.ts` (the matcher, with `references.test.ts`), `cuePrompts.ts` (the cues
   and the starter prompt), `agentSide.ts` (the props the panel and the phone dock share),
   `motion.ts` (the target flash and the row collapse), `useStickToBottom.ts`,
