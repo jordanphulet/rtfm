@@ -333,7 +333,7 @@ model**.
 - **Done when:** `npm run check:library -- <x>` passes, and the fixes pass a code review.
 
 ### LB.8 — Comparison
-- **Status:** doing (comparison agent)
+- **Status:** needs-human (the user picks the winning interaction model)
 - **Depends on:** LB.7 (all three)
 - **Files:** `docs/LIBRARY_COMPARISON.md`, `docs/library-comparison/**`
 - **Do:** write a side-by-side comparison of every scenario, a paragraph per variant, a
