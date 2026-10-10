@@ -1,3 +1,15 @@
+.library-b :is(.shelf-head, .shelf-rule, .row, .shelf-empty) {
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.library-b .page:has(.panel[data-open]) :is(.shelf-head, .shelf-rule, .row, .shelf-empty) {
+  opacity: 0.85;
+}
+
+.library-b .page:has(.panel[data-open]) .row:hover {
+  opacity: 1;
+}
+
 .library-b .shelf-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -78,7 +90,19 @@
 }
 
 @media (max-width: 767px) {
-  .library-b .shelf-head {
+  .library-b :is(.shelf-head, .shelf-rule, .row, .shelf-empty) {
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.library-b .page:has(.panel[data-open]) :is(.shelf-head, .shelf-rule, .row, .shelf-empty) {
+  opacity: 0.85;
+}
+
+.library-b .page:has(.panel[data-open]) .row:hover {
+  opacity: 1;
+}
+
+.library-b .shelf-head {
     margin-top: var(--space-6);
   }
 

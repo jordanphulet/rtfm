@@ -23,12 +23,13 @@
 
 .library-b .cue-unit {
   position: relative;
-  margin-inline: calc(-1 * var(--hang)) calc(-1 * var(--space-4));
+  margin-inline: calc(-1 * var(--hang) - var(--hairline)) calc(-1 * var(--space-4));
 }
 
 /* The bar */
 
 .library-b .cue-bar {
+  anchor-name: --cue-bar;
   display: grid;
   grid-template-columns: var(--hang) minmax(0, 1fr) auto;
   align-items: center;
@@ -148,6 +149,18 @@
   visibility: hidden;
 }
 
+.library-b .readout-slash {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .library-b .readout-slash {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+}
+
 .library-b .readout-note,
 .library-b .readout-dot,
 .library-b .suggestions-label {
@@ -241,20 +254,18 @@
     justify-content: center;
   }
 
-  .library-b .cue-busy-words {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-
-  .library-b .cue-readout:not([data-state="conversation"]) {
-    display: none;
+  .library-b .cue-unit[data-open] .cue-bar {
+    border-bottom-color: var(--rule-strong);
+    border-radius: var(--radius-m);
   }
 
   .library-b .cue-readout {
     margin-top: var(--space-2);
+  }
+
+  .library-b .readout-suggestions li:nth-child(n + 2),
+  .library-b .readout-slash {
+    display: none;
   }
 
   .library-b .cue-unit:focus-within .cue-dropdown {

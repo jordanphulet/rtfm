@@ -62,6 +62,7 @@ export default function Library() {
         <Shelf
           manuals={manuals}
           leavingId={leavingId}
+          confirmingId={toDelete?.id ?? null}
           emptyStartRef={emptyStartRef}
           onDelete={askToDelete}
           onCollapsed={finishDelete}

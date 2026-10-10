@@ -36,7 +36,9 @@ spacing step, radius and timing comes from `src/ui/tokens.css`.
 | --- | --- | --- |
 | `--column` | 1040px | Content width at 1280px and up |
 | `--gutter` | 64px (1024px and up) · 32px (768–1023) · 16px (phone) | Page side margin (minimum) |
-| `--hang` | 48px | The hanging column for the `›` mark and the cue numbers (1024px and up) |
+| `--hang` | 48px (1280px and up) · 32px (1024–1279, so the bar clears the dev switcher) · 0 below 1024 | The hanging column for the `›` mark and the cue numbers |
+| `--text-inset` | `max(var(--hang), var(--space-6))` | Where text starts inside the panel and the confirmation |
+| `--hairline` | 1px | The bar box also hangs out by its border, so the text inside it lands on the text edge |
 | `--bar-height` | 56px (phone: the field is `--tap`, 44px) | The cue line |
 | `--written-col` | 136px | Progress column |
 | `--opened-col` | 144px | Last-opened column (fits `Opened Dec 28, 2025` in micro mono) |
@@ -47,7 +49,7 @@ spacing step, radius and timing comes from `src/ui/tokens.css`.
 | `--library-peek` | 96px | The minimum library height left visible under the panel |
 | `--write-head-width` | 3px | The reader's write head, reused (same values as `src/reader/tokens.css`) |
 | `--write-head-lamp` | 7px | Its lamp |
-| `--write-head-offset` | 28px (phone 12px) | Its distance left of the text edge |
+| `--write-head-offset` | 28px (12px below 1024, where there's no hang column) | Its distance left of the text edge |
 
 ### Desktop, 1280px and up (designed at 1440 × 900)
 
@@ -68,7 +70,7 @@ y   48 ┌─ bar box x 152–1256 ───────────────
             Building haunted houses with improvising  ━━━━━━──────────
             animatronics, rooms that notice you, …
             The Birthday Party Field Manual           3 of 14 written   Opened yesterday  Delete
-            …                                                         (7 rows, ends ≈ y 812)
+            …                                                         (7 rows, ends ≈ y 836)
 ```
 
 - **Page:** `.library-b` has padding-top `--space-8`. The column is `min(var(--column), 100% − 2 × var(--gutter))`, centred.
@@ -88,7 +90,7 @@ y   48 ┌─ bar box x 152–1256 ───────────────
 - **Rows:** `grid-template-columns: minmax(0, 1fr) var(--written-col) var(--opened-col) var(--delete-col)`,
   gap `--space-8`. The title block is 600px at 1440. Rows are separated by `--space-1` of space
   and no lines (see The library).
-- **Bottom:** `--space-24` of padding.
+- **Bottom:** `--space-16` of padding, so the designed 1440 × 900 view doesn't scroll.
 
 ### 1024–1279px
 
@@ -152,7 +154,7 @@ bordered box at rest, at the top of the page at every width, and the first stop 
   400, `--ink-strong`; on phone `--text-body`. The placeholder is in `--ink-faint` (5.9:1):
   - desktop and tablet: `Ask the librarian — open, start or remove a manual…`
   - phone: `Ask the librarian…`
-  - empty library: `Tell the librarian what your first manual should teach…` (phone: `Your first manual…`)
+  - empty library: `Tell the librarian what your first manual should teach…` (phone: `What should your first manual teach?`)
   - It has a visually hidden label `Message the librarian`, `aria-keyshortcuts="/"`, and
     `data-shot="agent-input"`. It is always visible at both sizes, so it needs no opener.
 - **Focus:** the input's own outline is removed, and the ring is drawn on the bar box instead
@@ -166,8 +168,10 @@ bordered box at rest, at the top of the page at every width, and the first stop 
     It is `--ink-strong` with a draft, and `disabled` (`--ink-faint`, no hover) without one. On
     phone and touch it is always shown, with a `--tap` hit area.
   - **Thinking:** Send is replaced by `StatusRing status="writing"` and `Thinking…` in micro mono
-    `--cue`, the same words as the panel. **Streaming:** the same ring with `Replying…`. On phone
-    only the ring shows (the panel says the rest), with the words visually hidden. The input stays
+    `--cue`, the same words as the panel. **Streaming:** the same ring with `Replying…`. The
+    words show only while the panel is folded, where they are the only status. While it is open
+    (and always on phone), only the ring shows, with the words visually hidden, so `Thinking…`
+    never appears twice. The input stays
     editable, so you can draft your next message, but Enter does nothing until the reply is
     finished (sends are ignored, not queued).
 - **Autofocus:** on load at 1024px and up with a fine pointer, the bar takes focus, as a terminal
@@ -190,9 +194,13 @@ button. Its states:
 A suggestion **fills** the bar (it never sends), focuses it, and puts the caret at the end. One
 rule for every shortcut into the bar: you always press Enter yourself.
 
-On phone, the readout shows only the conversation states (and takes no space before the first
-send). The suggestions are too long for one line there, so they **drop down under the bar while
-it is focused**, the conversation is empty and the draft is empty. They appear in the panel's
+On fine pointers, the suggestions line ends with `· [/] returns you here`, because the bar is
+autofocused on desktop and its own `/` keycap would otherwise never be seen on a first visit.
+
+On phone, the readout line is reserved from the start, so the first send never moves the
+library. Before any conversation it shows `Try` and the first suggestion only. All three
+suggestions **drop down under the bar while it is focused**, the conversation is empty and the
+draft is empty. They appear in the panel's
 place, as three `--tap`-tall rows under a `Try` label. Typing hides them. The suggestion buttons
 cancel `mousedown`, so focus stays in the input and the list doesn't vanish before the click
 lands.
@@ -212,6 +220,14 @@ panel foot. It is only shown for `(hover: hover) and (pointer: fine)`.
   - `--ground-raised`, a 1px `--rule-strong` border on the sides and bottom, a 1px `--rule`
     divider on top (inside the bar-and-panel unit), radius `0 0 var(--radius-m) var(--radius-m)`.
   - No shadow and no blur: the reader's preview treatment.
+  - **A clean edge:** the raised body sits on a flat `--ground` mat, 16px wide on the sides and
+    bottom (the panel element itself, with the raised body inside it). Wherever the panel's
+    edge lands on the library, there is a band of plain ground between them. While the panel is
+    open, the library's head and rows drop to 85% opacity over `--dur-base` (instant under
+    reduced motion), so any rows the panel cuts read as background. The row under the pointer
+    returns to full opacity, and rows stay clickable. 85% is the lowest level at which every
+    text colour still passes AA on `--ground`: `--ink-faint` 4.59, `--ink-muted` 6.71, `--cue`
+    6.48, `--ink` 9.50.
   - Height follows the content, up to
     `min(var(--panel-max), 100dvh − (bar bottom) − var(--library-peek))`, which is 520px at 900
     tall. Beyond that the panel scrolls inside, with `overscroll-behavior: contain`.
@@ -222,10 +238,10 @@ panel foot. It is only shown for `(hover: hover) and (pointer: fine)`.
   - The full width keeps replies at about 48 characters; inside the 343px bar they would fall
     below the 45-character minimum.
   - Max height `calc(100dvh − band height − var(--space-16))`, so at least 64px of the library
-    always shows below it.
-- **Not modal.** It has no `aria-modal` and no scrim, so the dev switcher stays live. Rows the
-  panel doesn't cover stay fully clickable, and a click on one both folds the panel and opens
-  the manual, as on desktop.
+    always shows below it. The same `--ground` mat sits under its bottom edge.
+  - The bar keeps its full radius and `--rule-strong` border while the panel is open, because
+    on phone the panel is a separate full-width sheet 8px below it, not attached to it.
+- **Not modal.** It has no `aria-modal` and no scrim, so the dev switcher stays live.
 - It is a `<section id="conversation" aria-label="Conversation with the librarian">`. When folded
   it is `inert`, with `visibility: hidden` delayed until the fold animation ends (the `Sheet`
   pattern).
@@ -236,11 +252,12 @@ panel foot. It is only shown for `(hover: hover) and (pointer: fine)`.
 | --- | --- |
 | The bar gains focus, or is clicked, while a conversation exists | Esc, with focus in the bar or the panel |
 | A message is sent (it opens if folded) | **Hide** in the panel |
-| The page mounts with a conversation (the URL options, or coming back from the reader) | A pointerdown outside the bar unit and the readout (the click still goes through) |
+| The page mounts with a conversation (the URL options, or coming back from the reader) | A pointerdown outside the bar unit. The click that ends that same gesture is swallowed, so "click the library to put the answer away" never also opens a manual; a second click does. |
 | **Show ↓** in the readout | Focus moving to an element outside them (Tab into the library, `Start a new manual`) |
 
 That is the whole rule: one `open` boolean, two document listeners (`pointerdown` and `focusin`)
-that are attached only while the panel is open, and Esc. A click on plain text inside the panel
+that are attached only while the panel is open, and Esc. The swallowed click is a one-shot
+capture listener. It ends on that click, on `pointercancel`, or on the next `pointerdown` (registered in a microtask, after the current event), never on a timer, because a touch device's synthesized click can arrive late. A click on plain text inside the panel
 (to select it) never folds it. Folding with Esc or Hide while focus is inside the panel moves
 focus to the bar, so focus is never left on an inert element.
 
@@ -256,18 +273,24 @@ starting at the text edge.
   500 `--ink-muted`, tabular. They are aria-hidden: the visually hidden prefixes carry the
   structure. Below 1024px they sit inline before your words, `--space-2` apart. Labelling: a visually hidden
   `You:` before your words and `Librarian:` before each reply. There are no "You" or "Librarian"
-  labels on screen, no avatars and no bubbles. The difference shows in weight and color.
+  labels on screen, no avatars and no bubbles. Your words are set after a `›` prompt mark in
+  `--ink-faint`, echoing the bar, like a shell transcript: the prompt, then the output.
 - **The current exchange** (always the last; always open):
   - **Your words:** `--text-reply` 16/24 500 `--ink-strong`, `text-wrap: pretty`, capped at
     `--measure`.
-  - **The reply,** `--space-2` below: `ReplyMarkdown` with `className="reply"`, capped at
+  - **The reply,** `--space-3` below: `ReplyMarkdown` with `className="reply"`, capped at
     `--measure`. On phone it uses the panel's full content width (343px is about 48 characters;
     indenting it would drop below 45).
 - **Earlier exchanges** (folded by default; every exchange but the last):
-  - One 32px line: a `<button aria-expanded aria-controls>` spanning the text width, padding
-    `--space-1` `--space-2`, with the bleed pulled back so its text stays on the text edge.
-  - It shows your words, `--text-reply` `--ink-muted`, on one line with an ellipsis, then a CSS
-    chevron (the reader's location-button chevron, in `--ink-faint`) that turns down when open.
+  - One 32px line: a `<button aria-expanded aria-controls>` running the panel's full width,
+    padding `--space-1` `--space-2`, with the bleed pulled back so its text stays on the text
+    edge.
+  - It shows the `›` mark, then your words in `--text-reply` `--ink-muted` (up to the measure,
+    with an ellipsis), then a CSS chevron (the reader's location-button chevron, in
+    `--ink-faint`) that turns down when open.
+  - From 1024px, the rest of the line holds a one-line excerpt of the reply in `--ink-faint`,
+    with an ellipsis. History can be scanned without unfolding, and the panel's right half has
+    a job. The excerpt is aria-hidden, since unfolding gives the full reply.
   - Hover: `--ground-tint`, text to `--ink-strong` (`--dur-quick`).
   - Opened, your words turn `--ink-strong` 500, wrap in full, and the reply appears under them as
     in the current exchange. Any number can be open at once.
@@ -292,7 +315,8 @@ written. It is CSS only, with the reader's values in variant-local sizes:
 1. **Gutter bar:** while the exchange is live (`data-live` on the current exchange), the last
    block of the reply (`.reply > :last-child`) carries an `::after`:
    - `--write-head-width` wide, `--cue`, `--write-head-offset` left of the text edge, inset 4px
-     top and bottom, so it grows with the paragraph or list as it fills;
+     top and bottom, so it grows with the paragraph or list as it fills. Below 1024px the offset
+     is 12px and the panel's text starts `--space-6` in, so the bar stays inside the panel;
    - each new block's bar draws in with `scaleY(0 → 1)`, origin top, `--dur-quick`.
    While thinking, the same bar stands beside the thinking line.
 2. **Lamp:** a `--write-head-lamp` square in `--cue` at the foot of the bar, breathing
@@ -326,7 +350,9 @@ text edge.
 - A **Hide** text button with an `Esc` keycap after it (the keycap shows on fine pointers only);
   on phone it has a `--tap` hit area.
 - `↑ recalls your last message` in micro mono `--ink-faint` (fine pointers only).
-- `Latest ↓` at the right end.
+- `Latest ↓` (while you are scrolled up), then **Start a new manual** at the right end. The
+  open panel covers the library head, so the direct "start" control stays one click away; it
+  fills the bar directly above.
 
 ### Screen readers
 
@@ -348,7 +374,7 @@ link. Desktop column contents:
 | Title | `--text-body` 17/28 500 `--ink-strong`, `text-wrap: balance` |
 | Subtitle | `--text-ui` 14/20 `--ink-muted`, full text (no clamp), `text-wrap: pretty` |
 | Progress | `7 of 18 written` in micro mono `--ink-faint` (tabular), centred on the title's first line; `--space-2` below it the **meter**: a 1px `--rule` track the column's width with a `--meter-height` `--ink-muted` fill at `n / m` (drawn over the track with no change to layout, as in the reader's head rule). Flat, never green: progress isn't live. |
-| Last opened | `Opened today`, `Opened 3 days ago`, `Opened Dec 28, 2025` (`formatLastOpened`), micro mono `--ink-faint`, centred on the title's first line |
+| Last opened | `today`, `3 days ago`, `Dec 28, 2025` (`formatLastOpened`), micro mono `--ink-faint`, centred on the title's first line. The word `Opened` is kept for screen readers but visually hidden in the desktop column, where position already says it (repeating it on every row made the right half one grey texture). The compact inline meta keeps `Opened` visible. |
 | Delete | A `.text-button` reading `Delete`, `--text-ui` `--wdth-tight`, `--ink-faint` at rest, `--ink-muted` while the row is hovered or focused, `--ink-strong` on `--ground-tint` on its own hover. Its accessible name is `Delete <title>` (visually hidden suffix). It has `data-shot="delete"`. |
 
 - **Row box:** padding `--space-3` `--space-4`, bleeding `--space-4` past the column on each side
@@ -364,7 +390,7 @@ link. Desktop column contents:
 
 ### At 7 manuals and at 1
 
-- **7:** the whole list fits a 900px screen at 1440 (it ends around y 812). The meta reads
+- **7:** the whole list fits a 900px screen at 1440 (it ends around y 836, and the page doesn't scroll). The meta reads
   `7 manuals · 47 of 117 sections written`; the counts update live as manuals are deleted.
 - **1:** one row under the head rule, then empty ground. The meta reads
   `1 manual · 7 of 18 sections written`. There is no filler, no illustration and no stretching
@@ -419,9 +445,17 @@ manual's title link has focus.
     bar. The dev switcher goes inert on its own;
   - page scroll is locked with `html:has(.library-b .confirm[data-open]) { overflow: hidden; }`,
     and `scrollbar-gutter: stable` stops the page shifting sideways.
-- **Desktop and tablet:** fixed, its top level with the bar's resting top (y 48), its left edge on
-  the bar box's left edge, width `calc(var(--hang) + var(--measure) + 2 × var(--space-6))`.
-  - `--ground-raised`, a 1px `--rule-strong` border, `--radius-m`, padding `--space-6`.
+- **Desktop and tablet:** it **is** the cue line for a moment: exactly the bar box's top, left
+  edge and width, so the bar itself becomes the question.
+  - Placed with CSS anchor positioning (`anchor-name: --cue-bar` on the bar; `top: anchor(top)`,
+    `left: anchor(left)`, `width: anchor-size(width)`), so it lands on the bar whether or not the
+    band is stuck. Without anchor support it falls back to the bar's resting geometry (y 48, the
+    same column math).
+  - `--ground-raised`, a 1px `--rule-strong` border, `--radius-m`. Padding `--space-5`
+    `--space-6` `--space-6` `--text-inset`, so the title and **Keep it**'s text sit on the
+    page's text edge (x 200 at 1440).
+  - **The manual in question stays lit:** its row is raised above the scrim with `--ground-tint`,
+    so you see which manual is meant, keyboard users included.
   - It drops in with the Sheet's own opacity and `translateY(−8px → 0)`: the cue line asking.
 - **Phone:** fixed to the top, full width, over the cue line, the same place as on desktop.
   - A 1px `--rule-strong` bottom line; padding `--space-5` `--space-4`.
@@ -504,10 +538,10 @@ There are no other animations: no shimmer, no typing dots, no spring.
 | --- | --- | --- | --- |
 | 1 | First visit | The bar focused (cue ring, `›` in cue), the three suggestions on the readout line, `Library` with its meta, all 7 rows. | The bar at the top, unfocused, with `Send`; the library under it. |
 | 2 | Typing | `Delete the manual about birthday parties` in the bar, `Send` in `--ink-strong`, and the readout says `Enter to send`. | The same in the top bar; the suggestions hide as you type. |
-| 3 | Thinking | The panel hangs from the bar: `1  Let’s start a new manual about building a treehouse`, then the thinking line with the write head. The library shows below. The bar's slot reads `Thinking…`. | The panel drops from the band, full width, with the same content; the library shows below it. |
+| 3 | Thinking | The panel hangs from the bar: `1  Let’s start a new manual about building a treehouse`, then the thinking line with the write head. The library shows below, dimmed. The bar's slot shows only the ring (the panel says `Thinking…`). | The panel drops from the band, full width, with the same content; the library shows below it. |
 | 4 | Mid-stream | The half reply in the panel, with the gutter bar on the live block and the lamp at its foot. | The same, full width. |
-| 5 | Several turns | Cues `1` and `2` folded to one line each, cue `3` (the Klingon request and its fallback) open. The panel is about 250px tall; the library is visible below it. | The same stack, full width, under the bar. |
-| 6 | Delete confirmation | The confirmation over the cue line, the scrim over the page, focus on **Keep it**. | A full-width sheet over the bar at the top. |
+| 5 | Several turns | Cues `1` and `2` folded to one line each with a reply excerpt, cue `3` (the Klingon request and its fallback) open. The panel is about 250px tall; the library is visible below it. | The same stack, full width, under the bar. |
+| 6 | Delete confirmation | The confirmation exactly over the cue line, the scrim over the page, the manual in question lit, focus on **Keep it**. | A full-width sheet over the bar at the top. |
 | 7 | Fallback | `1  Sing me a sea shanty about geese` and the polite reply, settled (no green). The bar is focused and empty; the foot hints `↑ recalls your last message`. | The same; no ↑ hint (touch). |
 | 8 | Empty library | `No manuals yet`, the line under it, **Start a new manual ›**, and the empty-library placeholder and suggestions. | The same, stacked. |
 | 9 | Phone | Every state above at 375: the sticky top bar, the full-width panel dropping from it, the top confirmation, and rows with inline meta. | — |

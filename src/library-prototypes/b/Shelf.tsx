@@ -7,13 +7,22 @@ import "./shelf.css";
 interface ShelfProps {
   manuals: LibraryManual[];
   leavingId: string | null;
+  confirmingId: string | null;
   emptyStartRef: RefObject<HTMLButtonElement | null>;
   onDelete: (manual: LibraryManual, opener: HTMLElement) => void;
   onCollapsed: (manual: LibraryManual) => void;
   onStartNewManual: () => void;
 }
 
-export function Shelf({ manuals, leavingId, emptyStartRef, onDelete, onCollapsed, onStartNewManual }: ShelfProps) {
+export function Shelf({
+  manuals,
+  leavingId,
+  confirmingId,
+  emptyStartRef,
+  onDelete,
+  onCollapsed,
+  onStartNewManual,
+}: ShelfProps) {
   const isEmpty = manuals.length === 0;
 
   return (
@@ -47,6 +56,7 @@ export function Shelf({ manuals, leavingId, emptyStartRef, onDelete, onCollapsed
               key={manual.id}
               manual={manual}
               leaving={manual.id === leavingId}
+              confirming={manual.id === confirmingId}
               onDelete={onDelete}
               onCollapsed={onCollapsed}
             />

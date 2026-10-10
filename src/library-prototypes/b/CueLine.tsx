@@ -67,12 +67,12 @@ export function CueLine({ libraryIsEmpty, ref }: CueLineProps) {
     input.setSelectionRange(input.value.length, input.value.length);
   }, [caretRequest]);
 
-  useImperativeHandle(ref, () => ({
-    startNewManual() {
-      if (draft.trim() === "") setDraft(STARTER_PROMPT);
-      setCaretRequest((request) => request + 1);
-    },
-  }));
+  function startNewManual() {
+    if (draft.trim() === "") setDraft(STARTER_PROMPT);
+    setCaretRequest((request) => request + 1);
+  }
+
+  useImperativeHandle(ref, () => ({ startNewManual }));
 
   function openIfConversation() {
     if (hasConversation) setOpen(true);
@@ -163,9 +163,11 @@ export function CueLine({ libraryIsEmpty, ref }: CueLineProps) {
               onClick={openIfConversation}
               onKeyDown={onInputKeyDown}
             />
-            <BarSlot status={status} canSend={draft.trim() !== ""} />
+            <BarSlot status={status} canSend={draft.trim() !== ""} wordsHidden={open || isPhone} />
           </form>
-          {hasConversation && <Conversation open={open} onHide={foldToBar} />}
+          {hasConversation && (
+            <Conversation open={open} onHide={foldToBar} onStartNewManual={startNewManual} />
+          )}
           {!hasConversation && draft === "" && (
             <Suggestions className="cue-dropdown" libraryIsEmpty={libraryIsEmpty} onChoose={fillDraft} />
           )}
@@ -185,12 +187,20 @@ export function CueLine({ libraryIsEmpty, ref }: CueLineProps) {
   );
 }
 
-function BarSlot({ status, canSend }: { status: AgentStatus; canSend: boolean }) {
+interface BarSlotProps {
+  status: AgentStatus;
+  canSend: boolean;
+  wordsHidden: boolean;
+}
+
+function BarSlot({ status, canSend, wordsHidden }: BarSlotProps) {
   if (status !== "idle") {
     return (
       <span className="cue-slot cue-busy">
         <StatusRing status="writing" />
-        <span className="cue-busy-words">{status === "thinking" ? "Thinking…" : "Replying…"}</span>
+        <span className={wordsHidden ? "visually-hidden" : undefined}>
+          {status === "thinking" ? "Thinking…" : "Replying…"}
+        </span>
       </span>
     );
   }
@@ -208,7 +218,9 @@ function BarSlot({ status, canSend }: { status: AgentStatus; canSend: boolean })
 
 function placeholderFor(libraryIsEmpty: boolean, isPhone: boolean): string {
   if (libraryIsEmpty) {
-    return isPhone ? "Your first manual…" : "Tell the librarian what your first manual should teach…";
+    return isPhone
+      ? "What should your first manual teach?"
+      : "Tell the librarian what your first manual should teach…";
   }
   return isPhone ? "Ask the librarian…" : "Ask the librarian — open, start or remove a manual…";
 }

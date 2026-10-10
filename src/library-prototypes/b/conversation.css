@@ -1,19 +1,12 @@
+/* The panel is a --ground mat around the raised body, so wherever its edge lands on the
+   library there is a clean band of ground between them. */
 .library-b .panel {
-  --panel-inset: max(var(--hang), var(--space-4));
   position: absolute;
   top: 100%;
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  max-height: min(
-    var(--panel-max),
-    100dvh - var(--space-8) - var(--space-4) - var(--bar-height) - var(--library-peek)
-  );
-  border: 1px solid var(--rule-strong);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-m) var(--radius-m);
-  background: var(--ground-raised);
+  left: calc(-1 * var(--space-4));
+  right: calc(-1 * var(--space-4));
+  padding: 0 var(--space-4) var(--space-4);
+  background: var(--ground);
   visibility: hidden;
   opacity: 0;
   transform: translateY(calc(-1 * var(--space-2)));
@@ -30,6 +23,19 @@
   transition-delay: 0s;
 }
 
+.library-b .panel-body {
+  display: flex;
+  flex-direction: column;
+  max-height: min(
+    var(--panel-max),
+    100dvh - var(--space-8) - var(--space-4) - var(--bar-height) - var(--library-peek)
+  );
+  border: 1px solid var(--rule-strong);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+  background: var(--ground-raised);
+}
+
 .library-b .panel-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -41,7 +47,7 @@
 
 .library-b .cues {
   margin: 0;
-  padding: var(--space-4) var(--space-4) var(--space-5) var(--panel-inset);
+  padding: var(--space-4) var(--space-4) var(--space-5) var(--text-inset);
   list-style: none;
 }
 
@@ -59,9 +65,15 @@
 }
 
 .library-b .cue-ask,
-.library-b .cue-toggle,
+.library-b .cue-earlier[data-unfolded] .cue-toggle,
 .library-b .cue-reply {
   max-width: var(--measure);
+}
+
+.library-b .cue-prompt {
+  margin-right: var(--space-2);
+  font-weight: 400;
+  color: var(--ink-faint);
 }
 
 .library-b .cue-ask {
@@ -81,7 +93,7 @@
 }
 
 .library-b .cue-reply {
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 .library-b .cue-reply[hidden] {
@@ -119,11 +131,31 @@
   background: var(--ground-tint);
 }
 
+.library-b .cue-toggle .cue-prompt {
+  margin-right: 0;
+}
+
 .library-b .cue-toggle-text {
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: var(--measure);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.library-b .cue-excerpt {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: var(--space-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.library-b .cue-earlier[data-unfolded] .cue-excerpt {
+  display: none;
 }
 
 .library-b .cue-earlier[data-unfolded] .cue-toggle {
@@ -222,7 +254,7 @@
   align-items: center;
   gap: var(--space-2);
   height: var(--space-10);
-  padding: 0 var(--space-4) 0 var(--panel-inset);
+  padding: 0 var(--space-4) 0 var(--text-inset);
   border-top: 1px solid var(--rule);
   white-space: nowrap;
 }
@@ -249,7 +281,6 @@
 
 .library-b .panel-latest {
   margin-left: auto;
-  margin-right: calc(-1 * var(--space-2));
   font: 400 var(--text-micro) / var(--leading-micro) var(--font-mono);
   letter-spacing: inherit;
   visibility: hidden;
@@ -257,6 +288,12 @@
 
 .library-b .panel-latest[data-visible] {
   visibility: visible;
+}
+
+.library-b .panel-new {
+  margin-right: calc(-1 * var(--space-2));
+  font: 500 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
 }
 
 @media not ((hover: hover) and (pointer: fine)), (max-width: 767px) {
@@ -267,6 +304,10 @@
 }
 
 @media (max-width: 1023px) {
+  .library-b .cue-excerpt {
+    display: none;
+  }
+
   .library-b .cue-number,
   .library-b .cue-toggle .cue-number {
     position: static;
@@ -283,10 +324,18 @@
     top: calc(100% + var(--space-2));
     left: calc(-1 * var(--page-inline));
     right: calc(-1 * var(--page-inline));
+    padding-inline: 0;
+  }
+
+  .library-b .panel-body {
     max-height: calc(100dvh - var(--bar-height) - 2 * var(--space-2) - var(--space-16));
     border-inline: 0;
     border-top: 1px solid var(--rule-strong);
     border-radius: 0;
+  }
+
+  .library-b .panel-new {
+    min-height: var(--tap);
   }
 
   .library-b .cues {

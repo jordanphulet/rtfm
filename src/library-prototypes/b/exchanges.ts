@@ -21,3 +21,7 @@ export function exchangesOf(messages: AgentMessage[]): Exchange[] {
 export function plainText(markdown: string): string {
   return markdown.replaceAll(/[*_`]/g, "");
 }
+
+export function firstLineOf(markdown: string): string {
+  return plainText(markdown).split("\n")[0];
+}

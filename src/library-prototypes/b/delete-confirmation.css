@@ -1,7 +1,7 @@
 .library-b .scrim {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: calc(var(--z-dialog) - 1);
   background: color-mix(in srgb, var(--ground) 72%, transparent);
   visibility: hidden;
   opacity: 0;
@@ -23,10 +23,10 @@ html:has(.library-b .confirm[data-open]) {
 .library-b .confirm {
   position: fixed;
   top: var(--space-12);
-  left: calc(var(--page-inline) - var(--hang));
-  z-index: 11;
-  width: min(calc(var(--hang) + var(--measure) + 2 * var(--space-6)), 100cqi - 2 * var(--gutter));
-  padding: var(--space-6);
+  left: calc(var(--page-inline) - var(--hang) - var(--hairline));
+  z-index: var(--z-dialog);
+  width: calc(min(var(--column), 100cqi - 2 * var(--gutter)) + var(--hang) + var(--hairline) + var(--space-4));
+  padding: var(--space-5) var(--space-6) var(--space-6) var(--text-inset);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius-m);
   background: var(--ground-raised);
@@ -75,6 +75,24 @@ html:has(.library-b .confirm[data-open]) {
 
 .library-b .confirm-delete:hover {
   color: var(--cue);
+}
+
+@media (max-width: 1023px) {
+  .library-b .confirm {
+    left: var(--page-inline);
+    width: min(var(--column), 100cqi - 2 * var(--gutter));
+  }
+}
+
+@supports (anchor-name: --cue-bar) {
+  @media (min-width: 768px) {
+    .library-b .confirm {
+      position-anchor: --cue-bar;
+      top: anchor(top);
+      left: anchor(left);
+      width: anchor-size(width);
+    }
+  }
 }
 
 @media (max-width: 767px) {

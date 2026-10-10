@@ -19,12 +19,22 @@
   --write-head-lamp: 7px;
   --write-head-lamp-inset: calc((var(--write-head-lamp) - var(--write-head-width)) / 2);
   --write-head-offset: 28px;
+  --text-inset: max(var(--hang), var(--space-6));
+  --hairline: 1px;
+  --z-dialog: 11;
+}
+
+@media (max-width: 1279px) {
+  .library-b {
+    --hang: 32px;
+  }
 }
 
 @media (max-width: 1023px) {
   .library-b {
     --gutter: var(--space-8);
     --hang: 0px;
+    --write-head-offset: 12px;
   }
 }
 
@@ -32,6 +42,5 @@
   .library-b {
     --gutter: var(--space-4);
     --bar-height: var(--tap);
-    --write-head-offset: 12px;
   }
 }

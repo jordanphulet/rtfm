@@ -7,14 +7,37 @@ export function useDismissOutside(
 ) {
   useEffect(() => {
     if (!active) return;
-    const dismissIfOutside = (event: Event) => {
-      if (!region.current?.contains(event.target as Node)) onDismiss();
+    const isOutside = (event: Event) => !region.current?.contains(event.target as Node);
+    const onPointerDown = (event: PointerEvent) => {
+      if (!isOutside(event)) return;
+      swallowClickOfThisGesture();
+      onDismiss();
     };
-    document.addEventListener("pointerdown", dismissIfOutside);
-    document.addEventListener("focusin", dismissIfOutside);
+    const onFocusIn = (event: FocusEvent) => {
+      if (isOutside(event)) onDismiss();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("focusin", onFocusIn);
     return () => {
-      document.removeEventListener("pointerdown", dismissIfOutside);
-      document.removeEventListener("focusin", dismissIfOutside);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("focusin", onFocusIn);
     };
   }, [active, region, onDismiss]);
+}
+
+function swallowClickOfThisGesture() {
+  const gesture = new AbortController();
+  const options = { capture: true, signal: gesture.signal };
+  const end = () => gesture.abort();
+  window.addEventListener(
+    "click",
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      end();
+    },
+    options,
+  );
+  window.addEventListener("pointercancel", end, options);
+  queueMicrotask(() => window.addEventListener("pointerdown", end, options));
 }

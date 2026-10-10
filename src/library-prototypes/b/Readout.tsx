@@ -15,7 +15,7 @@ export function Readout(props: ReadoutProps) {
   const state = readoutState(props);
 
   return (
-    <div className="cue-readout" data-state={state} inert={props.covered}>
+    <div className="cue-readout" inert={props.covered}>
       <ReadoutContent state={state} {...props} />
     </div>
   );
@@ -58,7 +58,20 @@ function ReadoutContent({ state, ...props }: ReadoutProps & { state: ReadoutStat
       );
     case "suggestions":
       return (
-        <Suggestions libraryIsEmpty={props.libraryIsEmpty} onChoose={props.onSuggest} />
+        <>
+          <Suggestions
+            className="readout-suggestions"
+            libraryIsEmpty={props.libraryIsEmpty}
+            onChoose={props.onSuggest}
+          />
+          <span className="readout-slash readout-note">
+            <span aria-hidden="true">·</span>
+            <kbd className="keycap" aria-hidden="true">
+              /
+            </kbd>
+            returns you here
+          </span>
+        </>
       );
     case "starter":
       return <span className="readout-note">Finish the sentence, then press Enter</span>;

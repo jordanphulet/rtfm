@@ -1,16 +1,17 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { useAgent } from "../../agent";
 import { ReplyMarkdown, StatusRing } from "../../ui";
-import { exchangesOf, plainText, type Exchange } from "./exchanges";
+import { exchangesOf, firstLineOf, plainText, type Exchange } from "./exchanges";
 import { useStickToBottom } from "./useStickToBottom";
 import "./conversation.css";
 
 interface ConversationProps {
   open: boolean;
   onHide: () => void;
+  onStartNewManual: () => void;
 }
 
-export function Conversation({ open, onHide }: ConversationProps) {
+export function Conversation({ open, onHide, onStartNewManual }: ConversationProps) {
   const { messages, status } = useAgent();
   const exchanges = exchangesOf(messages);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -44,38 +45,43 @@ export function Conversation({ open, onHide }: ConversationProps) {
         data-open={open || undefined}
         inert={!open}
       >
-        <div ref={scrollerRef} className="panel-scroll">
-          <ol ref={contentRef} className="cues">
-            {exchanges.map((exchange) =>
-              exchange === current ? (
-                <CurrentCue key={exchange.ask.id} exchange={exchange} live={status !== "idle"} />
-              ) : (
-                <EarlierCue
-                  key={exchange.ask.id}
-                  exchange={exchange}
-                  unfolded={unfolded.has(exchange.number)}
-                  onToggle={() => toggle(exchange.number)}
-                />
-              ),
-            )}
-          </ol>
-        </div>
-        <div className="panel-foot">
-          <button type="button" className="text-button panel-hide" onClick={onHide}>
-            Hide{" "}
-            <kbd className="keycap" aria-hidden="true">
-              Esc
-            </kbd>
-          </button>
-          <span className="panel-hint">↑ recalls your last message</span>
-          <button
-            type="button"
-            className="text-button panel-latest"
-            data-visible={behind || undefined}
-            onClick={scrollToBottom}
-          >
-            Latest ↓
-          </button>
+        <div className="panel-body">
+          <div ref={scrollerRef} className="panel-scroll">
+            <ol ref={contentRef} className="cues">
+              {exchanges.map((exchange) =>
+                exchange === current ? (
+                  <CurrentCue key={exchange.ask.id} exchange={exchange} live={status !== "idle"} />
+                ) : (
+                  <EarlierCue
+                    key={exchange.ask.id}
+                    exchange={exchange}
+                    unfolded={unfolded.has(exchange.number)}
+                    onToggle={() => toggle(exchange.number)}
+                  />
+                ),
+              )}
+            </ol>
+          </div>
+          <div className="panel-foot">
+            <button type="button" className="text-button panel-hide" onClick={onHide}>
+              Hide{" "}
+              <kbd className="keycap" aria-hidden="true">
+                Esc
+              </kbd>
+            </button>
+            <span className="panel-hint">↑ recalls your last message</span>
+            <button
+              type="button"
+              className="text-button panel-latest"
+              data-visible={behind || undefined}
+              onClick={scrollToBottom}
+            >
+              Latest ↓
+            </button>
+            <button type="button" className="text-button panel-new" onClick={onStartNewManual}>
+              Start a new manual
+            </button>
+          </div>
         </div>
       </section>
       <p className="visually-hidden" aria-live="polite">
@@ -91,7 +97,7 @@ function CurrentCue({ exchange, live }: { exchange: Exchange; live: boolean }) {
     <li className="cue cue-current" data-live={live || undefined}>
       <p className="cue-ask">
         <CueNumber number={exchange.number} />
-        <span className="visually-hidden">You: </span>
+        <Prompt />
         {exchange.ask.text}
       </p>
       <div className="cue-reply">
@@ -127,9 +133,14 @@ function EarlierCue({ exchange, unfolded, onToggle }: EarlierCueProps) {
         onClick={onToggle}
       >
         <CueNumber number={exchange.number} />
-        <span className="visually-hidden">You: </span>
+        <Prompt />
         <span className="cue-toggle-text">{exchange.ask.text}</span>
         <span className="chevron" aria-hidden="true" />
+        {exchange.reply && (
+          <span className="cue-excerpt" aria-hidden="true">
+            {firstLineOf(exchange.reply.text)}
+          </span>
+        )}
       </button>
       <div id={replyId} className="cue-reply" hidden={!unfolded}>
         {exchange.reply && <Reply text={exchange.reply.text} />}
@@ -143,6 +154,17 @@ function CueNumber({ number }: { number: number }) {
     <span className="cue-number" aria-hidden="true">
       {number}
     </span>
+  );
+}
+
+function Prompt() {
+  return (
+    <>
+      <span className="cue-prompt" aria-hidden="true">
+        ›
+      </span>
+      <span className="visually-hidden">You: </span>
+    </>
   );
 }
 

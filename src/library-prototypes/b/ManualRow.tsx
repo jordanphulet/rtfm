@@ -8,11 +8,12 @@ import "./manual-row.css";
 interface ManualRowProps {
   manual: LibraryManual;
   leaving: boolean;
+  confirming: boolean;
   onDelete: (manual: LibraryManual, opener: HTMLElement) => void;
   onCollapsed: (manual: LibraryManual) => void;
 }
 
-export function ManualRow({ manual, leaving, onDelete, onCollapsed }: ManualRowProps) {
+export function ManualRow({ manual, leaving, confirming, onDelete, onCollapsed }: ManualRowProps) {
   const rowRef = useRef<HTMLLIElement>(null);
   const onCollapsedRef = useRef(onCollapsed);
   const subtitleId = useId();
@@ -34,7 +35,13 @@ export function ManualRow({ manual, leaving, onDelete, onCollapsed }: ManualRowP
   }, [leaving, manual]);
 
   return (
-    <li ref={rowRef} className="row" data-manual-id={manual.id} data-leaving={leaving || undefined}>
+    <li
+      ref={rowRef}
+      className="row"
+      data-manual-id={manual.id}
+      data-leaving={leaving || undefined}
+      data-confirming={confirming || undefined}
+    >
       <div className="row-main">
         <h2 className="row-title">
           <Link
@@ -65,7 +72,10 @@ export function ManualRow({ manual, leaving, onDelete, onCollapsed }: ManualRowP
         <span className="row-separator" aria-hidden="true">
           ·
         </span>
-        <span className="row-opened">Opened {formatLastOpened(manual.lastOpenedAt)}</span>
+        <span className="row-opened">
+          <span className="row-opened-word">Opened </span>
+          {formatLastOpened(manual.lastOpenedAt)}
+        </span>
       </div>
       <button
         type="button"

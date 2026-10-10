@@ -22,6 +22,11 @@
   overflow: hidden;
 }
 
+.library-b .row[data-confirming] {
+  z-index: var(--z-dialog);
+  background: var(--ground-tint);
+}
+
 .library-b .row:has(.row-link:focus-visible) {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
@@ -129,6 +134,16 @@
 .library-b .row .row-delete:hover {
   color: var(--ink-strong);
   background: var(--ground-tint);
+}
+
+@media (min-width: 1024px) {
+  .library-b .row-opened-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 
 @media (max-width: 1023px) {
