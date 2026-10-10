@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, type ReactNode } from "react";
+import { Component, lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useParams } from "react-router";
 
 const designs = {
@@ -57,17 +57,18 @@ class DesignErrorBoundary extends Component<{ children: ReactNode }, DesignError
 
 function DesignSwitcher({ current, sectionId }: { current: DesignKey; sectionId?: string }) {
   const { search } = useLocation();
+  const modalIsOpen = useSyncExternalStore(subscribeToDomChanges, isModalOpen);
   const keys = Object.keys(designs) as DesignKey[];
 
   return (
-    <nav aria-label="Design" data-shot="design-switcher" style={switcherStyle}>
+    <nav aria-label="Design" data-shot="design-switcher" className="design-switcher" inert={modalIsOpen}>
+      <style>{switcherCss}</style>
       {keys.map((key) => (
         <Link
           key={key}
           to={{ pathname: sectionId ? `/${key}/${sectionId}` : `/${key}`, search }}
           reloadDocument
           aria-current={key === current ? "page" : undefined}
-          style={key === current ? currentLinkStyle : linkStyle}
         >
           {key.toUpperCase()}
         </Link>
@@ -76,27 +77,48 @@ function DesignSwitcher({ current, sectionId }: { current: DesignKey; sectionId?
   );
 }
 
-const switcherStyle = {
-  position: "fixed",
-  right: 8,
-  bottom: 8,
-  zIndex: 1000,
-  display: "flex",
-  gap: 2,
-  padding: 2,
-  background: "#1e1e1e",
-  font: "11px/1 ui-monospace, monospace",
-  opacity: 0.7,
-} as const;
+function isModalOpen() {
+  const modals = document.querySelectorAll("dialog:modal, [aria-modal='true']");
+  return [...modals].some((modal) => !modal.closest("[inert]"));
+}
 
-const linkStyle = {
-  padding: "4px 6px",
-  color: "#9a9a9a",
-  textDecoration: "none",
-} as const;
+function subscribeToDomChanges(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["open", "inert", "aria-modal"],
+  });
+  return () => observer.disconnect();
+}
 
-const currentLinkStyle = {
-  ...linkStyle,
-  color: "#ececec",
-  background: "#333",
-} as const;
+const switcherCss = `
+  .design-switcher {
+    position: fixed;
+    top: 50%;
+    right: 2px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 1px;
+    background: #1e1e1e;
+    font: 11px/1 ui-monospace, monospace;
+    opacity: 0.7;
+    transform: translateY(-50%);
+  }
+  .design-switcher:hover,
+  .design-switcher:focus-within {
+    opacity: 1;
+  }
+  .design-switcher a {
+    padding: 4px 2px;
+    color: #9a9a9a;
+    text-decoration: none;
+  }
+  .design-switcher a[aria-current="page"] {
+    color: #ececec;
+    background: #333;
+  }
+`;
