@@ -623,7 +623,8 @@ the reader's own, in `prose.css`.
 
 ## Build structure
 
-The reader lives in `src/reader/`. It is built on two shared folders:
+The reader lives in `src/reader/`. `src/App.tsx` loads it lazily at `/read` and
+`/read/:sectionId`, so it is its own chunk. It is built on two shared folders:
 
 - **`src/ui/`, the design system** (documented in `src/ui/README.md`), shared with the library.
   Importing it loads the fonts (`fonts.ts`), the tokens (`tokens.css`, on `:root`), the page and

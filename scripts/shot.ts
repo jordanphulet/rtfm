@@ -1,66 +1,47 @@
-import { mkdir, rm } from "node:fs/promises";
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type BrowserContextOptions,
-  type Page,
-} from "playwright";
-import { createLogger, createServer, type Logger } from "vite";
+import type { Page } from "playwright";
 import type * as ManualModule from "../src/manual/sample/index.ts";
+import {
+  captureAll,
+  DESKTOP,
+  emptyDir,
+  PHONE,
+  printSummary,
+  settle,
+  startServer,
+  type Capture,
+  type Size,
+} from "./screenshots.ts";
 
 const PORT = 5174;
-const OUT_DIR = "shots";
-const SETTLE_MS = 300;
+const OUT_DIR = "shots/reader";
 const TOC_TOGGLE_TIMEOUT_MS = 3000;
 const TOC_TOGGLE = "[data-shot=toc-toggle]";
 
 type Shot = { state: string; path: string; fullPage?: boolean; openToc?: boolean };
-type Variant = { name: string; options: BrowserContextOptions; onlyStates?: string[] };
-type ShotResult = { file: string; saved: boolean; errors: string[] };
+type Variant = Size & { onlyStates?: string[] };
 
 const VARIANTS: Variant[] = [
-  { name: "desktop", options: { viewport: { width: 1440, height: 900 } } },
-  {
-    name: "mobile",
-    options: { viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true },
-  },
+  { name: "desktop", options: DESKTOP },
+  { name: "mobile", options: PHONE },
   {
     name: "desktop-reduced",
-    options: { viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" },
+    options: { ...DESKTOP, reducedMotion: "reduce" },
     onlyStates: ["start", "streaming"],
   },
 ];
 
-const server = await createServer({
-  server: { port: PORT, strictPort: true, forwardConsole: false },
-  clearScreen: false,
-  customLogger: createLoggerWithoutRepeatedErrors(),
-});
+const server = await startServer(PORT);
 
 try {
-  await server.listen();
-  await rm(OUT_DIR, { recursive: true, force: true });
-  await mkdir(OUT_DIR, { recursive: true });
-
+  await emptyDir(OUT_DIR);
   const manual = (await server.ssrLoadModule("/src/manual/sample/index.ts")) as typeof ManualModule;
-  const results = await captureAll(`http://localhost:${PORT}`, shotsFor(manual.SHOT_SECTIONS));
+  const shots = shotsFor(manual.SHOT_SECTIONS);
+  const results = await captureAll(`http://localhost:${PORT}`, VARIANTS, (variant) =>
+    capturesFor(variant, shots),
+  );
   process.exitCode = printSummary(results) ? 0 : 1;
 } finally {
   await server.close();
-}
-
-function createLoggerWithoutRepeatedErrors(): Logger {
-  const logger = createLogger("warn");
-  const loggedErrors = new Set<string>();
-  const logError = logger.error;
-  logger.error = (message, options) => {
-    const key = options?.error?.message ?? message;
-    if (loggedErrors.has(key)) return;
-    loggedErrors.add(key);
-    logError(message, options);
-  };
-  return logger;
 }
 
 function shotsFor(sections: typeof ManualModule.SHOT_SECTIONS): Shot[] {
@@ -81,60 +62,18 @@ function shotsFor(sections: typeof ManualModule.SHOT_SECTIONS): Shot[] {
   ];
 }
 
-async function captureAll(baseURL: string, shots: Shot[]): Promise<ShotResult[]> {
-  const browser = await chromium.launch();
-  try {
-    const results = await Promise.all(
-      VARIANTS.map((variant) => captureVariant(browser, baseURL, variant, shots)),
-    );
-    return results.flat();
-  } finally {
-    await browser.close();
-  }
-}
-
-async function captureVariant(
-  browser: Browser,
-  baseURL: string,
-  variant: Variant,
-  shots: Shot[],
-): Promise<ShotResult[]> {
-  const context = await browser.newContext({ ...variant.options, baseURL, colorScheme: "dark" });
-  const results: ShotResult[] = [];
-  try {
-    for (const shot of shots) {
-      if (variant.onlyStates && !variant.onlyStates.includes(shot.state)) continue;
-      results.push(await capture(context, shot, `${shot.state}-${variant.name}`));
-    }
-  } finally {
-    await context.close();
-  }
-  return results;
-}
-
-async function capture(context: BrowserContext, shot: Shot, name: string): Promise<ShotResult> {
-  const file = `${OUT_DIR}/${name}.png`;
-  const errors = new Set<string>();
-  let saved = false;
-
-  const page = await context.newPage();
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.add(briefly(`${message.text()}\n${message.location().url}`));
-  });
-  page.on("pageerror", (error) => errors.add(briefly(error.stack ?? error.message)));
-
-  try {
-    await page.goto(shot.path, { waitUntil: "networkidle" });
-    await settle(page);
-    if (shot.openToc) await openToc(page, name);
-    await page.screenshot({ path: file, fullPage: shot.fullPage, animations: "disabled" });
-    saved = true;
-  } catch (error) {
-    errors.add(`Capture failed: ${String(error).split("\n")[0]}`);
-  } finally {
-    await page.close();
-  }
-  return { file, saved, errors: [...errors] };
+function capturesFor(variant: Variant, shots: Shot[]): Capture[] {
+  return shots
+    .filter((shot) => !variant.onlyStates || variant.onlyStates.includes(shot.state))
+    .map((shot) => {
+      const name = `${shot.state}-${variant.name}`;
+      return {
+        path: shot.path,
+        file: `${OUT_DIR}/${name}.png`,
+        fullPage: shot.fullPage,
+        prepare: shot.openToc ? (page) => openToc(page, name) : undefined,
+      };
+    });
 }
 
 async function openToc(page: Page, name: string) {
@@ -145,38 +84,4 @@ async function openToc(page: Page, name: string) {
   }
   await toggle.click({ timeout: TOC_TOGGLE_TIMEOUT_MS });
   await settle(page);
-}
-
-async function settle(page: Page) {
-  await page.evaluate(() => document.fonts.ready.then(() => undefined));
-  await page.waitForTimeout(SETTLE_MS);
-}
-
-function briefly(error: string): string {
-  return error
-    .replaceAll(/%[a-zA-Z]/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .slice(0, 2)
-    .join("  ");
-}
-
-function printSummary(results: ShotResult[]): boolean {
-  const saved = results.filter((result) => result.saved);
-  console.log(`\nSaved ${saved.length} of ${results.length} screenshots:`);
-  for (const { file } of saved) console.log(`  ${file}`);
-
-  const failed = results.filter((result) => result.errors.length > 0);
-  if (failed.length === 0) {
-    console.log("\nNo errors.");
-    return true;
-  }
-
-  console.log(`\nErrors in ${failed.length} screenshots:`);
-  for (const { file, errors } of failed) {
-    console.log(`  ${file}`);
-    for (const error of errors) console.log(`    ${error}`);
-  }
-  return false;
 }
