@@ -307,7 +307,7 @@ model**.
   passes a code review.
 
 ### LB.6 — Design review (a new agent)
-- **Status:** A: doing (agent: a86e7ef37de519285) · B: doing (agent: a18d2478f56f66665) · C: doing (agent: a341d5742d86732b5)
+- **Status:** A: doing (agent: a86e7ef37de519285) · B: done · C: doing (agent: a341d5742d86732b5)
 - **Depends on:** the matching LB.5
 - **Files:** `src/library-prototypes/<x>/REVIEW.md`
 - **Do:**
@@ -325,7 +325,7 @@ model**.
 - **Done when:** `REVIEW.md` covers every rule and has the scores and the fix list.
 
 ### LB.7 — Fix (one round, by the builder)
-- **Status:** A: todo · B: todo · C: todo
+- **Status:** A: todo · B: doing (agent: ab6678b62487b6c90) · C: todo
 - **Depends on:** the matching LB.6
 - **Files:** `src/library-prototypes/<x>/**` (except `REVIEW.md`)
 - **Do:** fix every rule failure and as many quality items as possible. Log a "Response to
