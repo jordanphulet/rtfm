@@ -77,7 +77,7 @@ the comparison live at the `library-comparison` tag.
 - **Done when:** `git tag` lists `library-comparison` pointing at `55bda41`.
 
 ### AL.2 — Promote A to the landing page
-- **Status:** doing (agent: a31d1f9ed43d22cbb)
+- **Status:** done
 - **Depends on:** AL.1
 - **Files:** `src/**` (except `src/ui/`, `src/manual/`, `src/library/` and `src/agent/`, whose
   READMEs AL.5 updates), `DESIGN.md`
@@ -99,7 +99,7 @@ the comparison live at the `library-comparison` tag.
   - the landing page looks exactly as variant A did (compare against `shots/library/a/`).
 
 ### AL.3 — Share what the reader and the landing page duplicate
-- **Status:** todo
+- **Status:** doing (agent: af20bcf902a024d43)
 - **Depends on:** AL.2
 - **Files:** `src/ui/**`, `src/reader/**`, `src/home/**`
 - **Do:** move the pieces both the reader and the landing page now carry their own copies of into
@@ -135,7 +135,7 @@ the comparison live at the `library-comparison` tag.
   - `npm test`, the type check and the screenshots pass.
 
 ### AL.4 — Remove the prototype tooling
-- **Status:** todo
+- **Status:** doing (agent: afae73315b065a768)
 - **Depends on:** AL.2
 - **Files:** `package.json`, `scripts/**`, `docs/**`, `.gitignore`
 - **Do:**
