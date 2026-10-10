@@ -268,7 +268,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P2 — Review (fresh agents, not the builders)
 
 ### P2.A.review · P2.B.review · P2.C.review
-- **Status:** A: doing (agent: a595c9bd0f9bd05a9) · B: doing (agent: ac8dd22be4eefcfef) · C: doing (agent: a4530ac823ad8878e)
+- **Status:** A: done · B: doing (agent: ac8dd22be4eefcfef) · C: doing (agent: a4530ac823ad8878e)
 - **Depends on:** the matching P1.x.build, and P1.shot
 - **Agent:** a new agent, never the one that built the design
 - **Files:** `src/designs/<x>/REVIEW.md` (the only file it may write)
@@ -289,7 +289,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P3 — Fix (one round only)
 
 ### P3.A.fix · P3.B.fix · P3.C.fix
-- **Status:** A: todo · B: todo · C: todo
+- **Status:** A: doing (agent: a0d3ba98559399c81) · B: todo · C: todo
 - **Depends on:** the matching P2.x.review
 - **Agent:** the builder from P1.x.build if it's still available (`SendMessage`); otherwise a new
   agent given the same brief
