@@ -260,6 +260,19 @@ model**.
     which type-checks one variant in isolation.
 - **Done when:** both commands work against a stub variant.
 
+### LB.2b — Typography in the library and agent data
+- **Status:** todo (start when an agent slot is free)
+- **Depends on:** LB.2
+- **Files:** `src/library/**`, `src/agent/**`
+- **Do:**
+  - Use curly apostrophes and quotes, real dashes and ellipses in every seed manual, canned reply
+    and demo message. DESIGN.md's typographic detail requires them.
+  - Make keyword matching accept both ’ and ' in what the user types.
+  - Keep `npm run shot:library`'s fallback wait working: it reads the reply text from
+    `replyTo()`.
+- **Done when:** `grep` finds no straight apostrophes or quotes in user-facing strings in
+  `src/library` and `src/agent`; tests pass, including one with a typed curly apostrophe.
+
 ### LB.4 — Specs (A, B and C at the same time)
 - **Status:** A: done · B: done · C: done (approved with notes, folded in during the build)
 - **Depends on:** LB.3
