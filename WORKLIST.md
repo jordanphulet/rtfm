@@ -254,7 +254,7 @@ Screenshot caveats to include in every design agent's brief:
   3 or more passes; no files are changed outside `src/designs/<x>/`.
 
 ### P1.shot — Full-page streaming screenshot
-- **Status:** doing (agent: a37edd7e6e7681d49)
+- **Status:** done
 - **Depends on:** — (start when an agent slot is free)
 - **Files:** `scripts/shot.ts`
 - **Do:** add a `streaming-full` state: the unwritten section with `?freeze=0.5`, captured full
@@ -268,7 +268,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P2 — Review (fresh agents, not the builders)
 
 ### P2.A.review · P2.B.review · P2.C.review
-- **Status:** A: todo · B: todo · C: todo
+- **Status:** A: doing (agent: a595c9bd0f9bd05a9) · B: todo · C: todo
 - **Depends on:** the matching P1.x.build, and P1.shot
 - **Agent:** a new agent, never the one that built the design
 - **Files:** `src/designs/<x>/REVIEW.md` (the only file it may write)
