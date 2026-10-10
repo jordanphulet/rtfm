@@ -296,7 +296,7 @@ model**.
   reader's design system.
 
 ### LB.5 — Build (the same agent as the spec)
-- **Status:** A: doing (agent: a1468a1e11d5d0641) · B: doing (agent: ab6678b62487b6c90) · C: doing (agent: aa7b0b3a8a8e1b691)
+- **Status:** A: in code review · B: in code review · C: in code review
 - **Depends on:** the matching LB.4
 - **Files:** `src/library-prototypes/<x>/**`
 - **Do:**
