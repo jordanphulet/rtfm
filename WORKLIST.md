@@ -93,7 +93,7 @@ of any existing task that must now wait for it.
   font is installed and exported.
 
 ### P0.2 — Shared runtime
-- **Status:** doing (agent: aba8824b8fe979be7)
+- **Status:** done
 - **Depends on:** P0.1
 - **Files:** `src/shared/**` (except `src/shared/manual/` and `types.ts`), `package.json`
 - **Do:**
@@ -119,7 +119,7 @@ of any existing task that must now wait for it.
 - **Done when:** tests pass; `npm run build` passes; the README covers every export.
 
 ### P0.3 — Sample manual
-- **Status:** doing (agent: a0900de9e481682b0)
+- **Status:** done
 - **Depends on:** — (the data model is in `DESIGN_RULES.md`)
 - **Files:** `src/shared/manual/**`
 - **Do:**
@@ -146,9 +146,9 @@ of any existing task that must now wait for it.
   yet, write against the model in `DESIGN_RULES.md` and type-check once it appears.
 
 ### P0.4 — Screenshot and check scripts
-- **Status:** todo
+- **Status:** doing (agent: ac33fbce557491def)
 - **Depends on:** P0.2, P0.3
-- **Files:** `scripts/**`, `package.json`
+- **Files:** `scripts/**`, `package.json`, `tsconfig.scripts.json` (if needed)
 - **Do:**
   - **`npm run shot -- <a|b|c>`** (Playwright, Chromium):
     - starts its own dev server on a **separate port per design** (a = 5174, b = 5175,
