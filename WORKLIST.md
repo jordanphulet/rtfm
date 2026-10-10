@@ -172,7 +172,7 @@ of any existing task that must now wait for it.
 - **Done when:** both commands work against the stub design `a`, and the screenshots exist.
 
 ### P0.5 — Reference screenshots
-- **Status:** doing (agent: a4029f0c8305d9a8c)
+- **Status:** done
 - **Depends on:** P0.4
 - **Files:** `docs/inspo/**`, `scripts/inspo.ts`
 - **Do:**
@@ -200,9 +200,9 @@ of any existing task that must now wait for it.
   wall or an error page); the README is written.
 
 ### P0.6 — Base check
-- **Status:** todo
+- **Status:** doing (agent: ad2f7e953334ba1b1)
 - **Depends on:** P0.1–P0.5
-- **Files:** `src/shared/**`, `scripts/**`, root config
+- **Files:** `src/shared/**`, `scripts/**`, root config, root `README.md`
 - **Do:**
   - Run `npm run build`, `npm test` and `npm run shot -- a`, and fix anything that fails.
   - Make sure `types.ts`, the sample manual and `src/shared/README.md` all agree.
