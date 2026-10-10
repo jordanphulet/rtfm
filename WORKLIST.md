@@ -66,7 +66,7 @@ Design A (the show-control desk) won the comparison. This phase turns the three-
 into a single reader. **Cleanup only:** no new features and no design changes.
 
 ### CL.1 — Tag the comparison
-- **Status:** todo
+- **Status:** done
 - **Owner:** orchestrator (a git operation)
 - **Depends on:** —
 - **Do:** tag commit `438fd36` (all three designs plus the comparison) as `design-comparison`,
@@ -74,7 +74,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
 - **Done when:** `git tag` lists `design-comparison` pointing at `438fd36`.
 
 ### CL.2 — Promote A to the reader
-- **Status:** todo
+- **Status:** doing (agent: a216ef2d0c31b5212)
 - **Depends on:** CL.1
 - **Files:** `src/**`, `DESIGN.md`
 - **Do:**
