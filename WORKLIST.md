@@ -57,6 +57,8 @@ of any existing task that must now wait for it.
   with the files it changed, how it checked its work, and anything left unresolved.
 - Agents work in the same checkout at the same time, so they **must stay inside their task's
   Files**. Two tasks that touch the same file never run at the same time.
+- While designs are being built at the same time (P1–P3), `npm run build` can fail because of
+  another design's unfinished work. Gate each design task on `npm run check -- <x>` instead.
 
 **Statuses:** `todo` · `doing` · `done` · `blocked` · `needs-human`
 
@@ -65,35 +67,36 @@ of any existing task that must now wait for it.
 ## P0 — Base
 
 ### P0.1 — Scaffold
-- **Status:** todo
+- **Status:** done
 - **Depends on:** —
 - **Files:** repo root config, `package.json`, `src/App.tsx`, `src/main.tsx`,
-  `src/designs/*/index.tsx` (stubs), `src/shared/fonts.ts`, `.claude/launch.json`, `.gitignore`
+  `src/designs/*/index.tsx` (stubs), `src/shared/types.ts`, `src/shared/fonts/**`,
+  `.claude/launch.json`, `.gitignore`
 - **Do:**
   - Vite + React + TypeScript (strict), React Router.
+  - `src/shared/types.ts`: exactly the data model in `DESIGN_RULES.md`.
   - Install a curated Fontsource set, checking on npm that each package exists. Prefer variable
     versions. **No Inter.**
     - **Serif:** Newsreader, Literata, Source Serif 4, EB Garamond
     - **Display:** Fraunces, Instrument Serif
     - **Sans:** Instrument Sans, IBM Plex Sans, Public Sans
     - **Mono:** JetBrains Mono, IBM Plex Mono
-  - `src/shared/fonts.ts`: one export per font, so a design imports only the fonts it uses.
+  - `src/shared/fonts/<font>.ts`: one module per font, so importing a font registers only that font.
   - Install `three` and `@types/three` (for design C).
   - `src/App.tsx`: routes `/:design` and `/:design/:sectionId`. Each design is **lazy-loaded**
     (`React.lazy`), so a broken design can't break the others. Add a small A | B | C switcher in
     a corner that keeps the current section when you switch.
   - Stub `src/designs/{a,b,c}/index.tsx` that just render "Design X".
   - `.claude/launch.json` entry `reader` that runs the dev server, for the browser pane preview.
-  - `.gitignore`: `node_modules`, `dist`, `shots/`, Playwright output.
+  - `.gitignore`: `node_modules`, `dist`, `shots/`, Playwright output, editor swap files (`*.swp`).
 - **Done when:** `npm run dev` serves `/a`, `/b`, `/c`; `npm run build` passes; every listed
   font is installed and exported.
 
 ### P0.2 — Shared runtime
-- **Status:** todo
+- **Status:** doing (agent: aba8824b8fe979be7)
 - **Depends on:** P0.1
-- **Files:** `src/shared/**` (except `src/shared/manual/`), `package.json`
+- **Files:** `src/shared/**` (except `src/shared/manual/` and `types.ts`), `package.json`
 - **Do:**
-  - `types.ts`: exactly the data model in `DESIGN_RULES.md`.
   - **Manual store** (in memory, resets on reload): `useManual()` returns the manual with live
     statuses. Helpers for previous/next section in reading order (chapters, then appendices) and
     for finding a section by ID.
@@ -112,11 +115,11 @@ of any existing task that must now wait for it.
     syntax is never visible.
   - Unit tests (Vitest) for the repair function and for prev/next ordering.
   - `src/shared/README.md`: the API reference designers read. Include the hooks, the
-    `<Markdown>` props, the URL options, and the fonts in `fonts.ts`.
+    `<Markdown>` props, the URL options, and the fonts in `src/shared/fonts/`.
 - **Done when:** tests pass; `npm run build` passes; the README covers every export.
 
 ### P0.3 — Sample manual
-- **Status:** todo
+- **Status:** doing (agent: a0900de9e481682b0)
 - **Depends on:** — (the data model is in `DESIGN_RULES.md`)
 - **Files:** `src/shared/manual/**`
 - **Do:**
@@ -139,8 +142,8 @@ of any existing task that must now wait for it.
     screenshot script uses.
 - **Done when:** it type-checks against `types.ts`; every markdown feature appears; every
   cross-reference target exists; the `SHOT_SECTIONS` IDs exist with the right starting statuses.
-- **Note:** if `types.ts` doesn't exist yet, write against the model in `DESIGN_RULES.md`.
-  P0.6 reconciles any differences.
+- **Note:** P0.1 creates `src/shared/types.ts` and runs at the same time. If it doesn't exist
+  yet, write against the model in `DESIGN_RULES.md` and type-check once it appears.
 
 ### P0.4 — Screenshot and check scripts
 - **Status:** todo
@@ -164,6 +167,8 @@ of any existing task that must now wait for it.
   - **`npm run check -- <x>`**: type-checks only `src/shared` plus `src/designs/<x>`, so one
     design's half-finished code can't fail another design's check.
   - Install the Playwright Chromium browser.
+  - Hide the dev design switcher (`[data-shot=design-switcher]`) in every capture.
+  - Make sure `scripts/` is covered by a tsconfig, so the scripts are type-checked too.
 - **Done when:** both commands work against the stub design `a`, and the screenshots exist.
 
 ### P0.5 — Reference screenshots
@@ -252,7 +257,8 @@ images in `docs/inspo/<x>/`, and `src/shared/README.md`.
   - Check **every locked rule** (pass/fail, with evidence) and the **banned list**.
   - Score 1–5, with one line of evidence each, for: hierarchy, spacing consistency, reading
     comfort, state clarity, streaming feel, phone layout, signature moment, and
-    "would a professional ship this".
+    "would a professional ship this". Judge the desktop layout first. Flag anything that looks
+    simplified on desktop just to suit the phone layout.
   - Compare against `docs/inspo/<x>/`: what the references do better.
   - End with a **prioritized fix list**: every rule failure first, then at most 8 quality fixes.
     Each fix must be specific (what, where, and to what).

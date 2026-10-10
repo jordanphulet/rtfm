@@ -82,8 +82,15 @@ in, and the section becomes `written`.
 - **Body text is real HTML text.** It is never drawn with Canvas or WebGL, and it can always be
   selected, searched with find-in-page, and zoomed.
 
+**Desktop first, phone too**
+- **Desktop is the primary experience.** Design it at full strength first: wide layouts, multiple
+  columns, margin notes and hover previews are all welcome.
+- **Never simplify the desktop layout to make the phone layout easier.** The phone gets its own
+  adaptation at narrow widths (a different structure, a drawer, notes moved inline), not a
+  shared lowest-common-denominator layout.
+- Works from **375px to 1440px+** wide, with no horizontal page scroll.
+
 **Baseline quality**
-- Works from **375px to 1440px** wide, with no horizontal page scroll.
 - TOC and prev/next work from the keyboard, with a visible focus state.
 - Text contrast meets **WCAG AA**.
 - **`prefers-reduced-motion`** is respected: every animation has a calm fallback.
