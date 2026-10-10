@@ -8,7 +8,7 @@
   align-items: flex-start;
   gap: var(--space-1);
   padding: var(--space-3);
-  background: var(--bg-raised);
+  background: var(--page-bg);
   border-radius: var(--radius);
 }
 

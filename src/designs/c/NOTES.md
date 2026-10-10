@@ -134,3 +134,79 @@
   - Four start-page round trips leave one canvas and no errors.
   - With `getContext` stubbed to fail, the stage is gone and nothing is thrown.
   - Streaming at 1440 and 375: no movement above the live edge, no self-scroll, follow works.
+
+## Pass 5 (P3 review round)
+
+**Saw**
+- With the reviewer’s phone fix (12px gutters and −0.015em tracking at ≤400px), the median line
+  length is 45, 46 and 46 characters at 375 across three sections, and 47–48 at 390. Desktop stays
+  at 64–66.
+- The house hover outline already existed but was invisible. It was drawn at glass depth, inside
+  the wall around the opening, so the reveal hid it. The 8% glass lift barely showed.
+- The writing window, flickering at 75–100% in a single pane, looked like a slightly oranger lit
+  window.
+- After narrowing the phone gutter, wide tables and code still bled by the old 16px, which made
+  the page 379px wide at 375 (`dense-mobile` was 379px). The coordinator flagged the same thing.
+- The sill light and the lower-sash lamp: in a close crop of the start page with 1.2 writing, the
+  lit lower sash under a dark upper sash is unmistakable and echoes the drawer mark. The kerb
+  railing no longer cuts the basement windows into barcodes.
+- Hover from a contents row (4.2) and from a window (2.2): a bright frame around the window, lifted
+  glass, the row highlighted, and the caption naming the section.
+
+**Changed**
+- Moved the outline in front of the wall and sill, made it 0.09 units in `--ink`, and raised the
+  hover lift to 30%.
+- Split each window into two sash instances. A writing window lights only its lower sash (pure
+  lamp, 45–100% flicker) with an 18% spill above. Written windows are `--lit` at 85%.
+- Added sill-light strips to the same `InstancedMesh`, so no extra draw call.
+- Replaced the full-height railing with a kerb and a short railing at street level.
+- Raised pointer parallax from ±2° to ±4° and tightened the house framing a little.
+- Added a `--gutter` on the reader that the phone bleed and the sticky first column use.
+  Re-checked eight pages at 375, 390, 768, 1100, 1180, 1280 and 1440: no horizontal overflow, and
+  every phone screenshot is 375px wide.
+
+## Response to review
+
+| Item | Status | Notes |
+| --- | --- | --- |
+| R1 Phone measure | Done | 12px gutters and −0.015em tracking at ≤400px. Measured medians are 45/46/46 at 375 and 47–48 at 390. |
+| R2 House window hover | Done | An `--ink` outline in front of the wall and sill, and a 30% lift. Obvious at 1× from both the window and the contents row. |
+| Q1 Inline unwritten mark looks like tofu | Done | Every window mark now has a 1px cross of glazing bars. In text it sits on the baseline with 0.2em before it. |
+| Q2 Writing lamp | Done | The lower sash is lit in pure lamp with a 45–100% flicker, the upper sash is dim, written windows are lit at 85%, there is sill light, and the railing is lowered to street level. |
+| Q3 Table numbers breaking at 1100–1279 | Done | Every table column except the last is `nowrap` at ≥601px. |
+| Q4 Phone tables | Done | Text cells have a 10em minimum, numeric cells don’t wrap, the cut column shows the table scrolls, sticky cells use `--page-bg` (no cellar stripe), and code gets extra right padding. Also fixed the 4px page overflow. |
+| Q5 Tail too long and dim | Done | 24/40/48 characters at 40/62/80% ink. `streaming-full-*` still shows all three steps, now about one line at 1440. |
+| Q6 Name “Writing” in the contents | Done | A caption-size “Writing” in `--lamp` after the title in the drawer and start-page rows (`aria-hidden`, because the mark already says it). |
+| Q7 Follow button over the text | Done | Fixed and caption-size at ≥1100, 24px right of the column (in the lane at ≥1280). Checked at 1100, 1180, 1280, 1440 and 1920: the gap is always 24px, and it is on screen. It stays sticky in the column below 1100. |
+| Q8 Begin hierarchy | Done | The summary is dropped and the title is set at 25/32, weight 540. |
+| Also: blockquote device | Done | A 1px `--line-strong` rule hangs 24px left. |
+| Also: ↗ wrapping in footnote previews | Done | `nowrap` on external links in previews. |
+| Also: popover above the link at 1180 | Skipped | It only flips above when there isn’t room below, as the spec says. At 1100–1279 the right margin (214–303px) is narrower than a 288px preview plus its gap, so the margin isn’t a reliable home. |
+| Also: corner mark backing | Done | Painted in `--page-bg`, so it is unboxed type that is still opaque. |
+| Also: switcher reachable while the drawer is open | Skipped | Outside C’s tree. The coordinator says the shared switcher now goes inert while the drawer is open. |
+| Also: switcher over the phone bar | Skipped | Outside C’s folder. It has been moved by another task. |
+
+## Pass 6 (code review follow-up)
+
+- Restored the `.c-contents[data-variant="start"]` prefix on the start-page summary size (a
+  replace had matched twice). The drawer’s current-row summary is caption size again. Deleted the
+  duplicated `.c-row-writing` block.
+- The sill-light matrices are placed in `setStatuses` and uploaded only there. Per frame, the loop
+  writes colours only.
+- Merged each phone block back into one 600px block followed by a 400px override, in
+  `section.css` and `prose.css`.
+- The numeric-cell selector is `[style*="text-align: right"]`. React serializes it as
+  `text-align: right;` (checked live, and it computes `nowrap`).
+- Removed the no-op `vertical-align: 0` on the inline mark. In a 2× crop, the 9px mark on the
+  baseline already spans the x-height, so lifting it read as floating.
+- A raycast hit with no `instanceId` now returns nothing instead of window 0.
+- The sill dimensions are one exported `SILL` constant, used by the model and the scene.
+- The follow control sits 16px right of the column at 1100–1279 (24px at ≥1280) with tighter
+  padding. At 1100 it now clears the right edge by 33px (`f1100` crop).
+- The written mark’s glazing bars use the house’s glass tone (`--glass`), so they read in the
+  drawer and on hovered rows.
+- Re-checked live:
+  - streaming at 1440: no movement above the live edge, no self-scroll, follow stops on an upward
+    wheel;
+  - the house’s writing sash, sill light and hover are still in place;
+  - reduced motion makes 0 rAF calls.

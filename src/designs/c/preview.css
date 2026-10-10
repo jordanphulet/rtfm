@@ -81,3 +81,7 @@
     animation: none;
   }
 }
+
+.c-preview-note a.c-external {
+  white-space: nowrap;
+}

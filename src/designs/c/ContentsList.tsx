@@ -65,7 +65,14 @@ function Row({ section, variant, currentId, hoveredId, onHover, onNavigate }: Co
       <WindowMark status={section.status} />
       <span className="c-row-label">{section.label}</span>
       <span className="c-row-text">
-        <span className="c-row-title">{section.title}</span>
+        <span className="c-row-title">
+          {section.title}
+          {section.status === "writing" && (
+            <span className="c-row-writing" aria-hidden="true">
+              Writing
+            </span>
+          )}
+        </span>
         {showSummary && <span className="c-row-summary">{section.summary}</span>}
       </span>
     </Link>

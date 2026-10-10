@@ -25,7 +25,7 @@ for you.
 | `c/claude-ai-streaming-start.jpg` | The newest words are faint where the line ends, with no cursor | The developing tail: three ink levels by position, no caret |
 | | No chrome around the text: a serif body on a plain ground | The reading column has no container, border or background |
 | | A quiet one-line status above the reply | The meta line: section number, chapter, state |
-| `c/claude-ai-streaming-later.jpg` | Streaming in the final layout (bold lead-ins, list numbers in place); only the last line or two still faint; nothing above moves | Only colour changes, and only in the last 160 rendered characters. Bold lead-ins are kept. |
+| `c/claude-ai-streaming-later.jpg` | Streaming in the final layout (bold lead-ins, list numbers in place); only the last line or two still faint; nothing above moves | Only colour changes, and only in the last 112 rendered characters (about one line at 1440). Bold lead-ins are kept. |
 | `c/claude-ai-finished.jpg` | The page didn’t scroll itself, and offers a small “jump to bottom” arrow instead | **Follow the writing**: opt-in, and shown only while new words are out of view |
 
 **How C differs from A and B:**
@@ -92,8 +92,9 @@ sit only one to three steps above the body, so the running text dominates.
 
 **Measure.**
 - Desktop: the column is **672px**, about **69 characters** at 21px.
-- Phone: 16px text with 16px gutters gives about **46 characters** at 375px and 53 at 430px. Phone
-  body text also gets `hyphens: auto`.
+- Phone: 16px text with 16px gutters, narrowing to 12px gutters and −0.015em tracking at
+  ≤400px. Measured per rendered line, the median is **45–46 characters** at 375, 47–48 at 390, and
+  over 50 at 430. Phone body text also gets `hyphens: auto`.
 
 ### Spacing (4px grid)
 
@@ -130,7 +131,8 @@ Contrast is against `--bg`, with the value on `--bg-hover` in brackets.
 | `--select` | `#263444` | `::selection` background | ink on it 8.5 |
 | `--lit` | `#CDAE7C` | **Written**: lit-window marks and lit windows in the house | 9.1 |
 | `--lamp` | `#E0A85E` | **Being written**: writing marks, the flickering window | 9.1 |
-| `--fresh-1/2/3` | `color-mix(in oklab, var(--ink) 30% / 55% / 80%, var(--bg))` | The developing tail | — |
+| `--page-bg` | `--bg`, or `--bg-cellar` on appendix pages | The ground the page actually paints. The corner mark’s backing and sticky table cells use it. | — |
+| `--fresh-1/2/3` | `color-mix(in oklab, var(--ink) 40% / 62% / 80%, var(--bg))` | The developing tail | About 2.6 / 5 / 8.5 : 1 |
 
 House-only colours (in `tokens.ts`, used only by the scene, so they are not CSS variables):
 `wall #2A3542`, `trim #344252`, `roof #1F2833`, `glass #0C1219` (an unwritten window), `moon
@@ -165,9 +167,13 @@ The remaining punctuation (“ ” ’ – — … ·) is in the font subsets.
 
 | State | Mark (7×9px, square corners, inline-block `<span>`) |
 | --- | --- |
-| Written | Solid `--lit` (a lit window) |
-| Unwritten | A 1px `--ink-4` frame with a dark centre (a dark window) |
-| Writing | A 1px `--lamp` frame with the **lower half** filled `--lamp` (a lamp lit at the sill). Static: it doesn’t animate. |
+| Written | Solid `--lit` with glazing bars in the house’s dark glass tone (`--glass`), so they read on every surface (a lit window) |
+| Unwritten | A 1px `--ink-4` frame with `--ink-4` glazing bars and a dark centre (a dark window, never an empty box) |
+| Writing | A 1px `--lamp` frame with the **lower half** filled `--lamp` (a lamp lit at the sill, as in the house). Static: it doesn’t animate. |
+
+Each mark has a 1px cross of glazing bars, drawn with `::before` and `::after`, so it reads as a
+window and never as a missing-glyph box. In running text it sits on the baseline, 0.2em after the
+link text.
 
 The three marks differ in shape (full, empty, half) as well as colour. Each carries hidden text:
 “written”, “not yet written” or “being written”. They are the house’s windows in miniature.
@@ -229,15 +235,22 @@ bleeds 24px each side) and scroll inside themselves. Previews are popovers 8px u
     Character”.
   - On `/c` it reads “Contents”, with › going to 1.1.
 - **Wide blocks:** code and tables go full-bleed (16px inner padding) and scroll sideways inside
-  themselves. A table’s first column is `position: sticky` on `--bg`.
+  themselves. The bleed uses the reader’s `--gutter` (16px, or 12px at ≤400px), so it never makes
+  the page wider than the screen.
+- **Phone tables:**
+  - Text cells have `min-width: 10em`. Right-aligned numeric cells don’t wrap and have no minimum,
+    so rows are one or two lines.
+  - The last visible column is cut mid-cell, which shows that the table scrolls.
+  - The first column is `position: sticky` on `--page-bg`, so there is no lighter stripe on
+    appendix pages.
 - **Footnotes:** references use the renderer’s jump links.
 
 ## Chrome and navigation
 
 ### Corner mark (section pages, ≥ 1100)
 
-Fixed at (12, 12) on a `--bg-raised` backing with 12px padding (2px radius, no border), so the text
-inside sits at (24, 24) and nothing scrolls visibly through it.
+Fixed at (12, 12) on a `--page-bg` backing (the page’s own ground, so it reads as unboxed type)
+with 12px padding, so the text inside sits at (24, 24) and nothing scrolls visibly through it.
 - **Line 1:** *The Haunt That Listens* in Literata italic 15, `--ink-2`. It links to `/c`.
 - **Line 2:** the **Contents** button (`data-shot="toc-toggle"`): the list glyph and the eyebrow
   “CONTENTS” in `--ink-3`.
@@ -261,7 +274,8 @@ narrow layouts keep the bottom bar).
   - A 40×40 close button labelled “Close contents”.
 - **Rows:** small sans at 15px, 40px tall (48px on phone), laid out as `[window mark] 12px [label,
   3.5ch, tnum, --ink-3] [title]`. Chapter headings are Literata 15/24 at weight 600, 24px above
-  their group.
+  their group. A row being written also shows a caption-size **“Writing”** in `--lamp` after its
+  title (here and on the start page), so state doesn’t rest on a 7×9 mark alone.
 - **Appendices:** 32px of space, a 1px `--line-strong` **ground line**, the eyebrow “APPENDICES ·
   BELOW STAIRS”, italic headings and letter labels.
 - **You are here:** the current row has a 2px `--ink` bar on its left edge, a `--bg-hover`
@@ -331,7 +345,7 @@ paragraph replaces the waiting line at the same y position.
 and works by **position**, not by timer, so a frozen screenshot shows it.
 - **When:** after each render while `status === "writing"` (in `useLayoutEffect`).
 - **What it measures:** it walks **backwards** from the end of the prose with a `TreeWalker`
-  (`previousNode()`), collecting rendered text nodes until it has about 200 characters. It skips
+  (`previousNode()`), collecting rendered text nodes until it has about 150 characters. It skips
   `section[data-footnotes]` (the prose’s last child, which sits after the live edge) and hidden
   text. Level boundaries move forward to the next word start, and a new block (paragraph, list
   item, cell…) counts as a word start.
@@ -340,9 +354,9 @@ and works by **position**, not by timer, so a frozen screenshot shows it.
 
   | Characters from the end | Highlight | Ink |
   | --- | --- | --- |
-  | Last 40 | `c-fresh-1` | 30% |
-  | The 60 before those | `c-fresh-2` | 55% |
-  | The 60 before those | `c-fresh-3` | 80% |
+  | Last 24 | `c-fresh-1` | 40% |
+  | The 40 before those | `c-fresh-2` | 62% |
+  | The 48 before those | `c-fresh-3` | 80% |
 
   The ranges are held until the next update.
 - **Live:** chunks arrive every 85ms, so the tail reads as words surfacing.
@@ -379,9 +393,13 @@ never render partially, so they always use `balance`.
   and the end of the prose is more than one line below the viewport.
 - **Look:** 36px tall, `--bg-raised`, 1px `--line-strong` border, 2px radius, small sans in
   `--ink-2`, with the lamp mark and the down-arrow glyph.
-- **Position:** it sits in the column right after the prose, `position: sticky` 32px from the
-  viewport bottom (16px above the bar on narrow widths), centred on the column. It is rendered only
-  while the section is writing. The space it frees is below the live edge.
+- **Position:**
+  - At ≥1100 it is `position: fixed`, 32px from the bottom, with its left edge 16px right of the
+    column (24px at ≥1280, which puts it in the lane). It never covers a line of text, and the
+    label is caption size. At 1100 it clears the right edge by 33px.
+  - Below 1100 it sits in the column right after the prose, `position: sticky` 16px above the
+    bottom bar, centred on the column.
+  - It is rendered only while the section is writing. The space it frees is below the live edge.
 - **The threshold** is the prose’s computed line-height, so it is right on phone too. While the
   button has focus it stays shown, so it is never made `inert` under the keyboard.
 - **Click:** scrolls the newest line to two-thirds of the way down the viewport, then follows it as
@@ -418,8 +436,10 @@ React 19 logs that as an error and the screenshot script fails on console errors
   - `li:has(> input:checked)` fills the box with `--ink-2`, and `::after` draws the tick in CSS (two
     borders of a rotated 5×9 box, in `--bg`).
   - Ticked text is `--ink-2` with no strikethrough.
-- **Blockquotes:** **roman**, body size, `--ink-2`, indented 2em, 40px above and below, with no bar
-  and no added quote glyph. A lowered voice, not a pull-quote.
+- **Blockquotes:** **roman**, body size, `--ink-2`, indented 2em, 40px above and below. A 1px
+  `--line-strong` rule hangs 24px to the left of the quote, inset 8px top and bottom, so it reads
+  as set apart rather than mis-indented. There is no added quote glyph. A lowered voice, not a
+  pull-quote.
 - **Tables:**
   - Instrument Sans 18/28 with `tnum`. The header is the micro eyebrow in `--ink-3` over a 1px
     `--line-strong` rule.
@@ -477,8 +497,9 @@ corner mark.
   3. The **lamp count**, 24px below: a lit-window mark and “7 of 18 rooms lit. A dark room is
      written the first time you open it.” (small, `--ink-3`).
   4. **Begin**, between two `--line-strong` hairlines: “Begin at 1.1, Why a Haunt Should Listen”
-     (Literata 21 at weight 600, `--ink`) with the arrow glyph, and its summary below (sans 15,
-     `--ink-3`).
+     at `--size-h2` (25/32), weight 540, with the arrow glyph. This makes it the one primary
+     action, outranking the chapter headings. There is no summary, because the 1.1 row just below
+     already has it.
   5. The **contents**: chapter headings in Literata 21 at weight 600. Section rows have a window
      mark, label, title (Literata 21) and **summary** (sans 15, `--ink-3`), 16px apart. The ground
      line and “APPENDICES · BELOW STAIRS” come before the appendices.
@@ -522,10 +543,16 @@ floors.
 | Below the ground line | Appendices A and B | A strip of 4 low basement windows, 2 + 2 |
 
 - **Windows are live** from `useManual()`:
-  - **Unwritten:** dark `--glass`.
-  - **Written:** steady `--lit`.
-  - **Writing:** the lamp is lit over 600ms, then flickers gently in `--lamp` (intensity
-    0.75 + 0.25 × slow noise), and settles to `--lit` over 400ms when done.
+  - Each window is two sashes (two glass instances), plus a sill-light strip.
+  - **Unwritten:** both sashes are dark `glass`, and there is no sill light.
+  - **Written:** both sashes are steady `--lit`, mixed 85% over glass.
+  - **Writing:** the **lower sash** is pure `--lamp`, flickering between 45% and 100%, while the
+    upper sash only catches an 18% spill. That is a lamp on the sill, the same picture as the
+    drawer’s half-lit mark, and unmistakably different from a lit window.
+  - **Sill light:** a lit or writing window throws a flat, unlit strip on the front of its sill (its
+    placement changes only when statuses change; per frame only colours are written),
+    in trim mixed 40% toward the window’s colour. It reads as light on stone, not a glow.
+  - **Easing:** colour eases over `timing.fast`, and settles to `--lit` when the writing is done.
 - **Why it serves reading:** it is the one view of the whole manual. At a glance it shows what can
   be read now without waiting, how the manual is organised (floors are chapters, the basement is
   reference), and where to go. It is a clickable index, mirrored one-to-one by the accessible HTML
@@ -535,8 +562,8 @@ floors.
 
 **Where the effort goes:**
 1. **Silhouette.** A steep gable with deep eaves, and a chimney stack running up the side wall that
-   faces the camera, giving a strong profile against the night. An areaway railing runs in front
-   of the basement.
+   faces the camera, giving a strong profile against the night. A short railing on a kerb at
+   street level (above grade, never in front of the basement windows) marks the ground line.
 2. **Window proportions.** Tall sashes about 1:1.8, **inset** 0.15 units into the wall, with a sill
    and lintel, and upper and lower sashes with glazing bars (mullions). Basement windows are
    landscape, about 1.6:1.
@@ -549,8 +576,9 @@ floors.
   - Walls, string courses, sills, lintels, roof and chimney are `BoxGeometry` and
     `ExtrudeGeometry` (for the gable), merged into one mesh per material.
   - The glass is one `InstancedMesh` with per-instance colour. Frames and bars are one merged mesh.
-  - The ground line is a deeper string course at grade, with the railing in front of it. There
-    is no ground plane: a lit ground read as a slab with a visible edge.
+  - The ground line is a deeper string course at grade, with the kerb and a short railing in front
+    of it, so the four basement windows read as windows. There is no ground plane: a lit ground
+    read as a slab with a visible edge.
 - **Materials:**
   - `MeshLambertMaterial` for walls, trim and roof.
   - `MeshBasicMaterial` for the glass (flat, unlit).
@@ -558,14 +586,19 @@ floors.
   - Shadow maps are off. The inset reveals get their shade from the lighting angle.
 - **Depth:** subtle `Fog(--bg)` so the far side wall falls into the night.
 - **Camera:** 30° field of view, framed to fit the house to the stage’s aspect ratio.
-  - Fine pointer: ±2° yaw and ±1° pitch following the pointer (lerp 0.06 per frame).
+  - Fine pointer: ±4° yaw and ±1° pitch following the pointer.
   - Touch: still.
-- **Picking:** a raycast on `pointermove` (once per animation frame) against the windows and the
-  door. The hovered window’s frame lightens to `--ink-2` and the cursor becomes a pointer.
+- **Picking:** a raycast on `pointermove` against the windows and the door.
+- **Hover:** obvious at 1×, from the window or from its contents row:
+  - a 0.09-unit `--ink` outline frames the window, in front of the wall and sill;
+  - both sashes lift 30% toward `--ink`;
+  - the contents row gets `--bg-hover`;
+  - the caption names the section and its state;
+  - the cursor becomes a pointer.
 
 **Budget:**
-- At most 5 draw calls (wall, trim, roof, glass, hover outline) and about 6,000 triangles. The
-  door’s click target is invisible and never drawn.
+- At most 5 draw calls (wall, trim, roof, glass with sashes and sill light, hover outline) and
+  about 6,000 triangles. The door’s click target is invisible and never drawn.
 - `devicePixelRatio` capped at 1.5 on desktop and 2 on phone.
 - Under 3ms of GPU time per frame on integrated graphics.
 - The `requestAnimationFrame` loop runs only while something moves (pointer easing, a flickering

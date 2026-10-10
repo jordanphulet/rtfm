@@ -37,6 +37,29 @@
   background: var(--bg-hover);
 }
 
+@media (min-width: 1100px) {
+  .c-follow {
+    position: fixed;
+    left: calc(50% + var(--measure) / 2 + var(--space-4));
+    bottom: var(--space-7);
+    margin: 0;
+  }
+
+  .c-follow-button {
+    padding-inline: var(--space-3);
+    font-size: var(--size-caption);
+  }
+}
+
+@media (min-width: 1280px) {
+  .c-follow {
+    left: calc(
+      max(var(--wide-left), (100% - var(--measure) - var(--lane-gap) - var(--lane)) / 2) +
+        var(--measure) + var(--space-6)
+    );
+  }
+}
+
 @media (max-width: 1099px) {
   .c-follow {
     bottom: calc(var(--bottom-bar) + var(--space-4) + env(safe-area-inset-bottom));

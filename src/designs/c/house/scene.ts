@@ -22,22 +22,29 @@ import {
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Section } from "../../../shared";
 import { colors, timing } from "../tokens";
-import { buildHouse, type Opening } from "./model";
+import { buildHouse, SILL, type Opening } from "./model";
 import type { Storey } from "./plan";
 
 const YAW = MathUtils.degToRad(-15);
-const PARALLAX_YAW = MathUtils.degToRad(2);
+const PARALLAX_YAW = MathUtils.degToRad(4);
 const PARALLAX_PITCH = 0.04;
 const CAMERA_LIFT = -0.12;
 const FIELD_OF_VIEW = 30;
 const FRAME_MS = 1000 / 30;
-const STILL_LAMP = 0.8;
-const HOVER_LIFT = 0.08;
+const STILL_LAMP = 0.85;
+const WRITTEN_LIGHT = 0.85;
+const HOVER_LIFT = 0.3;
+const SILL_LIGHT = 0.4;
+const LAMP_SPILL = 0.18;
+const OUTLINE = 0.09;
+const OUTLINE_Z = SILL.frontZ + 0.04;
+const SILL_LIGHT_HEIGHT = 0.045;
 
 const GLASS = new Color(colors.glass);
 const LIT = new Color(colors.lit);
 const LAMP = new Color(colors.lamp);
 const INK = new Color(colors.ink);
+const TRIM = new Color(colors.trim);
 
 interface HouseOptions {
   storeys: Storey[];
@@ -66,7 +73,7 @@ export function createHouseScene(canvas: HTMLCanvasElement, options: HouseOption
     trim: new MeshLambertMaterial({ color: colors.trim }),
     roof: new MeshLambertMaterial({ color: colors.roof }),
     glass: new MeshBasicMaterial(),
-    highlight: new MeshBasicMaterial({ color: colors.ink2 }),
+    highlight: new MeshBasicMaterial({ color: colors.ink }),
     pickOnly: new MeshBasicMaterial({ visible: false }),
   };
   const structure = [
@@ -83,8 +90,9 @@ export function createHouseScene(canvas: HTMLCanvasElement, options: HouseOption
 
   const bounds = new Box3().setFromObject(structure[0]).union(new Box3().setFromObject(structure[1]));
   const focus = bounds.getCenter(new Vector3());
-  const glassColors = model.windows.map(() => GLASS.clone());
-  const target = new Color();
+  const sashColors = model.windows.map(() => ({ lower: GLASS.clone(), upper: GLASS.clone() }));
+  const lowerTarget = new Color();
+  const upperTarget = new Color();
   const shown = new Color();
   const parallax = { x: 0, y: 0, targetX: 0, targetY: 0 };
   let distance = 40;
@@ -107,17 +115,22 @@ export function createHouseScene(canvas: HTMLCanvasElement, options: HouseOption
   }
 
   function updateColors(elapsedMs: number, now: number) {
+    const count = model.windows.length;
+    const ease = reducedMotion ? 1 : 1 - Math.exp(-elapsedMs / timing.fast);
     let moving = false;
     model.windows.forEach((slot, index) => {
       const status = statuses.get(slot.sectionId) ?? "unwritten";
-      setTargetColor(target, status, now, reducedMotion);
-      const current = glassColors[index];
-      if (reducedMotion) current.copy(target);
-      else current.lerp(target, 1 - Math.exp(-elapsedMs / timing.fast));
-      if (status === "writing" || colorDistance(current, target) > 0.002) moving = true;
-      shown.copy(current);
-      if (slot.sectionId === hoveredId) shown.lerp(INK, HOVER_LIFT);
-      glass.setColorAt(index, shown);
+      setTargetColors(lowerTarget, upperTarget, status, now, reducedMotion);
+      const { lower, upper } = sashColors[index];
+      lower.lerp(lowerTarget, ease);
+      upper.lerp(upperTarget, ease);
+      if (status === "writing" || colorDistance(lower, lowerTarget) + colorDistance(upper, upperTarget) > 0.004) {
+        moving = true;
+      }
+      const lift = slot.sectionId === hoveredId ? HOVER_LIFT : 0;
+      glass.setColorAt(index, shown.copy(lower).lerp(INK, lift));
+      glass.setColorAt(count + index, shown.copy(upper).lerp(INK, lift));
+      glass.setColorAt(2 * count + index, shown.copy(TRIM).lerp(lower, SILL_LIGHT));
     });
     if (glass.instanceColor) glass.instanceColor.needsUpdate = true;
     return moving;
@@ -157,7 +170,9 @@ export function createHouseScene(canvas: HTMLCanvasElement, options: HouseOption
       raycaster.setFromCamera(point, camera);
       const [hit] = raycaster.intersectObjects([glass, doorTarget], false);
       if (!hit) return undefined;
-      return hit.object === doorTarget ? options.doorSectionId : model.windows[hit.instanceId ?? -1]?.sectionId;
+      if (hit.object === doorTarget) return options.doorSectionId;
+      if (hit.instanceId === undefined) return undefined;
+      return model.windows[hit.instanceId % model.windows.length].sectionId;
     }
 
     function onMove(event: PointerEvent) {
@@ -204,11 +219,15 @@ export function createHouseScene(canvas: HTMLCanvasElement, options: HouseOption
   return {
     setStatuses(next) {
       statuses = next;
+      model.windows.forEach((slot, index) =>
+        placeSillLight(glass, model.windows, index, statuses.get(slot.sectionId) !== "unwritten"),
+      );
+      glass.instanceMatrix.needsUpdate = true;
       loop.request();
     },
     setHovered(sectionId) {
       hoveredId = sectionId;
-      showHighlight(highlight, model.windows.find((slot) => slot.sectionId === sectionId), model.glassZ);
+      showHighlight(highlight, model.windows.find((slot) => slot.sectionId === sectionId));
       loop.request();
     },
     setReducedMotion(next) {
@@ -231,10 +250,23 @@ export function createHouseScene(canvas: HTMLCanvasElement, options: HouseOption
   };
 }
 
-function setTargetColor(out: Color, status: Section["status"], now: number, reducedMotion: boolean) {
-  if (status === "written") out.copy(LIT);
-  else if (status === "unwritten") out.copy(GLASS);
-  else out.copy(GLASS).lerp(LAMP, reducedMotion ? STILL_LAMP : 0.75 + 0.25 * flicker(now / 1000));
+function setTargetColors(
+  lower: Color,
+  upper: Color,
+  status: Section["status"],
+  now: number,
+  reducedMotion: boolean,
+) {
+  if (status === "written") {
+    lower.copy(GLASS).lerp(LIT, WRITTEN_LIGHT);
+    upper.copy(lower);
+  } else if (status === "unwritten") {
+    lower.copy(GLASS);
+    upper.copy(GLASS);
+  } else {
+    lower.copy(GLASS).lerp(LAMP, reducedMotion ? STILL_LAMP : 0.45 + 0.55 * flicker(now / 1000));
+    upper.copy(GLASS).lerp(LAMP, LAMP_SPILL);
+  }
 }
 
 function flicker(seconds: number) {
@@ -246,14 +278,30 @@ function colorDistance(a: Color, b: Color) {
 }
 
 function createGlass(windows: Opening[], z: number, material: MeshBasicMaterial) {
-  const glass = new InstancedMesh(new PlaneGeometry(1, 1), material, windows.length);
+  const count = windows.length;
+  const glass = new InstancedMesh(new PlaneGeometry(1, 1), material, count * 3);
   const matrix = new Matrix4();
   windows.forEach(({ x, y, width, height }, index) => {
-    matrix.makeScale(width, height, 1).setPosition(x, y + height / 2, z);
-    glass.setMatrixAt(index, matrix);
+    const sash = height / 2;
+    glass.setMatrixAt(index, matrix.makeScale(width, sash, 1).setPosition(x, y + sash / 2, z));
+    glass.setMatrixAt(count + index, matrix.makeScale(width, sash, 1).setPosition(x, y + sash * 1.5, z));
     glass.setColorAt(index, GLASS);
+    glass.setColorAt(count + index, GLASS);
+    placeSillLight(glass, windows, index, false);
+    glass.setColorAt(2 * count + index, TRIM);
   });
   return glass;
+}
+
+const sillMatrix = new Matrix4();
+
+function placeSillLight(glass: InstancedMesh, windows: Opening[], index: number, lit: boolean) {
+  const { x, y, width } = windows[index];
+  const scale = lit ? 1 : 0;
+  sillMatrix
+    .makeScale((width + SILL.overhang) * scale, SILL_LIGHT_HEIGHT * scale, 1)
+    .setPosition(x, y - SILL_LIGHT_HEIGHT / 2, SILL.frontZ + 0.002);
+  glass.setMatrixAt(2 * windows.length + index, sillMatrix);
 }
 
 function createDoorTarget({ x, y, width, height }: Opening, z: number, material: MeshBasicMaterial) {
@@ -262,10 +310,10 @@ function createDoorTarget({ x, y, width, height }: Opening, z: number, material:
   return target;
 }
 
-function showHighlight(highlight: Mesh, slot: Opening | undefined, z: number) {
+function showHighlight(highlight: Mesh, slot: Opening | undefined) {
   highlight.visible = slot !== undefined;
   if (!slot) return;
-  const thickness = 0.06;
+  const thickness = OUTLINE;
   const { x, y, width, height } = slot;
   const pieces = [
     [width + thickness * 2, thickness, x, y - thickness / 2],
@@ -273,7 +321,7 @@ function showHighlight(highlight: Mesh, slot: Opening | undefined, z: number) {
     [thickness, height, x - width / 2 - thickness / 2, y + height / 2],
     [thickness, height, x + width / 2 + thickness / 2, y + height / 2],
   ].map(([pieceWidth, pieceHeight, pieceX, pieceY]) =>
-    new BoxGeometry(pieceWidth, pieceHeight, 0.05).translate(pieceX, pieceY, z + 0.08),
+    new BoxGeometry(pieceWidth, pieceHeight, 0.03).translate(pieceX, pieceY, OUTLINE_Z),
   );
   highlight.geometry.dispose();
   highlight.geometry = mergeGeometries(pieces);
@@ -289,8 +337,8 @@ function addLights(scene: Scene) {
 
 function fitDistance(bounds: Box3, camera: PerspectiveCamera) {
   const size = bounds.getSize(new Vector3());
-  const halfHeight = (size.y / 2) * 1.08;
-  const halfWidth = (Math.max(size.x, size.z) / 2) * 1.15;
+  const halfHeight = (size.y / 2) * 1.04;
+  const halfWidth = (Math.max(size.x, size.z) / 2) * 1.1;
   const tanHalf = Math.tan(MathUtils.degToRad(camera.fov / 2));
   return Math.max(halfHeight / tanHalf, halfWidth / (tanHalf * camera.aspect)) + size.z / 2;
 }

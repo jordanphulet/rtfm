@@ -34,9 +34,9 @@ export const timing = {
 
 export const develop = {
   levels: [
-    { highlight: "c-fresh-1", characters: 40 },
-    { highlight: "c-fresh-2", characters: 60 },
-    { highlight: "c-fresh-3", characters: 60 },
+    { highlight: "c-fresh-1", characters: 24 },
+    { highlight: "c-fresh-2", characters: 40 },
+    { highlight: "c-fresh-3", characters: 48 },
   ],
 };
 
@@ -67,6 +67,7 @@ export const media = {
 const cssVariables: Record<string, string> = {
   "--bg": colors.bg,
   "--bg-cellar": colors.bgCellar,
+  "--page-bg": colors.bg,
   "--bg-raised": colors.bgRaised,
   "--bg-hover": colors.bgHover,
   "--scrim": colors.scrim,
@@ -79,8 +80,9 @@ const cssVariables: Record<string, string> = {
   "--select": colors.select,
   "--lit": colors.lit,
   "--lamp": colors.lamp,
-  "--fresh-1": `color-mix(in oklab, ${colors.ink} 30%, ${colors.bg})`,
-  "--fresh-2": `color-mix(in oklab, ${colors.ink} 55%, ${colors.bg})`,
+  "--glass": colors.glass,
+  "--fresh-1": `color-mix(in oklab, ${colors.ink} 40%, ${colors.bg})`,
+  "--fresh-2": `color-mix(in oklab, ${colors.ink} 62%, ${colors.bg})`,
   "--fresh-3": `color-mix(in oklab, ${colors.ink} 80%, ${colors.bg})`,
 
   "--font-text": literata,
@@ -119,6 +121,7 @@ const cssVariables: Record<string, string> = {
   "--glyph-ui": "16px",
   "--lane-gap": `${layout.laneGap}px`,
   "--lane": `${layout.lane}px`,
+  "--wide-left": "240px",
   "--bottom-bar": `${layout.bottomBar}px`,
 
   "--radius": "2px",

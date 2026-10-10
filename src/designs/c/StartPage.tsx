@@ -29,7 +29,6 @@ export function StartPage() {
             Begin at {first.label}, {first.title}
             <Glyph name="arrowRight" />
           </span>
-          <span className="c-begin-summary">{first.summary}</span>
         </Link>
         <h2 className="c-eyebrow c-start-contents-label">Contents</h2>
         <ContentsList variant="start" hoveredId={hoveredId} onHover={setHoveredId} />

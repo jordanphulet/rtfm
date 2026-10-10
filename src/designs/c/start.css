@@ -45,7 +45,9 @@
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-3);
-  font-weight: 600;
+  font-size: var(--size-h2);
+  line-height: var(--lh-h2);
+  font-weight: 540;
 }
 
 .c-begin-title .c-glyph {
@@ -61,13 +63,6 @@
 
 .c-begin:hover .c-glyph {
   transform: translateX(var(--space-1));
-}
-
-.c-begin-summary {
-  font-family: var(--font-ui);
-  font-size: var(--size-small);
-  line-height: var(--lh-small);
-  color: var(--ink-3);
 }
 
 .c-start-contents-label {

@@ -1,7 +1,7 @@
 html,
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--page-bg);
   color-scheme: dark;
 }
 

@@ -19,6 +19,8 @@ const windowSize = {
 
 const door = { width: 1.2, height: 2.45 };
 
+export const SILL = { overhang: 0.26, height: 0.1, depth: 0.34, frontZ: 0.19 };
+
 export interface Opening {
   x: number;
   y: number;
@@ -134,7 +136,7 @@ function windowTrim({ x, y, width, height }: Opening) {
   const bar = 0.07;
   const frameZ = -GLASS_INSET + 0.04;
   const pieces = [
-    box(width + 0.26, 0.1, 0.34, x, y - 0.05, 0.02),
+    box(width + SILL.overhang, SILL.height, SILL.depth, x, y - SILL.height / 2, SILL.frontZ - SILL.depth / 2),
     box(width + 0.2, 0.18, 0.08, x, y + height + 0.09, 0.04),
     box(width, bar, 0.06, x, y + bar / 2, frameZ),
     box(width, bar, 0.06, x, y + height - bar / 2, frameZ),
@@ -157,14 +159,14 @@ function doorTrim({ x, y, width, height }: Opening) {
 
 function railing() {
   const front = 1.5;
-  const top = 0.55;
-  const height = top + BASEMENT;
-  const pieces = [box(WIDTH + 1, 0.07, 0.07, 0, top, front)];
-  const count = 24;
+  const top = 0.6;
+  const width = WIDTH + 1;
+  const pieces = [box(width, 0.06, 0.06, 0, top, front), box(width, 0.12, 0.45, 0, -0.06, front)];
+  const count = 18;
   for (let index = 0; index <= count; index++) {
-    const x = -(WIDTH + 1) / 2 + ((WIDTH + 1) * index) / count;
-    const thickness = index === 0 || index === count ? 0.12 : 0.045;
-    pieces.push(box(thickness, height, thickness, x, -BASEMENT + height / 2, front));
+    const x = -width / 2 + (width * index) / count;
+    const thickness = index === 0 || index === count ? 0.1 : 0.035;
+    pieces.push(box(thickness, top, thickness, x, top / 2, front));
   }
   return pieces;
 }

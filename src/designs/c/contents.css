@@ -85,6 +85,15 @@
   text-wrap: balance;
 }
 
+.c-row-writing {
+  margin-left: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--size-caption);
+  line-height: var(--lh-caption);
+  font-weight: 400;
+  color: var(--lamp);
+}
+
 .c-row-summary {
   font-size: var(--size-caption);
   line-height: var(--lh-caption);

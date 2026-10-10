@@ -1,10 +1,10 @@
 body:has(.c-reader[data-cellar]) {
-  background: var(--bg-cellar);
+  --page-bg: var(--bg-cellar);
 }
 
 .c-reader {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) var(--measure) var(--lane-gap) var(--lane) 1fr;
+  grid-template-columns: minmax(var(--wide-left), 1fr) var(--measure) var(--lane-gap) var(--lane) 1fr;
   min-height: 100dvh;
 }
 
@@ -96,7 +96,8 @@ body:has(.c-reader[data-cellar]) {
 
 @media (max-width: 600px) {
   .c-reader {
-    grid-template-columns: var(--space-4) minmax(0, 1fr) var(--space-4);
+    --gutter: var(--space-4);
+    grid-template-columns: var(--gutter) minmax(0, 1fr) var(--gutter);
   }
 
   .c-article {
@@ -109,5 +110,11 @@ body:has(.c-reader[data-cellar]) {
 
   .c-meta {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 400px) {
+  .c-reader {
+    --gutter: var(--space-3);
   }
 }
