@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { chapterOf, useManual, type Chapter, type Section } from "../manual";
+import { StatusRing } from "../ui";
 import { CONTENTS_PATH, chapterName, sectionPath } from "./manualParts";
-import { StatusRing } from "./StatusRing";
 import "./pager.css";
 
 interface PagerProps {

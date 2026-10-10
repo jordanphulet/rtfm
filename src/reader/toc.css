@@ -111,7 +111,7 @@
 }
 
 .reader .toc :focus-visible {
-  outline-offset: -2px;
+  outline-offset: calc(-1 * var(--focus-offset));
 }
 
 .reader .toc-appendices {

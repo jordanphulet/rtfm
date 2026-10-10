@@ -1,0 +1,79 @@
+html {
+  background: var(--ground);
+  color-scheme: dark;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+body {
+  margin: 0;
+}
+
+.ui {
+  min-height: 100dvh;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ui *,
+.ui *::before,
+.ui *::after {
+  box-sizing: border-box;
+}
+
+.ui ::selection {
+  background: var(--selection);
+  color: var(--ink-strong);
+}
+
+.ui :focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius-s);
+}
+
+.ui .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ui .scroll-x {
+  overflow-x: auto;
+  scrollbar-color: auto;
+}
+
+.ui .scroll-x::-webkit-scrollbar {
+  height: var(--space-2);
+}
+
+.ui .scroll-x::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: var(--radius-s);
+}
+
+.ui .scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .ui .scroll-x {
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

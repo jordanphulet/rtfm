@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "../ui";
 import "./code-block.css";
 
 const COPY_RESULT_SHOWN_MS = 1500;
@@ -34,11 +35,11 @@ export function CodeBlock({ language, code }: CodeBlockProps) {
     <div className="code-block" data-language={language || undefined}>
       <div className="code-strip">
         <span className="code-language">{language}</span>
-        <button type="button" className="code-copy" onClick={copy}>
+        <button type="button" className="text-button code-copy" onClick={copy}>
           <span aria-live="polite">{COPY_LABELS[copyState]}</span>
         </button>
       </div>
-      <pre tabIndex={0} aria-label={language ? `${language} code` : "Code"}>
+      <pre className="scroll-x" tabIndex={0} aria-label={language ? `${language} code` : "Code"}>
         <code>{code}</code>
       </pre>
     </div>

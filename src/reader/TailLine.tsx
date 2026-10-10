@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import "../ui";
 import "./tail-line.css";
 
 const FOLLOW_MARGIN = 24;
@@ -43,7 +44,7 @@ export function TailLine({ progress, isWaiting }: TailLineProps) {
       <span className="tail-progress">Being written · {Math.round(progress * 100)}%</span>
       <button
         type="button"
-        className="follow"
+        className="text-button follow"
         aria-pressed={following}
         onClick={() => setFollowing(!following)}
       >

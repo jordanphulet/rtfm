@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, type ComponentProps, type CSSProperties } from "react";
 import type { Components, ExtraProps } from "react-markdown";
 import { Markdown } from "../manual";
+import { ExternalLink } from "../ui";
 import { CodeBlock } from "./CodeBlock";
 import type { Heading } from "./markdownScan";
 import { SectionLink } from "./SectionLink";
@@ -66,10 +67,9 @@ function ProseLink({ href = "", children, ...props }: ComponentProps<"a">) {
     );
   }
   return (
-    <a href={href} {...props} className="external-link" target="_blank" rel="noreferrer">
+    <ExternalLink href={href} {...props}>
       {children}
-      <span className="visually-hidden"> (opens in a new tab)</span>
-    </a>
+    </ExternalLink>
   );
 }
 
@@ -108,7 +108,7 @@ export function Prose({ source, headings, sectionLabel, wrap }: ProseProps) {
   return (
     <div className="prose" data-wrap={wrap} style={style}>
       <HeadingIdsByLine.Provider value={idsByLine}>
-        <Markdown source={source} SectionLink={SectionLink} components={components} className="prose-root" />
+        <Markdown source={source} SectionLink={SectionLink} components={components} className="markdown prose-root" />
       </HeadingIdsByLine.Provider>
     </div>
   );

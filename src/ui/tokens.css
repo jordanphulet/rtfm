@@ -1,0 +1,91 @@
+:root {
+  --font-sans: "IBM Plex Sans Variable", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --wdth-tight: 85;
+
+  --text-micro: 12px;
+  --leading-micro: 16px;
+  --text-ui: 14px;
+  --leading-ui: 20px;
+  --text-reply: 16px;
+  --leading-reply: 24px;
+  --text-body: 17px;
+  --leading-body: 28px;
+  --text-lead: 20px;
+  --leading-lead: 28px;
+  --text-h3: 20px;
+  --leading-h3: 28px;
+  --text-h2: 24px;
+  --leading-h2: 32px;
+  --text-h1: 29px;
+  --leading-h1: 36px;
+  --text-title: 35px;
+  --leading-title: 40px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+
+  --ground: #121314;
+  --ground-side: #17191b;
+  --ground-raised: #1c1e20;
+  --ground-tint: #24272a;
+  --ground-hover: #1e2023;
+  --rule: #2b2e31;
+  --rule-strong: #3c4044;
+  --ink-strong: #edefef;
+  --ink: #d3d7d8;
+  --ink-muted: #aeb4b7;
+  --ink-faint: #8c9296;
+  --cue: #5fc48a;
+  --cue-deep: #377d57;
+  --cue-tint: #15261d;
+  --selection: #22412f;
+
+  --radius-s: 2px;
+  --radius-m: 4px;
+
+  --dur-quick: 150ms;
+  --dur-base: 200ms;
+  --dur-settle: 250ms;
+  --dur-breathe: 1600ms;
+  --dur-target: 1600ms;
+  --delay-preview: 300ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --focus-ring: 2px solid var(--cue);
+  --focus-offset: 2px;
+
+  --measure: 576px;
+  --tap: 44px;
+  --ring: 10px;
+  --list-indent: 28px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --text-body: 16px;
+    --leading-body: 24px;
+    --text-lead: 17px;
+    --text-title: 29px;
+    --leading-title: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-quick: 0ms;
+    --dur-base: 0ms;
+    --dur-settle: 0ms;
+    --delay-preview: 0ms;
+  }
+}

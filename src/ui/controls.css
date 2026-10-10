@@ -1,0 +1,47 @@
+.ui .text-button {
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  font: inherit;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-quick) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out);
+}
+
+.ui .text-button:hover {
+  color: var(--ink-strong);
+  background: var(--ground-tint);
+}
+
+.ui .link {
+  color: inherit;
+  text-decoration: underline 1px var(--cue-deep);
+  text-underline-offset: 0.18em;
+  transition:
+    color var(--dur-quick) var(--ease-out),
+    text-decoration-color var(--dur-quick) var(--ease-out);
+}
+
+.ui .link:hover {
+  color: var(--cue);
+  text-decoration-color: var(--cue);
+}
+
+.ui .external-link::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 0.05em 0 0.2em;
+  border: solid currentColor;
+  border-width: 1.5px 1.5px 0 0;
+  vertical-align: 0.45em;
+  color: var(--ink-faint);
+}
+
+.ui .external-link:hover::after {
+  color: var(--cue);
+}

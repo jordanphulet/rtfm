@@ -1,8 +1,9 @@
 import { useId } from "react";
 import { Link } from "react-router";
 import { chapterOf, useManual, type SectionLinkProps } from "../manual";
+import { StatusRing } from "../ui";
 import { chapterName, sectionPath } from "./manualParts";
-import { STATUS_WORDS, StatusRing } from "./StatusRing";
+import { STATUS_WORDS } from "./statusWords";
 import "./section-link.css";
 
 const OPENING_NOTE = " — opening it starts the writing.";
@@ -18,7 +19,7 @@ export function SectionLink({ section, children }: SectionLinkProps) {
     <span className="xref">
       <Link
         to={sectionPath(section.id)}
-        className="xref-link"
+        className="link xref-link"
         data-status={section.status}
         aria-describedby={previewId}
         style={{ anchorName }}

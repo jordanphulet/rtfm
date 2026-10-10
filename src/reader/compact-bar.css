@@ -96,23 +96,6 @@
 .reader .sheet {
   position: fixed;
   inset: var(--header-height) 0 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--ground);
-  visibility: hidden;
-  opacity: 0;
-  transform: translateY(calc(-1 * var(--space-2)));
-  transition:
-    opacity var(--dur-base) var(--ease-out),
-    transform var(--dur-base) var(--ease-out),
-    visibility 0s linear var(--dur-base);
-}
-
-.reader .sheet[data-open] {
-  visibility: visible;
-  opacity: 1;
-  transform: none;
-  transition-delay: 0s;
 }
 
 .reader .sheet .toc {

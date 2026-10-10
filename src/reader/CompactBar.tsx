@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { Section } from "../manual";
+import { Sheet, StatusRing } from "../ui";
 import { sectionPath } from "./manualParts";
-import { StatusRing } from "./StatusRing";
 import { Toc } from "./Toc";
 import "./compact-bar.css";
-
-const FOCUSABLE = "a[href], button:not([disabled])";
 
 interface CompactBarProps {
   current?: Section;
@@ -19,15 +17,6 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
   const [open, setOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
-  const sheetRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const sheet = sheetRef.current;
-    const currentRow = sheet?.querySelector<HTMLElement>(".toc-row[aria-current='page']");
-    if (sheet && currentRow) sheet.scrollTop = currentRow.offsetTop - sheet.clientHeight / 3;
-    (currentRow ?? sheet?.querySelector<HTMLElement>(FOCUSABLE))?.focus({ preventScroll: true });
-  }, [open]);
 
   const close = () => {
     setOpen(false);
@@ -38,14 +27,8 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
     if (event.target instanceof Element && event.target.closest("a")) setOpen(false);
   };
 
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (!open) return;
-    if (event.key === "Escape") close();
-    if (event.key === "Tab") keepFocusInside(event, barRef.current);
-  };
-
   return (
-    <div ref={barRef} className="compact-bar" onKeyDown={onKeyDown}>
+    <div ref={barRef} className="compact-bar">
       <header className="compact-header">
         <button
           ref={toggleRef}
@@ -71,16 +54,16 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
         <StepLink section={previous} direction="Previous" />
         <StepLink section={next} direction="Next" />
       </header>
-      <div
-        ref={sheetRef}
+      <Sheet
         id="contents-sheet"
-        className="sheet"
-        data-open={open || undefined}
-        inert={!open}
+        open={open}
+        onClose={close}
+        focusScope={barRef}
+        focusOnOpen={scrollToCurrentRow}
         onClick={closeAfterChoosingALink}
       >
         <Toc currentId={current?.id} currentOutline={currentOutline} />
-      </div>
+      </Sheet>
     </div>
   );
 }
@@ -99,15 +82,8 @@ function StepLink({ section, direction }: { section?: Section; direction: "Previ
   );
 }
 
-function keepFocusInside(event: KeyboardEvent, container: HTMLElement | null) {
-  const focusable = [...(container?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
-  const first = focusable[0];
-  const last = focusable.at(-1);
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last?.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first?.focus();
-  }
+function scrollToCurrentRow(sheet: HTMLElement): HTMLElement | null {
+  const currentRow = sheet.querySelector<HTMLElement>(".toc-row[aria-current='page']");
+  if (currentRow) sheet.scrollTop = currentRow.offsetTop - sheet.clientHeight / 3;
+  return currentRow;
 }

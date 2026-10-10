@@ -95,7 +95,8 @@ These rules are locked: any change to the reader keeps them.
 ## Craft requirements
 
 **System**
-- All colors, type sizes, spacing, radii and timings are tokens defined in **one place**.
+- All colors, type sizes, spacing, radii and timings are tokens defined in **one place**
+  (`src/ui/tokens.css`).
 - A modular type scale and a **4px** spacing grid.
 - At most **two font families**, plus a monospace font for code.
 - The background is not pure black (`#000`), and text is not pure white (`#fff`).
@@ -160,16 +161,18 @@ lives in the words; the interface stays the calm stage manager.
 
 ## Tokens
 
-All tokens are custom properties in `src/reader/tokens.css`, set on `html:has(.reader)` so the
-page background can use them too. No other file defines a color, type size, spacing step, radius
-or timing.
+Every color, type size, spacing step, radius and timing is a custom property in
+`src/ui/tokens.css`, set on `:root` and shared with the library (see `src/ui/README.md`). The
+reader's own layout and component sizes (column widths, header height, gutter, write-head
+geometry, label and outline columns) are in `src/reader/tokens.css`, set on `.reader`. No other
+file defines a color, type size, spacing step, radius or timing.
 
 ### Typefaces
 
-| Role | Font (module in `src/manual/fonts/`) | Settings | Why |
+| Role | Font (loaded by `src/ui/fonts.ts`) | Settings | Why |
 | --- | --- | --- | --- |
-| Text and interface | **IBM Plex Sans Variable** (`ibm-plex-sans`), `--font-sans` | wght 400 / 500 / 600; wdth 100 for reading, **85** (`--wdth-tight`) for the TOC, outline, tables, pager and previews | Engineering-manual lineage, and it has every glyph the content needs (`I²C`, `1½`, `N·m`, `‹ ›`, `↑ ↓`). wdth 85 packs dense UI about 6% tighter without a second family. |
-| Code and readouts | **IBM Plex Mono** (`ibm-plex-mono`), `--font-mono` | 400 | Same superfamily, so metrics and texture match. It is the "machine voice" for status readouts, language tags and percentages. |
+| Text and interface | **IBM Plex Sans Variable**, `--font-sans` | wght 400 / 500 / 600; wdth 100 for reading, **85** (`--wdth-tight`) for the TOC, outline, tables, pager and previews | Engineering-manual lineage, and it has every glyph the content needs (`I²C`, `1½`, `N·m`, `‹ ›`, `↑ ↓`). wdth 85 packs dense UI about 6% tighter without a second family. |
+| Code and readouts | **IBM Plex Mono**, `--font-mono` | 400 | Same superfamily, so metrics and texture match. It is the "machine voice" for status readouts, language tags and percentages. |
 
 Body italics are Plex's true italic. No `font-optical-sizing` (Plex has no opsz axis). Measured on
 the sample text: Plex Sans 17px is about 7.58px per character, 16px about 7.13px.
@@ -183,6 +186,7 @@ with a matching `--leading-*` token.
 | --- | --- | --- | --- |
 | `--text-micro` | 12 / 16 | Mono 400, +0.02em; or Sans 600 | Status readouts, code language tag, table headers, outline and group labels |
 | `--text-ui` | 14 / 20 | 400–600 · wdth 85 | TOC, outline, tables, previews, footnotes |
+| `--text-reply` | 16 / 24 | 400 · wdth 100 | The library agent's replies (`ReplyMarkdown`); not used by the reader |
 | `--text-body` | **17 / 28** (phone **16 / 24**) | 400 · wdth 100 | Paragraphs, lists, H4, pager titles |
 | `--text-lead` | 20 / 28 (phone 17 / 28) | 400 | Section summary, start-page subtitle, blockquotes |
 | `--text-h3` | 20 / 28 | 600, −0.005em | H3, start-page chapter headings |
@@ -192,7 +196,8 @@ with a matching `--leading-*` token.
 
 "Phone" means below 768px. The phone body steps off the scale to 16/24 on purpose: at 375px it
 keeps the measure at about 48 characters (17px would sit at the 45 limit), and a short line wants
-tighter leading.
+tighter leading. `--text-reply` takes the same 16/24 at every width, for the same reason: replies
+sit in narrow columns.
 
 ### Spacing
 
@@ -237,24 +242,29 @@ No second accent. Hairlines are always `--rule` or `--rule-strong`.
 - **Easing:** `--ease-out` `cubic-bezier(0.2, 0.8, 0.2, 1)` for things arriving; `--ease-in-out`
   `cubic-bezier(0.4, 0, 0.2, 1)` for state changes; **linear** for the progress fill (it tracks a
   measurement, so easing would make it lurch).
-- **Layout sizes:** `--toc-width` 272px · `--outline-width` 240px · `--measure` **576px** (about 76
-  characters of 17px Plex) · `--start-width` 720px · `--header-height` 48px · `--gutter` 64px
-  (32px below 1024px, 16px on phone) · `--tap` 44px (touch targets).
-- **Component sizes:** `--ring` 10px (1.5px border, so the writing dot and the solid fill centre
-  cleanly) · `--bar-width` 2px (current-item bars) · `--write-head-width` 3px · `--write-head-lamp`
-  7px · `--write-head-offset` 28px (12px on phone) · `--code-bleed` 20px (16px on phone) ·
-  `--label-col` 36px · `--label-col-wide` 48px (40px on phone) · `--outline-number-col` 40px (48px
-  below 1024px) · `--status-col` 136px · `--list-indent` 28px · `--check-size` 14px ·
-  `--preview-width` 320px.
+- **Focus:** `--focus-ring` `2px solid var(--cue)`, `--focus-offset` 2px.
+- **Shared sizes** (`src/ui/tokens.css`): `--measure` **576px** (about 76 characters of 17px
+  Plex) · `--tap` 44px (touch targets) · `--ring` 10px (1.5px border, so the writing dot and the
+  solid fill centre cleanly) · `--list-indent` 28px.
+- **Reader layout sizes** (`src/reader/tokens.css`): `--toc-width` 272px · `--outline-width` 240px
+  · `--start-width` 720px · `--header-height` 48px · `--gutter` 64px (32px below 1024px, 16px on
+  phone).
+- **Reader component sizes** (`src/reader/tokens.css`): `--bar-width` 2px (current-item bars) ·
+  `--write-head-width` 3px · `--write-head-lamp` 7px · `--write-head-offset` 28px (12px on phone) ·
+  `--code-bleed` 20px (16px on phone) · `--label-col` 36px · `--label-col-wide` 48px (40px on
+  phone) · `--outline-number-col` 40px (48px below 1024px) · `--status-col` 136px ·
+  `--check-size` 14px · `--preview-width` 320px.
 - **Reduced motion** sets `--dur-quick`, `--dur-base`, `--dur-settle` and `--delay-preview` to 0ms;
   each animation (breathe, outline rows, write head, footnote target) is switched off where it is
   defined.
 
 ### Page
 
-`html:has(.reader)` sets `background: var(--ground)`, `color-scheme: dark`, `scrollbar-gutter:
-stable` (so the page growing past the viewport never shifts text sideways) and thin scrollbars
-(`scrollbar-color: var(--rule-strong) transparent`). All other CSS is scoped under `.reader`.
+`src/ui/base.css` gives `html` `background: var(--ground)`, `color-scheme: dark`,
+`scrollbar-gutter: stable` (so the page growing past the viewport never shifts text sideways) and
+scrollbar colors (`scrollbar-color: var(--rule-strong) transparent`). The reader's root is `<div class="ui
+reader">`: `.ui` sets the base type, selection and focus, and scopes the shared styles; all of the
+reader's own CSS is scoped under `.reader`.
 
 ## Layout
 
@@ -416,8 +426,9 @@ tables and deserve the same craft.
 - First focusable: "Skip to text", shown on focus at the top left (14/20 500 on `--ground-raised`).
 - DOM order: compact header and sheet → TOC → main (eyebrow links, body links, Copy, Follow, pager)
   → outline.
-- Focus ring everywhere: `outline: 2px solid var(--cue); outline-offset: 2px`, radius 2 (offset
-  −2px inside the TOC). `:focus-visible` only.
+- Focus ring everywhere: `outline: var(--focus-ring); outline-offset: var(--focus-offset)` (2px
+  cue, 2px out), radius 2, or the control's own radius where it has one (offset −2px inside the
+  TOC). `:focus-visible` only.
 - Route change to a section: scroll to the top. After link navigation (a router PUSH, not a fresh
   load) focus moves to the H1 (`tabindex=-1`, `preventScroll`), so a fresh load still starts at
   the skip link. The start page scrolls to the chapter in the URL hash, or to the top.
@@ -436,7 +447,7 @@ tables and deserve the same craft.
 
 The shape differs by state (hollow, centre dot, solid), so state never depends on color alone. A
 legend in the TOC masthead explains the three rings in one line (`Written · Writing · Not written`,
-micro, ink-faint, rings drawn in CSS). Rings are the `StatusRing` component.
+micro, ink-faint, rings drawn in CSS). Rings are the shared `StatusRing` component (`src/ui`).
 
 ## Streaming
 
@@ -519,6 +530,9 @@ to text that streams:
 ## Markdown
 
 Every element the sample manual uses has a deliberate treatment, all under `.prose-root`.
+Paragraphs, bold, inline code and lists come from the shared `.markdown` treatment in
+`src/ui/markdown.css`, which the library's agent replies use too (at `--text-reply`); the rest is
+the reader's own, in `prose.css`.
 
 - **Paragraphs:** 17/28 [16/24] ink, 16px below, ragged right, no automatic hyphens.
 - **Headings:** H2 24/32 600 ink-strong, 48px above, 12px below. H3 20/28 600, 32 / 8. H4 17/28
@@ -559,12 +573,13 @@ Every element the sample manual uses has a deliberate treatment, all under `.pro
 - **Code blocks** (`CodeBlock`): `--ground-raised`, radius 2, extended `--code-bleed` (20px) into
   each gutter so the code aligns with the body text; on phone the bleed reaches the screen edges
   and the radius is 0. A 32px strip at the top: the language tag on the left (`ts`, `text`; micro
-  mono ink-faint), **Copy** on the right (micro mono ink-faint, ink-strong on hover; `Copied` or
-  `Couldn’t copy` for 1.5s in a polite live region; hidden with `visibility` while writing). Code
-  14/20 Plex Mono, ink, padding 8/20/16. `language-text` (the cast's prompts) uses `pre-wrap` so
-  prose prompts read on a phone; other languages scroll sideways with an always-visible 8px
-  scrollbar (rule-strong thumb), so a clipped line reads as scrollable even where the OS hides thin
-  scrollbars.
+  mono ink-faint), **Copy** on the right (a `.text-button`: micro mono ink-faint, ink-strong on
+  hover; `Copied` or `Couldn’t copy` for 1.5s in a polite live region; hidden with `visibility`
+  while writing). Code 14/20 Plex Mono, ink, padding 8/20/16. `language-text` (the cast's prompts)
+  uses `pre-wrap` so prose prompts read on a phone; other languages scroll sideways (`.scroll-x`)
+  with an always-visible 8px scrollbar (rule-strong thumb, drawn with `::-webkit-scrollbar` after
+  resetting the inherited `scrollbar-color` to `auto`, which Chromium requires), so a clipped line
+  reads as scrollable even where the OS hides scrollbars.
 - **Inline code:** Plex Mono 0.88em, `--ground-tint`, padding 1px 4px, radius 2.
 - **Horizontal rule:** 1px `--rule-strong` across the measure, 40px above and below.
 - **Footnote references:** `sup` at 12px, 600, cue, tabular, `line-height: 0` with a relative
@@ -575,14 +590,14 @@ Every element the sample manual uses has a deliberate treatment, all under `.pro
   `data-footnote-backref`, keeping the `aria-label`; the loaded font subset has U+2191 but not
   `↩`, `→` or `↗`), ink-faint, cue on hover. A targeted note or reference flashes `--cue-tint`,
   fading over 1.6s.
-- **External links:** ink text, a 1px cue-deep underline at a 0.18em offset; cue text and underline
-  on hover (`--dur-quick`). A trailing CSS corner mark (5px, top and right 1.5px borders,
-  ink-faint) says "leaves the manual". They open in a new tab, with a visually hidden "(opens in a
-  new tab)".
-- **Cross-references** (`SectionLink`): to a written section, the external-link underline without
-  the corner mark; to an unwritten or writing one, see Section states. On hover (after 300ms) or
-  keyboard focus (at once), a **preview** opens below the link (1024px and up, hover devices
-  only): `4.2 · Chapter 4` in micro mono, the title 14/20 600 ink-strong, the summary 14/20
+- **External links** (`ExternalLink` from `src/ui`, styled by `.link`): ink text, a 1px cue-deep
+  underline at a 0.18em offset; cue text and underline on hover (`--dur-quick`). A trailing CSS
+  corner mark (5px, top and right 1.5px borders, ink-faint) says "leaves the manual". They open in
+  a new tab, with a visually hidden "(opens in a new tab)".
+- **Cross-references** (`SectionLink`, styled by `.link`): to a written section, the external-link
+  underline without the corner mark; to an unwritten or writing one, see Section states. On hover
+  (after 300ms) or keyboard focus (at once), a **preview** opens below the link (1024px and up,
+  hover devices only): `4.2 · Chapter 4` in micro mono, the title 14/20 600 ink-strong, the summary 14/20
   ink-muted, and a status line with its ring (`Not yet written — opening it starts the writing.`
   for an unwritten target). 320px wide, `--ground-raised`, a 1px `--rule-strong` border, radius 4,
   padding 12/16, no shadow, fading in over `--dur-base`.
@@ -608,27 +623,41 @@ Every element the sample manual uses has a deliberate treatment, all under `.pro
 
 ## Build structure
 
-All of the reader lives in `src/reader/`. It uses `src/manual/` for the manual's data, store,
-streaming and markdown renderer, and styles the renderer's output rather than forking it.
+The reader lives in `src/reader/`. It is built on two shared folders:
 
-- One component per file; each one that has styles imports its own stylesheet. `tokens.css`
-  defines every token; `shell.css` holds the page, the base type, focus and the column grid.
-  - `index.tsx` (the route: `StartPage` or `SectionPage`) · `Shell` (layout, TOC column, outline
-    column) · `CompactBar` (compact header and contents sheet) · `Toc` · `StatusRing` (and the
-    legend) · `SectionPage` · `ArticleHead` · `Prose` (renderer components; `prose.css` also holds
-    the write head) · `CodeBlock` · `SectionLink` (and its preview) · `TailLine` (and Follow) ·
-    `Pager` · `Outline` (the outline, "Referenced here" and "In this manual") · `StartPage`.
+- **`src/ui/`, the design system** (documented in `src/ui/README.md`), shared with the library.
+  Importing it loads the fonts (`fonts.ts`), the tokens (`tokens.css`, on `:root`), the page and
+  base styles (`base.css`: the `.ui` root, selection, focus, `.visually-hidden`, `.scroll-x`, the
+  `breathe` keyframes), `controls.css` (`.text-button`, `.link`, `.external-link`) and
+  `markdown.css` (the shared `.markdown` prose treatment and `.reply-markdown`). Its components are
+  `StatusRing`, `Sheet` (a panel with a focus trap: focus on open, Tab contained, Escape
+  closes), `ExternalLink` and `ReplyMarkdown` (the library agent's replies). It knows nothing
+  about manuals, sections or streaming.
+- **`src/manual/`** for the manual's data, store, streaming and markdown renderer. The reader
+  styles the renderer's output rather than forking it.
+
+In `src/reader/`:
+
+- One component per file; each one that has styles imports its own stylesheet, after its import
+  from `src/ui`, so the shared styles come first in the cascade. `tokens.css` holds the reader's
+  layout and component sizes (on `.reader`); `shell.css` the skip link and the column grid.
+  - `index.tsx` (the route: `StartPage` or `SectionPage`) · `Shell` (the `ui reader` root, layout,
+    TOC column, outline column) · `CompactBar` (compact header, and the contents sheet as a
+    `Sheet` whose focus scope includes the header) · `Toc` · `StatusLegend` · `SectionPage` ·
+    `ArticleHead` · `Prose` (renderer components; `prose.css` holds the reader-only markdown
+    treatment and the write head) · `CodeBlock` · `SectionLink` (and its preview) · `TailLine`
+    (and Follow) · `Pager` · `Outline` (the outline, "Referenced here" and "In this manual") ·
+    `StartPage`.
   - Helpers: `markdownScan.ts` (headings with unique ids, source lines and clause numbers; linked
     sections; word count), `manualParts.ts` (every section in reading order, chapter names, paths
-    and chapter anchors), `streamedThisLoad.ts`, `useActiveHeading.ts`, `usePrevNextKeys.ts`.
-  - The fonts are side-effect imports of `src/manual/fonts/ibm-plex-sans` and `ibm-plex-mono`,
-    made by `Shell`.
+    and chapter anchors), `statusWords.ts` (the status words), `streamedThisLoad.ts`,
+    `useActiveHeading.ts`, `usePrevNextKeys.ts`.
 - `Shell` stays mounted while moving between sections (only the article is keyed by section id),
   so the TOC keeps its scroll position.
 - Heading ids come from one scan of the text: `Prose` looks each heading's id up by its source
   line, so the outline and the page always agree, and duplicates get `-2`, `-3`.
 - The contents sheet locks page scroll with CSS only (`html:has(.reader .sheet[data-open])`, below
-  1024px), so widening the window releases it.
+  1024px, in `compact-bar.css`), so widening the window releases it.
 - `useSection` is called only by the section page. The TOC, outline, previews and pager read
   `useManual()` and `findSection()`, so they never open a section.
 - `SectionLink` and the renderer `components` are defined at module level, so focus and hover

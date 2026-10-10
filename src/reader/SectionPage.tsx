@@ -18,7 +18,7 @@ import { isOutlineLevel, OutlineList, ReferencedSections } from "./Outline";
 import { Pager } from "./Pager";
 import { Prose } from "./Prose";
 import { Shell } from "./Shell";
-import { STATUS_WORDS } from "./StatusRing";
+import { STATUS_WORDS } from "./statusWords";
 import { loadedAlreadyWritten } from "./streamedThisLoad";
 import { TailLine } from "./TailLine";
 import { useActiveHeading } from "./useActiveHeading";

@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import type { Chapter, Section } from "../manual";
+import { StatusRing } from "../ui";
 import { chapterPath, sectionPath } from "./manualParts";
-import { StatusRing } from "./StatusRing";
 import "./article-head.css";
 
 export const TITLE_ID = "section-title";

@@ -1,0 +1,78 @@
+.ui .markdown {
+  color: var(--ink);
+  hyphens: manual;
+  overflow-wrap: break-word;
+}
+
+.ui .markdown > :first-child {
+  margin-top: 0;
+}
+
+.ui .markdown p {
+  margin: 0 0 var(--space-4);
+}
+
+.ui .markdown strong {
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.ui .markdown code {
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-s);
+  background: var(--ground-tint);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.ui .markdown :is(ul, ol) {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--list-indent);
+}
+
+.ui .markdown li + li {
+  margin-top: var(--space-1);
+}
+
+.ui .markdown li > :is(ul, ol) {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-6);
+}
+
+.ui .markdown li > p {
+  margin-bottom: var(--space-2);
+}
+
+.ui .markdown ul {
+  list-style: none;
+}
+
+.ui .markdown ul > li {
+  position: relative;
+}
+
+.ui .markdown ul > li::before {
+  content: "–";
+  position: absolute;
+  right: calc(100% + var(--space-2));
+  color: var(--ink-faint);
+}
+
+.ui .markdown li ul > li::before {
+  content: "·";
+  font-weight: 600;
+}
+
+.ui .markdown ol > li::marker {
+  color: var(--ink-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui .reply-markdown {
+  font: 400 var(--text-reply) / var(--leading-reply) var(--font-sans);
+}
+
+.ui .reply-markdown > :last-child {
+  margin-bottom: 0;
+}

@@ -172,21 +172,3 @@ written sections are unaffected.
 | ------------- | ------------------------------------------------------------------- |
 | `?freeze=0`   | The section stays in the waiting state (`writing`, `text` is `""`). |
 | `?freeze=0.5` | The section jumps straight to 50% and stays `writing`. Any fraction 0–1 works. |
-
-## Fonts
-
-One side-effect module per font in `fonts/`. Importing a module registers that font (roman and
-italic); the modules export nothing.
-
-```ts
-import "../manual/fonts/ibm-plex-sans";
-import "../manual/fonts/ibm-plex-mono";
-```
-
-| Module          | Family in CSS            | Registers                                   |
-| --------------- | ------------------------ | ------------------------------------------- |
-| `ibm-plex-sans` | `"IBM Plex Sans Variable"` | IBM Plex Sans, variable (weight and width axes) |
-| `ibm-plex-mono` | `"IBM Plex Mono"`        | IBM Plex Mono, weights 400 and 700          |
-
-The reader names them in `src/reader/tokens.css` as `--font-sans` and `--font-mono`, with
-fallbacks.

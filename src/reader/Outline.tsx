@@ -1,9 +1,9 @@
 import { Link } from "react-router";
 import type { Chapter, Section } from "../manual";
+import { StatusRing } from "../ui";
 import { TITLE_ID } from "./ArticleHead";
 import type { Heading } from "./markdownScan";
 import { chapterAnchor, sectionPath } from "./manualParts";
-import { StatusRing } from "./StatusRing";
 import "./outline.css";
 
 interface OutlineListProps {

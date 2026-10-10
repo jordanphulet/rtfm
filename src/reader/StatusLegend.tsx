@@ -1,15 +1,6 @@
 import type { Section } from "../manual";
-import "./status-ring.css";
-
-export const STATUS_WORDS: Record<Section["status"], string> = {
-  unwritten: "Not yet written",
-  writing: "Being written",
-  written: "Written",
-};
-
-export function StatusRing({ status }: { status: Section["status"] }) {
-  return <span className="ring" data-status={status} aria-hidden="true" />;
-}
+import { StatusRing } from "../ui";
+import "./status-legend.css";
 
 const LEGEND_WORDS: Record<Section["status"], string> = {
   written: "Written",

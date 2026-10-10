@@ -1,10 +1,9 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { useManual, type Section } from "../manual";
+import "../ui";
 import { CompactBar } from "./CompactBar";
 import { rememberStreamingSections } from "./streamedThisLoad";
 import { Toc } from "./Toc";
-import "../manual/fonts/ibm-plex-sans";
-import "../manual/fonts/ibm-plex-mono";
 import "./tokens.css";
 import "./shell.css";
 
@@ -23,7 +22,7 @@ export function Shell({ current, previous, next, currentOutline, aside, asideLab
   rememberStreamingSections(manual);
 
   return (
-    <div className="reader">
+    <div className="ui reader">
       <a className="skip-link" href="#main">
         Skip to text
       </a>

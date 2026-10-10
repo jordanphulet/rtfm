@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { useManual, type Chapter, type Section } from "../manual";
+import { StatusRing } from "../ui";
 import { CONTENTS_PATH, allSections, sectionPath } from "./manualParts";
-import { STATUS_WORDS, StatusLegend, StatusRing } from "./StatusRing";
+import { StatusLegend } from "./StatusLegend";
+import { STATUS_WORDS } from "./statusWords";
 import "./toc.css";
 
 interface TocProps {

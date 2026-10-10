@@ -1,10 +1,11 @@
 import { useLayoutEffect } from "react";
 import { Link, useLocation } from "react-router";
 import { useManual, type Chapter } from "../manual";
+import { StatusRing } from "../ui";
 import { allSections, chapterAnchor, sectionPath } from "./manualParts";
 import { ManualOutline } from "./Outline";
 import { Shell } from "./Shell";
-import { STATUS_WORDS, StatusRing } from "./StatusRing";
+import { STATUS_WORDS } from "./statusWords";
 import "./start-page.css";
 
 export function StartPage() {
