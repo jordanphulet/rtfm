@@ -138,8 +138,8 @@ async function capture(context: BrowserContext, shot: Shot, name: string): Promi
 }
 
 async function openToc(page: Page, name: string) {
-  const toggle = page.locator(TOC_TOGGLE).first();
-  if (!(await toggle.isVisible())) {
+  const toggle = page.locator(TOC_TOGGLE).filter({ visible: true }).first();
+  if ((await toggle.count()) === 0) {
     console.log(`${name}: no visible ${TOC_TOGGLE}`);
     return;
   }

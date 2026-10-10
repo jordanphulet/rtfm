@@ -11,7 +11,9 @@ import {
 } from "../../shared";
 ```
 
-The data model (`Manual`, `Chapter`, `Section`) is described in `DESIGN_RULES.md`.
+The data model (`Manual`, `Chapter`, `Section`) is described in `DESIGN_RULES.md`. The sample
+manual lives in `manual/` (its structure in `index.ts`, one `.md` file per section body). Designs
+never import it directly: `useManual()` returns it with live statuses.
 
 ## Hooks
 
@@ -54,7 +56,7 @@ All take the manual from `useManual()`. Reading order is every chapter, then eve
 | Function                              | Returns                                          |
 | ------------------------------------- | ------------------------------------------------ |
 | `findSection(manual, id)`             | The `Section`, or `undefined`.                   |
-| `chapterOf(manual, sectionId)`        | The `Chapter` (or appendix) containing it.       |
+| `chapterOf(manual, sectionId)`        | The `Chapter` (or appendix) containing it, or `undefined`. |
 | `previousSection(manual, id)`         | The section before it, or `undefined` at the start. |
 | `nextSection(manual, id)`             | The section after it, or `undefined` at the end. |
 
@@ -72,7 +74,7 @@ Renders markdown with GitHub-flavored extensions (tables, checklists, footnotes)
 - `SectionLink` gets `{ section, children }`. `section.status` is live, so the link can show
   whether its target is unwritten, writing or written. A link to an unknown id renders as plain text.
 - Other links (external, footnote) go to `components.a` if you pass one, else a plain `<a>`.
-- Every custom component receives a `node` prop (the syntax tree node). Drop it before
+- Custom components (except `a`) receive a `node` prop (the syntax tree node). Drop it before
   spreading props onto a DOM element: `h2: ({ node, ...props }) => <h2 {...props} />`.
 - Define `SectionLink` and `components` at module level, not inside a render function.
   Otherwise every link is remounted on each streamed chunk and loses its focus and hover state.

@@ -25,8 +25,8 @@ export const Markdown = memo(function Markdown({
   components,
   className,
 }: MarkdownProps) {
-  const ExternalLink = components?.a ?? "a";
-  const a = useMemo(() => linkComponent(SectionLink, ExternalLink), [SectionLink, ExternalLink]);
+  const OtherLink = components?.a ?? "a";
+  const a = useMemo(() => linkComponent(SectionLink, OtherLink), [SectionLink, OtherLink]);
 
   return (
     <div className={className}>
@@ -41,11 +41,11 @@ export const Markdown = memo(function Markdown({
   );
 });
 
-function linkComponent(SectionLink: ComponentType<SectionLinkProps>, ExternalLink: ElementType) {
+function linkComponent(SectionLink: ComponentType<SectionLinkProps>, OtherLink: ElementType) {
   return function Link({ node: _node, href = "", children, ...props }: ComponentProps<"a"> & ExtraProps) {
     const manual = useManual();
     if (!href.startsWith(SECTION_URL_PREFIX)) {
-      return <ExternalLink href={href} {...props}>{children}</ExternalLink>;
+      return <OtherLink href={href} {...props}>{children}</OtherLink>;
     }
 
     const section = findSection(manual, href.slice(SECTION_URL_PREFIX.length));
