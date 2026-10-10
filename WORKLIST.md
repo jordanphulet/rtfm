@@ -289,7 +289,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P3 — Fix (one round only)
 
 ### P3.A.fix · P3.B.fix · P3.C.fix
-- **Status:** A: done · B: doing (agent: a32e1599794f15149) · C: doing (agent: a395da211fdfd8ec3)
+- **Status:** A: done · B: done · C: doing (agent: a395da211fdfd8ec3)
 - **Depends on:** the matching P2.x.review
 - **Agent:** the builder from P1.x.build if it's still available (`SendMessage`); otherwise a new
   agent given the same brief
