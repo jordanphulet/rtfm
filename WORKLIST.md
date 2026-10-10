@@ -261,7 +261,7 @@ model**.
 - **Done when:** both commands work against a stub variant.
 
 ### LB.4 — Specs (A, B and C at the same time)
-- **Status:** A: doing (agent: a1468a1e11d5d0641) · B: doing (agent: ab6678b62487b6c90) · C: doing (agent: aa7b0b3a8a8e1b691)
+- **Status:** A: done · B: done · C: done (approved with notes, folded in during the build)
 - **Depends on:** LB.3
 - **Files:** `src/library-prototypes/<x>/SPEC.md`
 - **Do:**
@@ -283,7 +283,7 @@ model**.
   reader's design system.
 
 ### LB.5 — Build (the same agent as the spec)
-- **Status:** A: todo · B: todo · C: todo
+- **Status:** A: doing (agent: a1468a1e11d5d0641) · B: doing (agent: ab6678b62487b6c90) · C: doing (agent: aa7b0b3a8a8e1b691)
 - **Depends on:** the matching LB.4
 - **Files:** `src/library-prototypes/<x>/**`
 - **Do:**
