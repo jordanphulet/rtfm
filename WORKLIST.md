@@ -325,7 +325,7 @@ model**.
 - **Done when:** `REVIEW.md` covers every rule and has the scores and the fix list.
 
 ### LB.7 — Fix (one round, by the builder)
-- **Status:** A: done · B: doing (agent: ab6678b62487b6c90) · C: done
+- **Status:** A: done · B: done · C: done
 - **Depends on:** the matching LB.6
 - **Files:** `src/library-prototypes/<x>/**` (except `REVIEW.md`)
 - **Do:** fix every rule failure and as many quality items as possible. Log a "Response to
@@ -333,7 +333,7 @@ model**.
 - **Done when:** `npm run check:library -- <x>` passes, and the fixes pass a code review.
 
 ### LB.8 — Comparison
-- **Status:** todo
+- **Status:** doing (comparison agent)
 - **Depends on:** LB.7 (all three)
 - **Files:** `docs/LIBRARY_COMPARISON.md`, `docs/library-comparison/**`
 - **Do:** write a side-by-side comparison of every scenario, a paragraph per variant, a
