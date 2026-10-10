@@ -12,6 +12,10 @@ there is no back-end or LLM yet.
 Commands run in zsh. Quote any argument that starts with `=` (e.g. `echo '====='`), because zsh
 otherwise reads it as a command lookup and fails with "not found".
 
+Only stop processes you started yourself, using the handle or PID you got when you started them.
+Never kill a process because it holds a port: the Claude app and other tools listen on local
+ports too. If a port you need is taken by something that isn't yours, report it instead.
+
 ## Code standards
 
 Optimize for a human reading the code for the first time.
