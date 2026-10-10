@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "node scripts/check.ts",
+    "shot": "node scripts/shot.ts"
   },
   "dependencies": {
     "@fontsource-variable/eb-garamond": "^5.3.0",
@@ -34,6 +36,7 @@
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "playwright": "^1.64.0",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
     "vitest": "^5.0.3"
