@@ -241,7 +241,7 @@ Screenshot caveats to include in every design agent's brief:
   reading).
 
 ### P1.A.build · P1.B.build · P1.C.build — Build the design
-- **Status:** A: done · B: done · C: doing (agent: a395da211fdfd8ec3)
+- **Status:** A: done · B: done · C: done
 - **Depends on:** the matching P1.x.spec
 - **Files:** `src/designs/<x>/**`
 - **Do:**
@@ -268,7 +268,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P2 — Review (fresh agents, not the builders)
 
 ### P2.A.review · P2.B.review · P2.C.review
-- **Status:** A: doing (agent: a595c9bd0f9bd05a9) · B: doing (agent: ac8dd22be4eefcfef) · C: todo
+- **Status:** A: doing (agent: a595c9bd0f9bd05a9) · B: doing (agent: ac8dd22be4eefcfef) · C: doing (agent: a4530ac823ad8878e)
 - **Depends on:** the matching P1.x.build, and P1.shot
 - **Agent:** a new agent, never the one that built the design
 - **Files:** `src/designs/<x>/REVIEW.md` (the only file it may write)
