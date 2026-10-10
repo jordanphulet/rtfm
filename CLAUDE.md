@@ -7,6 +7,11 @@ there is no back-end or LLM yet.
 - `DESIGN_RULES.md`: what every reader design must do.
 - `WORKLIST.md`: the task list and the orchestrator's protocol.
 
+## Shell
+
+Commands run in zsh. Quote any argument that starts with `=` (e.g. `echo '====='`), because zsh
+otherwise reads it as a command lookup and fails with "not found".
+
 ## Code standards
 
 Optimize for a human reading the code for the first time.

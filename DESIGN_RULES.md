@@ -123,7 +123,9 @@ external links · cross-references to written **and unwritten** sections.
 - Curly quotes and apostrophes, real en/em dashes, a real ellipsis.
 - Tabular (even-width) numerals wherever numbers line up, such as section labels in the TOC.
 - `text-wrap: balance` on headings and `text-wrap: pretty` on body text, so no single word is left
-  alone on a line.
+  alone on a line. Exception: `pretty` can re-wrap a paragraph when it changes, so a section that
+  is streaming, or that streamed in during this page load, uses ordinary wrapping. Only sections
+  that were already written when the page loaded use `pretty`.
 - Every interactive element has a clear hover state and a clear focus state.
 - UI transitions are about **150–250ms**, with deliberate easing.
 
