@@ -206,7 +206,7 @@ model**.
   and suggestions shown as interactive cards inside it. The most agent-first of the three.
 
 ### LB.1 — Extract the design system
-- **Status:** doing (agent: ae7b39f810c23fb51)
+- **Status:** done
 - **Depends on:** CL.5
 - **Files:** `src/ui/**`, `src/reader/**`, `DESIGN.md`
 - **Do:**
@@ -246,9 +246,9 @@ model**.
 - **Done when:** tests pass; the READMEs cover every export and URL option.
 
 ### LB.3 — Prototype scaffold and screenshots
-- **Status:** todo
+- **Status:** doing (agent: a8be4c6e7c2657175)
 - **Depends on:** LB.1, LB.2
-- **Files:** `src/App.tsx`, `src/library-prototypes/**` (stubs), `scripts/**`, `package.json`
+- **Files:** `src/App.tsx`, `src/library-prototypes/**` (stubs and README), `scripts/**`, `package.json`, `README.md` (scripts table)
 - **Do:**
   - Add routes `/library/<a|b|c>`. Load each variant lazily, behind its own error boundary. Load
     the reader lazily too, so the build splits into chunks again (it currently warns about one
