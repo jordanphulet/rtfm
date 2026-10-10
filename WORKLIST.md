@@ -129,7 +129,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
   comparison, or deleted files.
 
 ### CL.5 — Final check
-- **Status:** doing (agent: a7beaf44d6bc1ba57)
+- **Status:** done
 - **Depends on:** CL.4
 - **Files:** anything, for small fixes only
 - **Do:**
@@ -206,20 +206,23 @@ model**.
   and suggestions shown as interactive cards inside it. The most agent-first of the three.
 
 ### LB.1 — Extract the design system
-- **Status:** todo
+- **Status:** doing (agent: ae7b39f810c23fb51)
 - **Depends on:** CL.5
 - **Files:** `src/ui/**`, `src/reader/**`, `DESIGN.md`
 - **Do:**
   - Move the reader's tokens, base type and focus styles, and the components that aren't specific
     to the reader (state ring, buttons, links, sheet, scroll hints) into `src/ui/`.
   - The reader imports them from there.
+  - Add a small `ReplyMarkdown` component to `src/ui/` for short markdown (paragraphs, bold and
+    italic, lists, inline code, links), styled with the reader's prose tokens. The library
+    variants render the agent's replies with it, so replies look the same in every variant.
   - Write `src/ui/README.md`: the tokens, and each component with its props.
   - Update the build structure in `DESIGN.md`.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the reader screenshots look
   identical to before; nothing reader-specific is in `src/ui/`.
 
 ### LB.2 — Library data and a scripted agent
-- **Status:** doing (agent: a2f0d613630994b75)
+- **Status:** done
 - **Depends on:** CL.3 (its folders are new, so it doesn't need to wait for the docs)
 - **Files:** `src/library/**`, `src/agent/**`, `package.json` (scripts only)
 - **Do:**
@@ -247,7 +250,9 @@ model**.
 - **Depends on:** LB.1, LB.2
 - **Files:** `src/App.tsx`, `src/library-prototypes/**` (stubs), `scripts/**`, `package.json`
 - **Do:**
-  - Add routes `/library/<a|b|c>`. Load each variant lazily, behind its own error boundary.
+  - Add routes `/library/<a|b|c>`. Load each variant lazily, behind its own error boundary. Load
+    the reader lazily too, so the build splits into chunks again (it currently warns about one
+    501 kB chunk).
   - Add a small dev switcher, like the one in the comparison (see the `design-comparison` tag). It
     stays clear of each variant's controls, and goes inert while a modal is open.
   - Add `npm run shot:library -- <x>`, which captures every scenario at desktop and phone size
