@@ -91,7 +91,8 @@ Ratio **1.25** (major third) from a **20px** base. Every line-height is a multip
 
 | Token | Size / line | Weight · style | Used for |
 | --- | --- | --- | --- |
-| `--text-caps` | 13 / 16 | 500, uppercase, +0.08em | Running heads, chapter lines, table heads, status line, "Contents" |
+| `--text-caps` | 13 / 16 | 500, uppercase, +0.08em | Kept rare: table heads, H4, "Contents" / "Previous" / "Next", the contents and back-matter heads |
+| `--text-note` | 16 / 24 | 380 *italic* | Running heads, status line, chapter lines (italic instead of tracked capitals) |
 | `--text-small` | 16 / 24 | 380 | Margin notes, tables, contents summaries, previews, prev/next |
 | `--text-body` | 20 / 32 (phone **18 / 28**) | 380 | Body text |
 | `--text-body-back` | 18 / 28 | 380 | Appendix body text (back matter is set smaller) |
@@ -138,7 +139,11 @@ never for decoration, and it doubles as the manual's own safety-button red.
 
 ## Tokens and timing
 
-All of the above live in one file, `src/designs/b/tokens.css`, as custom properties, together with:
+All of the above live in one file, `src/designs/b/styles/tokens.css`, as custom properties, together
+with `--line-snug` (28px, for 20px text in tight places), `--wght-initial` (400, the drop cap),
+`--wght-quote` (350), `--preview-width` (360px), `--entry-label` (the contents label column, 48px;
+36px on phone and in the back matter; 40px in the sheet), the SVG masks for dot leaders and the
+checklist tick (coloured by `background-color`, so no palette hex is repeated), and:
 
 | Token | Value | Use |
 | --- | --- | --- |
@@ -151,7 +156,7 @@ All of the above live in one file, `src/designs/b/tokens.css`, as custom propert
 | `--dur-quill` | 1600ms | Loop for the "being written" leaf glyph and fore-edge tick |
 | `--ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | Things arriving |
 | `--ease-in-out` | `cubic-bezier(0.45, 0, 0.2, 1)` | Strokes being drawn |
-| `--delay-preview` | 300ms | Hover delay before a cross-reference preview opens |
+| `--delay-preview` | 300ms | Hover delay before a cross-reference preview appears (an `animation-delay`; none on focus) |
 
 ---
 
@@ -163,7 +168,7 @@ All of the above live in one file, `src/designs/b/tokens.css`, as custom propert
 | --- | --- | --- |
 | **Folio** | ≥ 1280 | Fore-edge · left margin · text · notes margin (full strength) |
 | **Quarto** | 1024–1279 | Same, with a narrower left margin. H2s move into the text column. |
-| **Octavo** | 768–1023 | No fore-edge; folio bar instead. A single 576px column, notes become tap slips. |
+| **Octavo** | 768–1023 | No fore-edge; folio bar instead. A single 576px column, footnotes become endnotes. |
 | **Pocket** | < 768 | Phone. See below. |
 
 ### Desktop, 1440 (Folio): the section page
@@ -179,18 +184,18 @@ All of the above live in one file, `src/designs/b/tokens.css`, as custom propert
 - **Fore-edge index** (fixed, 64px, full height). See [Navigation](#navigation).
 - **Page grid** `240 | 48 | 576 | 48 | 256` (1168px), centred in the space to the right of the
   fore-edge. Asymmetric like a recto page: a narrower inner margin, a wider outer margin for notes.
-- **Running head** (top 40px, scrolls with the page, `--text-caps`): over the text column, the
-  chapter line `CHAPTER 2 · PERFORMERS WITHOUT A PULSE` (`--ink-soft`); right-aligned at the
-  notes column's edge, `THE HAUNT THAT LISTENS` (`--ink-faint`, a link to the title page).
-  For appendices: `APPENDIX A · PARTS AND SENSOR REFERENCE`.
+- **Running head** (top 40px, scrolls with the page, italic `--text-note`): over the text
+  column, the chapter line *Chapter 2 · Performers Without a Pulse* (`--ink-soft`); right-aligned
+  at the notes column's edge, *The Haunt That Listens* (`--ink-faint`, a link to the title page).
+  For appendices: *Appendix A · Parts and Sensor Reference*.
 - **Opener**, starting 72px below the running head:
   - The **section label** `2.4` hangs in the left margin, right-aligned, `--text-title` 300
     weight, rubric, tabular, on the title's first baseline (Butterick's hung title).
   - **Title** (H1) in the text column, `--text-title`, `text-wrap: balance`.
   - **Summary** below in italic `--text-body`, `--ink-soft`: the section's "argument", as in a
     Victorian chapter head.
-  - **Status line** (`--text-caps`, `--ink-faint`) with a leaf glyph, like Gwern's metadata
-    line: `WRITTEN · ABOUT 520 WORDS` or `BEING WRITTEN · 42%`. It has a fixed height and
+  - **Status line** (italic `--text-note`, `--ink-faint`) with a leaf glyph, like Gwern's
+    metadata line: *Written · about 520 words* or *Being written · 42%*. It has a fixed height and
     `min-width` tabular figures, so updates never shift anything.
   - **Head rule**: a 6px rubric lozenge plus a 96px `--rule-strong` hairline, `--space-5` above
     and `--space-6` below.
@@ -205,26 +210,26 @@ Fore-edge 56 · grid `128 | 40 | 544 | 40 | 200`. The left margin holds only the
 
 ### Octavo (768–1023)
 No fore-edge. The **folio bar** appears (as on phone). One 576px column (20/32, ≈72 characters)
-with a 64px left margin. The opener uses the phone structure (label on its own line above the
-title) at desktop sizes. Notes become **tap slips** (as on phone). Wide blocks stay at the
+between 64px gutters, centred. The opener uses the phone structure (label on its own line above the
+title) at desktop sizes. Footnotes are **endnotes** (as on phone). Wide blocks stay at the
 column width and scroll inside themselves.
 
 ### Phone (Pocket, < 768; designed at 375)
 A different structure, not a squeezed desktop:
 - **16px side gutters**, body **18/28** (≈47 characters). Pocket editions have narrow margins.
-- **Running head** at the top: only the chapter line, in caps (scrolls away).
+- **Running head** at the top: only the chapter line, in italic (scrolls away).
 - **Opener:** the label `2.4` on its own line (rubric, `--text-body`, tabular), the title at
   `--text-title-s`, the summary in italic 18/28, the status line, then the head rule.
-- **H2s are in the column** at 22/28, weight 500, with the rule above spanning the measure and
+- **H2s are in the column** at 20/28 (the phone `--text-head`), weight 500, with the rule above spanning the measure and
   40px of space above it.
-- **Footnotes become tap slips** under their line (see Footnotes). A "Notes" list stays at the end.
+- **Footnotes are endnotes**: the renderer's own jump links and back-links (see Footnotes).
 - **Wide blocks are full-bleed** (negative 16px margins), with code and tables scrolling sideways
   *inside* their own box (`overflow-x: auto`, `tabindex="0"`, labelled region). The page itself
   never scrolls sideways.
 - **Folio bar** (fixed at the bottom, 48px + `env(safe-area-inset-bottom)`, `--ground`, 1px
   `--rule` top): on the left, the **Contents** button (`data-shot="toc-toggle"`); on the right,
   the current label `2.4` and its leaf glyph (animated while writing). Thumb-reachable and always
-  one tap away. A book's folio lives at the foot of the page. The page has 64px of padding at
+  one tap away. A book's folio lives at the foot of the page. The page reserves the bar's height plus 128px at
   the bottom so the bar never covers the last line.
 - The nib (signature) sits in the gutter at 3px from the edge, scaled to 8×12. The wet rule is
   left out: there is no room for it.
@@ -240,12 +245,12 @@ A reader of a manual comes to choose a section, so the front matter is compresse
 and the contents begins above the fold.
 
 **Desktop (1440):** in the text column, from the top:
-1. Caps line `A MANUAL IN FIVE CHAPTERS AND TWO APPENDICES` (`--ink-faint`, computed from data).
+1. Italic line *A manual in five chapters and two appendices* (`--ink-faint`, computed from data).
 2. **Title** `The Haunt That Listens`, `--text-display`, balanced.
 3. **Subtitle** in italic, `--text-head` 25/36, `--ink-soft`, at most about 2 lines.
-4. A meta line in caps: `7 OF 18 SECTIONS WRITTEN · BEGIN AT 1.1 →` (the last part is a link,
+4. An italic meta line: *7 of 18 sections written · Begin at 1.1 →* (the last part is a link,
    and the arrow is drawn).
-5. A wide **title ornament** (head rule at 240px).
+5. The **head rule** (the same lozenge and hairline as every section opener).
 6. Caps `CONTENTS`, then the **contents** (below).
 
 In the **right margin**, level with `CONTENTS`, a **key** as a margin note: the three leaf glyphs
@@ -273,7 +278,7 @@ parts list is set at the back of a printed book.
 
 **Phone:** the same order. Title at `--text-numeral` (39/48), subtitle in italic 18/28, the key
 as a compact three-item line under the meta line. Chapter numerals sit inline before the chapter
-title (rubric). Leaders are dropped; the leaf glyph stays right-aligned. Back matter is one
+title (rubric). Entries drop to `--text-small` and keep short leaders; the leaf glyph stays right-aligned. Back matter is one
 column. No folio bar on `/b`, because this page *is* the contents.
 
 ### State in the contents (and everywhere else a section is listed)
@@ -336,8 +341,8 @@ section, and it takes 64px instead of a sidebar.
 After the tailpiece: **two joined ruled cells** across the text column (Stripe Press's joined
 buttons): 1px `--rule-strong` frame and a shared middle rule, square corners.
 - Each cell: caps `PREVIOUS` / `NEXT` (`--ink-faint`) with a drawn arrow; if it crosses a
-  chapter or into the back matter, a caps chapter line (`CHAPTER 3 · ROOMS THAT NOTICE` /
-  `BACK MATTER · APPENDIX A`); the label and title (`--text-body`); the leaf glyph; the summary
+  chapter or into the back matter, an italic chapter line (*Chapter 3 · Rooms That Notice* /
+  *Back matter · Appendix A*); the label and title (`--text-body`); the leaf glyph; the summary
   in italic `--text-small`. The Next cell is right-aligned.
 - **Hover:** fill `--raised`, title underline rubric. **Focus:** rubric outline on the cell.
 - At **1.1** the Previous cell becomes "Contents". At **B.2** the Next cell becomes "End of the
@@ -351,9 +356,9 @@ buttons): 1px `--rule-strong` frame and a shared middle rule, square corners.
 | State | What the reader sees |
 | --- | --- |
 | **unwritten** | Never painted (writing starts first). If it is, it renders exactly like *waiting*. |
-| **waiting** (`writing`, no text) | The full opener: chapter line, hung label, title, **summary**, status line `BEING WRITTEN` with the rubric leaf. Then the **head rule draws itself** (`--dur-rule`), the **nib** appears at the first line's position, and one italic `--ink-faint` line reads *"The first words are on their way…"*. Never blank. |
-| **streaming** | Text in the final layout. The **nib** rides beside the newest line, the **wet-ink rule** runs down the left margin, the status line counts up `BEING WRITTEN · 42%`, and the fore-edge tick and leaf glyph show the writing state. Prev/next are already there at the end. |
-| **written** | No nib, no rule, a drawn **tailpiece** under the last line, status line `WRITTEN · ABOUT 520 WORDS`. |
+| **waiting** (`writing`, no text) | The full opener: chapter line, hung label, title, **summary**, status line *Being written* with the rubric leaf. Then the **head rule draws itself** (`--dur-rule`), the **nib** appears at the first line's position, and one italic `--ink-faint` line reads *"The first words are on their way…"*. Never blank. |
+| **streaming** | Text in the final layout. The **nib** rides beside the newest line, the **wet-ink rule** runs down the left margin, the status line counts up *Being written · 42%*, and the fore-edge tick and leaf glyph show the writing state. Prev/next are already there at the end. |
+| **written** | No nib, no rule, a drawn **tailpiece** under the last line, status line *Written · about 520 words*. |
 
 The `<article>` carries `data-status`. The status line is an `aria-live="polite"` region that
 announces only state changes ("Being written", "Written"). The percentage is `aria-hidden`.
@@ -373,19 +378,24 @@ announces only state changes ("Being written", "Written"). The percentage is `ar
   - **`fine`**: a section that was already `written` when the page loaded. Body text uses
     `text-wrap: pretty`, and markdown headings and blockquotes use `balance`.
   - **Only on the opener title, the title page and the contents is `balance` always used.**
-    Those come whole from the TOC data and are never partly rendered.
-  - *To verify in the build:* that markdown H2–H4 never show partly rendered while streaming. If
-    they never do, they could keep `balance` even in `plain` sections. Until that's shown, they
-    stay on `wrap` there.
-- **Margin notes** are absolutely positioned outside the text column, so filling them in never
-  moves text. Their positions come from references *above* the writing edge, which don't move.
+    Those come whole from the TOC data and are never partly rendered. The shared repair *does*
+    render markdown headings partially mid-stream, so in `plain` sections they stay on `wrap`.
+- **Margin notes** are absolutely positioned outside the text column, so they never move text.
+  Footnote definitions come at the very end of the markdown, so **while writing, every note is a
+  number-only stub** (one line high) at its reference's height. The stubs are laid out top-down as
+  references arrive, and earlier stubs never move. **On completion the notes fill in and the
+  overlap pass runs once.** Below desktop the notes list is hidden until the section is written,
+  then appears at the end, below everything.
 - The **tailpiece's box is reserved while writing** (`visibility: hidden`), so it appears on
   completion without pushing prev/next.
 - **The page never scrolls by itself.** When the writing edge is below the viewport, a quiet
-  **"Follow the writing"** text button (caps, drawn ↓ arrow) appears: fixed at the foot of the
-  notes column on desktop, or above the folio bar on phone. Clicking it scrolls to the edge
-  (smooth, or instant under reduced motion) and keeps the newest line in view until the reader
-  scrolls, presses a key, or the section finishes.
+  **"Follow the writing"** text button (italic, drawn ↓ arrow) appears. It never covers text or
+  code: on desktop it is set vertically at the foot of the fore-edge strip, and below 1024px it
+  sits inside the folio bar. Clicking it scrolls to the edge (smooth, or instant under reduced
+  motion) and keeps the newest line in view until the reader scrolls, drags, taps, presses a key,
+  or the section finishes. While following it reads "Following the writing" (`aria-pressed`) and
+  clicking it again stops. It stays visible while it has focus, and when the section finishes
+  focus moves to the text instead of dropping to the page.
 - New text appears without a fade. The text is *set*; the nib shows where.
 
 ---
@@ -401,24 +411,24 @@ labelled scroll region).
 | **First paragraph** | A **2-line drop cap** in rubric: `::first-letter` with `initial-letter: 2`, opsz 72, weight 400, with a float fallback. Only when the section opens with a paragraph. None in appendices. |
 | **Paragraphs** | No gap between them. `p + p { text-indent: 1.5em }` (book indents). No indent after a heading, list, table, quote, code block or rule. `hyphens: auto`. `text-wrap: pretty` only in sections that loaded already written; ordinary wrapping in any section that streams in this page load (see Streaming). |
 | **Bold / italic** | Weight 600 / Newsreader's true italic. Bold lead-ins in lists stay `--ink`. |
-| **H2** | Folio: **hung in the left margin**, right-aligned, `--text-head` 500, `text-wrap: balance` in `fine` sections only (see Streaming), `float: left` with a negative margin so it lines up with its first paragraph (`clear: left`). Above it, a 1px `--rule-strong` rule spans the left margin and text (Butterick plus Gwern), with `--space-7` above. `hr + h2` drops the rule (the asterism already separates them). Quarto and below: in the column, rule above. |
+| **H2** | Folio: **hung in the left margin**, right-aligned, `--text-head` 500, `text-wrap: balance` in `fine` sections only (see Streaming), **without floats**: the `h2` is an in-flow, zero-height block, and its text (a `span` added through `components.h2`) is absolutely positioned into the margin, so the paragraph after it starts on the same line. Above it, a 1px `--rule-strong` rule spans the left margin and text (Butterick plus Gwern), with `--space-7` above. `hr + h2` drops the rule (the asterism already separates them). Quarto and below: in the column, rule above. |
 | **H3** | In the column. *Italic* `--text-head` 400 (Tufte), `--space-6` above, `--space-2` below. |
 | **H4** | Caps label (`--text-caps`, weight 600, `--ink-soft`), `--space-5` above, `--space-1` below, followed by an unindented paragraph. |
 | **Bulleted lists** | Indent 1.5em (same as the paragraph indent). The marker is a **6px rubric lozenge** (an SVG mask on `::before`) hanging in the indent, centred on the first line. Items have no gap between them. |
 | **Numbered lists** | `::marker` in `--ink-soft`, tabular, followed by a period, right-aligned in the indent. |
 | **Nested lists** | One more 1.5em step. Nested bullets are a 10px `--ink-faint` en-dash (drawn), and nested numbers are lowercase letters. |
 | **Checklists** | `input` with `appearance: none`, 14px. Unchecked: a drawn square in `--ink-faint`. Checked: the same square with a **hand-drawn rubric tick** overrunning its corner, like a pencil check in a real manual. Text is not struck through; checked items are `--ink-soft`. The box hangs in the list indent. |
-| **Blockquotes** | The manual's quotes are mottoes and character lines, so they are set as **epigraphs**: *italic* `--text-quote`, indented `--space-7`, `--ink`, no bar and no border, `text-wrap: balance` in `fine` sections only. Opening quote marks hang where supported (`hanging-punctuation: first`). |
+| **Blockquotes** | The manual's quotes are mottoes and character lines, so they are set as **epigraphs**: *italic* `--text-quote`, indented `--space-7`, `--ink`, no bar and no border, `text-wrap: balance` in `fine` sections only. |
 | **Tables** | **Wide block** (880px on folio). "Booktabs" rules: 2px `--rule-strong` top and bottom, 1px `--rule` under the head, no vertical rules, no zebra stripes. Head: caps label, `--ink-soft`. Cells `--text-small`, padding 8px 16px 8px 0, top-aligned. GFM alignment is honoured (right-aligned numbers, tabular). Wrapped in a `role="region"` with `tabindex="0"` and a label for internal scrolling on narrow screens. |
 | **Code blocks** | **Wide block**. A `--raised` plate with no border or radius, padding 16px 24px, Plex Mono `--text-code`, `--ink`, `overflow-x: auto` inside. The 98-character latency-guard line fits at 880px. No syntax colours (two-colour book). |
 | **Inline code** | Plex Mono at 0.85em, `--ink`, no fill, no border: the face alone marks it, as in Tufte. |
 | **Horizontal rule** | A drawn **asterism**: three 5px rubric lozenges 16px apart, centred, `--space-6` above and below. The classic section break. |
 | **Footnote references** | Rubric tabular numerals at 0.65em, raised with `position: relative` (not `vertical-align`, so line spacing stays even). The hit area is padded to 24px. Hover or focus highlights the matching note. |
-| **Footnotes, desktop** | **Sidenotes** in the notes column, **level with their reference's line**: `--text-small`, `--ink-soft`, led by a rubric number. A small layout hook measures each `a[data-footnote-ref]`, sets `--note-top` on its `li`, pushes notes down to avoid overlaps (16px gap) and wide blocks, and re-runs on a `ResizeObserver`. A note pushed more than one line away from its reference gets a **leader line**: a 1px dotted `--ink-faint` SVG elbow from the end of the reference's line, across the gap, to the note. Backrefs are hidden (the note is already beside its reference). Hovering a note brightens it to `--ink` and its reference to underlined rubric. While streaming, a note whose text hasn't arrived shows just its number and a faint dash. |
-| **Footnotes, phone/octavo** | Tapping a reference opens the note as a **slip under that line**: absolutely positioned (nothing reflows) across the measure, `--raised`, a 1px rubric top rule, `--text-small`. Tap again, Esc, or tap the slip to close. A **"Notes"** list stays at the end (caps head under a short 64px rule, the classic footnote separator), with backrefs drawn as small return hooks labelled "Back to reference 1". |
+| **Footnotes, desktop** | **Sidenotes** in the notes column, **level with their reference's line**: `--text-small`, `--ink-soft`, led by a rubric number. A small layout hook measures each `a[data-footnote-ref]`, sets `--note-top` on its `li`, and pushes notes down to avoid overlaps (16px gap) and wide blocks. A pushed note simply sits lower with its rubric number, as in Tufte; there are no leader lines. **While writing, notes are number-only stubs**; they fill in on completion and the pass runs once more (see Streaming). Backrefs are hidden (the note is already beside its reference). |
+| **Footnotes, phone/octavo** | **Endnotes**, using the renderer's own jump links and back-links. The renderer's **"Footnotes"** label is shown as a caps head at the end (under a short 64px rule, the classic footnote separator); `--text-small`, `--ink-soft`, with backrefs drawn as small return hooks labelled "Back to reference 1". Hidden while the section is writing (the definitions only arrive at the end). |
 | **External links** | `--ink` text, 1px `--ink-faint` underline (offset 4px), followed by a **drawn 8px ↗** (meaning "leaves the manual"). Opens in a new tab, with the screen-reader text "(opens in a new tab)". Hover: underline becomes rubric. |
 | **Cross-references** | A book's "see §4.2": the link text is followed by a small non-breaking **`§4.2`** (0.75em, tabular, `--ink-faint`) inside the link. The underline shows state: **written**: solid 1px rubric. **writing**: solid rubric plus a tiny writing leaf after the label. **unwritten**: **dotted 1.5px `--ink-soft`** (not yet set in type). Hover: underline thickens to 2px rubric. |
-| **Cross-reference preview** (pointer devices) | After `--delay-preview` on hover, or at once on focus: a **framed slip** under the link (flips above near the bottom of the viewport), 360px, `--raised`, 1px `--rule-strong` frame, no shadow (Gwern). It shows the chapter caps line, `4.2 The Director`, the summary in italic, and the state: leaf plus *"Written"*, *"Being written now"*, or *"Not yet written. Opening it starts the writing."* Read with `useManual()` + `findSection()`, so a preview never opens a section. `role="tooltip"`, tied to the link with `aria-describedby`. Esc closes it. |
+| **Cross-reference preview** (pointer devices) | After `--delay-preview` on hover, or at once on focus: a **framed slip** under the link, rendered through a **portal** into the `.design-b` root (never a `div` inside a `p`), placed from `--anchor-left`/`--anchor-top` and clamped inside the gutters in CSS, flipped above near the bottom of the viewport, `--preview-width`, `--raised`, 1px `--rule-strong` frame, no shadow (Gwern). It shows the italic chapter line, `4.2 The Director`, the summary in italic, and the state: leaf plus *"Written"*, *"Being written now"*, or *"Not yet written. Opening it starts the writing."* Read with `useManual()` + `findSection()`, so a preview never opens a section. `role="tooltip"`, tied to the link with `aria-describedby`. Esc closes it. |
 | **Selection** | `--selection` background, `--ink` text. |
 
 ---
@@ -447,16 +457,18 @@ text**, never behind anything being read.
 1. **Waiting (≈1.2s).** Under the summary, the **head rule draws itself** left to right (SVG
    `stroke-dashoffset`, `--dur-rule`, `--ease-in-out`), and the rubric **nib** (a drawn split-nib
    pen point, 10×16) appears in the margin 28px left of the text, level with the first line.
-2. **Streaming.** The nib **rides beside the newest line**. It is positioned at the bottom of the
-   body wrapper. During writing the last block's bottom margin is zeroed and the notes section is
-   height 0, so the bottom of the wrapper *is* the newest line, and no JavaScript is needed. A
-   1px **wet-ink rule** (`--rubric-wet`) runs from the top of the body down to the nib, 24px
+2. **Streaming.** The nib **rides beside the newest line**. A layout effect (re-run on every
+   chunk and on a `ResizeObserver`) measures the bottom of the last rendered block that is *not*
+   `section.footnotes` (that section is the last child from the first footnote reference onward)
+   and sets `--live-edge` on the body. The nib and rule are positioned from it, so a
+   `?freeze=0.5` screenshot shows the nib in place. A 1px **wet-ink rule** (`--rubric-wet`) runs from the top of the body down to the nib, 24px
    left of the text. From anywhere on the page, the reader can see that this section is still
    being written and how much exists.
 3. **Finished.** The nib **lifts** (fades out with a 4px rise, `--dur-base`). The wet rule
    **dries**, fading from `--rubric-wet` to transparent over `--dur-rule`. Then the **tailpiece**
-   (a 120×20 swash rule, two mirrored curls round a central lozenge, drawn as one path) **draws
-   itself** under the last line (`--dur-draw`), and its lozenge fills in (`--dur-quick`). The
+   (a 6px rubric lozenge between two 40px `--rule-strong` hairlines, from the same lozenge
+   family as the bullets, asterism and head rule) **draws itself** under the last line: the
+   lozenge appears, then the hairlines grow outward from it (`--dur-draw`). The
    status line changes to `WRITTEN`, and the live region announces it.
    This plays **only on a live writing → written change**. A section that was already written
    shows its tailpiece at rest.
@@ -474,7 +486,7 @@ show their static "being written" frame.
 
 ### Drawn details (SVG)
 
-All are inline SVG components using `stroke="currentColor"`, 1px hairlines with
+One ornament family built from the **lozenge** (bullets, asterism, head rule, tailpiece). No swashes or pictorial flourishes, to stay clear of Halloween-book pastiche. All are inline SVG components using `stroke="currentColor"`, 1px hairlines with
 `vector-effect: non-scaling-stroke` and butt caps (engraved, not rounded), so tokens colour them.
 
 | Drawing | Meaning |
@@ -482,9 +494,9 @@ All are inline SVG components using `stroke="currentColor"`, 1px hairlines with
 | Leaf glyph (3 states) | Section state |
 | Ribbon (contents, fore-edge) | You are here |
 | Fore-edge ticks | Each section, its state, and your place in the book |
-| Head rule / title ornament | Start of the text |
+| Head rule (lozenge + hairline) | Start of the text (section openers and the title page) |
 | Asterism | Section break (`hr`) |
-| Tailpiece | End of section: the text is complete |
+| Tailpiece (hairline · lozenge · hairline) | End of section: the text is complete |
 | Nib + wet rule | Where the writing is now; still writing |
 | Dot leaders | Connect a contents entry to its state |
 | Lozenge bullet, en-dash sub-bullet | List items |
@@ -492,7 +504,6 @@ All are inline SVG components using `stroke="currentColor"`, 1px hairlines with
 | ↗ arrow | Leaves the manual |
 | Return hook | Back to the note's reference |
 | ↓ / → arrows | Follow the writing / Begin reading, previous/next |
-| Dotted leader elbow | Links a displaced sidenote to its reference |
 
 ---
 
@@ -507,7 +518,7 @@ All are inline SVG components using `stroke="currentColor"`, 1px hairlines with
 - **Tab order:** "Skip to text" link (visible on focus) → fore-edge (Contents button, one stop
   for the ticks) → running-head links → body links → Follow → prev/next. On phone the folio bar
   comes last in the DOM but is always visible.
-- **Keys:** Esc closes the sheet, slips and previews. ↑/↓/Home/End move within the fore-edge.
+- **Keys:** Esc closes the sheet and previews. ↑/↓/Home/End move within the fore-edge.
   There are no other shortcuts.
 - **Touch targets** are at least 24×24 (ticks, note references, checkboxes) and 44px tall in the
   folio bar.
@@ -517,7 +528,7 @@ All are inline SVG components using `stroke="currentColor"`, 1px hairlines with
 | Motion | Default | `prefers-reduced-motion: reduce` |
 | --- | --- | --- |
 | Contents sheet | Slides in, `--dur-sheet` | Appears instantly (0ms opacity) |
-| Scrim, previews, label slips, note slips | Fade, `--dur-base` | Instant |
+| Scrim, previews, tick label slips | Fade, `--dur-base` | Instant |
 | Head rule while waiting | Drawn, `--dur-rule` | Static, complete |
 | Leaf glyph / fore-edge tick while writing | Quill loop, `--dur-quill` | Static resting frame |
 | Nib / wet rule at completion | Lift and dry | Removed instantly |
@@ -527,16 +538,25 @@ All are inline SVG components using `stroke="currentColor"`, 1px hairlines with
 
 ---
 
-## Build notes (for the next step)
+## Build structure
 
-- Files under `src/designs/b/`: `tokens.css` (the single token source), `book.css` (layout),
-  `prose.css` (markdown), and small components: `ForeEdge`, `ContentsSheet`, `Contents`
-  (shared by `/b` and the sheet), `TitlePage`, `SectionPage`, `Opener`, `StatusLine`,
-  `TurnThePage`, `FolioBar`, `FollowButton`, `SectionLink` + `Preview`, `useMarginNotes`,
-  `drawings.tsx` (all SVGs).
-- `SectionLink` and `components` are defined at module level (README). The preview and contents
-  use `findSection`, never `useSection`.
-- Footnote ids are global, so there is never a second `<Markdown>` on the page. Previews show
-  summaries, not bodies.
-- Gate on `npm run check -- b`, then three or more shot → critique → fix passes logged in
-  `NOTES.md`.
+- Every rule is nested under the `.design-b` root (native CSS nesting), so names like `.prose`
+  and `.page` can't collide with other designs. Keyframes are prefixed `b-`. Tokens sit on
+  `body:has(.design-b)`.
+- `src/designs/b/styles/`: `tokens.css` (the single token source), `base.css`, `drawings.css`
+  (glyph colours and stroke animations), `navigation.css` (fore-edge, folio bar, follow button,
+  sheet, turn the page), `title-page.css`, `contents.css`, `section.css` (opener and the
+  signature), `prose.css` (markdown and notes), `preview.css`.
+- Components: `index.tsx` (routing and the sheet state), `TitlePage`, `Contents` (shared by `/b`
+  and the sheet), `ContentsSheet` (a native modal `<dialog>`: focus trap, Esc and focus return
+  come with it), `ForeEdge` (sets `--tick-count` from the manual), `FolioBar`, `SectionPage`
+  (a `<main>`, keyed by section id), `Opener`, `SectionBody` (prose, nib, wet ink, tailpiece),
+  `TurnThePage`, `FollowButton`, `SectionLink` (with its portalled preview),
+  `markdownComponents` (`a`, `h2`, `table`, `pre`, `hr`), `drawings.tsx` (every SVG).
+- `book.ts` (paths, chapter lines, state words) and `readingMemory.ts` (sections streamed this
+  load, the last one opened).
+- Hooks: `useLiveEdge` (writes `--live-edge` and keeps the value in a ref, so streaming causes no
+  extra renders) and `useMarginNotes` (desktop only; reads every position, then writes). Each
+  creates its `ResizeObserver` once and re-measures on new text.
+- On back-matter pages the code plate and the fore-edge thumb band use `--ground`, because
+  `--raised` barely differs from `--ground-back`.

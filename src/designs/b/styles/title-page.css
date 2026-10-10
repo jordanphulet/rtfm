@@ -1,0 +1,113 @@
+.design-b {
+  .title-kicker,
+  .title-meta {
+    margin: 0;
+    font-style: italic;
+    font-size: var(--text-small);
+    line-height: var(--line-small);
+    color: var(--ink-faint);
+  }
+
+  .book-title-display {
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-display);
+    line-height: var(--line-display);
+    font-weight: var(--wght-numeral);
+    font-variation-settings: "opsz" 72;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  .book-subtitle {
+    margin: var(--space-4) 0 0;
+    font-style: italic;
+    font-size: var(--text-head);
+    line-height: var(--line-quote);
+    font-weight: var(--wght-display);
+    color: var(--ink-soft);
+    text-wrap: balance;
+  }
+
+  .title-meta {
+    margin-top: var(--space-5);
+
+    a {
+      color: var(--ink-soft);
+      text-decoration: underline 1px var(--rubric);
+      text-underline-offset: 4px;
+      transition: color var(--dur-quick) var(--ease-out);
+
+      &:hover {
+        color: var(--ink);
+        text-decoration-thickness: 2px;
+      }
+    }
+
+    .arrow {
+      vertical-align: -1px;
+    }
+  }
+
+  .title-page .head-rule {
+    margin: var(--space-6) 0 var(--space-7);
+  }
+
+  .contents-head {
+    position: relative;
+    margin-bottom: var(--space-6);
+
+    h2 {
+      margin: 0;
+      color: var(--ink-soft);
+    }
+  }
+
+  .contents-key {
+    position: absolute;
+    top: 0;
+    left: calc(100% + var(--gap));
+    width: var(--notes);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-style: italic;
+    font-size: var(--text-small);
+    line-height: var(--line-small);
+    color: var(--ink-soft);
+
+    span {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .key-note {
+      display: block;
+      margin-top: var(--space-2);
+      color: var(--ink-faint);
+      text-wrap: pretty;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .contents-key {
+      position: static;
+      width: auto;
+      flex-flow: row wrap;
+      column-gap: var(--space-4);
+      margin-top: var(--space-3);
+    }
+  }
+
+  @media (max-width: 767px) {
+    .book-title-display {
+      font-size: var(--text-numeral);
+      line-height: var(--line-numeral);
+    }
+
+    .book-subtitle {
+      font-size: var(--text-body);
+      line-height: var(--line-body);
+    }
+  }
+}

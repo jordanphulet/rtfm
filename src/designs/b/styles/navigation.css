@@ -1,0 +1,434 @@
+.design-b {
+  /* Fore-edge index */
+
+  .fore-edge {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 10;
+    width: var(--fore-edge);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: var(--space-6);
+  }
+
+  .spine-button {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    padding: var(--space-3) var(--space-2);
+    font-size: var(--text-caps);
+    line-height: var(--line-caps);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: var(--wght-head);
+    color: var(--ink-soft);
+    transition: color var(--dur-quick) var(--ease-out);
+
+    &:hover {
+      color: var(--rubric);
+    }
+  }
+
+  .ticks {
+    --tick-pitch: min(24px, calc((100vh - 360px) / (var(--tick-count) + 5)));
+    margin-top: var(--space-6);
+    width: 100%;
+  }
+
+  .tick-group + .tick-group {
+    margin-top: var(--space-4);
+  }
+
+  .ticks-back {
+    margin-top: var(--space-6);
+    padding: var(--space-2) 0;
+    background: var(--raised);
+  }
+
+  &:has(.section-page[data-matter="back"]) .ticks-back {
+    background: var(--ground);
+  }
+
+  .tick {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: var(--tick-pitch);
+    padding-left: var(--space-4);
+    text-decoration: none;
+  }
+
+  .tick-mark {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--ink-soft);
+    transform-origin: left center;
+    transition: width var(--dur-quick) var(--ease-out);
+  }
+
+  .tick[data-status="writing"] .tick-mark {
+    background: var(--rubric);
+    animation: b-tick-writing var(--dur-quill) var(--ease-in-out) infinite;
+  }
+
+  .tick[data-status="unwritten"] .tick-mark {
+    width: 10px;
+    height: 1px;
+    background: var(--ink-faint);
+  }
+
+  .tick[aria-current="page"] .tick-mark {
+    width: 26px;
+    height: 7px;
+    background: var(--rubric);
+    clip-path: polygon(0 0, 100% 0, 80% 50%, 100% 100%, 0 100%);
+    animation: none;
+  }
+
+  .tick:hover .tick-mark {
+    width: 24px;
+  }
+
+  .tick:hover[data-status="unwritten"] .tick-mark {
+    width: 14px;
+  }
+
+  .tick-label {
+    position: absolute;
+    left: calc(100% + var(--space-2));
+    top: 50%;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    white-space: nowrap;
+    background: var(--raised);
+    outline: 1px solid var(--rule-strong);
+    font-size: var(--text-small);
+    line-height: var(--line-small);
+    color: var(--ink);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: opacity var(--dur-base) var(--ease-out);
+  }
+
+  .tick:hover .tick-label,
+  .tick:focus-visible .tick-label {
+    opacity: 1;
+  }
+
+  .tick-number {
+    color: var(--rubric);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tick-state {
+    font-style: italic;
+    color: var(--ink-faint);
+  }
+
+  /* Folio bar */
+
+  .folio-bar {
+    display: none;
+  }
+
+  @media (max-width: 1023px) {
+    .fore-edge {
+      display: none;
+    }
+
+    .folio-bar {
+      position: fixed;
+      inset: auto 0 0 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: calc(var(--folio-bar) + env(safe-area-inset-bottom));
+      padding: 0 var(--gutter) env(safe-area-inset-bottom);
+      background: var(--ground);
+      border-top: 1px solid var(--rule);
+    }
+
+    &:has(.section-page[data-matter="back"]) .folio-bar {
+      background: var(--ground-back);
+    }
+
+    .folio-contents {
+      min-height: 44px;
+      padding-right: var(--space-4);
+      font-size: var(--text-caps);
+      letter-spacing: var(--tracking-caps);
+      text-transform: uppercase;
+      font-weight: var(--wght-head);
+      color: var(--ink-soft);
+
+      &:hover {
+        color: var(--rubric);
+      }
+    }
+
+    .folio-place {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-variant-numeric: tabular-nums;
+      font-size: var(--text-small);
+      color: var(--ink-soft);
+    }
+  }
+
+  /* Follow the writing: in the fore-edge on desktop, in the folio bar below 1024px */
+
+  .follow-button {
+    position: fixed;
+    z-index: 11;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-style: italic;
+    font-size: var(--text-small);
+    line-height: var(--line-small);
+    color: var(--ink-soft);
+    visibility: hidden;
+    transition: color var(--dur-quick) var(--ease-out);
+
+    &[data-shown] {
+      visibility: visible;
+    }
+
+    &:hover,
+    &[aria-pressed="true"] {
+      color: var(--rubric);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .follow-button {
+      left: 0;
+      bottom: var(--space-6);
+      width: var(--fore-edge);
+      flex-direction: column;
+      padding: var(--space-2) 0;
+    }
+
+    .follow-words {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .follow-button {
+      right: calc(var(--gutter) + var(--space-8));
+      bottom: env(safe-area-inset-bottom);
+      height: var(--folio-bar);
+    }
+  }
+
+  /* Contents sheet */
+
+  .contents-sheet {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(560px, 100vw);
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-right: 1px solid var(--rule);
+    background: var(--raised);
+    color: var(--ink);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(-100%);
+    transition:
+      transform var(--dur-sheet) var(--ease-out),
+      overlay var(--dur-sheet) allow-discrete,
+      display var(--dur-sheet) allow-discrete;
+
+    &[open] {
+      transform: none;
+
+      @starting-style {
+        transform: translateX(-100%);
+      }
+    }
+
+    &::backdrop {
+      background: var(--scrim);
+      opacity: 0;
+      transition:
+        opacity var(--dur-sheet) var(--ease-out),
+        overlay var(--dur-sheet) allow-discrete,
+        display var(--dur-sheet) allow-discrete;
+    }
+
+    &[open]::backdrop {
+      opacity: 1;
+
+      @starting-style {
+        opacity: 0;
+      }
+    }
+  }
+
+  .sheet-paper {
+    padding: 0 var(--space-7) var(--space-8) var(--space-8);
+  }
+
+  .sheet-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: var(--space-5);
+    padding: var(--space-6) 0 var(--space-4);
+    background: var(--raised);
+    border-bottom: 1px solid var(--rule);
+
+    h2 {
+      margin: 0;
+      color: var(--ink-soft);
+    }
+  }
+
+  .sheet-close {
+    font-style: italic;
+    font-size: var(--text-small);
+    color: var(--ink-soft);
+    transition: color var(--dur-quick) var(--ease-out);
+
+    &:hover {
+      color: var(--rubric);
+    }
+  }
+
+  .sheet-key {
+    margin-left: var(--space-1);
+    font-style: normal;
+    font-size: var(--text-caps);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  @media (max-width: 767px) {
+    .sheet-paper {
+      padding: 0 var(--gutter) var(--space-8) var(--space-7);
+    }
+
+    .sheet-head {
+      padding-top: var(--space-5);
+    }
+
+    .sheet-key {
+      display: none;
+    }
+  }
+
+  /* Turn the page */
+
+  .turn-the-page {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: var(--space-8);
+    border: 1px solid var(--rule-strong);
+  }
+
+  .page-cell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4) var(--space-5) var(--space-5);
+    text-decoration: none;
+    transition: background-color var(--dur-quick) var(--ease-out);
+
+    & + & {
+      border-left: 1px solid var(--rule-strong);
+    }
+
+    &[data-direction="next"] {
+      text-align: right;
+      align-items: flex-end;
+    }
+
+    &:hover {
+      background: var(--raised);
+    }
+
+    &:focus-visible {
+      outline-offset: -2px;
+    }
+  }
+
+  .cell-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--ink-faint);
+  }
+
+  .cell-chapter {
+    font-style: italic;
+    font-size: var(--text-small);
+    line-height: var(--line-small);
+    color: var(--ink-soft);
+  }
+
+  .cell-title {
+    text-wrap: balance;
+    text-decoration: underline 1px transparent;
+    text-underline-offset: 4px;
+    transition: text-decoration-color var(--dur-quick) var(--ease-out);
+  }
+
+  .page-cell:hover .cell-title {
+    text-decoration-color: var(--rubric);
+  }
+
+  .cell-label {
+    color: var(--rubric);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .page-cell[data-status="unwritten"] .cell-title {
+    font-style: italic;
+  }
+
+  .cell-summary {
+    font-style: italic;
+    font-size: var(--text-small);
+    line-height: var(--line-small);
+    color: var(--ink-soft);
+    text-wrap: pretty;
+  }
+
+  @media (max-width: 767px) {
+    .turn-the-page {
+      grid-template-columns: 1fr;
+    }
+
+    .page-cell + .page-cell {
+      border-left: 0;
+      border-top: 1px solid var(--rule-strong);
+    }
+  }
+}
+
+@keyframes b-tick-writing {
+  0% {
+    transform: scaleX(0.15);
+  }
+  70%,
+  100% {
+    transform: scaleX(1);
+  }
+}
