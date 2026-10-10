@@ -1,0 +1,104 @@
+.reader .xref-link {
+  color: inherit;
+  text-decoration: underline 1px var(--cue-deep);
+  text-underline-offset: 0.18em;
+  transition:
+    color var(--dur-quick) var(--ease-out),
+    text-decoration-color var(--dur-quick) var(--ease-out);
+}
+
+.reader .xref-link:not([data-status="written"]) {
+  text-decoration-style: dashed;
+}
+
+.reader .xref-link[data-status="unwritten"] {
+  text-decoration-color: var(--ink-faint);
+}
+
+.reader .xref-link:hover {
+  color: var(--cue);
+  text-decoration-color: var(--cue);
+}
+
+.reader .xref-link .ring {
+  margin-left: 0.3em;
+  vertical-align: 0.05em;
+}
+
+.reader .xref-preview {
+  display: none;
+}
+
+@supports (anchor-name: --x) {
+  @media (hover: hover) and (min-width: 1024px) {
+    .reader .xref-preview {
+      position: fixed;
+      position-area: bottom span-right;
+      position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+      z-index: 10;
+      width: var(--preview-width);
+      margin: var(--space-2) 0;
+      padding: var(--space-3) var(--space-4);
+      background: var(--ground-raised);
+      border: 1px solid var(--rule-strong);
+      border-radius: var(--radius-m);
+      font: 400 var(--text-ui) / var(--leading-ui) var(--font-sans);
+      font-stretch: calc(var(--wdth-tight) * 1%);
+      color: var(--ink-muted);
+      text-wrap: pretty;
+      opacity: 0;
+      pointer-events: none;
+      transition:
+        opacity var(--dur-base) var(--ease-out),
+        display var(--dur-base) allow-discrete;
+    }
+
+    .reader .xref:hover .xref-preview {
+      display: block;
+      opacity: 1;
+      transition-delay: var(--delay-preview);
+    }
+
+    .reader .xref:has(.xref-link:focus-visible) .xref-preview {
+      display: block;
+      opacity: 1;
+      transition-delay: 0s;
+    }
+
+    @starting-style {
+      .reader .xref:hover .xref-preview,
+      .reader .xref:has(.xref-link:focus-visible) .xref-preview {
+        opacity: 0;
+      }
+    }
+  }
+}
+
+.reader .xref-preview > span {
+  display: block;
+}
+
+.reader .xref-preview-meta,
+.reader .xref-preview-status {
+  font: var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.reader .xref-preview-title {
+  margin-top: var(--space-1);
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.reader .xref-preview-summary {
+  margin-top: var(--space-1);
+}
+
+.reader .xref-preview .xref-preview-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

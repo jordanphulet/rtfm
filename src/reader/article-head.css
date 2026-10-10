@@ -1,0 +1,111 @@
+.reader .article-head {
+  margin-bottom: var(--space-8);
+}
+
+.reader .eyebrow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  font-variant-numeric: tabular-nums;
+}
+
+.reader .eyebrow a {
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+
+.reader .eyebrow a:hover {
+  color: var(--cue);
+}
+
+.reader .eyebrow-steps {
+  display: flex;
+  gap: var(--space-4);
+  flex: none;
+}
+
+.reader .article-head h1 {
+  position: relative;
+  margin: 0 0 var(--space-3);
+  font: 600 var(--text-h1) / var(--leading-h1) var(--font-sans);
+  letter-spacing: -0.012em;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}
+
+.reader .article-head h1:focus {
+  outline: none;
+}
+
+.reader .title-label {
+  font-weight: 400;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+@media (min-width: 1024px) and (max-width: 1199px), (min-width: 1280px) {
+  .reader .title-label {
+    position: absolute;
+    right: calc(100% + var(--space-4));
+    white-space: nowrap;
+  }
+}
+
+.reader .summary {
+  margin: 0 0 var(--space-4);
+  font: 400 var(--text-lead) / var(--leading-lead) var(--font-sans);
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.reader .status-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--leading-micro);
+  margin: 0;
+  font: var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.reader [data-status="writing"] .status-line {
+  color: var(--cue);
+}
+
+.reader .head-rule {
+  position: relative;
+  height: 1px;
+  margin-top: var(--space-4);
+  background: var(--rule-strong);
+}
+
+.reader .head-rule::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--rule-strong);
+  transform: scaleX(var(--progress, 0));
+  transform-origin: left;
+  transition:
+    transform var(--dur-settle) linear,
+    background-color var(--dur-settle) var(--ease-in-out);
+}
+
+.reader [data-status="writing"] .head-rule::after {
+  inset: -0.5px 0;
+  background: var(--cue);
+}
+
+@media (max-width: 1023px) {
+  .reader .eyebrow-steps {
+    display: none;
+  }
+}

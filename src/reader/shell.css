@@ -1,0 +1,145 @@
+html:has(.reader) {
+  background: var(--ground);
+  color-scheme: dark;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+body:has(.reader) {
+  margin: 0;
+}
+
+.reader {
+  min-height: 100dvh;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+.reader *,
+.reader *::before,
+.reader *::after {
+  box-sizing: border-box;
+}
+
+.reader ::selection {
+  background: var(--selection);
+  color: var(--ink-strong);
+}
+
+.reader :focus-visible {
+  outline: 2px solid var(--cue);
+  outline-offset: 2px;
+  border-radius: var(--radius-s);
+}
+
+.reader .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.reader .skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 30;
+  padding: var(--space-2) var(--space-3);
+  background: var(--ground-raised);
+  font: 500 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink-strong);
+  transform: translateY(-200%);
+}
+
+.reader .skip-link:focus-visible {
+  transform: none;
+}
+
+.reader .layout {
+  --content-width: var(--measure);
+  display: grid;
+  grid-template-columns:
+    var(--toc-width)
+    minmax(0, 1fr)
+    minmax(0, calc(var(--content-width) + 2 * var(--gutter)))
+    var(--outline-width)
+    minmax(var(--space-6), 1fr);
+  align-items: start;
+}
+
+.reader .layout:has(.start) {
+  --content-width: var(--start-width);
+}
+
+.reader .toc-side {
+  grid-column: 1;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--ground-side);
+}
+
+.reader .main {
+  grid-column: 3;
+  min-width: 0;
+  padding: var(--space-16) var(--gutter) var(--space-24);
+}
+
+.reader .main:focus {
+  outline: none;
+}
+
+.reader .column {
+  max-width: var(--measure);
+  margin-inline: auto;
+}
+
+.reader .outline-side {
+  grid-column: 4;
+  position: sticky;
+  top: 0;
+  max-height: 100dvh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: calc(var(--space-16) + var(--space-1)) 0 var(--space-8);
+}
+
+@media (max-width: 1199px) {
+  .reader .layout {
+    grid-template-columns: var(--toc-width) minmax(0, 1fr);
+  }
+
+  .reader .main {
+    grid-column: 2;
+  }
+
+  .reader .outline-side {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .reader .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reader .main {
+    grid-column: 1;
+  }
+
+  .reader .toc-side {
+    display: none;
+  }
+
+  .reader .main {
+    padding-top: var(--space-6);
+  }
+}

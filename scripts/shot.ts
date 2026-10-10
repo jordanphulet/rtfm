@@ -7,7 +7,7 @@ import {
   type Page,
 } from "playwright";
 import { createLogger, createServer, type Logger } from "vite";
-import type * as ManualModule from "../src/shared/manual/index.ts";
+import type * as ManualModule from "../src/manual/sample/index.ts";
 import { designFromArgs, type Design } from "./design-arg.ts";
 
 const PORTS: Record<Design, number> = { a: 5174, b: 5175, c: 5176 };
@@ -47,7 +47,7 @@ try {
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
-  const manual = (await server.ssrLoadModule("/src/shared/manual/index.ts")) as typeof ManualModule;
+  const manual = (await server.ssrLoadModule("/src/manual/sample/index.ts")) as typeof ManualModule;
   const results = await captureAll(`http://localhost:${PORTS[design]}`, shotsFor(manual.SHOT_SECTIONS));
   process.exitCode = printSummary(results) ? 0 : 1;
 } finally {

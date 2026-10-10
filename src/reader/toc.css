@@ -1,0 +1,142 @@
+.reader .toc {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding-bottom: var(--space-4);
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  font-variant-numeric: tabular-nums;
+}
+
+.reader .toc-masthead {
+  padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
+.reader .toc-manual-title {
+  display: block;
+  padding: var(--space-1) var(--space-2);
+  margin-inline: calc(-1 * var(--space-2));
+  border-radius: var(--radius-m);
+  font-weight: 600;
+  color: var(--ink-strong);
+  text-decoration: none;
+  transition: background-color var(--dur-quick) var(--ease-out);
+}
+
+.reader .toc-manual-title:hover,
+.reader .toc-manual-title[aria-current="page"] {
+  background: var(--ground-tint);
+}
+
+.reader .toc-masthead .status-legend {
+  margin-top: var(--space-2);
+}
+
+.reader .toc-count {
+  margin: var(--space-1) 0 0;
+  font: var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.reader .toc-chapters,
+.reader .toc-sections {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reader .toc-chapter {
+  margin-top: var(--space-2);
+}
+
+.reader .toc-chapter-title {
+  display: grid;
+  grid-template-columns: var(--label-col) 1fr;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.reader .toc-label {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.reader .toc-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--label-col) 1fr var(--space-4);
+  align-items: start;
+  padding: calc(var(--space-1) / 2) var(--space-3);
+  color: var(--ink);
+  text-decoration: none;
+  text-wrap: pretty;
+  transition:
+    background-color var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
+}
+
+.reader .toc-row .ring {
+  justify-self: end;
+  margin-top: calc((var(--leading-ui) - var(--ring)) / 2);
+}
+
+.reader .toc-row[data-status="unwritten"] {
+  color: var(--ink-faint);
+}
+
+.reader .toc-row:hover {
+  background: var(--ground-hover);
+  color: var(--ink-strong);
+}
+
+.reader .toc-row[aria-current="page"] {
+  background: var(--ground-tint);
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+.reader .toc-row[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--bar-width);
+  background: var(--ink-strong);
+}
+
+.reader .toc-row[aria-current="page"] .toc-label {
+  color: var(--ink-muted);
+}
+
+.reader .toc :focus-visible {
+  outline-offset: -2px;
+}
+
+.reader .toc-appendices {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule-strong);
+}
+
+.reader .toc-group-label {
+  margin: 0;
+  padding: 0 var(--space-3);
+  font: 600 var(--text-micro) / var(--leading-micro) var(--font-sans);
+  color: var(--ink-muted);
+}
+
+.reader .toc-appendices .toc-chapter:first-child {
+  margin-top: var(--space-2);
+}
+
+.reader .toc .toc-outline {
+  margin: var(--space-1) 0 var(--space-2) calc(var(--label-col) + var(--space-3));
+}
+
+@media (min-width: 1200px) {
+  .reader .toc-side .toc-outline {
+    display: none;
+  }
+}

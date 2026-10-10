@@ -1,0 +1,63 @@
+.reader .pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-16);
+}
+
+.reader .pager-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule-strong);
+  text-decoration: none;
+  transition: border-color var(--dur-quick) var(--ease-out);
+}
+
+.reader .pager-link[data-direction="next"] {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.reader .pager-caption {
+  font: var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.reader .pager-title {
+  font: 500 var(--text-body) / var(--leading-body) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  color: var(--ink-strong);
+  text-wrap: balance;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+
+.reader .pager-title .ring {
+  margin-left: var(--space-2);
+  vertical-align: 0.05em;
+}
+
+.reader .pager-link:hover {
+  border-color: var(--cue);
+}
+
+.reader .pager-link:hover .pager-title {
+  color: var(--cue);
+}
+
+@media (max-width: 767px) {
+  .reader .pager {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .reader .pager-link,
+  .reader .pager-link[data-direction="next"] {
+    min-height: var(--tap);
+    align-items: flex-start;
+    text-align: left;
+  }
+}
