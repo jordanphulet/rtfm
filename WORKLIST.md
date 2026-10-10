@@ -135,7 +135,7 @@ the comparison live at the `library-comparison` tag.
   - `npm test`, the type check and the screenshots pass.
 
 ### AL.4 — Remove the prototype tooling
-- **Status:** doing (agent: afae73315b065a768)
+- **Status:** done
 - **Depends on:** AL.2
 - **Files:** `package.json`, `scripts/**`, `docs/**`, `.gitignore`
 - **Do:**
