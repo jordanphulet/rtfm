@@ -74,7 +74,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
 - **Done when:** `git tag` lists `design-comparison` pointing at `438fd36`.
 
 ### CL.2 — Promote A to the reader
-- **Status:** doing (agent: a216ef2d0c31b5212)
+- **Status:** done
 - **Depends on:** CL.1
 - **Files:** `src/**`, `DESIGN.md`
 - **Do:**
@@ -93,7 +93,7 @@ into a single reader. **Cleanup only:** no new features and no design changes.
   in `src/` refers to designs A, B or C.
 
 ### CL.3 — Remove comparison tooling and unused packages
-- **Status:** todo
+- **Status:** doing (agent: abf095122f60a9a6f)
 - **Depends on:** CL.2
 - **Files:** `package.json`, `package-lock.json`, `scripts/**`, `tsconfig*.json`,
   `src/manual/fonts/**`, `docs/**`, `.claude/launch.json`, `.gitignore`
