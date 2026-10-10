@@ -1,8 +1,7 @@
-# RTFM Reader — Work List
+# RTFM — Work List
 
 The orchestrator works through this file under `/loop`, starting subagents for tasks until
 everything is done or a task needs a human. **This file is the source of truth for status.**
-`DESIGN_RULES.md` is the source of truth for what a design must do.
 
 ## Orchestrator protocol
 
@@ -24,9 +23,9 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
 
 1. **Check the basics:** every item in the task's **Done when** list, and `git status` shows
    changes only inside the task's **Files**.
-2. **Read the full diff** against `CLAUDE.md` › Code standards and, for design work,
-   `DESIGN_RULES.md`. For anything beyond a trivial change, also start a **review subagent** for
-   an independent code review, then weigh its findings.
+2. **Read the full diff** against `CLAUDE.md` › Code standards and, for UI work, the design doc.
+   For anything beyond a trivial change, also start a **review subagent** for an independent code
+   review, then weigh its findings.
 3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
    keeps its context), then wait for it to report back and repeat from step 1.
 4. **Approved:** mark the task `done` and commit **only that task's files**, with the message
@@ -38,7 +37,7 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
 
 Avoid it. If it does happen (for example, a small fix while reconciling two tasks), start a
 review subagent on that change and only commit once the review passes. Keeping this file's
-statuses up to date doesn't count as work.
+statuses up to date, and git operations such as tags, don't count as work.
 
 ### Adding work
 
@@ -48,282 +47,278 @@ of any existing task that must now wait for it.
 
 ### Rules
 
-- **Every agent runs on Opus 5.5** (`model: "opus"`), in the background. Design agents (P1, P3)
-  and design review agents (P2) run at **high** effort.
+- **Every agent runs on Opus 5.5** (`model: "opus"`), in the background.
 - **Only the orchestrator commits.** Agents never run git commands that change anything.
 - **Agents never edit this file.** They report back, and the orchestrator updates statuses.
-- Every agent prompt includes the full task block, and points to `CLAUDE.md` (code standards),
-  `DESIGN_RULES.md`, and `src/shared/README.md` once it exists. It asks the agent to report back
-  with the files it changed, how it checked its work, and anything left unresolved.
+- Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
+  `src/manual/README.md` (`src/shared/README.md` until CL.2 renames it). It asks the agent to report back with the files it changed, how it
+  checked its work, and anything left unresolved.
 - Agents work in the same checkout at the same time, so they **must stay inside their task's
   Files**. Two tasks that touch the same file never run at the same time.
-- While designs are being built at the same time (P1–P3), `npm run build` can fail because of
-  another design's unfinished work. Gate each design task on `npm run check -- <x>` instead.
 
 **Statuses:** `todo` · `doing` · `done` · `blocked` · `needs-human`
 
 ---
 
-## P0 — Base
+## Adopt design A
 
-### P0.1 — Scaffold
-- **Status:** done
+Design A (the show-control desk) won the comparison. This phase turns the three-design comparison
+into a single reader. **Cleanup only:** no new features and no design changes.
+
+### CL.1 — Tag the comparison
+- **Status:** todo
+- **Owner:** orchestrator (a git operation)
 - **Depends on:** —
-- **Files:** repo root config, `package.json`, `src/App.tsx`, `src/main.tsx`,
-  `src/designs/*/index.tsx` (stubs), `src/shared/types.ts`, `src/shared/fonts/**`,
-  `.claude/launch.json`, `.gitignore`
-- **Do:**
-  - Vite + React + TypeScript (strict), React Router.
-  - `src/shared/types.ts`: exactly the data model in `DESIGN_RULES.md`.
-  - Install a curated Fontsource set, checking on npm that each package exists. Prefer variable
-    versions. **No Inter.**
-    - **Serif:** Newsreader, Literata, Source Serif 4, EB Garamond
-    - **Display:** Fraunces, Instrument Serif
-    - **Sans:** Instrument Sans, IBM Plex Sans, Public Sans
-    - **Mono:** JetBrains Mono, IBM Plex Mono
-  - `src/shared/fonts/<font>.ts`: one module per font, so importing a font registers only that font.
-  - Install `three` and `@types/three` (for design C).
-  - `src/App.tsx`: routes `/:design` and `/:design/:sectionId`. Each design is **lazy-loaded**
-    (`React.lazy`), so a broken design can't break the others. Add a small A | B | C switcher in
-    a corner that keeps the current section when you switch.
-  - Stub `src/designs/{a,b,c}/index.tsx` that just render "Design X".
-  - `.claude/launch.json` entry `reader` that runs the dev server, for the browser pane preview.
-  - `.gitignore`: `node_modules`, `dist`, `shots/`, Playwright output, editor swap files (`*.swp`).
-- **Done when:** `npm run dev` serves `/a`, `/b`, `/c`; `npm run build` passes; every listed
-  font is installed and exported.
+- **Do:** tag commit `438fd36` (all three designs plus the comparison) as `design-comparison`,
+  so the other designs can be checked out later.
+- **Done when:** `git tag` lists `design-comparison` pointing at `438fd36`.
 
-### P0.2 — Shared runtime
-- **Status:** done
-- **Depends on:** P0.1
-- **Files:** `src/shared/**` (except `src/shared/manual/` and `types.ts`), `package.json`
+### CL.2 — Promote A to the reader
+- **Status:** todo
+- **Depends on:** CL.1
+- **Files:** `src/**`, `DESIGN.md`
 - **Do:**
-  - **Manual store** (in memory, resets on reload): `useManual()` returns the manual with live
-    statuses. Helpers for previous/next section in reading order (chapters, then appendices) and
-    for finding a section by ID.
-  - **`useSection(id)`**: returns `{ section, status, text, progress }`. Opening an `unwritten`
-    section starts it streaming automatically.
-  - **Fake streamer:** wait ~1.2s before the first chunk (so the waiting state shows), then send
-    ~20 characters every ~85ms, split at word boundaries. When it finishes, the section is
-    `written`.
-  - **URL options for screenshots:** `?freeze=0` holds the section in the waiting state;
-    `?freeze=0.5` stops it at 50% and keeps it `writing`.
-  - **`<Markdown source>`**: `react-markdown` + `remark-gfm`. Designs pass their own element
-    components and class names. Links of the form `section:<id>` go to a `SectionLink` component
-    that designs supply, and it receives the target section and its status.
-  - **Partial-markdown repair:** while streaming, close or hold back anything incomplete (open
-    `**`/`*`/`` ` ``, code fences, link syntax, half-written table rows, footnote markers), so raw
-    syntax is never visible.
-  - Unit tests (Vitest) for the repair function and for prev/next ordering.
-  - `src/shared/README.md`: the API reference designers read. Include the hooks, the
-    `<Markdown>` props, the URL options, and the fonts in `src/shared/fonts/`.
-- **Done when:** tests pass; `npm run build` passes; the README covers every export.
+  - Move design A from `src/designs/a/` to `src/reader/`, and delete `src/designs/`.
+  - Delete A's `NOTES.md` and `REVIEW.md`. Move A's `SPEC.md` unchanged to `DESIGN.md` at the
+    repo root (CL.4 rewrites it).
+  - Rename `src/shared/` to `src/manual/` (the manual's data, store, streaming and markdown),
+    and update every import. Leave the paths written inside its README for CL.4 to fix.
+  - Rename everything that still says "design A" (`design-a` class names, `Design` component
+    names, the `/a` paths) so the code reads as *the* reader.
+  - Simplify `src/App.tsx`: remove the design switcher, the per-design lazy loading and the
+    per-design error boundary. Routes become `/read` (the start page) and `/read/:sectionId`, and
+    `/` redirects to `/read`. `/` is kept free for the library, which will become the landing
+    page.
+- **Done when:** `npm run build` and `npm test` pass; `/read` and a section page render; nothing
+  in `src/` refers to designs A, B or C.
 
-### P0.3 — Sample manual
-- **Status:** done
-- **Depends on:** — (the data model is in `DESIGN_RULES.md`)
-- **Files:** `src/shared/manual/**`
+### CL.3 — Remove comparison tooling and unused packages
+- **Status:** todo
+- **Depends on:** CL.2
+- **Files:** `package.json`, `package-lock.json`, `scripts/**`, `tsconfig*.json`,
+  `src/manual/fonts/**`, `docs/**`, `.claude/launch.json`, `.gitignore`
 - **Do:**
-  - Manual: *a guide to designing a haunted house that uses LLMs and robotics*: animatronics
-    that improvise in character, rooms that react to guests, scares that adapt as people walk
-    through. Write the `title`, `subtitle` and `voice` too. The voice should be distinctive
-    (e.g., a theatrical, slightly unhinged veteran haunt builder who is also a careful engineer),
-    and every section must be written in it.
-  - **5 chapters and 2 appendices, about 18 sections in total.** Appendices should be truly
-    back-of-the-book, e.g., a parts and sensor reference (servos, sensors, controllers) and a
-    library of character prompts for the LLM-driven performers.
-  - **Every section has a full body**, roughly 300–600 words of markdown. About **40% start as
-    `written`**, spread across chapters; the rest start `unwritten`.
-  - Across the whole manual, use **every markdown feature** listed in `DESIGN_RULES.md`. At
-    least one section must use them **densely** (a table, footnotes, a code block, a checklist
-    and a blockquote together). Include cross-references to both written and unwritten sections
-    using `[…](section:<id>)`.
-  - Store the structure in `index.ts` and each body as its own `.md` file (imported with `?raw`).
-  - Export `SHOT_SECTIONS`: `{ written, dense, unwritten, appendix }`, the section IDs the
-    screenshot script uses.
-- **Done when:** it type-checks against `types.ts`; every markdown feature appears; every
-  cross-reference target exists; the `SHOT_SECTIONS` IDs exist with the right starting statuses.
-- **Note:** P0.1 creates `src/shared/types.ts` and runs at the same time. If it doesn't exist
-  yet, write against the model in `DESIGN_RULES.md` and type-check once it appears.
+  - Uninstall `three`, `@types/three`, and every font package the reader doesn't use. Delete
+    their modules in `src/manual/fonts/`.
+  - Delete `scripts/check.ts`, `scripts/design-arg.ts`, `scripts/inspo.ts` and the `check`
+    script.
+  - Delete `docs/inspo/`, `docs/comparison/` and `docs/COMPARISON.md`.
+  - Simplify `npm run shot`: no design argument, one port, output to `shots/`. Keep every state.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; no unused dependency
+  remains (check package.json against actual imports).
 
-### P0.4 — Screenshot and check scripts
-- **Status:** done
-- **Depends on:** P0.2, P0.3
-- **Files:** `scripts/**`, `package.json`, `tsconfig.scripts.json` (if needed)
+### CL.4 — One design doc, updated docs
+- **Status:** todo
+- **Depends on:** CL.3
+- **Files:** `DESIGN.md`, `DESIGN_RULES.md`, `README.md`, `CLAUDE.md`, `src/manual/README.md`
 - **Do:**
-  - **`npm run shot -- <a|b|c>`** (Playwright, Chromium):
-    - starts its own dev server on a **separate port per design** (a = 5174, b = 5175,
-      c = 5176), so agents can run it at the same time;
-    - captures **1440×900 and 375×812** pages with dark color scheme;
-    - saves `shots/<x>/<state>-<desktop|mobile>.png` for these states:
-      - `start`: `/<x>`
-      - `toc`: the written section, with `[data-shot=toc-toggle]` clicked if present
-      - `written`: the written section, full page
-      - `dense`: the dense section, full page
-      - `waiting`: the unwritten section with `?freeze=0`
-      - `streaming`: the unwritten section with `?freeze=0.5`
-      - `appendix`: the appendix section
-    - also saves `start` and `streaming` at desktop size with `reducedMotion: "reduce"`;
-    - waits for fonts to load before each capture.
-  - **`npm run check -- <x>`**: type-checks only `src/shared` plus `src/designs/<x>`, so one
-    design's half-finished code can't fail another design's check.
-  - Install the Playwright Chromium browser.
-  - Hide the dev design switcher (`[data-shot=design-switcher]`) in every capture.
-  - Make sure `scripts/` is covered by a tsconfig, so the scripts are type-checked too.
-- **Done when:** both commands work against the stub design `a`, and the screenshots exist.
+  - Merge `DESIGN_RULES.md` into `DESIGN.md` to make one design doc for the reader:
+    - what the reader is;
+    - the data model;
+    - the locked reader behavior;
+    - desktop first, phone too;
+    - the craft requirements and banned list;
+    - then A's concept, tokens, layout, section states, streaming, markdown styling and build
+      structure.
+  - Drop everything about three competing designs, directions B and C, screenshot-pass process
+    and per-design rules. Delete `DESIGN_RULES.md`.
+  - Update `README.md`, `CLAUDE.md` and `src/manual/README.md` for one reader. Fix paths, scripts,
+    fonts and wording, and remove references to designs, the switcher, `check` and the inspo
+    screenshots.
+- **Done when:** the docs match the code and each other; nothing refers to designs A, B or C, the
+  comparison, or deleted files.
 
-### P0.5 — Reference screenshots
-- **Status:** done
-- **Depends on:** P0.4
-- **Files:** `docs/inspo/**`, `scripts/inspo.ts`
+### CL.5 — Final check
+- **Status:** todo
+- **Depends on:** CL.4
+- **Files:** anything, for small fixes only
 - **Do:**
-  - Capture these public pages at 1440×900 (and also 375×812 where marked) into
-    `docs/inspo/<x>/`:
-    - **a:**
-      - https://linear.app/docs/conceptual-model (both sizes)
-      - https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html
-      - https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview
-    - **b:**
-      - https://practicaltypography.com/line-length.html
-      - https://press.stripe.com (wait about 4s for the 3D books)
-      - https://press.stripe.com/poor-charlies-almanack
-      - https://gwern.net/design
-      - https://edwardtufte.github.io/tufte-css/
-    - **c:**
-      - https://press.stripe.com
-      - plus copies of the Claude.ai streaming screenshots from the research session:
-        - `/Users/jordan/.claude/projects/-Users-jordan-projects-rtfm/a1ba449f-d2ce-487d-84ed-d97e04d01576/tool-results/mcp-Claude_Browser-blob-1791650977475-2ye8w3.jpg`
-        - `/Users/jordan/.claude/projects/-Users-jordan-projects-rtfm/a1ba449f-d2ce-487d-84ed-d97e04d01576/tool-results/mcp-Claude_Browser-blob-1791650977475-6a94ac.jpg`
-        - `/Users/jordan/.claude/projects/-Users-jordan-projects-rtfm/a1ba449f-d2ce-487d-84ed-d97e04d01576/tool-results/mcp-Claude_Browser-blob-1791650985842-b34029.jpg`
-  - Decline cookie banners, or close them before capturing. Never sign in anywhere.
-  - Write `docs/inspo/README.md`: one line per image saying what to look at.
-- **Done when:** every listed image exists and is non-empty (spot-check that none show a cookie
-  wall or an error page); the README is written.
-
-### P0.6 — Base check
-- **Status:** done
-- **Depends on:** P0.1–P0.5
-- **Files:** `src/shared/**`, `scripts/**`, root config, root `README.md`
-- **Do:**
-  - Run `npm run build`, `npm test` and `npm run shot -- a`, and fix anything that fails.
-  - Make sure `types.ts`, the sample manual and `src/shared/README.md` all agree.
-  - Read the whole base as a newcomer would, and simplify anything that doesn't meet
-    `CLAUDE.md` › Code standards. This is the foundation all three designs build on.
-- **Done when:** all three commands pass; the README matches the code; nothing is left that a
-  newcomer would trip over.
+  - Run `npm run build`, `npm test` and `npm run shot`, and look at the screenshots.
+  - Stream an unwritten section live at 1440 and 375, and confirm the locked behavior still holds.
+  - Grep the repo for leftovers: `design-a`, `designs/`, `three`, `inspo`, `COMPARISON`,
+    `DESIGN_RULES`, `switcher`, `check --`.
+  - Read the repo as a newcomer would, and fix anything that still describes the comparison.
+- **Done when:** all commands pass, the greps come back clean, and the reader looks and behaves
+  as it did at `design-comparison`.
 
 ---
 
-## P1 — Build (A, B and C run at the same time)
+## Library prototypes
 
-Design agent brief: the full **direction** for your letter in `DESIGN_RULES.md`, the reference
-images in `docs/inspo/<x>/`, and `src/shared/README.md`.
+A landing page where you choose a manual to read, manage your manuals, or start a new one. Its
+primary interface is an agent you talk to ("let's create a new manual", "delete the manual about
+birthday parties"). As with the reader, three variants are built and compared, then one is chosen.
+**The visual style is fixed** (the reader's design system). The variants differ in **interaction
+model**.
 
-Screenshot caveats to include in every design agent's brief:
-- Screenshots are taken with animations disabled, so they show end states. Check motion live in
-  the browser.
-- That only stops CSS animations. A WebGL scene that keeps animating will look different in every
-  screenshot. Under reduced motion it must render a still frame, which also makes the
-  `-reduced` screenshots stable.
-- In full-page captures, fixed and `100vh` elements appear once, at the top. That's a capture
-  limit, not a layout bug. A design that scrolls an inner container instead of the page will be
-  cut off at the viewport, so let the page itself scroll.
+### Library rules
 
-### P1.A.spec · P1.B.spec · P1.C.spec — Design spec
-- **Status:** A: done · B: done · C: done
-- **Depends on:** P0.6
-- **Files:** `src/designs/<x>/SPEC.md`
-- **Do:** write the SPEC described in `DESIGN_RULES.md` › Craft requirements. Name the specific
-  traits taken from each reference image. Describe the signature moment and its reduced-motion
-  fallback. **No code.**
-- **Done when:** the SPEC covers every item in the Craft requirements list, and passes review:
-  nothing breaks a locked rule or the banned list, and nothing is generic (default-looking fonts,
-  a palette with no point of view, or a signature moment that decorates rather than serves
-  reading).
+**Locked**
+- **Visual system:** use only the shared design system from LB.1: dark only, the reader's tokens,
+  type and components. The banned list and craft requirements in `DESIGN.md` apply. Desktop
+  first, phone too (375px to 1440px+).
+- **Agent first:**
+  - The agent's input is the most prominent control, and it is always one click, tap or
+    keystroke away. A keyboard shortcut focuses it.
+  - Every action can also be done directly:
+    - open a manual (click it);
+    - delete a manual, with confirmation;
+    - start a new manual, which opens the agent with a starter prompt (creating a manual is out of
+      scope).
+- **The agent is simulated:**
+  - You type and send.
+  - A visible "thinking" state appears before the first words.
+  - The reply streams in as markdown.
+  - Replies are canned and **do nothing**: no actions, no changes to the library.
+  - The conversation stays while you're on the page.
+  - If you've scrolled up in the conversation, a new reply never pulls you back down.
+- **The library:**
+  - Each manual shows its title, subtitle, progress (n of m sections written) and when it was last
+    opened.
+  - Deleting directly removes the manual from the list (in memory; reload restores it).
+  - There is an empty state for when every manual is deleted.
+  - Opening any manual goes to the reader. The reader always shows the sample manual for now.
+- **Boundaries:**
+  - Each variant lives in `src/library-prototypes/<a|b|c>/`.
+  - Variants use only `src/ui`, `src/library` and `src/agent`. They add no packages.
+  - Each variant is reached at `/library/<a|b|c>`.
+- **Scenarios every variant must handle** (these are also the screenshot states):
+  1. first visit: an empty conversation, the full library;
+  2. typing a message;
+  3. the agent thinking;
+  4. a reply mid-stream;
+  5. a conversation several turns long;
+  6. a delete confirmation (direct);
+  7. a request the agent can't handle (fallback reply);
+  8. the empty library;
+  9. phone.
 
-### P1.A.build · P1.B.build · P1.C.build — Build the design
-- **Status:** A: done · B: done · C: done
-- **Depends on:** the matching P1.x.spec
-- **Files:** `src/designs/<x>/**`
+**Open:** where the conversation lives, how replies are presented, how the library is laid out
+(list, grid, shelf), how the agent and the direct controls relate, and motion.
+
+**The three directions**
+- **A — Agent beside the library:** the library fills the page, and the agent sits in a docked
+  panel (like the reader's right column). Familiar, in the spirit of Claude Projects or Cursor.
+- **B — Command line first:** one prompt bar at the top of the library, like a stage manager's
+  cue line. Replies appear briefly under it, and the library stays in view. In the spirit of
+  Raycast or Linear's command menu.
+- **C — The conversation is the page:** a full-width conversation, with the library, confirmations
+  and suggestions shown as interactive cards inside it. The most agent-first of the three.
+
+### LB.1 — Extract the design system
+- **Status:** todo
+- **Depends on:** CL.5
+- **Files:** `src/ui/**`, `src/reader/**`, `DESIGN.md`
 - **Do:**
-  - Build the reader to the approved SPEC.
-  - Run **at least 3** passes of `npm run shot -- <x>` → look at every screenshot → critique
-    against `DESIGN_RULES.md` → fix. Log each pass in `NOTES.md`: what you saw, what you changed.
-  - Before reporting, step through streaming live once at normal speed and check the "nothing
-    moves" and "never auto-scrolls" rules.
-- **Done when:** `npm run check -- <x>` passes; all screenshot states render; `NOTES.md` logs
-  3 or more passes; no files are changed outside `src/designs/<x>/`.
+  - Move the reader's tokens, base type and focus styles, and the components that aren't specific
+    to the reader (state ring, buttons, links, sheet, scroll hints) into `src/ui/`.
+  - The reader imports them from there.
+  - Write `src/ui/README.md`: the tokens, and each component with its props.
+  - Update the build structure in `DESIGN.md`.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the reader screenshots look
+  identical to before; nothing reader-specific is in `src/ui/`.
 
-### P1.shot — Full-page streaming screenshot
-- **Status:** done
-- **Depends on:** — (start when an agent slot is free)
-- **Files:** `scripts/shot.ts`
-- **Do:** add a `streaming-full` state: the unwritten section with `?freeze=0.5`, captured full
-  page at desktop and mobile. The `streaming` viewport capture can't show the live edge, because
-  at 50% it is below the fold and designs must not scroll to it.
-- **Done when:** `npm run shot -- a` saves the two new files with no errors, and the live edge
-  is visible in them.
-
----
-
-## P2 — Review (fresh agents, not the builders)
-
-### P2.A.review · P2.B.review · P2.C.review
-- **Status:** A: done · B: done · C: done
-- **Depends on:** the matching P1.x.build, and P1.shot
-- **Agent:** a new agent, never the one that built the design
-- **Files:** `src/designs/<x>/REVIEW.md` (the only file it may write)
+### LB.2 — Library data and a scripted agent
+- **Status:** todo
+- **Depends on:** CL.5
+- **Files:** `src/library/**`, `src/agent/**`, `package.json` (scripts only)
 - **Do:**
-  - Run `npm run shot -- <x>` and also try the reader live in the browser.
-  - Check **every locked rule** (pass/fail, with evidence) and the **banned list**.
-  - Score 1–5, with one line of evidence each, for: hierarchy, spacing consistency, reading
-    comfort, state clarity, streaming feel, phone layout, signature moment, and
-    "would a professional ship this". Judge the desktop layout first. Flag anything that looks
-    simplified on desktop just to suit the phone layout.
-  - Compare against `docs/inspo/<x>/`: what the references do better.
-  - End with a **prioritized fix list**: every rule failure first, then at most 8 quality fixes.
-    Each fix must be specific (what, where, and to what).
-- **Done when:** `REVIEW.md` covers every locked rule and has the scores and the fix list.
+  - **`src/library/`:**
+    - About 7 seed manuals with varied titles, subtitles, sizes, progress and last-opened times.
+      Include *The Haunt That Listens* and a manual about birthday parties.
+    - An in-memory store: `useLibrary()` lists the manuals; `deleteManual(id)` removes one.
+  - **`src/agent/`:**
+    - `useAgent()` returns `{ messages, status, send }`.
+    - After a ~600ms thinking state, the reply streams in using the same pacing as the reader's
+      fake streamer.
+    - Canned replies by keyword: create or new, delete or remove, open or read, list (what do I
+      have), and help. Anything else gets a polite fallback ("I can't do that yet…").
+    - Replies are markdown and change nothing.
+  - URL options for screenshots:
+    - `?conversation=demo` preloads a several-turn conversation;
+    - `?agentFreeze=thinking` holds the next reply in its thinking state;
+    - `?agentFreeze=0.5` holds the next reply half-streamed;
+    - `?library=empty` starts with no manuals.
+  - Tests, and a README for each folder.
+- **Done when:** tests pass; the READMEs cover every export and URL option.
 
----
-
-## P3 — Fix (one round only)
-
-### P3.A.fix · P3.B.fix · P3.C.fix
-- **Status:** A: done · B: done · C: done
-- **Depends on:** the matching P2.x.review
-- **Agent:** the builder from P1.x.build if it's still available (`SendMessage`); otherwise a new
-  agent given the same brief
-- **Files:** `src/designs/<x>/**` (except `REVIEW.md`)
+### LB.3 — Prototype scaffold and screenshots
+- **Status:** todo
+- **Depends on:** LB.1, LB.2
+- **Files:** `src/App.tsx`, `src/library-prototypes/**` (stubs), `scripts/**`, `package.json`
 - **Do:**
-  - Fix every rule failure, then as many quality fixes as possible.
-  - Use the same screenshot → critique loop and log it in `NOTES.md`.
-  - Append a "Response to review" section to `NOTES.md`: each fix marked done or skipped, with a
-    reason.
-- **Done when:** `npm run check -- <x>` passes; no rule failures remain; every fix list item is
-  accounted for.
+  - Add routes `/library/<a|b|c>`. Load each variant lazily, behind its own error boundary.
+  - Add a small dev switcher, like the one in the comparison (see the `design-comparison` tag). It
+    stays clear of each variant's controls, and goes inert while a modal is open.
+  - Add `npm run shot:library -- <x>`, which captures every scenario at desktop and phone size
+    using the URL options, on a separate port per variant. Add `npm run check:library -- <x>`,
+    which type-checks one variant in isolation.
+- **Done when:** both commands work against a stub variant.
 
-### P3.switcher — Move the dev design switcher
-- **Status:** done
-- **Depends on:** —
-- **Files:** `src/App.tsx`
-- **Do:** move the A | B | C switcher so it never covers a design's controls at any width, and
-  make it unreachable by Tab while a design's modal drawer or sheet is open.
-- **Done when:** checked live against all three designs at 1440, 1024 and 375.
-
----
-
-## P4 — Hand-off
-
-### P4.1 — Comparison
-- **Status:** needs-human (the user picks the winner)
-- **Depends on:** P3.A.fix, P3.B.fix, P3.C.fix, P3.switcher
-- **Files:** `docs/comparison/**`, `docs/COMPARISON.md`
+### LB.4 — Specs (A, B and C at the same time)
+- **Status:** A: todo · B: todo · C: todo
+- **Depends on:** LB.3
+- **Files:** `src/library-prototypes/<x>/SPEC.md`
 - **Do:**
-  - Run `npm run build` and `npm run shot` for all three designs, then copy the screenshots to
-    `docs/comparison/<x>/`.
-  - Write `docs/COMPARISON.md`: the same states side by side, one paragraph per design
-    (strengths and weaknesses), what each signature technique was worth, and ideas worth
-    combining in a round 2.
-- **Done when:** the build passes and the comparison is complete.
-- **After approval:** the orchestrator commits, opens the app in the browser pane, sets this task
-  to `needs-human`, and stops the loop. The user picks the winner.
+  - Design the variant within the library rules and its direction.
+  - Cover:
+    - its layout at 1440 and 375;
+    - where the conversation lives;
+    - how replies, the thinking state and streaming look;
+    - how the library is presented;
+    - the direct controls, including the delete confirmation;
+    - the empty state;
+    - the fallback reply;
+    - keyboard use, including the focus shortcut;
+    - motion, and the reduced-motion fallback.
+  - Name what you take from the shared design system, and anything new you need from it.
+  - **No code.**
+- **Done when:** the spec covers every locked rule and scenario, and passes a joint review of all
+  three: each is distinct in interaction model, none is generic, and each is consistent with the
+  reader's design system.
+
+### LB.5 — Build (the same agent as the spec)
+- **Status:** A: todo · B: todo · C: todo
+- **Depends on:** the matching LB.4
+- **Files:** `src/library-prototypes/<x>/**`
+- **Do:**
+  - Build the variant to its approved spec.
+  - Do at least 3 passes of screenshot → critique → fix, logged in `NOTES.md`.
+  - Check the conversation live: thinking, then streaming, then scrolling up during a reply.
+- **Done when:** `npm run check:library -- <x>` passes; every scenario screenshot renders; it
+  passes a code review.
+
+### LB.6 — Design review (a new agent)
+- **Status:** A: todo · B: todo · C: todo
+- **Depends on:** the matching LB.5
+- **Files:** `src/library-prototypes/<x>/REVIEW.md`
+- **Do:**
+  - Check every locked rule (pass or fail, with evidence).
+  - Score 1–5 on:
+    - hierarchy;
+    - agent prominence;
+    - how easy direct controls are to find;
+    - conversation feel;
+    - library scanability;
+    - phone layout;
+    - consistency with the reader;
+    - "would a professional ship this".
+  - Write a prioritized fix list.
+- **Done when:** `REVIEW.md` covers every rule and has the scores and the fix list.
+
+### LB.7 — Fix (one round, by the builder)
+- **Status:** A: todo · B: todo · C: todo
+- **Depends on:** the matching LB.6
+- **Files:** `src/library-prototypes/<x>/**` (except `REVIEW.md`)
+- **Do:** fix every rule failure and as many quality items as possible. Log a "Response to
+  review" section in `NOTES.md`.
+- **Done when:** `npm run check:library -- <x>` passes, and the fixes pass a code review.
+
+### LB.8 — Comparison
+- **Status:** todo
+- **Depends on:** LB.7 (all three)
+- **Files:** `docs/LIBRARY_COMPARISON.md`, `docs/library-comparison/**`
+- **Do:** write a side-by-side comparison of every scenario, a paragraph per variant, a
+  recommendation, and ideas to combine.
+- **After approval:** the orchestrator commits, opens `/library/a` in the browser pane, sets this
+  task to `needs-human`, and stops the loop. The user picks a winner.
