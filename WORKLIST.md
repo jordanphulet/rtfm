@@ -268,7 +268,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P2 — Review (fresh agents, not the builders)
 
 ### P2.A.review · P2.B.review · P2.C.review
-- **Status:** A: done · B: doing (agent: ac8dd22be4eefcfef) · C: doing (agent: a4530ac823ad8878e)
+- **Status:** A: done · B: done · C: done
 - **Depends on:** the matching P1.x.build, and P1.shot
 - **Agent:** a new agent, never the one that built the design
 - **Files:** `src/designs/<x>/REVIEW.md` (the only file it may write)
@@ -289,7 +289,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P3 — Fix (one round only)
 
 ### P3.A.fix · P3.B.fix · P3.C.fix
-- **Status:** A: done · B: todo · C: todo
+- **Status:** A: done · B: doing (agent: a32e1599794f15149) · C: doing (agent: a395da211fdfd8ec3)
 - **Depends on:** the matching P2.x.review
 - **Agent:** the builder from P1.x.build if it's still available (`SendMessage`); otherwise a new
   agent given the same brief
@@ -302,13 +302,21 @@ Screenshot caveats to include in every design agent's brief:
 - **Done when:** `npm run check -- <x>` passes; no rule failures remain; every fix list item is
   accounted for.
 
+### P3.switcher — Move the dev design switcher
+- **Status:** doing (agent: ac8d30f9625d01062)
+- **Depends on:** —
+- **Files:** `src/App.tsx`
+- **Do:** move the A | B | C switcher so it never covers a design's controls at any width, and
+  make it unreachable by Tab while a design's modal drawer or sheet is open.
+- **Done when:** checked live against all three designs at 1440, 1024 and 375.
+
 ---
 
 ## P4 — Hand-off
 
 ### P4.1 — Comparison
 - **Status:** todo
-- **Depends on:** P3.A.fix, P3.B.fix, P3.C.fix
+- **Depends on:** P3.A.fix, P3.B.fix, P3.C.fix, P3.switcher
 - **Files:** `docs/comparison/**`, `docs/COMPARISON.md`
 - **Do:**
   - Run `npm run build` and `npm run shot` for all three designs, then copy the screenshots to
