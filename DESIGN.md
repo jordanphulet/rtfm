@@ -611,8 +611,8 @@ Every element the sample manual uses has a deliberate treatment, all under `.pro
 All of the reader lives in `src/reader/`. It uses `src/manual/` for the manual's data, store,
 streaming and markdown renderer, and styles the renderer's output rather than forking it.
 
-- One component per file, each importing its own stylesheet. `tokens.css` defines every token;
-  `shell.css` holds the page, the base type, focus and the column grid.
+- One component per file; each one that has styles imports its own stylesheet. `tokens.css`
+  defines every token; `shell.css` holds the page, the base type, focus and the column grid.
   - `index.tsx` (the route: `StartPage` or `SectionPage`) · `Shell` (layout, TOC column, outline
     column) · `CompactBar` (compact header and contents sheet) · `Toc` · `StatusRing` (and the
     legend) · `SectionPage` · `ArticleHead` · `Prose` (renderer components; `prose.css` also holds
