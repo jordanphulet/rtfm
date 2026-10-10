@@ -296,7 +296,7 @@ model**.
   reader's design system.
 
 ### LB.5 — Build (the same agent as the spec)
-- **Status:** A: fixing code review · B: done · C: fixing code review
+- **Status:** A: fixing code review · B: done · C: done
 - **Depends on:** the matching LB.4
 - **Files:** `src/library-prototypes/<x>/**`
 - **Do:**
@@ -307,7 +307,7 @@ model**.
   passes a code review.
 
 ### LB.6 — Design review (a new agent)
-- **Status:** A: todo · B: doing (agent: a18d2478f56f66665) · C: todo
+- **Status:** A: todo · B: doing (agent: a18d2478f56f66665) · C: doing (agent: a341d5742d86732b5)
 - **Depends on:** the matching LB.5
 - **Files:** `src/library-prototypes/<x>/REVIEW.md`
 - **Do:**
