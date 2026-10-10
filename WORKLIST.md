@@ -115,6 +115,25 @@ the comparison live at the `library-comparison` tag.
   - the reader's screenshots and the landing page's screenshots are unchanged;
   - no copy remains.
 
+### AL.3b — Keep a named manual's link stable after a delete
+- **Status:** todo
+- **Depends on:** AL.3 (same files)
+- **Files:** `src/home/**`
+- **Do:**
+  - Today a message's "In your library" link is worked out again from the current library on
+    every render. After the named manual is deleted, the link can switch to a different
+    manual.
+  - Decide which manual a message names once, when it's sent (or when a demo conversation
+    loads), and keep that.
+  - If that manual is later deleted, show the title as plain text with "no longer in your
+    library" instead of a link. The row mark already disappears with the row.
+  - Add a test.
+- **Done when:**
+  - Live: delete *The Haunt That Listens* after "Open the one about haunted houses", and the
+    earlier turn shows "The Haunt That Listens — no longer in your library", never another
+    manual.
+  - `npm test`, the type check and the screenshots pass.
+
 ### AL.4 — Remove the prototype tooling
 - **Status:** todo
 - **Depends on:** AL.2
@@ -131,7 +150,7 @@ the comparison live at the `library-comparison` tag.
 
 ### AL.5 — One design doc, updated docs
 - **Status:** todo
-- **Depends on:** AL.3, AL.4
+- **Depends on:** AL.3b, AL.4
 - **Files:** `DESIGN.md`, `README.md`, `CLAUDE.md`, `src/ui/README.md`, `src/manual/README.md`,
   `src/library/README.md`, `src/agent/README.md`
 - **Do:**
