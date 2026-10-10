@@ -1,31 +1,21 @@
-import { mkdir, rm } from "node:fs/promises";
 import { chromium, type BrowserContext, type BrowserContextOptions, type Page } from "playwright";
 import { createLogger, createServer, type Logger, type ViteDevServer } from "vite";
 
 const SETTLE_MS = 300;
 
-export const DESKTOP: BrowserContextOptions = { viewport: { width: 1440, height: 900 } };
-export const PHONE: BrowserContextOptions = {
-  viewport: { width: 375, height: 812 },
-  isMobile: true,
-  hasTouch: true,
-};
-
-export type Size = { name: string; options: BrowserContextOptions };
-
-export type Capture = {
+type Capture = {
   path: string;
   file: string;
   fullPage?: boolean;
-  style?: string;
   prepare?: (page: Page) => Promise<void>;
 };
 
-export type ShotResult = { file: string; saved: boolean; errors: string[] };
+export type CaptureGroup = { options: BrowserContextOptions; captures: Capture[] };
 
-export async function startServer(port: number, cacheDir?: string): Promise<ViteDevServer> {
+type ShotResult = { file: string; saved: boolean; errors: string[] };
+
+export async function startServer(port: number): Promise<ViteDevServer> {
   const server = await createServer({
-    cacheDir,
     server: { port, strictPort: true, forwardConsole: false },
     clearScreen: false,
     customLogger: createLoggerWithoutRepeatedErrors(),
@@ -34,25 +24,16 @@ export async function startServer(port: number, cacheDir?: string): Promise<Vite
   return server;
 }
 
-export async function emptyDir(dir: string) {
-  await rm(dir, { recursive: true, force: true });
-  await mkdir(dir, { recursive: true });
-}
-
-export async function captureAll<S extends Size>(
-  baseURL: string,
-  sizes: S[],
-  capturesFor: (size: S) => Capture[],
-): Promise<ShotResult[]> {
+export async function captureAll(baseURL: string, groups: CaptureGroup[]): Promise<ShotResult[]> {
   const browser = await chromium.launch();
   try {
     const results = await Promise.all(
-      sizes.map(async (size) => {
-        const context = await browser.newContext({ ...size.options, baseURL, colorScheme: "dark" });
+      groups.map(async ({ options, captures }) => {
+        const context = await browser.newContext({ ...options, baseURL, colorScheme: "dark" });
         try {
-          const sizeResults: ShotResult[] = [];
-          for (const shot of capturesFor(size)) sizeResults.push(await capture(context, shot));
-          return sizeResults;
+          const groupResults: ShotResult[] = [];
+          for (const shot of captures) groupResults.push(await capture(context, shot));
+          return groupResults;
         } finally {
           await context.close();
         }
@@ -66,7 +47,7 @@ export async function captureAll<S extends Size>(
 
 async function capture(
   context: BrowserContext,
-  { path, file, fullPage, style, prepare }: Capture,
+  { path, file, fullPage, prepare }: Capture,
 ): Promise<ShotResult> {
   const errors = new Set<string>();
   let saved = false;
@@ -81,7 +62,7 @@ async function capture(
     await page.goto(path, { waitUntil: "networkidle" });
     await settle(page);
     await prepare?.(page);
-    await page.screenshot({ path: file, fullPage, style, animations: "disabled" });
+    await page.screenshot({ path: file, fullPage, animations: "disabled" });
     saved = true;
   } catch (error) {
     errors.add(`Capture failed: ${String(error).split("\n")[0]}`);
