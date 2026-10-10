@@ -146,7 +146,7 @@ of any existing task that must now wait for it.
   yet, write against the model in `DESIGN_RULES.md` and type-check once it appears.
 
 ### P0.4 — Screenshot and check scripts
-- **Status:** doing (agent: ac33fbce557491def)
+- **Status:** done
 - **Depends on:** P0.2, P0.3
 - **Files:** `scripts/**`, `package.json`, `tsconfig.scripts.json` (if needed)
 - **Do:**
@@ -172,7 +172,7 @@ of any existing task that must now wait for it.
 - **Done when:** both commands work against the stub design `a`, and the screenshots exist.
 
 ### P0.5 — Reference screenshots
-- **Status:** todo
+- **Status:** doing (agent: a4029f0c8305d9a8c)
 - **Depends on:** P0.4
 - **Files:** `docs/inspo/**`, `scripts/inspo.ts`
 - **Do:**
@@ -217,6 +217,16 @@ of any existing task that must now wait for it.
 
 Design agent brief: the full **direction** for your letter in `DESIGN_RULES.md`, the reference
 images in `docs/inspo/<x>/`, and `src/shared/README.md`.
+
+Screenshot caveats to include in every design agent's brief:
+- Screenshots are taken with animations disabled, so they show end states. Check motion live in
+  the browser.
+- That only stops CSS animations. A WebGL scene that keeps animating will look different in every
+  screenshot. Under reduced motion it must render a still frame, which also makes the
+  `-reduced` screenshots stable.
+- In full-page captures, fixed and `100vh` elements appear once, at the top. That's a capture
+  limit, not a layout bug. A design that scrolls an inner container instead of the page will be
+  cut off at the viewport, so let the page itself scroll.
 
 ### P1.A.spec · P1.B.spec · P1.C.spec — Design spec
 - **Status:** A: todo · B: todo · C: todo
