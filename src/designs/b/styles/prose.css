@@ -1,6 +1,11 @@
 .design-b .prose {
   position: relative;
   hyphens: auto;
+  hyphenate-limit-chars: 8 4 4;
+
+  :is(h2, h3, h4, blockquote) {
+    hyphens: manual;
+  }
 
   & > * {
     margin-top: 0;
@@ -19,6 +24,10 @@
 
   & > p + p {
     text-indent: 1.5em;
+  }
+
+  & > p:first-child {
+    min-height: calc(2 * var(--line-body));
   }
 
   & > p:first-child::first-letter {
@@ -59,8 +68,8 @@
         content: "";
         position: absolute;
         top: calc(var(--space-4) * -1);
-        right: 0;
         left: calc((var(--margin) + var(--gap)) * -1);
+        width: var(--margin);
         border-top: 1px solid var(--rule-strong);
       }
 
@@ -243,7 +252,7 @@
   }
 
   tr + tr td {
-    border-top: 1px solid color-mix(in srgb, var(--rule) 50%, transparent);
+    border-top: 1px solid var(--rule-faint);
   }
 
   :is(th, td):last-child {
@@ -391,7 +400,7 @@
 
   a[data-footnote-backref] {
     margin-left: var(--space-1);
-    padding: 4px;
+    padding: var(--space-1);
     color: var(--ink-faint);
     text-decoration: none;
 
@@ -465,6 +474,10 @@
       table {
         min-width: 560px;
       }
+
+      :is(td, th) {
+        min-width: 7em;
+      }
     }
 
     blockquote {
@@ -487,11 +500,11 @@
 .design-b .section-body {
   &[data-wrap="pretty"] .prose {
     :is(p, li, td, th) {
-      text-wrap: pretty;
+      text-wrap-style: pretty;
     }
 
     :is(h2, h3, h4, blockquote) {
-      text-wrap: balance;
+      text-wrap-style: balance;
     }
   }
 
@@ -526,27 +539,31 @@
     font: inherit;
   }
 
+  & > p:first-child {
+    min-height: 0;
+  }
+
   & > h2 {
-    height: auto;
     width: calc(100% + var(--wide-extra));
-    margin: var(--space-7) 0 var(--space-3);
-    padding: var(--space-2) 0 0;
-    border-top: 1px solid var(--rule-strong);
-    font-size: var(--text-caps);
-    line-height: var(--line-caps);
-    letter-spacing: var(--tracking-caps);
-    text-transform: uppercase;
-    text-align: right;
-    color: var(--ink-soft);
 
-    &::before {
-      display: none;
-    }
-
-    .hung-text {
-      position: static;
+    @media (min-width: 1280px) {
       width: auto;
+
+      &::before {
+        left: 0;
+        right: calc(var(--wide-extra) * -1);
+        width: auto;
+      }
     }
+  }
+
+  & > h2 + .table-scroll table {
+    border-top: 0;
+  }
+
+  h3 {
+    font-size: var(--text-body-back);
+    line-height: var(--line-body-back);
   }
 
   ul > li::before {

@@ -24,7 +24,7 @@
   .chapter-numeral {
     position: absolute;
     right: calc(100% + var(--gap));
-    top: -10px;
+    top: calc(var(--space-2) * -1);
     font-size: var(--text-numeral);
     line-height: var(--line-numeral);
     font-weight: var(--wght-numeral);
@@ -52,8 +52,8 @@
 
     .ribbon {
       position: absolute;
-      left: -22px;
-      top: -4px;
+      left: calc(var(--ribbon-offset) * -1);
+      top: calc(var(--space-1) * -1);
     }
 
     .leaf {
@@ -176,6 +176,7 @@
 
   .contents[data-variant="sheet"] {
     --entry-label: 40px;
+    --ribbon-offset: var(--space-5);
 
     .chapter-numeral {
       position: static;
@@ -223,10 +224,6 @@
 
     .entry-leaders {
       min-width: var(--space-3);
-    }
-
-    .contents[data-variant="page"] .entry .ribbon {
-      left: -14px;
     }
   }
 }

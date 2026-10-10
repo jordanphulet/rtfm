@@ -37,6 +37,7 @@ export function SectionBody({ text, isWriting, justFinished, wrap }: SectionBody
       {(isWriting || justFinished) && (
         <>
           <span className="wet-ink" aria-hidden="true" />
+          <span className="fresh-ink" aria-hidden="true" />
           <Nib />
         </>
       )}

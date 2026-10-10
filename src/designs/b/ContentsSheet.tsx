@@ -16,8 +16,8 @@ export function ContentsSheet({ isOpen, currentId, onClose }: ContentsSheetProps
     if (isOpen && !dialog.open) {
       dialog.showModal();
       const current = dialog.querySelector<HTMLElement>("[aria-current=page]");
-      current?.scrollIntoView({ block: "center" });
-      current?.focus();
+      current?.closest(".chapter-entry")?.scrollIntoView({ block: "start" });
+      current?.focus({ preventScroll: true });
     }
     if (!isOpen && dialog.open) dialog.close();
   }, [isOpen]);

@@ -206,13 +206,33 @@
     }
   }
 
+  .follow-button .nib {
+    position: static;
+    display: none;
+  }
+
   @media (min-width: 1024px) {
     .follow-button {
+      color: var(--rubric);
       left: 0;
       bottom: var(--space-6);
       width: var(--fore-edge);
       flex-direction: column;
       padding: var(--space-2) 0;
+    }
+
+    .follow-button:hover {
+      text-decoration: underline 1px;
+      text-underline-offset: 4px;
+    }
+
+    .follow-button[aria-pressed="true"] {
+      color: var(--ink);
+    }
+
+    .follow-button .nib {
+      display: block;
+      order: -1;
     }
 
     .follow-words {
@@ -246,6 +266,8 @@
     color: var(--ink);
     overflow-y: auto;
     overscroll-behavior: contain;
+    --sheet-head-top: var(--space-6);
+    scroll-padding-top: calc(var(--sheet-head-top) + var(--line-small) + var(--space-4) + var(--space-5));
     transform: translateX(-100%);
     transition:
       transform var(--dur-sheet) var(--ease-out),
@@ -290,7 +312,7 @@
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: var(--space-5);
-    padding: var(--space-6) 0 var(--space-4);
+    padding: var(--sheet-head-top) 0 var(--space-4);
     background: var(--raised);
     border-bottom: 1px solid var(--rule);
 
@@ -303,6 +325,7 @@
   .sheet-close {
     font-style: italic;
     font-size: var(--text-small);
+    line-height: var(--line-small);
     color: var(--ink-soft);
     transition: color var(--dur-quick) var(--ease-out);
 
@@ -325,8 +348,8 @@
       padding: 0 var(--gutter) var(--space-8) var(--space-7);
     }
 
-    .sheet-head {
-      padding-top: var(--space-5);
+    .contents-sheet {
+      --sheet-head-top: var(--space-5);
     }
 
     .sheet-key {
@@ -377,6 +400,7 @@
   }
 
   .cell-chapter {
+    text-wrap: balance;
     font-style: italic;
     font-size: var(--text-small);
     line-height: var(--line-small);
@@ -408,7 +432,7 @@
     font-size: var(--text-small);
     line-height: var(--line-small);
     color: var(--ink-soft);
-    text-wrap: pretty;
+    text-wrap: balance;
   }
 
   @media (max-width: 767px) {

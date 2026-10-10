@@ -6,9 +6,10 @@ body:has(.design-b) {
   --ink-soft: #b3a68e;
   --ink-faint: #8f826d;
   --rubric: #e0674b;
-  --rubric-wet: #7a3a2b;
+  --rubric-wet: #a64b37;
   --rule: #3a3128;
   --rule-strong: #5c4f40;
+  --rule-faint: #271f18;
   --selection: #4a2219;
   --scrim: rgb(12 10 8 / 0.72);
 
@@ -68,6 +69,10 @@ body:has(.design-b) {
   --folio-bar: 48px;
   --preview-width: 360px;
   --entry-label: 48px;
+  --nib-offset: 28px;
+  --ink-offset: 24px;
+  --ink-width: 2px;
+  --ribbon-offset: 20px;
 
   --radius: 0;
   --dur-quick: 150ms;
@@ -113,5 +118,7 @@ body:has(.design-b) {
     --text-head: 20px;
     --line-head: 28px;
     --entry-label: 36px;
+    --ink-offset: var(--space-2);
+    --ribbon-offset: var(--space-3);
   }
 }

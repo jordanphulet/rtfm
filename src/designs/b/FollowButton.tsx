@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { Arrow } from "./drawings";
+import { Arrow, Nib } from "./drawings";
 
 const ROOM_BELOW_EDGE = 160;
 const STOP_EVENTS = ["wheel", "touchmove", "pointerdown", "keydown"] as const;
@@ -64,6 +64,7 @@ export function FollowButton({ bodyRef, edgeRef, text }: FollowButtonProps) {
       onFocus={() => setHasFocus(true)}
       onBlur={() => setHasFocus(false)}
     >
+      <Nib />
       <span className="follow-words">{isFollowing ? "Following the writing" : "Follow the writing"}</span>
       <Arrow direction="down" />
     </button>

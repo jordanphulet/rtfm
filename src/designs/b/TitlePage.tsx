@@ -12,7 +12,8 @@ export function TitlePage() {
   const manual = useManual();
   const sections = allSections(manual);
   const writtenCount = sections.filter((section) => section.status === "written").length;
-  const first = sections[0];
+  const lastOpened = sections.find((section) => section.id === lastOpenedSection());
+  const resumeAt = lastOpened ?? sections[0];
 
   useEffect(() => {
     document.title = manual.title;
@@ -28,8 +29,8 @@ export function TitlePage() {
       <p className="book-subtitle">{manual.subtitle}</p>
       <p className="title-meta">
         {writtenCount} of {sections.length} sections written ·{" "}
-        <Link to={sectionPath(first.id)}>
-          Begin at {first.label} <Arrow direction="right" />
+        <Link to={sectionPath(resumeAt.id)}>
+          {lastOpened ? "Continue" : "Begin"} at {resumeAt.label} <Arrow direction="right" />
         </Link>
       </p>
       <HeadRule />
@@ -48,7 +49,7 @@ export function TitlePage() {
           <span className="key-note">Opening a section that isn’t written yet starts the writing.</span>
         </aside>
       </div>
-      <Contents variant="page" markedId={lastOpenedSection()} />
+      <Contents variant="page" markedId={lastOpened?.id} />
     </main>
   );
 }

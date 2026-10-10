@@ -19,14 +19,17 @@ export function useLiveEdge(bodyRef: RefObject<HTMLElement | null>, text: string
 }
 
 function markLiveEdge(body: HTMLElement, edgeRef: RefObject<number>) {
-  edgeRef.current = liveEdgeOf(body);
-  body.style.setProperty("--live-edge", `${edgeRef.current}px`);
+  const { blockTop, edge } = liveBlockOf(body);
+  edgeRef.current = edge;
+  body.style.setProperty("--live-edge", `${edge}px`);
+  body.style.setProperty("--live-block-top", `${blockTop}px`);
 }
 
-function liveEdgeOf(body: HTMLElement): number {
+function liveBlockOf(body: HTMLElement): { blockTop: number; edge: number } {
   const content = body.firstElementChild;
-  if (!content) return 0;
+  if (!content) return { blockTop: 0, edge: 0 };
   const blocks = [...content.children].filter((child) => !child.matches(".footnotes"));
-  const lastBlock = blocks.at(-1) ?? content;
-  return lastBlock.getBoundingClientRect().bottom - body.getBoundingClientRect().top;
+  const block = (blocks.at(-1) ?? content).getBoundingClientRect();
+  const origin = body.getBoundingClientRect().top;
+  return { blockTop: block.top - origin, edge: block.bottom - origin };
 }

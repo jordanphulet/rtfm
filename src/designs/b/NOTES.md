@@ -119,3 +119,74 @@ note stubs never moved while writing, `scrollY` stayed 0 throughout, and the nib
 - Streaming probes (1.2 at 1440 with notes, 3.2 at 375, 3.3 at 900): nothing above the edge
   moved, notes never moved while writing, `scrollY` stayed 0, and there were no console errors.
 - Following by keyboard scrolled with the edge, and focus landed on the text on completion.
+
+## Pass 5 (review round, P3.B.fix)
+
+**Saw** (`streaming-full-desktop`, `streaming-full-mobile`, `appendix-desktop`, `toc-desktop`,
+`written-desktop`, plus my own captures of 1.2 after streaming)
+- The wet ink now reads as ink: a red dried rule, and a brighter 2px fresh segment beside the
+  paragraph being written, ending at the nib. The H2 rules sit over the margin column only, so
+  nothing crosses the ink and no rule stacks on a wide table's top rule.
+- Back matter after the first change: "Servos" hung in the margin at the chapter H2 rank. But its
+  catalogue rule and the table's top rule then stacked 16px apart over the same extent. Fixed:
+  when a back-matter H2 is followed directly by a table, the table's top rule stands in for it.
+- Prev/next with `-webkit-line-clamp: 2` cut summaries mid-word ("should neve…", "on..").
+  Removed the clamp and kept `text-wrap: balance`: the summaries are short, and balance alone
+  stops the orphans.
+- 1.2 after streaming: "Every scare…" now starts on its own line under the cap, with no jog.
+- The sheet opens with the current chapter group under the sticky head; no row is cut.
+- Phone: the fresh-ink bar sits in the gutter beside the newest paragraph; the nib is gone there.
+
+**Verified live** on my 5178 server (stopped by its PID afterwards), with Playwright sampling every
+200ms until each section was written: 1.2 at 1440 (with notes), 3.2 at 375, 3.3 at 1100 and 4.3
+at 768. 0 block, opener or note movements; `scrollY` stayed 0; no console errors. On desktop the
+nib's bottom sat 8px above the newest line's bottom throughout. Following by keyboard scrolled
+with the edge, and focus landed on `#text` on completion. No horizontal overflow at 375–1440.
+
+## Pass 6 (code review of the P3 fixes)
+
+- **Locked-rule bug:** `h2:has(+ .table-scroll)` restyled the heading *after* the table arrived in
+  the stream. Below 1280 that moved the heading and everything after it up 17px, and at 1280 and
+  up the heading's rule vanished above the live edge. I replaced it with
+  `h2 + .table-scroll table { border-top: 0 }`, so only the arriving block changes. Grepping the
+  styles finds no other `:has(+ …)` or `:has(~ …)`.
+- The sheet's `scroll-padding-top` and the sticky head now share `--sheet-head-top`. The Close
+  button's line height is pinned to `--line-small`, so the head is the same 24px row at every
+  width and the padding matches it on phone.
+- On desktop the Follow control rests in `--rubric`, underlines on hover, and turns `--ink` while
+  following, so the pressed state has its own cue besides the wording.
+
+## Response to review
+
+**Rule failure**
+- Tokenise hard-coded offsets and the derived colour: **done.** Added `--nib-offset` 28px,
+  `--ink-offset` 24px (8px on phone), `--ink-width` 2px, `--ribbon-offset` 20px (12px on the
+  phone contents page; 24px, `--space-5`, in the sheet) and `--rule-faint` `#271F18` in place of the `color-mix()`. The nib's
+  vertical offset, the lift distance, the chapter-numeral nudge and the backref padding now use
+  spacing tokens. The phone nib's size and offsets are gone, replaced by the fresh-ink segment.
+
+**Quality fixes**
+1. Wet ink reads as ink, and stops crossing H2 rules: **done.** (a) At ≥1280 the H2 rule covers
+   the margin column only. (b) `--rubric-wet` is `#A64B37`. (c) `useLiveEdge` also writes
+   `--live-block-top`, and a 2px `--rubric` fresh segment runs from there to the nib. Dry, lift
+   and tailpiece are unchanged.
+2. Inverted back-matter hierarchy: **done.** Back-matter H2s use the chapter H2 rank (roman 25/32,
+   weight 500, ink, hung at ≥1280) under a catalogue rule from the text column to the wide edge.
+   H3s are 18/28 italic. A table directly under an H2 drops its own top rule (see Pass 6).
+3. `text-wrap` shorthand undoing `nowrap`, and phone table cells: **done.** The `pretty` and
+   `balance` rules use `text-wrap-style`, so the right-aligned numeric cells (e.g. `1,550 ms`) stay
+   on one line. Below 768px, `td`/`th` get `min-width: 7em` and the table scrolls.
+4. Drop-cap jog: **done.** The first paragraph has `min-height: calc(2 * var(--line-body))`
+   (reset to 0 in back matter, which has no cap).
+5. Hyphenation: **done.** `.prose` has `hyphenate-limit-chars: 8 4 4`. Headings and blockquotes
+   use `hyphens: manual`. The summary, cell titles, chapter lines, contents and previews sit
+   outside `.prose`, so they were already never auto-hyphenated.
+6. Prev/next cells: **done, partly differently.** Chapter line, title and summary use
+   `text-wrap: balance`. I skipped the two-line clamp: it truncated summaries mid-word, and
+   balance alone removes the orphans.
+7. "Where you were": **done.** The title-page meta link reads "Continue at 4.2 →" once a section
+   has been opened this visit, and the ribbon follows the same section. The sheet scrolls the
+   current chapter group to the top, with `scroll-padding-top` clearing the sticky head.
+8. Live-edge cues at the edges: **done.** On desktop the spine "Follow the writing" is `--rubric`
+   with a nib above it. On phone the squeezed nib is replaced by the 2px fresh-ink segment in the
+   gutter, 8px from the text.
