@@ -69,7 +69,7 @@ duplicated code the review flagged for after a winner was chosen (AL.3). The lib
 the comparison live at the `library-comparison` tag.
 
 ### AL.1 — Tag the comparison
-- **Status:** todo
+- **Status:** done
 - **Owner:** orchestrator (a git operation)
 - **Depends on:** —
 - **Do:** tag commit `55bda41` (all three library variants plus their comparison) as
@@ -77,7 +77,7 @@ the comparison live at the `library-comparison` tag.
 - **Done when:** `git tag` lists `library-comparison` pointing at `55bda41`.
 
 ### AL.2 — Promote A to the landing page
-- **Status:** todo
+- **Status:** doing (agent: a31d1f9ed43d22cbb)
 - **Depends on:** AL.1
 - **Files:** `src/**` (except `src/ui/`, `src/manual/`, `src/library/` and `src/agent/`, whose
   READMEs AL.5 updates), `DESIGN.md`
