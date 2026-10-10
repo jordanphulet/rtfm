@@ -1,0 +1,139 @@
+.home .conversation {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--panel-pad) var(--space-6) var(--panel-gutter);
+}
+
+.home .conversation:focus-visible {
+  outline-offset: calc(-1 * var(--focus-offset));
+  border-radius: 0;
+}
+
+.home .conversation-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  max-width: var(--measure);
+}
+
+.home .turns {
+  margin: auto 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Your lines: quoted, like a spoken line in the manual */
+
+.home .turn-user {
+  margin-top: var(--space-8);
+}
+
+.home .turn-user:first-child {
+  margin-top: 0;
+}
+
+.home .said {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: var(--said-rule) solid var(--rule-strong);
+  font: var(--text-reply) / var(--leading-reply) var(--font-sans);
+  color: var(--ink-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.home .named {
+  margin: var(--space-2) 0 0;
+  padding-left: calc(var(--space-3) + var(--said-rule));
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  color: var(--ink-faint);
+}
+
+.home .named-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The librarian's replies, and the write head */
+
+.home .turn-reply,
+.home .thinking {
+  margin-top: var(--space-3);
+}
+
+.home .reply > * {
+  position: relative;
+}
+
+.home .reply > :last-child::after,
+.home .thinking::after {
+  content: "";
+  position: absolute;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  left: calc(-1 * var(--head-offset));
+  width: var(--head-width);
+  background: var(--cue);
+}
+
+.home .reply > :last-child::after {
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform var(--dur-settle) var(--ease-in-out);
+}
+
+.home .turn-reply[data-live] .reply > :last-child::after {
+  transform: scaleY(1);
+  transform-origin: top;
+  animation: home-head-in var(--dur-quick) var(--ease-out);
+}
+
+.home .turn-reply[data-live] .reply > :last-child::before,
+.home .thinking::before {
+  content: "";
+  position: absolute;
+  bottom: var(--space-1);
+  left: calc(-1 * var(--head-offset) - var(--lamp-inset));
+  width: var(--lamp);
+  height: var(--lamp);
+  background: var(--cue);
+  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
+}
+
+.home .thinking {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--leading-reply);
+  font: var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--cue);
+  animation: home-fade-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes home-head-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes home-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home .turn-reply[data-live] .reply > :last-child::after,
+  .home .turn-reply[data-live] .reply > :last-child::before,
+  .home .thinking,
+  .home .thinking::before {
+    animation: none;
+  }
+}

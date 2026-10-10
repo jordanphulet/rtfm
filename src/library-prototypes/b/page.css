@@ -1,9 +1,0 @@
-.library-b .page {
-  padding: var(--space-8) var(--page-inline) var(--space-16);
-}
-
-@media (max-width: 767px) {
-  .library-b .page {
-    padding-top: 0;
-  }
-}

@@ -1,0 +1,74 @@
+.home .page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-width);
+  align-items: start;
+}
+
+.home .skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 40;
+  padding: var(--space-2) var(--space-3);
+  background: var(--ground-raised);
+  font: 500 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink-strong);
+  transform: translateY(-200%);
+}
+
+.home .skip-link:focus-visible {
+  transform: none;
+}
+
+.home .library {
+  padding: var(--space-16) var(--gutter) var(--space-12);
+}
+
+.home .library-inner {
+  max-width: var(--ledger-max);
+  margin-inline: auto;
+}
+
+@media (max-width: 1023px) {
+  .home .page {
+    display: block;
+  }
+
+  .home .library {
+    padding-bottom: calc(var(--dock-height) + var(--space-6));
+  }
+}
+
+@media (max-width: 767px) {
+  .home .library {
+    padding-top: var(--space-8);
+  }
+}
+
+/* Touch: the shared link and text-button hovers would stick after a tap */
+
+@media (hover: none) {
+  .home .start-link:hover,
+  .home .named-link:hover {
+    color: var(--ink);
+    text-decoration-color: var(--cue-deep);
+  }
+
+  .home .empty-link:hover {
+    color: var(--ink-strong);
+    text-decoration-color: var(--cue-deep);
+  }
+
+  .home .text-button:hover {
+    background: none;
+  }
+
+  .home .row-delete:hover {
+    color: var(--ink-faint);
+  }
+
+  .home .confirm-keep:hover,
+  .home .newest:hover {
+    color: var(--ink-muted);
+  }
+}

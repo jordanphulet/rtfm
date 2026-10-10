@@ -1,0 +1,54 @@
+.home .cues {
+  margin-top: auto;
+}
+
+.home .cues-title {
+  margin: 0 0 var(--space-2);
+  font: 600 var(--text-h3) / var(--leading-h3) var(--font-sans);
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}
+
+.home .cues-intro {
+  margin: 0 0 var(--space-6);
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.home .cues-label {
+  margin: 0 0 var(--space-2);
+  font: 600 var(--text-micro) / var(--leading-micro) var(--font-sans);
+  color: var(--ink-muted);
+}
+
+.home .cue-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home .cue {
+  display: block;
+  width: calc(100% + var(--space-3));
+  margin-left: calc(-1 * var(--space-3));
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: none;
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--dur-quick) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .home .cue:hover {
+    background: var(--ground-hover);
+    color: var(--ink-strong);
+  }
+}

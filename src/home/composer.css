@@ -1,0 +1,137 @@
+.home .composer {
+  padding: var(--space-3) var(--panel-pad) var(--space-5);
+  border-top: 1px solid var(--rule);
+}
+
+.home .field {
+  display: block;
+  width: 100%;
+  min-height: calc(2 * var(--leading-reply) + 2 * var(--space-3) + 2 * var(--field-border));
+  max-height: calc(8 * var(--leading-reply) + 2 * var(--space-3) + 2 * var(--field-border));
+  field-sizing: content;
+  resize: none;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--field-border) solid var(--ink-faint);
+  border-radius: var(--radius-m);
+  background: var(--ground);
+  font: var(--text-reply) / var(--leading-reply) var(--font-sans);
+  color: var(--ink-strong);
+  transition: border-color var(--dur-quick) var(--ease-out);
+}
+
+.home .field::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .home .field:hover {
+    border-color: var(--ink-muted);
+  }
+}
+
+.home .field[data-flash] {
+  animation: home-field-flash var(--dur-target) var(--ease-in-out);
+}
+
+@keyframes home-field-flash {
+  from {
+    background-color: var(--cue-tint);
+  }
+}
+
+.home .composer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--space-8);
+  margin-top: var(--space-2);
+}
+
+.home .readout {
+  margin: 0;
+  white-space: nowrap;
+  font: var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.home .readout kbd {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-s);
+  background: var(--ground-tint);
+  font: inherit;
+  color: var(--ink-muted);
+}
+
+@media (hover: none) {
+  .home .readout-shortcut {
+    visibility: hidden;
+  }
+}
+
+.home .send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--space-8);
+  margin-left: auto;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: var(--ground-tint);
+  font: 600 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  color: var(--ink-strong);
+  cursor: pointer;
+  transition:
+    color var(--dur-quick) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .home .send:not([aria-disabled]):hover {
+    color: var(--cue);
+  }
+}
+
+.home .send[aria-disabled] {
+  background: none;
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+/* The dock: field and Send side by side */
+
+.home .composer[data-layout="dock"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+}
+
+.home .composer[data-layout="dock"] .field {
+  min-height: var(--tap);
+  max-height: calc(4 * var(--leading-reply) + 2 * var(--dock-field-pad) + 2 * var(--field-border));
+  padding: var(--dock-field-pad) var(--space-3);
+}
+
+.home .composer[data-layout="dock"] .composer-row {
+  margin: 0;
+}
+
+.home .composer[data-layout="dock"] .send {
+  min-width: var(--tap);
+  min-height: var(--tap);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home .field[data-flash] {
+    animation: none;
+    background: var(--cue-tint);
+  }
+}

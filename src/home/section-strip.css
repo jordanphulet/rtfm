@@ -1,0 +1,14 @@
+.home .section-strip {
+  display: flex;
+  gap: calc(var(--tick-pitch) - var(--tick));
+  height: var(--tick-height);
+}
+
+.home .tick {
+  width: var(--tick);
+  background: var(--rule-strong);
+}
+
+.home .tick[data-written] {
+  background: var(--ink-muted);
+}
