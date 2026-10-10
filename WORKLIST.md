@@ -315,7 +315,7 @@ Screenshot caveats to include in every design agent's brief:
 ## P4 — Hand-off
 
 ### P4.1 — Comparison
-- **Status:** doing (agent: a3dc879b588bab46d)
+- **Status:** needs-human (the user picks the winner)
 - **Depends on:** P3.A.fix, P3.B.fix, P3.C.fix, P3.switcher
 - **Files:** `docs/comparison/**`, `docs/COMPARISON.md`
 - **Do:**
