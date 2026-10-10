@@ -246,7 +246,7 @@ model**.
 - **Done when:** tests pass; the READMEs cover every export and URL option.
 
 ### LB.3 — Prototype scaffold and screenshots
-- **Status:** doing (agent: a8be4c6e7c2657175)
+- **Status:** done
 - **Depends on:** LB.1, LB.2
 - **Files:** `src/App.tsx`, `src/library-prototypes/**` (stubs and README), `scripts/**`, `package.json`, `README.md` (scripts table)
 - **Do:**
@@ -261,7 +261,7 @@ model**.
 - **Done when:** both commands work against a stub variant.
 
 ### LB.4 — Specs (A, B and C at the same time)
-- **Status:** A: todo · B: todo · C: todo
+- **Status:** A: doing (agent: a1468a1e11d5d0641) · B: doing (agent: ab6678b62487b6c90) · C: doing (agent: aa7b0b3a8a8e1b691)
 - **Depends on:** LB.3
 - **Files:** `src/library-prototypes/<x>/SPEC.md`
 - **Do:**
