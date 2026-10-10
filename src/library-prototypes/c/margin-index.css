@@ -48,6 +48,30 @@
   color: var(--ink-strong);
 }
 
+.library-c .margin-library {
+  position: relative;
+}
+
+.library-c .margin-library + li {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+.library-c .margin-row[aria-current] {
+  color: var(--ink-strong);
+}
+
+.library-c .margin-row[aria-current]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: var(--ink-strong);
+}
+
 .library-c .margin-row:focus-visible {
   outline-offset: calc(-1 * var(--focus-offset));
 }

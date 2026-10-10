@@ -9,9 +9,10 @@ interface MarginIndexProps {
   exchanges: ExchangeData[];
   status: AgentStatus;
   manualCount: number;
+  libraryInView: boolean;
 }
 
-export function MarginIndex({ exchanges, status, manualCount }: MarginIndexProps) {
+export function MarginIndex({ exchanges, status, manualCount, libraryInView }: MarginIndexProps) {
   function onJump(event: MouseEvent, jump: () => void) {
     event.preventDefault();
     jump();
@@ -23,9 +24,14 @@ export function MarginIndex({ exchanges, status, manualCount }: MarginIndexProps
         In this conversation
       </p>
       <ol className="margin-list">
-        <li>
-          <a href="#library" className="margin-row" onClick={(event) => onJump(event, jumpToLibrary)}>
-            <span className="margin-text">Library</span>
+        <li className="margin-library">
+          <a
+            href="#library"
+            className="margin-row"
+            aria-current={libraryInView ? "location" : undefined}
+            onClick={(event) => onJump(event, jumpToLibrary)}
+          >
+            <span className="margin-text">Library ↑</span>
             <span className="margin-count">
               {manualCount}
               <span className="visually-hidden"> manuals</span>
@@ -49,7 +55,7 @@ export function MarginIndex({ exchanges, status, manualCount }: MarginIndexProps
         })}
       </ol>
       {exchanges.length === 0 && (
-        <p className="margin-hint">Your questions are listed here as you ask them.</p>
+        <p className="margin-hint">Your questions appear here.</p>
       )}
     </nav>
   );

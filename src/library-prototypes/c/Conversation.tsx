@@ -80,6 +80,6 @@ function useNewestInView(exchangeCount: number) {
 
 function placeNewestInView() {
   document
-    .querySelector(".library-c .exchange-group[data-newest] .exchange")
+    .querySelector(".library-c .exchange-group[data-newest]")
     ?.scrollIntoView({ block: "start", behavior: "instant" });
 }

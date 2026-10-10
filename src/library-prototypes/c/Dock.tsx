@@ -16,9 +16,19 @@ interface DockProps {
   onSuggestion: (text: string) => void;
   conversationEmpty: boolean;
   libraryInView: boolean;
+  deletedTitle: string | null;
 }
 
-export function Dock({ dockRef, prompt, status, send, onSuggestion, conversationEmpty, libraryInView }: DockProps) {
+export function Dock({
+  dockRef,
+  prompt,
+  status,
+  send,
+  onSuggestion,
+  conversationEmpty,
+  libraryInView,
+  deletedTitle,
+}: DockProps) {
   const { draft, setDraft, inputRef, startNewManual } = prompt;
   const idle = status === "idle";
   const canSend = idle && draft.trim() !== "";
@@ -72,6 +82,12 @@ export function Dock({ dockRef, prompt, status, send, onSuggestion, conversation
             </button>
           </form>
           <div className="dock-meta">
+            {conversationEmpty && draft === "" && !deletedTitle ? (
+              <Suggestions placement="dock" onSend={onSuggestion} onStartNew={startNewManual} />
+            ) : (
+              <p className="key-hints">Enter to send · Shift+Enter for a new line</p>
+            )}
+            <DockStatus replying={!idle} deletedTitle={deletedTitle} />
             <button
               type="button"
               className="text-button library-up"
@@ -80,22 +96,24 @@ export function Dock({ dockRef, prompt, status, send, onSuggestion, conversation
             >
               Library ↑
             </button>
-            {conversationEmpty && draft === "" ? (
-              <Suggestions placement="dock" onSend={onSuggestion} onStartNew={startNewManual} />
-            ) : (
-              <p className="key-hints">Enter to send · Shift+Enter for a new line</p>
-            )}
-            {!idle && (
-              <p className="readout">
-                <StatusRing status="writing" />
-                Replying…
-              </p>
-            )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function DockStatus({ replying, deletedTitle }: { replying: boolean; deletedTitle: string | null }) {
+  if (replying) {
+    return (
+      <p className="dock-status readout">
+        <StatusRing status="writing" />
+        Replying…
+      </p>
+    );
+  }
+  if (deletedTitle) return <p className="dock-status deleted-notice">Deleted {deletedTitle}</p>;
+  return null;
 }
 
 function useHeightToFit(input: RefObject<HTMLTextAreaElement | null>, text: string) {

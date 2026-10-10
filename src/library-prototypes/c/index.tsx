@@ -8,6 +8,7 @@ import { AGENT_INPUT_ID, Dock } from "./Dock";
 import { toExchanges } from "./exchanges";
 import { LibraryPlate } from "./LibraryPlate";
 import { MarginIndex } from "./MarginIndex";
+import { useStageDirections } from "./stageDirections";
 import { Suggestions } from "./Suggestions";
 import { useDeleteFlow } from "./useDeleteFlow";
 import { useInView } from "./useInView";
@@ -25,6 +26,9 @@ export default function Library() {
   const prompt = usePrompt();
   const deletion = useDeleteFlow(manuals, exchanges.length);
   const replyAnnouncement = useReplyAnnouncement(exchanges, status);
+  const latestDirection = useStageDirections().at(-1);
+  const deletedSinceLastSend =
+    latestDirection?.afterExchange === exchanges.length ? latestDirection.title : null;
 
   const rootRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
@@ -69,7 +73,12 @@ export default function Library() {
               }
             />
           </main>
-          <MarginIndex exchanges={exchanges} status={status} manualCount={manuals.length} />
+          <MarginIndex
+            exchanges={exchanges}
+            status={status}
+            manualCount={manuals.length}
+            libraryInView={plateHeadInView}
+          />
         </div>
         <Dock
           dockRef={dockRef}
@@ -79,6 +88,7 @@ export default function Library() {
           onSuggestion={sendSuggestion}
           conversationEmpty={exchanges.length === 0}
           libraryInView={plateHeadInView}
+          deletedTitle={deletedSinceLastSend}
         />
       </div>
       <DeleteConfirmation manual={deletion.confirming} onKeep={deletion.keep} onConfirm={deletion.confirm} />

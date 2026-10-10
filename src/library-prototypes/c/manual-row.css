@@ -46,7 +46,7 @@
 
 .library-c .manual-row:has(.manual-link:focus-visible) {
   outline: var(--focus-ring);
-  outline-offset: var(--focus-offset);
+  outline-offset: calc(-1 * var(--focus-offset));
 }
 
 .library-c .manual-row:has(.manual-link:hover) {
@@ -194,6 +194,7 @@
   }
 
   .library-c .manual[data-confirming] .manual-row {
-    padding-left: var(--space-3);
+    margin-inline: calc(-1 * var(--space-3));
+    padding-inline: var(--space-3);
   }
 }

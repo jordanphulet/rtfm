@@ -17,6 +17,7 @@
   --send-height: 36px;
   --well-control-inset: calc((var(--leading-body) + 2 * var(--well-pad) - var(--send-height)) / 2);
   --keycap-size: 20px;
+  --reply-budget: 440px;
   --meta-row-height: 28px;
   --user-name-offset: calc((var(--leading-body) - var(--leading-ui)) / 2);
   --reply-name-offset: calc((var(--leading-reply) - var(--leading-ui)) / 2);
@@ -35,7 +36,7 @@
   .library-c {
     --gutter: 16px;
     --meter-width: 48px;
-    --write-head-offset: 11px;
+    --write-head-offset: 8px;
     --well-pad: 12px;
     --send-height: 44px;
     --meta-row-height: 32px;

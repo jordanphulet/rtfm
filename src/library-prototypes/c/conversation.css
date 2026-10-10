@@ -4,6 +4,16 @@
   border-top: 1px solid var(--rule-strong);
 }
 
+.library-c .exchange-group {
+  scroll-margin-top: var(--space-8);
+}
+
+@media (min-width: 768px) {
+  .library-c .exchange-group[data-newest] {
+    scroll-margin-top: max(var(--space-8), var(--window-height) - var(--dock-height) - var(--reply-budget));
+  }
+}
+
 .library-c .exchange-group + .exchange-group {
   margin-top: var(--space-12);
 }
@@ -38,7 +48,7 @@
   color: var(--ink-muted);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .library-c .conversation:not(:has(.exchange-group, .stage-directions)) {
     border-top: 0;
   }

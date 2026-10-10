@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { Fragment, type RefObject } from "react";
 import type { LibraryManual } from "../../library";
 import "../../ui";
 import { LIBRARY_TITLE_ID } from "./jump";
@@ -25,7 +25,14 @@ export function LibraryPlate({ manuals, confirmingId, leavingId, headRef, onDele
         <h1 id={LIBRARY_TITLE_ID} className="plate-title" tabIndex={-1}>
           Library
         </h1>
-        <p className="plate-meta">{libraryMeta(manuals)}</p>
+        <p className="plate-meta">
+          {libraryMeta(manuals).map((part, index) => (
+            <Fragment key={part}>
+              {index > 0 && " · "}
+              <span className="plate-meta-part">{part}</span>
+            </Fragment>
+          ))}
+        </p>
         {!empty && <StartNewManual onStartNew={onStartNew} />}
       </header>
 
@@ -69,12 +76,12 @@ function StartNewManual({ id, onStartNew }: { id?: string; onStartNew: () => voi
   );
 }
 
-function libraryMeta(manuals: LibraryManual[]): string {
-  if (manuals.length === 0) return "No manuals";
+function libraryMeta(manuals: LibraryManual[]): string[] {
+  if (manuals.length === 0) return ["No manuals"];
   const written = sum(manuals.map((manual) => manual.writtenCount));
   const sections = sum(manuals.map((manual) => manual.sectionCount));
   const count = manuals.length === 1 ? "1 manual" : `${manuals.length} manuals`;
-  return `${count} · ${written} of ${sections} sections written · most recent first`;
+  return [count, `${written} of ${sections} sections written`, "most recent first"];
 }
 
 function sum(values: number[]): number {

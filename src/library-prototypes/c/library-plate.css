@@ -22,6 +22,10 @@
   color: var(--ink-faint);
 }
 
+.library-c .plate-meta-part {
+  white-space: nowrap;
+}
+
 .library-c .start-new {
   padding: 0;
   border: 0;
@@ -74,6 +78,11 @@
 }
 
 @media (max-width: 767px) {
+  .library-c .start-new {
+    min-height: var(--tap);
+    margin-block: calc((var(--leading-body) - var(--tap)) / 2);
+  }
+
   .library-c .plate-columns {
     display: none;
   }

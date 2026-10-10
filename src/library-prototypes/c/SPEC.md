@@ -29,7 +29,7 @@ What sets it apart from the other two:
 | Where the conversation lives | It is the page: one document that scrolls with the window (no inner scroll box), with the input docked at the bottom | Find-in-page, Home and End, and the browser's own scrolling all work on the conversation |
 | How replies look | Script lines: the speaker's name hangs in a 96px column, and the line sits at `--measure`. No bubbles and no avatars | This is the reader's hanging-label language, applied to dialogue |
 | Where the library is | The opening plate of the script, 816px wide, always first. It scrolls away as the conversation grows | The conversation is the page. The library is its first entry, not a fixed panel |
-| The way back to the library | At 1200px and up, the "Library" row at the top of the margin index. Below 1200px, **Library ↑** in the dock (hidden while the library's head is in view). At any width, Home | It is always one click or keystroke away |
+| The way back to the library | **Library ↑** in the dock at every width (hidden while the library's head is in view), the "Library ↑" row at the top of the margin index at 1200px and up, and Home | It is always one click or keystroke away |
 | What the extra width does at 1440 | The plate is wider than the dialogue (816 against 576), and a 240px margin index lists the conversation's entries | A table needs width and speech needs a measure. The index serves the same purpose as the reader's "On this page" |
 | Thinking and streaming | The reader's instruments, scaled down: a writing ring with `Thinking…`, then the **write head** (a cue bar with a lamp at its foot) on the live reply, and a settle when it ends | It looks like the same product: green means live |
 | Scrolling during a reply | **The page never moves while a reply streams.** After a send, the new exchange is placed at the top of the window, with room below it for the reply. There is no Follow: every canned reply fits that room at 1440 and at 375 | This meets "never pulls you down" by design, not with a scroll heuristic |
@@ -67,10 +67,11 @@ system").
 | `--gutter` | 32px; 16px on phone | The outer page margin below 1200px |
 | `--written-col` / `--opened-col` / `--delete-col` | 128px / 104px / 72px | The plate's table columns |
 | `--meter-width` | 96px; 48px on phone | The progress meter in each row |
-| `--write-head-width` / `--write-head-lamp` / `--write-head-offset` | 3px / 7px / 16px (11px on phone) | The live reply's bar, its lamp, and the bar's distance left of the text edge |
+| `--write-head-width` / `--write-head-lamp` / `--write-head-offset` | 3px / 7px / 16px (8px on phone) | The live reply's bar, its lamp, and the bar's distance left of the text edge |
 | `--well-pad` / `--send-height` | 10px / 36px (12px / 44px on phone) | The input's vertical padding, and the Send button's height |
 | `--well-control-inset` | Derived | Centres Send and the keycap on the input's first line |
 | `--keycap-size` | 20px | The `/` key hint |
+| `--reply-budget` | 440px | The room kept below a newly placed exchange at 768px and up |
 | `--meta-row-height` | 28px; 32px on phone | The dock's meta row |
 | `--user-name-offset` / `--reply-name-offset` | Derived (4px / 2px) | Lines the hanging names up with the first line of your line and of a reply |
 | `--dock-height` | Measured by JS (ResizeObserver) | The page's bottom padding, the end spacer, and the margin index's maximum height |
@@ -112,7 +113,6 @@ characters of reply text at 16px, inside the 45–90 rule.
 
 - The margin index is gone. The grid becomes `1fr | 96 | 32 | min(816px, 1fr) | 1fr`, with at
   least 32px at each outer edge.
-- **Library ↑** appears on the dock's meta row, hanging in the tag column under "You".
 - Everything else is as on desktop.
 
 ### 768–1023px
@@ -120,7 +120,8 @@ characters of reply text at 16px, inside the 45–90 rule.
 - **Speaker names move inline**, above each line (as on phone). There is no tag column, the gutter
   is 32px, the plate is the full width (at most 816px), and the dialogue is capped at `--measure`.
 - The plate keeps its columns: at 768 the title column is about 360px.
-- Suggestions move from the dock into the script, as on phone.
+- The suggestions stay in the dock's meta row, as at 1024px (they need about 660px; the row is 704px
+  wide at 768).
 
 ### Phone, below 768px (designed at 375 × 812)
 
@@ -130,9 +131,11 @@ characters of reply text at 16px, inside the 45–90 rule.
 - **Rows stack** (see The library plate).
 - **Dialogue:** the name sits inline above each line (12/16 Sans 600 `--ink-faint`, 4px below it),
   and the text runs the full width (343px, about 48 characters).
-- **Suggestions:** in the script, under the plate, one per line, each one a 44px-tall target.
+- **Suggestions:** the first one in the dock's meta row, and the full list in the script under the
+  plate, one per line, each one a 44px-tall target.
 - **Dock:** full width on `--ground-raised`. It has the well with **Send** (44×44) on its right,
-  then the meta row (**Library ↑** on the left, the reply readout on the right). Its bottom
+  then the meta row (the first suggestion or nothing on the left; the status and **Library ↑** on
+  the right). Its bottom
   padding includes `env(safe-area-inset-bottom)`. Height about 102px.
 - **Delete confirmation:** a bottom sheet over the dock, with the buttons stacked full width.
 - No hover-only affordances: every control is visible.
@@ -176,15 +179,22 @@ visually hidden h2 "Conversation"), and the dock. The margin index follows `<mai
 ### The newest message in view
 
 - **On load, if there are messages** (any URL option, or coming back from the reader): the last
-  exchange is scrolled to 32px from the top of the window (`scroll-margin-top: 32px`, an instant
-  scroll). The thinking readout, or the half-streamed reply, is right below it.
+  exchange is scrolled into place with an instant scroll. The thinking readout, or the
+  half-streamed reply, is right below it.
+- **Where "in place" is:**
+  - At 768px and up, it is as low as still leaves `--reply-budget` (440px, more than the longest
+    canned reply) above the dock: the newest exchange's group has `scroll-margin-top: max(32px,
+    var(--window-height) − var(--dock-height) − var(--reply-budget))`, and only this placement
+    scrolls the group (a margin-index jump scrolls the exchange itself, to 32px), so 350px from the top at 1440 × 900. The end of
+    the previous exchange, or the bottom of the table on a first send, stays in view above, so
+    the page never turns into an empty screen.
+  - On phone it is 32px from the top, where the window is too short to keep anything above.
 - **On load, placed again** on the next frame, after `document.fonts.ready`, and once on the first
   `document.fonts` `loadingdone`. Each time it reads whichever exchange is newest at that moment,
   because the page measures and the web fonts can change the height of everything above. All
   three are cancelled when the page unmounts.
-- **After a send:** the same thing, instantly, in the same frame the new exchange renders. The
-  script turns a page: your new line at the top, and the empty space below it, where the reply
-  will land.
+- **After a send:** the same thing, instantly, in the same frame the new exchange renders: your
+  new line, with room below it where the reply will land.
 - In both cases focus stays where it was (in the well after a send).
 
 ### A reply never pulls you down
@@ -248,7 +258,7 @@ id `library`.
 | Element | Desktop | Phone |
 | --- | --- | --- |
 | H1 `Library` (`id="library-title"`, `tabindex="-1"`) | `--text-title` 35/40 600 `--ink-strong`, 48px from the top, 8px below | 29/36 |
-| Meta: `7 manuals · 47 of 117 sections written · most recent first` | Micro mono `--ink-faint`, tabular, live. Says `1 manual` when there is one, and `No manuals` when empty; the last two parts are dropped at zero. 16px below | It wraps |
+| Meta: `7 manuals · 47 of 117 sections written · most recent first` | Micro mono `--ink-faint`, tabular, live. Says `1 manual` when there is one, and `No manuals` when empty; the last two parts are dropped at zero. 16px below | Each part is `nowrap`, so it only breaks at a `·` |
 | **Start a new manual ›** | 17/28 600 `--ink-strong`, a 2px `--cue` underline at 0.18em (the reader's "Begin at" link), `--cue` text on hover | 16/24 |
 
 ### Rows (768px and up): a ruled table
@@ -280,7 +290,7 @@ id `library`.
   - **Hover** (`.row:has(.row-link:hover)`): the row takes `--ground-tint` with `--radius-m`, and
     the title turns `--cue`, over `--dur-quick`.
   - **Focus:** the focus ring is drawn on the row (`:has(.row-link:focus-visible)`) with
-    `--radius-m`.
+    `--radius-m`, inset by the focus offset, so it never crosses the table's rules.
   - Hovering Delete doesn't tint the row: only the button turns `--ink-strong` on `--ground-tint`.
 - **At 7 manuals:** one screen-height of table at 1440, scanned top to bottom by recency, with
   progress and age in aligned columns.
@@ -304,6 +314,7 @@ id `library`.
 - **Start a new manual ›** puts the starter prompt `Let’s start a new manual about ` into the well when
   the well is empty. If you have already typed something, it keeps your draft and only focuses
   the well.
+- On phone the link's target is at least 44px tall (negative block margins keep the layout).
 - It focuses the well with the caret at the end, so you type the topic and press Enter. The dock
   is always on screen, so nothing needs to scroll.
 - The prompt reaches the canned *create* reply (the keyword "new"). Creating a manual is out of
@@ -343,28 +354,31 @@ The plate stays, because it is still the script's opening entry. In it:
 | “Which manuals haven’t I finished?” | Sends at once | *list* |
 | “Let’s start a new manual about…” | Fills the starter prompt and focuses the well (the ellipsis means "finish this yourself") | *create* |
 
-- **At 1024px and up**, they sit in the dock's meta row, after a `Try` label (12/16 Sans 600
+- **At 768px and up**, they sit in the dock's meta row, after a `Try` label (12/16 Sans 600
   `--ink-faint`). They show only while the conversation is empty **and** the well is empty, which
   keeps them next to where you type. When the well has text, the row shows the key hints instead.
-- **Below 1024px**, they sit in the script, under the plate's rule:
+- **On phone**, the dock's meta row shows `Try` and the first suggestion as a 44px target, and
+  the full list sits in the script, under the plate's rule:
   - a `Try asking` label (12/16 Sans 600 `--ink-muted`), 8px below;
   - one suggestion per line, each at least 44px tall.
 - They disappear when the first message is sent, and they don't return.
 
 ## The dock (the agent's input)
 
-It is the most prominent control: the only full-width surface, raised, on screen at every scroll
-position and every width, and the largest control on the page.
+It is the most prominent control: the only full-width surface, raised and edged with a 1px
+`--rule-strong` top line, on screen at every scroll position and every width, and the largest
+control on the page. Its boundary is the strongest line on the page.
 
 **Structure** (≥1024px): padding 12px at the top and bottom. Two rows:
 
 1. **The "You" tag** in the tag column, aligned to the input's first baseline. Next to it, **the
    well** spans `--plate-width`:
-   - `--ground` (an inset in the raised band), a 1px `--rule-strong` border with `--radius-s`, and
-     hover border `--ink-faint`;
+   - `--ground` (an inset in the raised band), a 1px `--ink-faint` border with `--radius-s`
+     (5.3:1 against the band, past the 3:1 a control's boundary needs), and hover border
+     `--ink-muted`;
    - inside it, a `<textarea data-shot="agent-input" aria-label="Message the librarian">`:
      - 17/28 `--ink-strong`, padding 10px 16px;
-     - the placeholder `Ask the librarian…` in `--ink-faint`;
+     - the placeholder `Ask the librarian…` in `--ink-muted`;
      - one row, growing with the text up to 6 lines (168px), then scrolling inside itself;
    - at the well's right end, bottom-aligned to the last line:
      - the **`/` keycap**: 20×20, a 1px `--rule-strong` border, `--radius-s`, micro mono
@@ -373,17 +387,24 @@ position and every width, and the largest control on the page.
      - **Send**: 36px tall, padding 0 16px, 14/20 600 wdth 85.
 2. **The meta row**, 8px below. It has a **fixed height of 28px**: its contents change, its height
    doesn't, so the page never shifts. It holds:
-   - **Library ↑** (below 1200px);
-   - the suggestions (empty conversation, empty well) **or** the key hints
+   - on the left, the suggestions (empty conversation, empty well, and no delete notice; they
+     never wrap) **or** the key hints (never wrapping)
      `Enter to send · Shift+Enter for a new line` (micro mono `--ink-faint`; hover-capable
      devices at 768px and up);
-   - on the right, the reply readout while replying.
+   - on the right, **the status slot** (micro mono, truncated with an ellipsis):
+     - while replying: writing ring + `Replying…` in `--cue`;
+     - after a direct delete: `Deleted Negotiating With Geese` in `--ink-muted`. It replaces the
+       suggestions rather than sharing the row with them, and it is the part that truncates. It shows while
+       the latest stage direction comes after the newest exchange, so it lasts until the next
+       send (or is replaced by the next delete). This is the delete's record where your eye is,
+       even when the stage direction is off screen;
+   - **Library ↑** (see below).
 
 **Send states:**
 
 | State | Look |
 | --- | --- |
-| The well is empty | Disabled, `--ink-faint` on no fill |
+| The well is empty | Disabled: `--ink-faint` on its `--ground-tint` block, so the well always reads as input plus action |
 | A draft, idle | `--ink-strong` on `--ground-tint`, `--cue` text on hover |
 | Replying | Disabled, as when empty. The well stays editable, so you can draft the next line. Enter does nothing, and **the draft is kept**, never cleared (`send` ignores it) |
 
@@ -396,29 +417,39 @@ whole input, Send included.
 - Padding 8px 16px, plus the safe area at the bottom.
 - The well is the full width, with text 16/24 and padding 12px. Send is 44×44.
 - There is no tag, no keycap and no hints.
-- The meta row is 32px: **Library ↑** on the left, the readout on the right.
+- The meta row is 32px: the first suggestion on the left; the status and **Library ↑** on the
+  right.
 
-**Library ↑:** a `text-button`. It scrolls the window to the top (instantly) and focuses the H1.
-While the library's head is in view it is hidden with `visibility: hidden` (an
-IntersectionObserver), keeping its space, so the meta row never shifts.
+**Library ↑:** a `text-button` at every width. It scrolls the window to the top (instantly) and
+focuses the H1. While the library's head is in view (an IntersectionObserver) it is hidden:
+- at 1024px and up it hangs in the tag column under "You", so it is hidden with `visibility` and
+  takes no row space;
+- below 1024px it is the last item at the right end of the meta row, at least 44px tall (negative
+  block margins keep the row's height). It is hidden with `display: none` there, so it never
+  crowds the suggestions; since it sits at the right end, nothing to its left moves when it
+  appears.
 
 ## The margin index (1200px and up)
 
-A static jump list, set like the reader's "On this page", for the conversation. It doesn't track
-a current entry and never scrolls itself: it is for jumping, and the script is short enough that
-"where am I" is always obvious.
+A static jump list, set like the reader's "On this page", for the conversation. It never scrolls
+itself: it is for jumping, and the script is short enough that "where am I" is always obvious.
+The only "you are here" it shows is on the Library row.
 
 - **Label:** `In this conversation`, 12/16 Sans 600 `--ink-muted`.
 - **Rows:** 14/20 wdth 85 `--ink-muted`, over a 1px `--rule` track:
-  - **`Library`**, always first, with the manual count at the right (tabular, `--ink-faint`). It
-    jumps to the plate and focuses the H1;
+  - **`Library ↑`**, always first, with the manual count at the right (tabular, `--ink-faint`). It
+    jumps to the plate and focuses the H1. It is set apart from the questions by 8px, a 1px
+    `--rule` line and 8px. While the library's head is in view it is current
+    (`aria-current="location"`): `--ink-strong`, with the reader's 2px `--ink-strong` bar on the
+    track;
   - **one row per exchange:** your words, clamped to 2 lines with an ellipsis. While that
     exchange's reply is live, the row shows a writing `StatusRing` at its right. It jumps to the
-    exchange and focuses it (`tabindex="-1"`, `scroll-margin-top: 32px`).
+    exchange and focuses it (`tabindex="-1"`, `scroll-margin-top: 32px`; the newest one uses the
+    placement above).
 - **Hover:** the row's text turns `--ink-strong` over `--dur-quick`.
 - **New rows** fade in over `--dur-base` and only ever append.
-- **With no exchanges:** the Library row, then the hint `Your questions are listed here as you ask
-  them.` (14/20 `--ink-faint`).
+- **With no exchanges:** the Library row, then the hint `Your questions appear here.` (14/20
+  `--ink-faint`).
 - **Stage directions** are not listed: the index is for finding things you said.
 
 ## The delete confirmation (direct)
@@ -440,7 +471,9 @@ a current entry and never scrolls itself: it is for jumping, and the script is s
   - Phone: the same band, full width, with the buttons stacked.
 - **The row stays lit:**
   - the row being deleted gets `data-confirming`: `--ground-tint`, the reader's 2px `--ink-strong`
-    "you are here" bar at its left edge, and a z-index above the scrim, so it shows undimmed;
+    "you are here" bar at its left edge, and a z-index above the scrim, so it shows undimmed. On
+    phone the tint bleeds 12px past the gutter (negative inline margin, matching padding), so no
+    text moves;
   - if the row would sit under the band, it is first scrolled (instantly) to 24px above the band's
     top.
 - **Content** (padding 24px at the top and 32px at the bottom):
@@ -470,6 +503,7 @@ a current entry and never scrolls itself: it is for jumping, and the script is s
     its place;
   - then `deleteManual(id)` runs;
   - the head's counts update;
+  - the dock's status slot reads `Deleted Negotiating With Geese` until the next send;
   - a stage direction is written into the script, and the live region says "Deleted Negotiating
     With Geese".
 - The reply to "delete …" (the canned *delete* intent) points you at this control, so the two
@@ -520,9 +554,9 @@ screenshots show a lit lamp.
 
 | # | Scenario | Desktop (1440 × 900) | Phone (375 × 812) |
 | --- | --- | --- | --- |
-| 1 | First visit | The head; the seven-row table; the dock with "You", the empty well, the `/` keycap, and `Try` + three suggestions; the margin index with `Library 7` and its hint | The head and the first rows; the dock (well, Send, Library ↑) |
+| 1 | First visit | The head; the seven-row table; the dock with "You", the empty well, the `/` keycap, and `Try` + three suggestions; the margin index with `Library ↑ 7` current and its hint | The head and the first rows; the dock (well, Send, `Try “What can you help with?”`) |
 | 2 | Typing | The well focused (ring around the well), the text `Delete the manual about birthday parties`, Send active, the key hints instead of the suggestions | The well focused, Send active |
-| 3 | Thinking | The exchange at the top: your line; "Librarian" in cue with the ring + `Thinking…` and the write head; `Replying…` in the dock; the margin row live | The same, with inline names |
+| 3 | Thinking | The exchange placed low enough that the end of the table shows above it: your line; "Librarian" in cue with the ring + `Thinking…` and the write head; `Replying…` in the dock; the margin row live | The same, with inline names |
 | 4 | Mid-stream | Half of the *create* reply (a numbered list cut mid-way), the bar running down it with the lamp at the last line | The same |
 | 5 | Several turns (full page) | The plate, the rule, three exchanges in script form, the end spacer, the dock | The same, stacked |
 | 6 | Delete confirmation | The scrim; the first row lit with its bar; the band with `Delete “The Haunt That Listens”?`, the text, Delete manual and Keep it | The bottom sheet with stacked buttons |
@@ -550,7 +584,7 @@ screenshots show a lit lamp.
 | Replies are canned and do nothing | What is agent text and what is interface: replies produce only text |
 | The conversation stays on the page | `useAgent()`'s store, plus the module-level stage directions |
 | A new reply never pulls you down | The page never scrolls during a reply, at all |
-| Newest message in view on load and after a send | The last exchange is placed at the top, with the end spacer |
+| Newest message in view on load and after a send | The last exchange is placed with a reply budget below it (32px from the top on phone), with the end spacer |
 | Title, subtitle, progress and last opened | The row cells |
 | Delete removes it in memory; reload restores it | `deleteManual`; nothing persisted |
 | Empty state | The empty library |

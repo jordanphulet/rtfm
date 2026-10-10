@@ -17,6 +17,8 @@
 
 .library-c .suggestions[data-placement="dock"] {
   display: flex;
+  flex: none;
+  white-space: nowrap;
   align-items: center;
   gap: var(--space-3);
   color: var(--ink-faint);
@@ -31,9 +33,14 @@
   display: none;
 }
 
-@media (max-width: 1023px) {
-  .library-c .suggestions[data-placement="dock"] {
+@media (max-width: 767px) {
+  .library-c .suggestions[data-placement="dock"] .suggestions-list > li + li {
     display: none;
+  }
+
+  .library-c .suggestions[data-placement="dock"] .suggestion {
+    min-height: var(--tap);
+    margin-block: calc((var(--meta-row-height) - var(--tap)) / 2);
   }
 
   .library-c .suggestions[data-placement="script"] {
