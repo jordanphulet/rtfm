@@ -44,7 +44,7 @@ One family plus mono. Body italics are Plex’s true italic. No `font-optical-si
 opsz axis). Measured with Playwright on the sample text: Plex Sans 17px ≈ 7.58 px/char, 16px ≈
 7.13 px/char.
 
-## Tokens (one file: `src/designs/a/tokens.css`, custom properties on `.design-a`)
+## Tokens (one file: `src/designs/a/tokens.css`, custom properties on `html:has(.design-a)`)
 
 ### Type scale — minor third (×1.2) on a 17px base; line-heights on the 4px grid
 
@@ -100,15 +100,17 @@ No second accent. No amber (C), no red (B), no blue or purple (banned). Hairline
 - Durations: `--dur-quick` 150ms (hover colour), `--dur-base` 200ms (preview, contents sheet,
   outline entry), `--dur-settle` 250ms (write-head retract, rule colour, ring fill, progress fill),
   `--dur-breathe` 1600ms (writing-ring pulse), `--dur-target` 1600ms (footnote target fade),
-  `--delay-preview` 300ms (text), `--delay-preview-toc` 500ms (index, so scanning doesn’t flicker).
+  `--delay-preview` 300ms.
 - Easing: `--ease-out` `cubic-bezier(0.2, 0.8, 0.2, 1)` for things arriving;
   `--ease-in-out` `cubic-bezier(0.4, 0, 0.2, 1)` for state changes; **linear** for the progress
   fill (it tracks a measurement — easing would make it lurch).
 - Sizes: `--toc-width` 272px · `--outline-width` 240px · `--measure` **576px** (≈76 characters of
   17px Plex) · `--start-width` 720px · `--header-height` 48px · `--gutter-phone` 16px ·
-  `--gutter-tablet` 32px · `--ring` 8px.
+  `--gutter-tablet` 32px · `--ring` 10px (1.5px border, so the writing dot and the solid fill
+  centre cleanly).
 
-All CSS is scoped under `.design-a` (designs are lazy-loaded, but CSS imports are global).
+All CSS is scoped under `.design-a` (designs are lazy-loaded, but CSS imports are global); the
+tokens sit on `html:has(.design-a)` so the page background can use them too.
 `html:has(.design-a)` sets `background: var(--ground)`, `color-scheme: dark`, and
 `scrollbar-gutter: stable` (so the page growing past the viewport never shifts text sideways).
 Thin scrollbars: `scrollbar-color: var(--rule-strong) transparent`.
@@ -166,7 +168,8 @@ Top to bottom, desktop (phone values in brackets):
    prev/next live in the header.]
 2. **Title** H1 29/36 ink-strong, `text-wrap: balance`. The label `2.4` **hangs** in the left gutter:
    same size, weight 400, ink-faint, tabular, right-aligned 16px left of the text edge, so the title
-   aligns with the body. [Inline above as `2.4` in the eyebrow.] 12px below.
+   aligns with the body. Below a 760px center (`@container main`) it sits inline before the title,
+   still ink-faint. 12px below.
 3. **Summary** 20/28 [17/28] ink-muted, `text-wrap: pretty`. 16px below.
 4. **Status line** — one line, fixed 16px height, micro mono, nowrap (text changes, layout doesn’t):
    (Rings are the CSS `StatusRing`; `● ◐ ○` in this spec are notation only.)
@@ -205,9 +208,6 @@ the page) to bring it into view.
   the right edge. 14/20 wdth 85; label ink-faint tabular.
 - Hover: `--ground-tint`, title → ink-strong, `--dur-quick`. Focus: 2px cue outline,
   offset −2px (inside the scroll container so it isn’t clipped).
-- Hover preview (≥1024px, fine pointer): after 500ms a preview opens to the right of the row —
-  label · chapter, title, summary, status (“Not yet written — opening it starts the writing.”). Lets
-  a reader peek at an unwritten section without triggering it.
 - **Appendices** sit after the chapters: 24px gap, 1px `--rule-strong`, 16px, group heading
   `Appendices` (12/16 Sans 600 ink-muted, sentence case), then `A  Parts and Sensor Reference` rows
   with lettered labels.
@@ -251,11 +251,9 @@ the page) to bring it into view.
   - Every `pretty` in this spec is scoped to `[data-wrap="pretty"]` (paragraphs, list items,
     blockquotes, table cells, footnotes). Static text outside the prose — summary, subtitle,
     previews, TOC — never changes while visible and keeps `pretty`/`balance` as specified.
-  - Headings keep `text-wrap: balance` in both modes, **on the assumption** that the shared repair
-    never renders a partial heading (it holds back unfinished lines). Build check: open an
-    unwritten section with headings (3.2) at several `?freeze=` fractions that land mid-heading,
-    and watch one live stream; confirm no heading ever appears partially. If
-    one does, headings inside `[data-wrap="plain"]` drop to ordinary wrapping too.
+  - Prose headings (H2–H4) use `balance` only under `[data-wrap="pretty"]`. A chunk can end
+    mid-heading (`## The Half`), so under `[data-wrap="plain"]` they wrap normally too. The H1 and
+    the manual title are static and always balanced.
 
 ## Signature moment — the write head (CSS only)
 
@@ -265,7 +263,7 @@ edge, how far has it got, is it done?*
 
 1. **Gutter bar.** While `data-status="writing"`, the block currently being written — selected as
    `.prose > :nth-last-child(1 of :not(section.footnotes))`, so the footnotes block appended early
-   by the renderer never steals it — carries a `::before`: 2px wide, cue, 28px left of the
+   by the renderer never steals it — carries an `::after`: 2px wide, cue, 28px left of the
    text edge (8px clear of a code block’s bleed; 12px on phone), inset 4px top and bottom, so it grows with the paragraph, list or
    table as it fills. Each new block’s bar draws in with `scaleY(0→1)`, origin top,
    `--dur-quick`. Solid fill: no glow, no shadow. In the waiting state it sits beside the tail line.
@@ -273,7 +271,7 @@ edge, how far has it got, is it done?*
    `transform: scaleX(var(--progress))`, origin left, `transition: transform var(--dur-settle)
    linear`. `--progress` is the only value JS provides (`style={{ "--progress": progress }}`).
 3. **The settle** (writing → written), all at once: the gutter bar retracts (`scaleY(1→0)`, origin
-   bottom, `--dur-settle` `--ease-in-out`; the `::before` exists on the last block in every state
+   bottom, `--dur-settle` `--ease-in-out`; the `::after` exists on the last block in every state
    and only its transform changes, so the transition can run); the meter’s colour fades from
    cue to `--rule-strong`; the status line swaps to `● Written · n words`; the TOC ring’s
    centre dot scales up to fill the ring while turning ink-muted. Green leaves the page; the
@@ -295,12 +293,19 @@ resets infinite animations to their first keyframe, so the breathe keyframes sta
 
 - **Paragraphs:** 17/28 [16/24] ink, 0 0 16px, `text-wrap: pretty` only under
   `[data-wrap="pretty"]` (see the wrapping rule in Streaming), ragged right, no auto hyphens.
-- **H2:** 24/32 600 ink-strong, 48px above / 12px below, `text-wrap: balance`. **H3:** 20/28 600,
+- **H2:** 24/32 600 ink-strong, 48px above / 12px below, `text-wrap: balance` under
+  `[data-wrap="pretty"]` (ordinary wrapping while streaming). **H3:** 20/28 600,
   32 / 8. **H4:** 17/28 600 ink-strong, 24 / 4 (a run-in-weight label, body size). Heading directly
-  after heading: 16px above. Ids are slugs (deduplicated) via `components.h2–h4`; `scroll-margin-top`
-  24px (64px under the phone header). On hover a `#` anchor (micro mono, ink-faint → cue)
-  hangs in the left gutter ending 12px before the text edge, clear of the write head (desktop
-  only).
+  after heading: 16px above. Ids are slugs via `components.h2–h4`; `scroll-margin-top` 24px
+  (64px under the phone header).
+- **Clause numbers.** Every prose H2 carries a clause number — `2.4.1`, `2.4.2`, `A.1.3` — set
+  like the section label: same size, weight 400, ink-faint, tabular, hanging 16px left of the
+  text edge (inline before the heading below a 760px center). A CSS counter on `.prose-root > h2`
+  plus the section label as a custom property (`--section-label: "2.4"`) build it, so it never
+  appears in the text or find-in-page. The number is the heading’s anchor link (hover → cue). The
+  outline shows the same numbers. The renderer’s footnotes label `h2` is left unnumbered. This is
+  the numbered-clause habit of real engineering manuals, and it is what keeps the written page from
+  reading as a generic docs template.
 - **Bold:** 600 ink-strong. **Italic:** Plex true italic, same colour.
 - **Bulleted lists:** 28px indent; marker is an en dash `–` in ink-faint, drawn with `li::before`
   in the indent; nested lists 24px further, marker `·` ink-faint; 4px between items, nested list
@@ -319,10 +324,12 @@ resets infinite animations to their first keyframe, so the breathe keyframes sta
   measure. 14/20 wdth 85, all cells tabular figures; header 12/16 Sans 600 ink-muted with a 1px
   `--rule-strong` line under it; rows separated by 1px `--rule`; no vertical lines, no zebra; cell
   padding 8/12 (first column flush left). First column 500 ink-strong — it names the row. GFM
-  `---:` columns align right. A total row (`tr:has(td:first-child > strong)`) gets a 1px
-  `--ink-faint` sum line above it. **Phone:** first column `position: sticky; left: 0` on
+  `---:` columns align right. A total row (first cell bold) gets a 1px `--ink-faint` sum
+  line above it (set as the bottom border of the row before, since collapsed borders favour the
+  upper cell). **Phone:** first column `position: sticky; left: 0` on
   `--ground` with a 1px `--rule` right edge, so the row stays named while the 5-column servo table
-  scrolls; the cut-off column at the right edge shows that it scrolls.
+  scrolls; cells keep at least 8rem and wrap inside it, and the cut-off column at the right edge
+  shows that the table scrolls. Right-aligned (numeric) cells never wrap (`150 ms` stays whole).
 - **Code blocks:** `--ground-raised`, radius 2, extended 20px into each gutter so code aligns with
   the body text (phone: full bleed to the screen edges, radius 0, padding 16). A 28px strip at the top: language tag left
   (`ts`, `text`; micro mono ink-faint), **Copy** right (micro mono ink-faint → ink-strong;
@@ -335,22 +342,26 @@ resets infinite animations to their first keyframe, so the breathe keyframes sta
   offset (no line-gap bump), hover underline, focus ring.
 - **Footnotes:** 48px above, a 1px `--rule-strong` top line, padding-top 16. The renderer’s hidden
   `h2` is shown as a label, 12/16 Sans 600 ink-muted. Notes 14/20 ink-muted, markers ink-faint
-  tabular, 8px apart. Back-links render as `↑` (via `components.a` on `data-footnote-backref`,
-  keeping the `aria-label`; Plex has U+2191 while `↩` would fall back), ink-faint → cue.
+  tabular, 8px apart. Back-links render as `↑` instead of the renderer’s `↩` (via `components.a`
+  on `data-footnote-backref`, keeping the `aria-label`; the loaded subset has U+2191 but not `↩`,
+  `→` or `↗`), ink-faint → cue.
   `li:target` and a targeted reference flash `--cue-tint` fading over 1.6s.
 - **External links:** ink text, 1px cue-deep underline at 0.18em offset; hover → cue
   text and underline (`--dur-quick`). A trailing CSS corner mark (5px, top and right 1.5px borders)
   says “leaves the manual”; opens in a new tab with visually hidden “(opens in a new tab)”.
 - **Cross-references** (`SectionLink`, module level): to a written section, the external-link
   underline without the corner mark; to an unwritten or writing one, see the states table. On
-  hover (300ms) or keyboard focus (immediate) a **preview** opens below the link: micro mono
+  hover (300ms) or keyboard focus (immediate) a **preview** opens below the link (≥1024px, hover
+  devices only): micro mono
   `4.2 · Chapter 4`, title 14/20 600 ink-strong, summary 14/20 ink-muted, status line with ring.
   320px wide, `--ground-raised`, 1px `--rule-strong` border, radius 4, padding 12/16, no shadow,
   opacity in over `--dur-base`. Positioned with **CSS anchor positioning**
   (`position-area`, `position-try-fallbacks: flip-block, flip-inline`) so it never causes
   horizontal scroll; hidden entirely under `@supports not (anchor-name: --x)`. It is a
-  `role="tooltip"` sibling of the link, referenced by `aria-describedby`, so it never joins the
-  link text or find-in-page.
+  `<span role="tooltip">` (styled `display: block`; a `div` inside the `<p>` would be invalid
+  nesting) beside the link, referenced by `aria-describedby`, so it never joins the link text or
+  find-in-page. Each link gets its own `anchor-name`/`position-anchor`, built from `useId()` with
+  the colons stripped (`:r1:` is not a valid dashed ident).
 
 ## Starting page (`/a`)
 
@@ -387,7 +398,8 @@ deserve the same craft.
   `--rule-strong` top line, padding-top 12. Line 1 micro mono ink-faint: `‹ Previous · 2.3` /
   `Next · Chapter 3 · 3.1 ›` (chapter or appendix named whenever the link crosses a boundary).
   Line 2: title 17/28 500 ink-strong + status ring. Next is right-aligned. Hover: title and top line
-  → cue. Ends of the manual are never empty: before 1.1 the cell reads `Contents`, after B.2
+  → cue. Ends of the manual are never empty: before 1.1 the cell reads `Start of the manual · Back to
+  contents`, after B.2
   `End of the manual · Back to contents`. Phone: stacked, full width, 44px+ targets.
 - Also the eyebrow’s `‹ 2.3  3.1 ›` (desktop), the header buttons (compact), and **← / →** keys
   (when focus isn’t in a text field or a horizontally scrollable code block or table).
@@ -398,7 +410,8 @@ deserve the same craft.
 - DOM order: TOC nav → main (eyebrow links, body links, Copy, Follow, pager) → outline aside.
 - Focus ring everywhere: `outline: 2px solid var(--cue); outline-offset: 2px`, radius 2
   (offset −2px inside scroll containers). `:focus-visible` only.
-- Route change: scroll to top, focus the H1 (`tabindex=-1`, `preventScroll`).
+- Route change: scroll to top; after link navigation (a router PUSH, not a fresh load) focus the
+  H1 (`tabindex=-1`, `preventScroll`), so a fresh load still starts at the skip link.
 - Contents sheet: focus moves to the current row on open, Tab is contained in header + sheet, Esc
   or a choice closes it, focus returns to the location button. Esc also closes any preview.
 - Code blocks and table wrappers are focusable scroll regions with labels.
@@ -410,10 +423,11 @@ deserve the same craft.
   `Not yet written — opening it starts the writing.`). The content is already typographic.
 - Tabular figures: TOC/outline/pager labels, status percentages and word counts (with thousands
   separators), table cells, ordered-list markers, footnote numbers.
-- `text-wrap: balance` on H1–H4 and the manual title. `text-wrap: pretty` on summaries and other
-  static text always, and on paragraphs, list items, blockquotes, table cells and footnotes only in
-  sections that loaded already written (`[data-wrap="pretty"]`); anything that streamed this load
-  wraps normally, during and after streaming.
+- `text-wrap: balance` on the H1 and the manual title always, and on prose H2–H4 only under
+  `[data-wrap="pretty"]`. `text-wrap: pretty` on summaries and other static text always, and on
+  paragraphs, list items, blockquotes, table cells and footnotes only in sections that loaded
+  already written (`[data-wrap="pretty"]`); anything that streamed this load wraps normally,
+  during and after streaming.
 - `::selection` in `--selection` with ink-strong text.
 
 ## Avoiding the generic
@@ -432,14 +446,28 @@ deserve the same craft.
 | Decorative icons | Each glyph above carries state or direction. No icons beside TOC entries. |
 | The usual LLM look | No uppercase tracked eyebrows (labels are sentence case), no 8–16px rounding on everything, no card grids, no gradient progress bar, no “AI sparkle”. Density comes from a type system (wdth 85, tabular columns, hanging numbers), not from shrinking everything. |
 
-## Build notes (for the next step)
+## Build structure
 
-- Files: `tokens.css`, `shell.css`, `prose.css`, and small components — `Shell`, `Toc`,
-  `ContentsSheet`, `LocationHeader`, `StartPage`, `SectionPage`, `ArticleHead`, `Outline`,
-  `StatusRing`, `SectionPreview`, `SectionLink`, `CodeBlock`, `Pager`, `TailLine`.
+- One component per file, each importing its own stylesheet; `tokens.css` is the only place any
+  colour, size, spacing, radius or timing is defined.
+  - `index.tsx` (route → `StartPage` or `SectionPage`) · `Shell` (layout,
+    TOC column, outline column) · `CompactBar` (phone header + contents sheet) · `Toc` ·
+    `StatusRing` (+ legend) · `ArticleHead` · `Prose` (renderer components) · `CodeBlock` ·
+    `SectionLink` (+ preview) · `TailLine` (+ Follow) · `Pager` · `Outline` · `StartPage`.
+  - Helpers: `markdownScan.ts` (headings with unique ids, source lines and clause numbers; linked
+    sections; word count), `manualParts.ts` (chapter names and paths), `streamedThisLoad.ts`,
+    `useActiveHeading.ts`, `usePrevNextKeys.ts` (ignores key auto-repeat).
+- The Shell stays mounted while moving between sections (only the article is keyed by section
+  id), so the TOC keeps its scroll position; it scrolls the current row into view only when the
+  row is out of comfortable view.
+- Heading ids come from one scan of the text: `Prose` looks each heading’s id up by its source
+  line, so the outline and the page always agree and duplicates get `-2`, `-3`.
+- The contents sheet locks page scroll with CSS only
+  (`html:has(.design-a .sheet[data-open])`, below 1024px), so widening the window releases it.
 - `useSection` only on the section page; the TOC, outline, previews and pager read
   `useManual()` + `findSection()` so they never open a section.
-- `SectionLink` and `components` defined at module level (focus and hover survive chunks).
-- The toggle is `display: none` at ≥1024px; the shot script only clicks a visible toggle.
-- Verify in the first screenshot pass: 76 ± 4 characters per line at 1440, ≥45 at 375, the label
-  hangs only when the center is ≥760px (viewport ≥1272) and sits inline below that, and the streaming shot shows bar + meter + tail together.
+- `SectionLink` and `components` are defined at module level (focus and hover survive chunks).
+- The preview is `display: none` until shown (fading in with `allow-discrete` and
+  `@starting-style`): Chrome remembers the last successful `position-try` fallback while a box
+  exists, so a preview first laid out below the fold would otherwise stay flipped above its link.
+- The toggle is hidden at ≥1024px; the shot script only clicks a visible toggle.

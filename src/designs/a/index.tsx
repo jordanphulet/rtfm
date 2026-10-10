@@ -1,3 +1,8 @@
+import { useParams } from "react-router";
+import { SectionPage } from "./SectionPage";
+import { StartPage } from "./StartPage";
+
 export default function DesignA() {
-  return <p>Design A</p>;
+  const { sectionId } = useParams();
+  return sectionId ? <SectionPage id={sectionId} /> : <StartPage />;
 }

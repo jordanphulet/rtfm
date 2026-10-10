@@ -1,0 +1,125 @@
+html:has(.design-a) {
+  background: var(--ground);
+  color-scheme: dark;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+body:has(.design-a) {
+  margin: 0;
+}
+
+.design-a {
+  min-height: 100dvh;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+.design-a *,
+.design-a *::before,
+.design-a *::after {
+  box-sizing: border-box;
+}
+
+.design-a ::selection {
+  background: var(--selection);
+  color: var(--ink-strong);
+}
+
+.design-a :focus-visible {
+  outline: 2px solid var(--cue);
+  outline-offset: 2px;
+  border-radius: var(--radius-s);
+}
+
+.design-a .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.design-a .skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 30;
+  padding: var(--space-2) var(--space-3);
+  background: var(--ground-raised);
+  font: 500 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink-strong);
+  transform: translateY(-200%);
+}
+
+.design-a .skip-link:focus-visible {
+  transform: none;
+}
+
+.design-a .layout {
+  display: grid;
+  grid-template-columns: var(--toc-width) minmax(0, 1fr) var(--outline-width);
+  align-items: start;
+}
+
+.design-a .toc-side {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--ground-side);
+}
+
+.design-a .main {
+  container: main / inline-size;
+  min-width: 0;
+  padding: var(--space-16) var(--gutter) var(--space-24);
+}
+
+.design-a .main:focus {
+  outline: none;
+}
+
+.design-a .column {
+  max-width: var(--measure);
+  margin-inline: auto;
+}
+
+.design-a .outline-side {
+  position: sticky;
+  top: 0;
+  max-height: 100dvh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: calc(var(--space-16) + var(--space-1)) var(--space-6) var(--space-8) 0;
+}
+
+@media (max-width: 1199px) {
+  .design-a .layout {
+    grid-template-columns: var(--toc-width) minmax(0, 1fr);
+  }
+
+  .design-a .outline-side {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .design-a .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .design-a .toc-side {
+    display: none;
+  }
+
+  .design-a .main {
+    padding-top: var(--space-6);
+  }
+}

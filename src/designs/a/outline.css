@@ -1,0 +1,108 @@
+.design-a .outline-label {
+  margin: 0 0 var(--space-3);
+  font: 600 var(--text-micro) / var(--leading-micro) var(--font-sans);
+  color: var(--ink-muted);
+}
+
+.design-a .outline-label-refs {
+  margin-top: var(--space-8);
+}
+
+.design-a .outline-list,
+.design-a .outline-refs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+}
+
+.design-a .outline-list {
+  border-left: 1px solid var(--rule);
+}
+
+.design-a .outline-list li {
+  position: relative;
+}
+
+.design-a .outline-list[data-writing] li {
+  animation: outline-row-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes outline-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--space-1)));
+  }
+}
+
+.design-a .outline-list a {
+  display: flex;
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  color: var(--ink-muted);
+  text-decoration: none;
+  text-wrap: pretty;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+
+.design-a .outline-list [data-level="3"] a {
+  padding-left: var(--space-6);
+}
+
+.design-a .outline-list a:hover {
+  color: var(--ink-strong);
+}
+
+.design-a .outline-list a[aria-current] {
+  color: var(--ink-strong);
+}
+
+.design-a .outline-list a[aria-current]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -1px;
+  width: var(--bar-width);
+  background: var(--ink-strong);
+}
+
+.design-a .outline-hint {
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  color: var(--ink-faint);
+}
+
+.design-a .outline-refs a {
+  display: grid;
+  grid-template-columns: var(--label-col) 1fr var(--space-4);
+  align-items: start;
+  padding: var(--space-1) 0;
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+
+.design-a .outline-refs a:hover {
+  color: var(--ink-strong);
+}
+
+.design-a .outline-refs .ring {
+  justify-self: end;
+  margin-top: calc((var(--leading-ui) - var(--ring)) / 2);
+}
+
+.design-a .outline-ref-label {
+  color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .design-a .outline-list[data-writing] li {
+    animation: none;
+  }
+}
+
+.design-a .outline-number {
+  flex: none;
+  margin-right: var(--space-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
