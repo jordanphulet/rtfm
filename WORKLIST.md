@@ -229,7 +229,7 @@ Screenshot caveats to include in every design agent's brief:
   cut off at the viewport, so let the page itself scroll.
 
 ### P1.A.spec · P1.B.spec · P1.C.spec — Design spec
-- **Status:** A: done · B: done · C: doing (agent: a395da211fdfd8ec3, revising)
+- **Status:** A: done · B: done · C: done
 - **Depends on:** P0.6
 - **Files:** `src/designs/<x>/SPEC.md`
 - **Do:** write the SPEC described in `DESIGN_RULES.md` › Craft requirements. Name the specific
@@ -241,7 +241,7 @@ Screenshot caveats to include in every design agent's brief:
   reading).
 
 ### P1.A.build · P1.B.build · P1.C.build — Build the design
-- **Status:** A: doing (agent: a0d3ba98559399c81) · B: doing (agent: a32e1599794f15149) · C: todo
+- **Status:** A: doing (agent: a0d3ba98559399c81) · B: doing (agent: a32e1599794f15149) · C: doing (agent: a395da211fdfd8ec3)
 - **Depends on:** the matching P1.x.spec
 - **Files:** `src/designs/<x>/**`
 - **Do:**
