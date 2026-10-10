@@ -1,0 +1,21 @@
+.library-a .panel {
+  position: sticky;
+  top: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100dvh;
+  background: var(--ground-side);
+}
+
+.library-a .panel-title {
+  margin: 0;
+  padding: var(--space-5) var(--panel-pad) var(--space-3) var(--panel-gutter);
+  border-bottom: 1px solid transparent;
+  font: 600 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink-strong);
+  transition: border-color var(--dur-settle) var(--ease-in-out);
+}
+
+.library-a .panel-title[data-edge] {
+  border-color: var(--rule);
+}

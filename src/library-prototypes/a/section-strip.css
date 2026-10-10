@@ -1,0 +1,14 @@
+.library-a .section-strip {
+  display: flex;
+  gap: calc(var(--tick-pitch) - var(--tick));
+  height: var(--tick-height);
+}
+
+.library-a .tick {
+  width: var(--tick);
+  background: var(--rule-strong);
+}
+
+.library-a .tick[data-written] {
+  background: var(--ink-muted);
+}
