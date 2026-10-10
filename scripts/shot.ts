@@ -76,6 +76,11 @@ function shotsFor(sections: typeof ManualModule.SHOT_SECTIONS): Shot[] {
     { state: "dense", path: sectionPath(sections.dense), fullPage: true },
     { state: "waiting", path: `${sectionPath(sections.unwritten)}?freeze=0` },
     { state: "streaming", path: `${sectionPath(sections.unwritten)}?freeze=0.5` },
+    {
+      state: "streaming-full",
+      path: `${sectionPath(sections.unwritten)}?freeze=0.5`,
+      fullPage: true,
+    },
     { state: "appendix", path: sectionPath(sections.appendix), fullPage: true },
   ];
 }
