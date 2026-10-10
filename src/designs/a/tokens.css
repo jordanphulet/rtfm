@@ -36,11 +36,12 @@ html:has(.design-a) {
   --ground-side: #17191b;
   --ground-raised: #1c1e20;
   --ground-tint: #24272a;
+  --ground-hover: #1e2023;
   --rule: #2b2e31;
   --rule-strong: #3c4044;
   --ink-strong: #edefef;
   --ink: #d3d7d8;
-  --ink-muted: #9ba1a4;
+  --ink-muted: #aeb4b7;
   --ink-faint: #8c9296;
   --cue: #5fc48a;
   --cue-deep: #377d57;
@@ -67,6 +68,10 @@ html:has(.design-a) {
   --gutter: var(--space-16);
   --ring: 10px;
   --bar-width: 2px;
+  --write-head-width: 3px;
+  --write-head-lamp: 7px;
+  --write-head-lamp-inset: calc((var(--write-head-lamp) - var(--write-head-width)) / 2);
+  --outline-number-col: 40px;
   --tap: 44px;
   --label-col: 36px;
   --label-col-wide: 48px;
@@ -81,6 +86,7 @@ html:has(.design-a) {
 @media (max-width: 1023px) {
   html:has(.design-a) {
     --gutter: var(--space-8);
+    --outline-number-col: 48px;
   }
 }
 

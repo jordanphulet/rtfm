@@ -46,7 +46,7 @@
 }
 
 .design-a .outline-list [data-level="3"] a {
-  padding-left: var(--space-6);
+  padding-left: calc(var(--space-3) + var(--outline-number-col) + var(--space-2));
 }
 
 .design-a .outline-list a:hover {
@@ -102,7 +102,12 @@
 
 .design-a .outline-number {
   flex: none;
+  width: var(--outline-number-col);
   margin-right: var(--space-2);
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
+}
+
+.design-a .outline-chapter-number {
+  width: var(--space-4);
 }

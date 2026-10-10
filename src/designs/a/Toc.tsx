@@ -24,6 +24,7 @@ export function Toc({ currentId, currentOutline }: TocProps) {
         <p className="toc-count">
           {writtenCount} of {sections.length} sections written
         </p>
+        <StatusLegend />
       </div>
       <ChapterList chapters={manual.chapters} currentId={currentId} currentOutline={currentOutline} />
       <div className="toc-appendices">
@@ -33,9 +34,6 @@ export function Toc({ currentId, currentOutline }: TocProps) {
           currentId={currentId}
           currentOutline={currentOutline}
         />
-      </div>
-      <div className="toc-legend">
-        <StatusLegend />
       </div>
     </nav>
   );
@@ -71,12 +69,10 @@ function TocRow({ section, isCurrent }: { section: Section; isCurrent: boolean }
       className="toc-row"
       data-status={section.status}
       aria-current={isCurrent ? "page" : undefined}
+      aria-label={`${section.label} ${section.title}, ${STATUS_WORDS[section.status].toLowerCase()}`}
     >
       <span className="toc-label">{section.label}</span>
-      <span className="toc-row-title">
-        {section.title}
-        <span className="visually-hidden">, {STATUS_WORDS[section.status].toLowerCase()}</span>
-      </span>
+      <span className="toc-row-title">{section.title}</span>
       <StatusRing status={section.status} />
     </Link>
   );

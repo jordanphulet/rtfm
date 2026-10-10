@@ -10,14 +10,18 @@
   color: var(--ink-faint);
 }
 
-.design-a .tail-line[data-waiting]::before {
+.design-a .tail-line::before {
   content: "";
   position: absolute;
   top: var(--space-1);
   bottom: var(--space-1);
   left: calc(-1 * var(--write-head-offset));
-  width: var(--bar-width);
+  width: var(--write-head-width);
   background: var(--cue);
+}
+
+.design-a .tail-progress {
+  color: var(--cue);
 }
 
 .design-a .follow {
@@ -42,4 +46,21 @@
 
 .design-a .follow[aria-pressed="true"] {
   color: var(--cue);
+}
+
+.design-a .tail-line[data-waiting]::after {
+  content: "";
+  position: absolute;
+  bottom: var(--space-1);
+  left: calc(-1 * var(--write-head-offset) - var(--write-head-lamp-inset));
+  width: var(--write-head-lamp);
+  height: var(--write-head-lamp);
+  background: var(--cue);
+  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .design-a .tail-line[data-waiting]::after {
+    animation: none;
+  }
 }

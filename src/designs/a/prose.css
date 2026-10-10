@@ -90,7 +90,7 @@
   color: var(--cue);
 }
 
-@container main (min-width: 760px) {
+@media (min-width: 1024px) and (max-width: 1199px), (min-width: 1280px) {
   .design-a .clause-number {
     position: absolute;
     right: 100%;
@@ -262,7 +262,7 @@
 }
 
 @media (max-width: 767px) {
-  .design-a .prose-root td {
+  .design-a .prose-root td:not([style*="right"]) {
     min-width: 8rem;
   }
 
@@ -396,6 +396,10 @@
   }
 }
 
+.design-a [data-status="writing"] .prose-root > .footnotes {
+  display: none;
+}
+
 .design-a .prose-root > :nth-last-child(1 of :not(.footnotes)) {
   position: relative;
 }
@@ -406,7 +410,7 @@
   top: var(--space-1);
   bottom: var(--space-1);
   left: calc(-1 * var(--write-head-offset));
-  width: var(--bar-width);
+  width: var(--write-head-width);
   background: var(--cue);
   transform: scaleY(0);
   transform-origin: bottom;
@@ -417,10 +421,30 @@
   left: calc(var(--code-bleed) - var(--write-head-offset));
 }
 
+.design-a .prose-root > hr:nth-last-child(1 of :not(.footnotes))::after {
+  top: calc(-1 * var(--space-3));
+  bottom: calc(-1 * var(--space-3));
+}
+
 .design-a [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::after {
   transform: scaleY(1);
   transform-origin: top;
   animation: write-head-in var(--dur-quick) var(--ease-out);
+}
+
+.design-a [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::before {
+  content: "";
+  position: absolute;
+  bottom: var(--space-1);
+  left: calc(-1 * var(--write-head-offset) - var(--write-head-lamp-inset));
+  width: var(--write-head-lamp);
+  height: var(--write-head-lamp);
+  background: var(--cue);
+  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
+}
+
+.design-a [data-status="writing"] .prose-root > .code-block:nth-last-child(1 of :not(.footnotes))::before {
+  left: calc(var(--code-bleed) - var(--write-head-offset) - var(--write-head-lamp-inset));
 }
 
 @keyframes write-head-in {
@@ -430,7 +454,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .design-a [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::after {
+  .design-a [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::after,
+  .design-a [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::before {
     animation: none;
   }
 }

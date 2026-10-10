@@ -15,7 +15,7 @@ export function StartPage() {
   useScrollToHash();
 
   return (
-    <Shell asideLabel="In this manual" aside={<ManualOutline chapters={[...manual.chapters, ...manual.appendices]} />}>
+    <Shell next={first} asideLabel="In this manual" aside={<ManualOutline chapters={[...manual.chapters, ...manual.appendices]} />}>
       <div className="start">
         <header className="start-head">
           <h1>{manual.title}</h1>

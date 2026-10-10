@@ -61,12 +61,23 @@ body:has(.design-a) {
 }
 
 .design-a .layout {
+  --content-width: var(--measure);
   display: grid;
-  grid-template-columns: var(--toc-width) minmax(0, 1fr) var(--outline-width);
+  grid-template-columns:
+    var(--toc-width)
+    minmax(0, 1fr)
+    minmax(0, calc(var(--content-width) + 2 * var(--gutter)))
+    var(--outline-width)
+    minmax(var(--space-6), 1fr);
   align-items: start;
 }
 
+.design-a .layout:has(.start) {
+  --content-width: var(--start-width);
+}
+
 .design-a .toc-side {
+  grid-column: 1;
   position: sticky;
   top: 0;
   height: 100dvh;
@@ -77,7 +88,7 @@ body:has(.design-a) {
 }
 
 .design-a .main {
-  container: main / inline-size;
+  grid-column: 3;
   min-width: 0;
   padding: var(--space-16) var(--gutter) var(--space-24);
 }
@@ -92,17 +103,22 @@ body:has(.design-a) {
 }
 
 .design-a .outline-side {
+  grid-column: 4;
   position: sticky;
   top: 0;
   max-height: 100dvh;
   overflow-y: auto;
   scrollbar-width: thin;
-  padding: calc(var(--space-16) + var(--space-1)) var(--space-6) var(--space-8) 0;
+  padding: calc(var(--space-16) + var(--space-1)) 0 var(--space-8);
 }
 
 @media (max-width: 1199px) {
   .design-a .layout {
     grid-template-columns: var(--toc-width) minmax(0, 1fr);
+  }
+
+  .design-a .main {
+    grid-column: 2;
   }
 
   .design-a .outline-side {
@@ -113,6 +129,10 @@ body:has(.design-a) {
 @media (max-width: 1023px) {
   .design-a .layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .design-a .main {
+    grid-column: 1;
   }
 
   .design-a .toc-side {

@@ -86,14 +86,8 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
 }
 
 function StepLink({ section, direction }: { section?: Section; direction: "Previous" | "Next" }) {
+  if (!section) return null;
   const glyph = direction === "Previous" ? "‹" : "›";
-  if (!section) {
-    return (
-      <span className="step" aria-hidden="true">
-        {glyph}
-      </span>
-    );
-  }
   return (
     <Link
       to={sectionPath(section.id)}

@@ -112,3 +112,72 @@
   outline and the page share one source.
 - Re-ran `npm run check -- a`, `npm run shot -- a` (16 of 16, no errors) and the live streaming
   check (0 moves, 0 scroll changes at 1440 and 375).
+
+## Pass 4 (review round)
+
+**Saw (before)**
+- In `streaming-full-*` an empty “Footnotes 1. ↑ 2. ↑” block sat between the live paragraph and
+  the tail line for most of a stream.
+- The write head was a 2px line and a 1px meter: correct but easy to miss.
+- At 1440×900 the index overflowed by 122px and the sticky legend covered A.2–B.2.
+- At 1920 the text and outline drifted 416px apart.
+
+**Changed**
+- Footnotes are hidden while writing and appear with the settle.
+- The write head is now an instrument: a 3px bar on the live block, a 7px breathing cue lamp at
+  the line being written, the same bar beside the tail line for the whole stream, a green
+  percentage beside Follow, and a 2px meter in the head rule while writing. An `hr` live block
+  keeps a bar 12px past each side.
+- Index: 24px rows, 8px between chapters, a one-line legend under the count instead of a sticky
+  footer. The whole index now fits 900px (`scrollHeight` 900 = `clientHeight`).
+- Layout ≥1200: text and outline are one group, with leftover width on the outer edges. The gap
+  is 64px at 1200, 1280, 1440 and 1920. Hanging labels switched from the `@container` test to
+  `min-width: 1280px`, because the main track is now exactly measure + gutters.
+
+**Saw (after)**
+- `streaming-full-desktop`: bar, lamp and tail rail read at a glance, and the tail hugs the live
+  paragraph. `toc-desktop` shows B.2 with nothing covered. Phone: the budget table shows Stage,
+  Target and Ceiling whole, and `/a` shows only a live `›`.
+
+## Response to review
+
+1. Hide footnote stubs while writing: **done.** `[data-status="writing"] .prose-root > .footnotes
+   { display: none }`. Verified live on 3.3: never visible while writing, shown once written.
+2. Unmistakable write head: **done**, as suggested, plus a breathing cue lamp at the live line
+   (static under reduced motion) and the tail readout in cue green. Still flat fills, no glow.
+3. Fit the whole index at 1440×900: **done.** 24px rows, 8px chapter gaps, legend in the
+   masthead. Measured `scrollHeight` 900 at 900.
+4. Keep text and outline together: **done**, with the suggested five-track grid. The main track
+   widens to `--start-width` on `/a`.
+5. Narrow numeric phone columns: **done.** Right-aligned cells are exempt from the 8rem minimum.
+6. Show that a code block scrolls: **done.** Always-visible 8px WebKit scrollbar with a
+   `--rule-strong` thumb inside the block’s padding (headless screenshots don’t paint scrollbars,
+   so this is checked in the CSS, not the captures).
+7. Outline H3 indentation: **done.** `--outline-number-col` (40px; 48px in the phone sheet), with
+   H3 rows indented to the H2 titles.
+8. No dead chevrons: **done.** A missing side is omitted; on `/a` the `›` links to 1.1 with
+   `aria-label="Next: 1.1 Why a Haunt Should Listen"`.
+- Minor, muted vs faint 1.20:1: **done.** `--ink-muted` is now `#AEB4B7` (8.9:1 on ground, 1.5:1
+  above faint).
+- Minor, hover equals current tint: **done.** New `--ground-hover` `#1E2023` for TOC row hover.
+- Minor, “3.1 Sensing the Guest , written”: **done.** Rows carry an explicit `aria-label`.
+- Minor, chapter list three times on `/a`: **skipped.** Each copy does a different job (compact
+  index, annotated contents with summaries and states, jump list), and the sidebar must stay for
+  the persistent shell.
+
+**Re-verified live (port 5177):** streamed 3.3 at 1440 and 3.2 at 375 with 200ms sampling: 0
+block moves, 0 scroll changes. The write head never collapsed (shortest ≈17px). The index fits
+900px. The text-to-outline gap stays 64px from 1200 to 1920, with no horizontal scroll. No
+console errors.
+
+## Cleanup after the review round
+
+- Hanging section and clause numbers are back at 1024–1199px. One media query
+  (`1024–1199px, ≥1280px`) replaces the `@container` test, which measured the main track’s
+  *content* box and so could not tell the roomy two-column band from the tight 1200–1279 band.
+  Measured clearance from the TOC: 14px at 1024, 52 at 1100, 102 at 1199, 22 at 1280, 102 at
+  1440. At 1200–1279 they stay inline, because a hanging `A.1.3` would reach the TOC at 1250.
+- `--outline-number-col: 48px` moved into the ≤1023px token block.
+- The lamp offset is one token (`--write-head-lamp-inset`). Ring and lamp share one `breathe`
+  keyframe in `status-ring.css`, so `tail-line.css` no longer depends on `prose.css`.
+- `.step:hover` and a `.tail-progress` class replace the element-qualified selectors.

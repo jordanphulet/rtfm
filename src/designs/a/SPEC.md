@@ -78,12 +78,13 @@ job. A muted signal green (not neon, not teal), so it reads as an indicator lamp
 | `--ground` | `#121314` | Page: graphite, neutral with a faint cool lean (never `#000`, not slate-blue) | — |
 | `--ground-side` | `#17191B` | TOC column; the tonal step *is* the divider (no border) | — |
 | `--ground-raised` | `#1C1E20` | Code blocks, previews | — |
-| `--ground-tint` | `#24272A` | Current TOC row, hover rows, inline code | — |
+| `--ground-tint` | `#24272A` | Current TOC row, inline code, hover on buttons | — |
+| `--ground-hover` | `#1E2023` | TOC row hover (lighter than the current row, so “here” stays unique) | — |
 | `--rule` | `#2B2E31` | Table row lines, outline track | — |
 | `--rule-strong` | `#3C4044` | Head rule, `hr`, table header line, pager rules, preview border | — |
 | `--ink-strong` | `#EDEFEF` | Headings, `strong`, current items (never `#fff`) | 16.1:1 |
 | `--ink` | `#D3D7D8` | Body text (cool off-white, no cream) | 12.8:1 |
-| `--ink-muted` | `#9BA1A4` | Summaries, labels, outline, footnotes, written-ring fill | 7.1:1 |
+| `--ink-muted` | `#AEB4B7` | Summaries, labels, outline, footnotes, written-ring fill (1.5:1 above ink-faint, so the two meta tiers stay apart) | 8.9:1 |
 | `--ink-faint` | `#8C9296` | Unwritten titles, label numerals, meta (≥4.7:1 on every ground, incl. tint) | 5.9:1 |
 | `--cue` | `#5FC48A` | GO green: live/writing state, link hover, footnote refs, focus ring (≥7.0:1 on every ground) | 8.6:1 |
 | `--cue-deep` | `#377D57` | Link underlines and the unwritten-link dash (non-text, ≥3:1 on ground) | 3.8:1 |
@@ -120,20 +121,28 @@ Thin scrollbars: `scrollbar-color: var(--rule-strong) transparent`.
 ### Desktop ≥1200px (designed at 1440 × 900) — three columns, nothing hidden
 
 ```
-| TOC 272 (ground-side) | center (fluid; text 576, centred)        | outline 240        |
-| sticky, own scroll    | 1440: x 448–1024, 176px gutters          | sticky, top 64px   |
+| TOC 272 | 1fr | main: 576 + 2×64 gutter | outline 240 | 1fr (≥24) |
+| 1440:   text x 448–1024, outline at 1088 (64px from the text)       |
+| 1920:   text x 688–1264, outline at 1328: the group stays together  |
 ```
+
+Text and outline form one group: the leftover width goes to the outer edges (two `1fr`
+tracks), never between them. On `/a` the main track widens to `--start-width`.
 
 - **No top bar.** The center starts with 64px of space; the TOC is always visible, so a header
   would only spend height. (Reason: density without chrome.)
 - **TOC column** (sticky, full height, own scroll, `overscroll-behavior: contain`):
   - Header (padding 20/16): manual title “The Haunt That Listens”, 14/20 Sans 600 ink-strong, links
     to `/a`; under it `7 of 18 sections written`, micro mono ink-faint, tabular, live.
-  - Chapter rows, then the appendix group, then a legend pinned to the column’s bottom (see TOC).
+  - A one-line status legend under the count, then chapter rows and the appendix group. The
+    whole index (18 sections, both appendices) fits in 900px of height: nothing hides.
 - **Center:** article head, body, tail line, pager. Gutters hold only things that hang: the
   section number, heading anchors and the write head.
 - **Outline column** (sticky; padding-right 24): “On this page” then “Referenced here” (below).
-- Hanging section number when the center is ≥760px wide (`@container`), else inline.
+- Section labels and clause numbers hang in the gutter at 1024–1199px (two columns, ≥14px clear
+  of the TOC) and at ≥1280px (≥22px clear). They sit inline at 1200–1279px, where the newly
+  added outline column leaves the gutter too narrow (a hanging `A.1.3` would touch the TOC), and
+  on phones.
 
 ### 1024–1199px — two columns
 
@@ -146,10 +155,11 @@ inline cross-references carry their status anyway.
 - **Sticky header, 48px**, `--ground`, 1px `--rule` bottom:
   - Left, flexible: the **location button** (`data-shot="toc-toggle"`) — status ring · `2.4` (tabular,
     ink-faint) · title (14/20, 500, ellipsis) · CSS chevron. On `/a` it reads “Contents”.
-  - Right: `‹` and `›` buttons, 44×44, `aria-label="Previous: 2.3 Staying in Character"`.
+  - Right: `‹` and `›` buttons, 44×44, `aria-label="Previous: 2.3 Staying in Character"`. A
+    missing side is omitted, never a dead glyph; on `/a`, `›` goes to 1.1.
 - **Contents sheet** (one tap): fixed from 48px to the bottom, `--ground`, own scroll, page scroll
   locked while open. Same rows as the TOC at 17/24 with 44px min height (touch), the current entry
-  expanded with its live outline (and `Writing · 46%` if writing), legend at the end. Opens with
+  expanded with its live outline, legend under the count. Opens with
   opacity 0→1 + translateY(−8px→0) over `--dur-base` `--ease-out`.
 - **Text**: full width minus 16px gutters (32px at 768–1023, where body returns to 17/28 and text
   caps at 576). Measure at 375 ≈ 48 characters.
@@ -168,7 +178,8 @@ Top to bottom, desktop (phone values in brackets):
    prev/next live in the header.]
 2. **Title** H1 29/36 ink-strong, `text-wrap: balance`. The label `2.4` **hangs** in the left gutter:
    same size, weight 400, ink-faint, tabular, right-aligned 16px left of the text edge, so the title
-   aligns with the body. Below a 760px center (`@container main`) it sits inline before the title,
+   aligns with the body. Where the gutter is too narrow (1200–1279px and below 1024px) it sits
+   inline before the title,
    still ink-faint. 12px below.
 3. **Summary** 20/28 [17/28] ink-muted, `text-wrap: pretty`. 16px below.
 4. **Status line** — one line, fixed 16px height, micro mono, nowrap (text changes, layout doesn’t):
@@ -192,8 +203,8 @@ The head is identical in waiting, streaming and written states, so nothing in it
 | **written** | Title ink; solid 8px ink-muted disc | No green anywhere; status `Written · n words`; no tail line | Solid 1px cue-deep underline, no ring |
 
 Shape differs by state (hollow / centre dot / solid), so state never depends on colour alone. A
-legend at the foot of the TOC and sheet explains the three rings (`● Written  ◐ Being written
-○ Not yet written`, micro, ink-faint, rings drawn in CSS, not glyphs).
+legend under the TOC’s count explains the three rings in one line (`● Written  ◐ Writing
+○ Not written`, micro, ink-faint, rings drawn in CSS, not glyphs).
 
 **You are here:** current row gets `--ground-tint`, a 2px ink-strong bar at its left edge, title
 ink-strong 600, `aria-current="page"`; on load the TOC scrolls (its own `scrollTop` only, never
@@ -202,8 +213,8 @@ the page) to bring it into view.
 ## The TOC
 
 - Chapter row: 14/20 Sans 600 ink-strong, wdth 85; label in a 36px tabular column, ink-faint
-  (`2`). A heading, not a link (chapters have no page). 16px above each chapter group.
-- Section row: 28px min height, padding 4/12; grid `36px label | title | 16px status` — labels
+  (`2`). A heading, not a link (chapters have no page). 8px above each chapter group.
+- Section row: 24px tall (padding 2/12; the dense index fits the screen); grid `36px label | title | 16px status` — labels
   align as a column (`2.4`, `A.1`), titles wrap under the title, rings form a status column at
   the right edge. 14/20 wdth 85; label ink-faint tabular.
 - Hover: `--ground-tint`, title → ink-strong, `--dur-quick`. Focus: 2px cue outline,
@@ -215,7 +226,8 @@ the page) to bring it into view.
 ## Outline column (≥1200px)
 
 - **On this page** (12/16 Sans 600 ink-muted): first row is the section title (so something is
-  always current), then H2 (padding-left 12) and H3 (padding-left 24), 14/20 wdth 85 ink-muted,
+  always current), then H2 rows with their clause number in a fixed `--outline-number-col` (40px) and H3 rows
+  indented to the H2 *titles* (so they nest under them), 14/20 wdth 85 ink-muted,
   over a 1px `--rule` track. Current heading: ink-strong + a 2px ink-strong bar on the track
   (`--dur-quick` colour transition). Current = last heading whose top is above 25% of the viewport
   (rAF-throttled scroll listener). Built from the `text` (H2/H3 lines outside code fences), so it
@@ -232,7 +244,7 @@ the page) to bring it into view.
   write head use `transform` only; the code “Copy” control is reserved space with
   `visibility: hidden` until written; outline and TOC changes happen in their own columns;
   `scrollbar-gutter: stable`; growth only happens below the last block.
-- **Never auto-scrolls.** The **tail line** sits just below the live block: micro mono ink-faint
+- **Never auto-scrolls.** The **tail line** sits just below the live block: micro mono, readout in cue green,
   `Being written · 46%` and a **Follow ↓** text button (`aria-pressed`). When pressed it reads
   `Following ↓` in cue and keeps the tail line 24px above the viewport bottom after each
   chunk (instant scroll, never smooth). Any upward scroll (wheel, touch, PageUp/↑/Home) or a second
@@ -262,15 +274,27 @@ the three questions a reader has while text arrives without the page moving: *wh
 edge, how far has it got, is it done?*
 
 1. **Gutter bar.** While `data-status="writing"`, the block currently being written — selected as
-   `.prose > :nth-last-child(1 of :not(section.footnotes))`, so the footnotes block appended early
-   by the renderer never steals it — carries an `::after`: 2px wide, cue, 28px left of the
-   text edge (8px clear of a code block’s bleed; 12px on phone), inset 4px top and bottom, so it grows with the paragraph, list or
-   table as it fills. Each new block’s bar draws in with `scaleY(0→1)`, origin top,
-   `--dur-quick`. Solid fill: no glow, no shadow. In the waiting state it sits beside the tail line.
-2. **Head rule as meter.** `.article-head::after`: 1px cue over the head rule,
-   `transform: scaleX(var(--progress))`, origin left, `transition: transform var(--dur-settle)
-   linear`. `--progress` is the only value JS provides (`style={{ "--progress": progress }}`).
-3. **The settle** (writing → written), all at once: the gutter bar retracts (`scaleY(1→0)`, origin
+   `.prose-root > :nth-last-child(1 of :not(.footnotes))` — carries an `::after`: **3px** wide
+   (`--write-head-width`), cue, 28px left of the text edge (8px clear of a code block’s bleed;
+   12px on phone), inset 4px top and bottom, so it grows with the paragraph, list or table as it
+   fills. An `hr` as the live block gets a bar 12px past each side, so the bar never collapses.
+   Each new block’s bar draws in with `scaleY(0→1)`, origin top, `--dur-quick`. Solid fill: no
+   glow, no shadow.
+2. **The lamp.** At the foot of that bar, level with the line being written, sits a 7px square
+   cue lamp (`::before`, `--write-head-lamp`) that breathes like the TOC’s writing ring (opacity
+   1 → 0.35 → 1, 1.6s). It is the cue light of the concept: the exact line where words land.
+3. **The tail.** The tail line directly under the live block carries the same 3px bar for the
+   whole stream, and its `Being written · 46%` readout is in cue green beside **Follow ↓**, so
+   bar, lamp, percentage and Follow read as one instrument. While waiting, the bar and lamp sit
+   beside the tail line alone.
+4. **Head rule as meter.** `.head-rule::after`: cue over the head rule, drawn 2px tall while
+   writing (`inset: -0.5px 0`, no layout change), `transform: scaleX(var(--progress))`, origin
+   left, `transition: transform var(--dur-settle) linear`. `--progress` is the only value JS
+   provides.
+5. **Footnotes wait.** While writing, the footnotes block (whose notes are empty stubs until the
+   last chunks) is `display: none`, so the tail line hugs the live text. It appears with the
+   settle, below everything, so nothing above the reader moves.
+6. **The settle** (writing → written), all at once: the gutter bar retracts (`scaleY(1→0)`, origin
    bottom, `--dur-settle` `--ease-in-out`; the `::after` exists on the last block in every state
    and only its transform changes, so the transition can run); the meter’s colour fades from
    cue to `--rule-strong`; the status line swaps to `● Written · n words`; the TOC ring’s
@@ -283,7 +307,8 @@ from the head, where the eye returns; the settle is the single, quiet signal tha
 be trusted as finished.
 
 **Reduced motion** (`prefers-reduced-motion: reduce` sets every duration token to 0ms and removes
-the breathe animation): the bar is present on the live block while writing and gone when written;
+the breathe animations): the bar and a steady lamp are present on the live block while writing
+and gone when written;
 the meter steps with each chunk; the ring shows a static half-size centre dot; outline rows and the
 contents sheet appear without movement; the footnote highlight becomes a static tint while
 targeted. All information is kept, none of the motion. (Playwright’s `animations: "disabled"`
@@ -300,7 +325,7 @@ resets infinite animations to their first keyframe, so the breathe keyframes sta
   (64px under the phone header).
 - **Clause numbers.** Every prose H2 carries a clause number — `2.4.1`, `2.4.2`, `A.1.3` — set
   like the section label: same size, weight 400, ink-faint, tabular, hanging 16px left of the
-  text edge (inline before the heading below a 760px center). A CSS counter on `.prose-root > h2`
+  text edge (inline before the heading where section labels are inline, see Layout). A CSS counter on `.prose-root > h2`
   plus the section label as a custom property (`--section-label: "2.4"`) build it, so it never
   appears in the text or find-in-page. The number is the heading’s anchor link (hover → cue). The
   outline shows the same numbers. The renderer’s footnotes label `h2` is left unnumbered. This is
@@ -328,14 +353,17 @@ resets infinite animations to their first keyframe, so the breathe keyframes sta
   line above it (set as the bottom border of the row before, since collapsed borders favour the
   upper cell). **Phone:** first column `position: sticky; left: 0` on
   `--ground` with a 1px `--rule` right edge, so the row stays named while the 5-column servo table
-  scrolls; cells keep at least 8rem and wrap inside it, and the cut-off column at the right edge
+  scrolls; text cells keep at least 8rem and wrap inside it (numeric, right-aligned cells stay as narrow as
+  their figures, so Stage + Target + Ceiling fit at 375), and the cut-off column at the right edge
   shows that the table scrolls. Right-aligned (numeric) cells never wrap (`150 ms` stays whole).
 - **Code blocks:** `--ground-raised`, radius 2, extended 20px into each gutter so code aligns with
   the body text (phone: full bleed to the screen edges, radius 0, padding 16). A 28px strip at the top: language tag left
   (`ts`, `text`; micro mono ink-faint), **Copy** right (micro mono ink-faint → ink-strong;
   “Copied” for 1.5s, polite live region; hidden with `visibility` until the section is written).
   Code 14/20 Plex Mono, color ink, padding 0 20 16; `language-text` (the cast’s prompts) uses
-  `pre-wrap` so prose prompts read on a phone; others scroll horizontally.
+  `pre-wrap` so prose prompts read on a phone; others scroll horizontally, with an always-visible
+  8px scrollbar (rule-strong thumb) inside the block’s padding, so a clipped line reads as
+  scrollable even where the OS hides thin scrollbars.
 - **Inline code:** Plex Mono 0.88em, `--ground-tint`, padding 1px 4px, radius 2, ink.
 - **Horizontal rule:** 1px `--rule-strong` across the measure, 40px above and below.
 - **Footnote references:** `sup` at 12px, 600, cue, tabular, `line-height: 0` and relative

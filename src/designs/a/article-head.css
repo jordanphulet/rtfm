@@ -48,7 +48,7 @@
   letter-spacing: 0;
 }
 
-@container main (min-width: 760px) {
+@media (min-width: 1024px) and (max-width: 1199px), (min-width: 1280px) {
   .design-a .title-label {
     position: absolute;
     right: calc(100% + var(--space-4));
@@ -100,6 +100,7 @@
 }
 
 .design-a [data-status="writing"] .head-rule::after {
+  inset: -0.5px 0;
   background: var(--cue);
 }
 

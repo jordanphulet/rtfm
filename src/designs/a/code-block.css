@@ -42,10 +42,22 @@
   margin: 0;
   padding: var(--space-2) var(--code-bleed) var(--space-4);
   overflow-x: auto;
-  scrollbar-width: thin;
   font: 400 var(--text-ui) / var(--leading-ui) var(--font-mono);
   color: var(--ink);
   tab-size: 2;
+}
+
+.design-a .code-block pre::-webkit-scrollbar {
+  height: var(--space-2);
+}
+
+.design-a .code-block pre::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: var(--radius-s);
+}
+
+.design-a .code-block pre::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .design-a .code-block[data-language="text"] pre {

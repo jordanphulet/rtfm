@@ -89,7 +89,7 @@ export function ManualOutline({ chapters }: { chapters: Chapter[] }) {
         {chapters.map((chapter) => (
           <li key={chapter.id} data-level={2}>
             <a href={`#${chapterAnchor(chapter)}`}>
-              <span className="outline-number">{chapter.label}</span>
+              <span className="outline-number outline-chapter-number">{chapter.label}</span>
               {chapter.title}
             </a>
           </li>
