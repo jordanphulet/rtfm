@@ -54,9 +54,9 @@ The text is GitHub-flavoured markdown: paragraphs, **bold**, bulleted and number
 
 ## Canned replies
 
-The reply depends on keywords in the message. Matching ignores case and punctuation, and only
-matches whole words (`renew` doesn't match `new`, `reader` doesn't match `read`). The **first
-intent in this order** with a matching keyword wins:
+The reply depends on keywords in the message. Matching ignores case and punctuation, reads `’`
+and `'` alike, and only matches whole words (`renew` doesn't match `new`, `reader` doesn't match
+`read`). The **first intent in this order** with a matching keyword wins:
 
 | Order | Intent   | Keywords                                          | The reply                                              |
 | ----- | -------- | ------------------------------------------------- | ------------------------------------------------------ |
@@ -65,9 +65,12 @@ intent in this order** with a matching keyword wins:
 | 3     | open     | open, read                                        | Choose a manual in the library; opening from the conversation isn't wired up yet |
 | 4     | list     | list, library, manuals, the phrase "what do I have" | A bulleted list of what each manual in the library shows |
 | 5     | help     | help                                              | A bulleted list of what it understands                 |
-| —     | fallback | anything else                                     | "I can't do that yet, I'm afraid…" and what it can do  |
+| —     | fallback | anything else                                     | "I can’t do that yet, I’m afraid…" and what it can do  |
 
 So "Delete the new manual" is a delete, and "Help me create a manual" is a create.
+
+Replies and the URL options' messages use typographic punctuation (`’ “ ” – — …`), so match
+their text with `replyTo()` rather than typing it out.
 
 ## URL options
 
@@ -78,7 +81,7 @@ state. They combine.
 | ----------------------- | ------------------------------------------------------------------------------------- | ------------- |
 | *(none)*                | Empty                                                                                 | `"idle"`      |
 | `?conversation=demo`    | Three finished exchanges: "What do I have?" (list), "Open the one about haunted houses" (open), "Can you translate the sourdough manual into Klingon?" (fallback) | `"idle"` |
-| `?agentFreeze=thinking` | Adds the user message "Let's start a new manual about building a treehouse" with no reply | `"thinking"`, forever |
+| `?agentFreeze=thinking` | Adds the user message "Let’s start a new manual about building a treehouse" with no reply | `"thinking"`, forever |
 | `?agentFreeze=0.5`      | Adds the same user message and its (create) reply, cut at the last chunk at or before 50% of its length, repaired | `"streaming"`, forever |
 
 - `agentFreeze` takes `thinking` or any number from 0 to 1. Any other value is ignored.

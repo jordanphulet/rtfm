@@ -20,6 +20,16 @@ describe("intentOf", () => {
   });
 
   it.each([
+    ["Let’s start a NEW one", "create"],
+    ["What’s in my library?", "list"],
+    ["I’d like to read something", "open"],
+    ["Can’t you sing?", "fallback"],
+  ])("reads %j, typed with a curly apostrophe, as %s like its straight twin", (message, intent) => {
+    expect(intentOf(message)).toBe(intent);
+    expect(intentOf(message.replaceAll("’", "'"))).toBe(intent);
+  });
+
+  it.each([
     ["Delete the new manual", "delete"],
     ["Help me create a manual", "create"],
     ["Open my newest manual", "open"],
@@ -42,20 +52,20 @@ describe("intentOf", () => {
 
 describe("replyTo", () => {
   it("falls back politely", () => {
-    expect(replyTo("Sing me a song")).toMatch(/^I can't do that yet/);
+    expect(replyTo("Sing me a song")).toMatch(/^I can’t do that yet/);
   });
 
-  it("says deleting would ask for confirmation and isn't wired up", () => {
+  it("says deleting would ask for confirmation and isn’t wired up", () => {
     const reply = replyTo("delete it");
     expect(reply).toMatch(/\*\*yes\*\*/);
-    expect(reply).toMatch(/isn't wired up yet/);
+    expect(reply).toMatch(/isn’t wired up yet/);
   });
 
-  it("sketches the create questions and says creating isn't wired up", () => {
+  it("sketches the create questions and says creating isn’t wired up", () => {
     const reply = replyTo("new manual");
     expect(reply).toMatch(/Topic/);
     expect(reply).toMatch(/Audience/);
     expect(reply).toMatch(/Tone/);
-    expect(reply).toMatch(/isn't wired up yet/);
+    expect(reply).toMatch(/isn’t wired up yet/);
   });
 });

@@ -36,7 +36,7 @@ export const seedManuals: LibraryManual[] = [
   {
     id: "keeping-a-sourdough-starter-alive",
     title: "Keeping a Sourdough Starter Alive",
-    subtitle: "Feeding schedules, rescue protocols, and who looks after it while you're on holiday",
+    subtitle: "Feeding schedules, rescue protocols, and who looks after it while you’re on holiday",
     chapterCount: 3,
     sectionCount: 9,
     writtenCount: 9,

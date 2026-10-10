@@ -10,7 +10,7 @@ const DEMO_MESSAGES = [
   "Open the one about haunted houses",
   "Can you translate the sourdough manual into Klingon?",
 ];
-const FROZEN_MESSAGE = "Let's start a new manual about building a treehouse";
+const FROZEN_MESSAGE = "Let’s start a new manual about building a treehouse";
 
 interface AgentState {
   messages: AgentMessage[];
