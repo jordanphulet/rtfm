@@ -1,0 +1,194 @@
+.library-c .dock {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 10;
+  padding: var(--space-3) 0 calc(var(--space-3) + env(safe-area-inset-bottom));
+  background: var(--ground-raised);
+}
+
+.library-c .dock-body {
+  grid-column: 2;
+  min-width: 0;
+  padding-left: calc(var(--tag-col) + var(--tag-gap));
+}
+
+.library-c .well {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-width: var(--plate-width);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-s);
+  background: var(--ground);
+  transition: border-color var(--dur-quick) var(--ease-out);
+}
+
+.library-c .well:hover {
+  border-color: var(--ink-faint);
+}
+
+.library-c .well:has(.well-input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.library-c .dock-speaker {
+  top: calc(var(--well-pad) + (var(--leading-body) - var(--leading-ui)) / 2);
+}
+
+.library-c .well-input {
+  flex: 1;
+  min-width: 0;
+  max-height: calc(6 * var(--leading-body) + 2 * var(--well-pad));
+  margin: 0;
+  padding: var(--well-pad) var(--space-4);
+  border: 0;
+  background: transparent;
+  font: var(--text-body) / var(--leading-body) var(--font-sans);
+  color: var(--ink-strong);
+  resize: none;
+  overflow-y: auto;
+}
+
+.library-c .well-input:focus-visible {
+  outline: none;
+}
+
+.library-c .well-input::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
+}
+
+.library-c .keycap {
+  display: none;
+  width: var(--keycap-size);
+  height: var(--keycap-size);
+  margin-bottom: calc(var(--well-control-inset) + (var(--send-height) - var(--keycap-size)) / 2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-s);
+  font: var(--text-micro) / calc(var(--keycap-size) - 2px) var(--font-mono);
+  text-align: center;
+  color: var(--ink-faint);
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 768px) {
+  .library-c .well:not(:focus-within):has(.well-input:placeholder-shown) .keycap {
+    display: block;
+  }
+}
+
+.library-c .send {
+  height: var(--send-height);
+  margin: 0 var(--well-control-inset) var(--well-control-inset) 0;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: var(--ground-tint);
+  font: 600 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  color: var(--ink-strong);
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+
+.library-c .send:hover:not(:disabled) {
+  color: var(--cue);
+}
+
+.library-c .send:disabled {
+  background: none;
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.library-c .dock-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--plate-width);
+  height: var(--meta-row-height);
+  margin-top: var(--space-2);
+  font: var(--text-micro) / var(--leading-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.library-c .dock-meta p {
+  margin: 0;
+}
+
+.library-c .library-up {
+  display: none;
+  margin-left: calc(-1 * var(--space-2));
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  white-space: nowrap;
+}
+
+.library-c .library-up[data-hidden] {
+  visibility: hidden;
+}
+
+.library-c .key-hints {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 768px) {
+  .library-c .key-hints {
+    display: block;
+  }
+}
+
+.library-c .readout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  color: var(--cue);
+  white-space: nowrap;
+}
+
+@media (max-width: 1199px) {
+  .library-c .library-up {
+    display: block;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .library-c .dock-meta {
+    position: relative;
+  }
+
+  .library-c .library-up {
+    position: absolute;
+    right: calc(100% + var(--tag-gap) - var(--space-2));
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 1023px) {
+  .library-c .dock-speaker {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .library-c .dock {
+    padding-top: var(--space-2);
+    padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+  }
+
+  .library-c .well-input {
+    padding-inline: var(--space-3);
+  }
+
+  .library-c .send {
+    width: var(--send-height);
+    padding: 0;
+  }
+
+  .library-c .dock-meta {
+    margin-top: var(--space-1);
+  }
+}

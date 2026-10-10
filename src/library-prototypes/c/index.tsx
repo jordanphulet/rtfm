@@ -1,117 +1,93 @@
-import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { useRef } from "react";
 import { useAgent } from "../../agent";
-import { deleteManual, formatLastOpened, useLibrary, type LibraryManual } from "../../library";
-import { ReplyMarkdown, Sheet } from "../../ui";
-import "./library.css";
+import { useLibrary } from "../../library";
+import "../../ui";
+import { Conversation } from "./Conversation";
+import { DeleteConfirmation } from "./DeleteConfirmation";
+import { AGENT_INPUT_ID, Dock } from "./Dock";
+import { toExchanges } from "./exchanges";
+import { LibraryPlate } from "./LibraryPlate";
+import { MarginIndex } from "./MarginIndex";
+import { Suggestions } from "./Suggestions";
+import { useDeleteFlow } from "./useDeleteFlow";
+import { useInView } from "./useInView";
+import { usePageMeasures } from "./usePageMeasures";
+import { usePrompt } from "./usePrompt";
+import { useReplyAnnouncement } from "./useReplyAnnouncement";
+import { useSlashShortcut } from "./useSlashShortcut";
+import "./tokens.css";
+import "./layout.css";
 
 export default function Library() {
-  const [toDelete, setToDelete] = useState<LibraryManual | null>(null);
-
-  return (
-    <div className="ui library-c">
-      <main inert={toDelete !== null}>
-        <h1>Library</h1>
-        <Conversation />
-        <Manuals onDelete={setToDelete} />
-      </main>
-      <DeleteConfirmation manual={toDelete} onClose={() => setToDelete(null)} />
-    </div>
-  );
-}
-
-function Conversation() {
   const { messages, status, send } = useAgent();
-  const [draft, setDraft] = useState("");
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (status !== "idle") return;
-    send(draft);
-    setDraft("");
-  }
-
-  return (
-    <section aria-label="Conversation">
-      {messages.map((message, index) => (
-        <article key={message.id}>
-          <strong>{message.role === "user" ? "You" : "Librarian"}</strong>
-          {message.role === "user" ? (
-            <p>{message.text}</p>
-          ) : (
-            <ReplyMarkdown>{message.text}</ReplyMarkdown>
-          )}
-          {status === "streaming" && index === messages.length - 1 && <span>▍</span>}
-        </article>
-      ))}
-      {status === "thinking" && <p>Thinking…</p>}
-      <form onSubmit={submit}>
-        <input
-          data-shot="agent-input"
-          aria-label="Ask the librarian"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <button type="submit" disabled={status !== "idle"}>
-          Send
-        </button>
-      </form>
-    </section>
-  );
-}
-
-function Manuals({ onDelete }: { onDelete: (manual: LibraryManual) => void }) {
   const manuals = useLibrary();
-  if (manuals.length === 0) return <p>No manuals.</p>;
+  const exchanges = toExchanges(messages);
+  const prompt = usePrompt();
+  const deletion = useDeleteFlow(manuals, exchanges.length);
+  const replyAnnouncement = useReplyAnnouncement(exchanges, status);
 
-  return (
-    <ul>
-      {manuals.map((manual) => (
-        <li key={manual.id}>
-          <Link to="/read" className="link">
-            {manual.title}
-          </Link>
-          <p>{manual.subtitle}</p>
-          <p>
-            {manual.writtenCount} of {manual.sectionCount} sections written · opened{" "}
-            {formatLastOpened(manual.lastOpenedAt)}
-          </p>
-          <button type="button" data-shot="delete" onClick={() => onDelete(manual)}>
-            Delete<span className="visually-hidden"> {manual.title}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
+  const rootRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const plateHeadRef = useRef<HTMLElement>(null);
+  const plateHeadInView = useInView(plateHeadRef);
+  usePageMeasures(rootRef, dockRef);
+  useSlashShortcut(prompt.focusInput, deletion.confirming === null);
 
-interface DeleteConfirmationProps {
-  manual: LibraryManual | null;
-  onClose: () => void;
-}
-
-function DeleteConfirmation({ manual, onClose }: DeleteConfirmationProps) {
-  function confirm() {
-    if (manual) deleteManual(manual.id);
-    onClose();
+  function sendSuggestion(text: string) {
+    send(text);
+    prompt.focusInput();
   }
 
   return (
-    <Sheet
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="delete-title"
-      open={manual !== null}
-      onClose={onClose}
-      className="confirm"
-    >
-      <h2 id="delete-title">Delete {manual?.title}?</h2>
-      <button type="button" onClick={onClose}>
-        Keep it
-      </button>
-      <button type="button" onClick={confirm}>
-        Delete
-      </button>
-    </Sheet>
+    <div className="ui library-c" ref={rootRef}>
+      <div className="page" inert={deletion.confirming !== null}>
+        <a
+          className="skip-link"
+          href={`#${AGENT_INPUT_ID}`}
+          onClick={(event) => {
+            event.preventDefault();
+            prompt.focusInput();
+          }}
+        >
+          Skip to the librarian
+        </a>
+        <div className="page-grid layout">
+          <main className="script">
+            <LibraryPlate
+              manuals={manuals}
+              confirmingId={deletion.confirming?.id ?? null}
+              leavingId={deletion.leavingId}
+              headRef={plateHeadRef}
+              onDelete={deletion.request}
+              onStartNew={prompt.startNewManual}
+            />
+            <Conversation
+              exchanges={exchanges}
+              status={status}
+              suggestions={
+                <Suggestions placement="script" onSend={sendSuggestion} onStartNew={prompt.startNewManual} />
+              }
+            />
+          </main>
+          <MarginIndex exchanges={exchanges} status={status} manualCount={manuals.length} />
+        </div>
+        <Dock
+          dockRef={dockRef}
+          prompt={prompt}
+          status={status}
+          send={send}
+          onSuggestion={sendSuggestion}
+          conversationEmpty={exchanges.length === 0}
+          libraryInView={plateHeadInView}
+        />
+      </div>
+      <DeleteConfirmation manual={deletion.confirming} onKeep={deletion.keep} onConfirm={deletion.confirm} />
+      <p className="visually-hidden" aria-live="polite">
+        {replyAnnouncement}
+      </p>
+      <p className="visually-hidden" aria-live="polite">
+        {deletion.announcement}
+      </p>
+    </div>
   );
 }

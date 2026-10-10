@@ -1,0 +1,45 @@
+.library-c .conversation {
+  margin-top: var(--space-12);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--rule-strong);
+}
+
+.library-c .exchange-group + .exchange-group {
+  margin-top: var(--space-12);
+}
+
+.library-c .exchange-group[data-newest] {
+  min-height: calc(var(--window-height) - var(--dock-height) - var(--space-8));
+}
+
+.library-c .stage-directions {
+  max-width: var(--measure);
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink);
+}
+
+.library-c .exchange + .stage-directions {
+  margin-top: var(--space-6);
+}
+
+.library-c .conversation > .stage-directions:has(+ :is(.suggestions, .exchange-group)) {
+  margin-bottom: var(--space-12);
+}
+
+.library-c .stage-direction {
+  margin: 0;
+}
+
+.library-c .stage-direction + .stage-direction {
+  margin-top: var(--space-2);
+}
+
+.library-c .stage-direction i {
+  color: var(--ink-muted);
+}
+
+@media (min-width: 1024px) {
+  .library-c .conversation:not(:has(.exchange-group, .stage-directions)) {
+    border-top: 0;
+  }
+}
