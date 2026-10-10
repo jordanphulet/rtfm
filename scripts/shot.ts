@@ -8,13 +8,12 @@ import {
 } from "playwright";
 import { createLogger, createServer, type Logger } from "vite";
 import type * as ManualModule from "../src/manual/sample/index.ts";
-import { designFromArgs, type Design } from "./design-arg.ts";
 
-const PORTS: Record<Design, number> = { a: 5174, b: 5175, c: 5176 };
+const PORT = 5174;
+const OUT_DIR = "shots";
 const SETTLE_MS = 300;
 const TOC_TOGGLE_TIMEOUT_MS = 3000;
 const TOC_TOGGLE = "[data-shot=toc-toggle]";
-const HIDE_SWITCHER = "[data-shot=design-switcher] { display: none !important; }";
 
 type Shot = { state: string; path: string; fullPage?: boolean; openToc?: boolean };
 type Variant = { name: string; options: BrowserContextOptions; onlyStates?: string[] };
@@ -33,22 +32,19 @@ const VARIANTS: Variant[] = [
   },
 ];
 
-const design = designFromArgs("shot");
-const outDir = `shots/${design}`;
 const server = await createServer({
-  cacheDir: `node_modules/.vite-shot/${design}`,
-  server: { port: PORTS[design], strictPort: true, forwardConsole: false },
+  server: { port: PORT, strictPort: true, forwardConsole: false },
   clearScreen: false,
   customLogger: createLoggerWithoutRepeatedErrors(),
 });
 
 try {
   await server.listen();
-  await rm(outDir, { recursive: true, force: true });
-  await mkdir(outDir, { recursive: true });
+  await rm(OUT_DIR, { recursive: true, force: true });
+  await mkdir(OUT_DIR, { recursive: true });
 
   const manual = (await server.ssrLoadModule("/src/manual/sample/index.ts")) as typeof ManualModule;
-  const results = await captureAll(`http://localhost:${PORTS[design]}`, shotsFor(manual.SHOT_SECTIONS));
+  const results = await captureAll(`http://localhost:${PORT}`, shotsFor(manual.SHOT_SECTIONS));
   process.exitCode = printSummary(results) ? 0 : 1;
 } finally {
   await server.close();
@@ -68,9 +64,9 @@ function createLoggerWithoutRepeatedErrors(): Logger {
 }
 
 function shotsFor(sections: typeof ManualModule.SHOT_SECTIONS): Shot[] {
-  const sectionPath = (id: string) => `/${design}/${id}`;
+  const sectionPath = (id: string) => `/read/${id}`;
   return [
-    { state: "start", path: `/${design}` },
+    { state: "start", path: "/read" },
     { state: "toc", path: sectionPath(sections.written), openToc: true },
     { state: "written", path: sectionPath(sections.written), fullPage: true },
     { state: "dense", path: sectionPath(sections.dense), fullPage: true },
@@ -117,7 +113,7 @@ async function captureVariant(
 }
 
 async function capture(context: BrowserContext, shot: Shot, name: string): Promise<ShotResult> {
-  const file = `${outDir}/${name}.png`;
+  const file = `${OUT_DIR}/${name}.png`;
   const errors = new Set<string>();
   let saved = false;
 
@@ -129,7 +125,6 @@ async function capture(context: BrowserContext, shot: Shot, name: string): Promi
 
   try {
     await page.goto(shot.path, { waitUntil: "networkidle" });
-    await page.addStyleTag({ content: HIDE_SWITCHER });
     await settle(page);
     if (shot.openToc) await openToc(page, name);
     await page.screenshot({ path: file, fullPage: shot.fullPage, animations: "disabled" });
