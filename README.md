@@ -1,9 +1,8 @@
 # RTFM
 
 A web app for reading hypothetical manuals. An LLM writes a manual's table of contents first, then
-writes each section only when a reader opens it. For now we are designing the reader UI: three
-competing designs (A, B, C) read one sample manual, and section writing is simulated by a fake
-streamer. There is no back-end or LLM yet.
+writes each section only when a reader opens it. Today the app is the reader: it shows one sample
+manual, and section writing is simulated by a fake streamer. There is no back-end or LLM yet.
 
 ## Running it
 
@@ -11,24 +10,22 @@ Needs Node 22.18 or later (the scripts run as TypeScript directly).
 
 ```sh
 npm install
-npx playwright install chromium   # once, for the screenshot scripts
-npm run dev                       # http://localhost:5173/a (or /b, /c)
+npx playwright install chromium   # once, for the screenshot script
+npm run dev                       # then open http://localhost:5173/read
 ```
 
-| Script                 | What it does                                                         |
-| ---------------------- | -------------------------------------------------------------------- |
-| `npm test`             | Unit tests (Vitest).                                                 |
-| `npm run build`        | Type-checks everything and builds the app.                           |
-| `npm run check -- <x>` | Type-checks only `src/shared` and design `<x>` (`a`, `b` or `c`).    |
-| `npm run shot -- <x>`  | Screenshots design `<x>` in every reader state into `shots/<x>/`.    |
+| Script          | What it does                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| `npm test`      | Unit tests (Vitest).                                                 |
+| `npm run build` | Type-checks everything and builds the app.                           |
+| `npm run shot`  | Screenshots the reader in every state at desktop and phone size, plus reduced motion, into `shots/`. |
 
 ## Where things live
 
-- `CLAUDE.md`: code standards.
-- `DESIGN_RULES.md`: what every reader design must do.
+- `src/reader/`: the reader (routes `/read` and `/read/:sectionId`).
+- `src/manual/`: the manual's data, store, fake streamer, markdown renderer and fonts, plus the
+  sample manual in `src/manual/sample/`. Its README documents the API.
+- `scripts/`: the `shot` script.
+- `DESIGN.md`: the reader's design: its rules, tokens, layout and behavior.
 - `WORKLIST.md`: the task list.
-- `src/shared/README.md`: the shared runtime designs build on (hooks, `<Markdown>`, fonts).
-- `src/designs/<x>/`: one folder per design.
-- `scripts/`: the `check` and `shot` scripts, plus `inspo.ts`, which captured the reference
-  screenshots.
-- `docs/inspo/`: reference screenshots for each design direction, described in its README.
+- `CLAUDE.md`: code standards.

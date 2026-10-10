@@ -1,10 +1,10 @@
 # RTFM
 
 A web app for reading hypothetical manuals. An LLM writes the table of contents first, then
-writes each section only when the reader opens it. We are currently designing the reader UI;
-there is no back-end or LLM yet.
+writes each section only when the reader opens it. The reader is built (in `src/reader/`) and
+reads one sample manual; there is no back-end or LLM yet.
 
-- `DESIGN_RULES.md`: what every reader design must do.
+- `DESIGN.md`: the reader's design and the rules any change to it must keep.
 - `WORKLIST.md`: the task list and the orchestrator's protocol.
 
 ## Shell

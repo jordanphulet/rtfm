@@ -1,6 +1,7 @@
-# Shared runtime
+# Manual runtime
 
-Everything a design needs to read the manual, stream sections and render markdown.
+Everything the app needs to read a manual: the data model, a live store, the fake streamer that
+writes sections, and the markdown renderer. The reader in `src/reader/` is built on it.
 
 ```ts
 import {
@@ -8,12 +9,14 @@ import {
   findSection, chapterOf, previousSection, nextSection,
   type Manual, type Chapter, type Section,
   type UseSectionResult, type SectionLinkProps, type MarkdownProps,
-} from "../../shared";
+} from "../manual";
 ```
 
-The data model (`Manual`, `Chapter`, `Section`) is described in `DESIGN_RULES.md`. The sample
-manual lives in `manual/` (its structure in `index.ts`, one `.md` file per section body). Designs
-never import it directly: `useManual()` returns it with live statuses.
+The data model (`Manual`, `Chapter`, `Section`) is defined in `types.ts` and described in
+`DESIGN.md`. The sample manual lives in `sample/` (its structure in `sample/index.ts`, one `.md`
+file per section body under `sample/sections/`). UI code never imports it directly:
+`useManual()` returns it with live statuses. `sample/index.ts` also exports `SHOT_SECTIONS`, the
+sections `npm run shot` and the tests use.
 
 ## Hooks
 
@@ -91,15 +94,19 @@ Renders markdown with GitHub-flavored extensions (tables, checklists, footnotes)
 
 ## Example
 
+A minimal reader, using the same patterns as `src/reader/`.
+
 ```tsx
 import { Link, useParams } from "react-router";
 import {
   Markdown, nextSection, previousSection, useManual, useSection, type SectionLinkProps,
-} from "../../shared";
+} from "../manual";
+
+const sectionPath = (id: string) => `/read/${id}`;
 
 function SectionLink({ section, children }: SectionLinkProps) {
   return (
-    <Link to={`/a/${section.id}`} data-status={section.status}>
+    <Link to={sectionPath(section.id)} data-status={section.status}>
       {children}
     </Link>
   );
@@ -115,7 +122,7 @@ function Toc({ currentId }: { currentId?: string }) {
           {chapter.sections.map((section) => (
             <Link
               key={section.id}
-              to={`/a/${section.id}`}
+              to={sectionPath(section.id)}
               data-status={section.status}
               aria-current={section.id === currentId ? "page" : undefined}
             >
@@ -137,14 +144,15 @@ function SectionPage({ id }: { id: string }) {
   return (
     <article data-status={status}>
       <h1>{section.label} {section.title}</h1>
-      {text === "" ? <p>{section.summary}</p> : <Markdown source={text} SectionLink={SectionLink} className="prose" />}
-      {previous && <Link to={`/a/${previous.id}`}>{previous.title}</Link>}
-      {next && <Link to={`/a/${next.id}`}>{next.title}</Link>}
+      <p>{section.summary}</p>
+      {text !== "" && <Markdown source={text} SectionLink={SectionLink} className="prose" />}
+      {previous && <Link to={sectionPath(previous.id)}>{previous.title}</Link>}
+      {next && <Link to={sectionPath(next.id)}>{next.title}</Link>}
     </article>
   );
 }
 
-export default function DesignA() {
+export default function Reader() {
   const { sectionId } = useParams();
   return (
     <>
@@ -167,27 +175,18 @@ written sections are unaffected.
 
 ## Fonts
 
-One module per font in `src/shared/fonts/`. Importing a module registers that font (all weights,
-roman and italic); its export is a `font-family` value with fallbacks.
+One side-effect module per font in `fonts/`. Importing a module registers that font (roman and
+italic); the modules export nothing.
 
 ```ts
-import { newsreader } from "../../shared/fonts/newsreader";
-
-const body = { fontFamily: newsreader };
+import "../manual/fonts/ibm-plex-sans";
+import "../manual/fonts/ibm-plex-mono";
 ```
 
-| Role    | Module             | Export           | Family                     |
-| ------- | ------------------ | ---------------- | -------------------------- |
-| Serif   | `newsreader`       | `newsreader`     | Newsreader (variable)      |
-| Serif   | `literata`         | `literata`       | Literata (variable)        |
-| Serif   | `source-serif-4`   | `sourceSerif4`   | Source Serif 4 (variable)  |
-| Serif   | `eb-garamond`      | `ebGaramond`     | EB Garamond (variable)     |
-| Display | `fraunces`         | `fraunces`       | Fraunces (variable)        |
-| Display | `instrument-serif` | `instrumentSerif`| Instrument Serif (400)     |
-| Sans    | `instrument-sans`  | `instrumentSans` | Instrument Sans (variable) |
-| Sans    | `ibm-plex-sans`    | `ibmPlexSans`    | IBM Plex Sans (variable)   |
-| Sans    | `public-sans`      | `publicSans`     | Public Sans (variable)     |
-| Mono    | `jetbrains-mono`   | `jetbrainsMono`  | JetBrains Mono (variable)  |
-| Mono    | `ibm-plex-mono`    | `ibmPlexMono`    | IBM Plex Mono (400, 700)   |
+| Module          | Family in CSS            | Registers                                   |
+| --------------- | ------------------------ | ------------------------------------------- |
+| `ibm-plex-sans` | `"IBM Plex Sans Variable"` | IBM Plex Sans, variable (weight and width axes) |
+| `ibm-plex-mono` | `"IBM Plex Mono"`        | IBM Plex Mono, weights 400 and 700          |
 
-In CSS, use the family name from the export, e.g. `font-family: "Newsreader Variable", Georgia, serif;`.
+The reader names them in `src/reader/tokens.css` as `--font-sans` and `--font-mono`, with
+fallbacks.
