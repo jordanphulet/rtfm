@@ -241,7 +241,7 @@ Screenshot caveats to include in every design agent's brief:
   reading).
 
 ### P1.A.build · P1.B.build · P1.C.build — Build the design
-- **Status:** A: doing (agent: a0d3ba98559399c81) · B: doing (agent: a32e1599794f15149) · C: doing (agent: a395da211fdfd8ec3)
+- **Status:** A: done · B: doing (agent: a32e1599794f15149) · C: doing (agent: a395da211fdfd8ec3)
 - **Depends on:** the matching P1.x.spec
 - **Files:** `src/designs/<x>/**`
 - **Do:**
@@ -253,13 +253,23 @@ Screenshot caveats to include in every design agent's brief:
 - **Done when:** `npm run check -- <x>` passes; all screenshot states render; `NOTES.md` logs
   3 or more passes; no files are changed outside `src/designs/<x>/`.
 
+### P1.shot — Full-page streaming screenshot
+- **Status:** doing (agent: a37edd7e6e7681d49)
+- **Depends on:** — (start when an agent slot is free)
+- **Files:** `scripts/shot.ts`
+- **Do:** add a `streaming-full` state: the unwritten section with `?freeze=0.5`, captured full
+  page at desktop and mobile. The `streaming` viewport capture can't show the live edge, because
+  at 50% it is below the fold and designs must not scroll to it.
+- **Done when:** `npm run shot -- a` saves the two new files with no errors, and the live edge
+  is visible in them.
+
 ---
 
 ## P2 — Review (fresh agents, not the builders)
 
 ### P2.A.review · P2.B.review · P2.C.review
 - **Status:** A: todo · B: todo · C: todo
-- **Depends on:** the matching P1.x.build
+- **Depends on:** the matching P1.x.build, and P1.shot
 - **Agent:** a new agent, never the one that built the design
 - **Files:** `src/designs/<x>/REVIEW.md` (the only file it may write)
 - **Do:**
