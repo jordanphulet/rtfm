@@ -1,0 +1,118 @@
+import { execFile } from "node:child_process";
+import { writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { describe, expect, it } from "vitest";
+import { createFileLedger } from "../storage/file-ledger.ts";
+import type { LedgerEntry, SettleEntry } from "../storage/types.ts";
+import { tempDataDir } from "../testing.ts";
+import { killSwitchPath } from "./gateway.ts";
+import { usageReport } from "./usage-report.ts";
+
+const HAIKU = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
+const CAPS = { dailyUsd: 2, monthlyUsd: 20 };
+const USAGE_SCRIPT = fileURLToPath(new URL("../usage.ts", import.meta.url));
+
+function call(
+  callId: string,
+  reservedAt: string,
+  settle: Partial<SettleEntry> | "unsettled",
+  { job = "write-section", model = HAIKU } = {},
+): LedgerEntry[] {
+  const reserve: LedgerEntry = { kind: "reserve", callId, reservedAt, job, model, worstCaseUsd: 0.02 };
+  if (settle === "unsettled") return [reserve];
+  return [
+    reserve,
+    {
+      kind: "settle",
+      callId,
+      reservedAt,
+      at: reservedAt,
+      job,
+      model,
+      inputTokens: 1000,
+      outputTokens: 800,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+      usd: 0.005,
+      outcome: "complete",
+      estimated: false,
+      ...settle,
+    },
+  ];
+}
+
+describe("usage report", () => {
+  const now = new Date("2026-10-11T12:00:00.000Z");
+
+  it("reports an empty ledger as no spend", () => {
+    const report = usageReport({ monthEntries: [], now, caps: CAPS, killSwitchOn: false });
+    expect(report).toContain("Kill switch: off.");
+    expect(report).toContain("Today, 2026-10-11: $0.0000 of $2.00, 0 calls");
+    expect(report).toContain("This month, 2026-10: $0.0000 of $20.00, 0 calls");
+    expect(report).not.toContain("Unsettled reservations");
+  });
+
+  it("splits today's and this month's spend by model and by job", () => {
+    const monthEntries = [
+      ...call("a", "2026-10-11T09:00:00.000Z", { usd: 0.005 }),
+      ...call("b", "2026-10-11T10:00:00.000Z", { usd: 0.0102, outcome: "aborted", estimated: true }),
+      ...call("c", "2026-10-11T11:00:00.000Z", "unsettled"),
+      ...call("d", "2026-10-03T11:00:00.000Z", { usd: 0.1 }, { job: "write-toc", model: "us.model" }),
+    ];
+    const report = usageReport({ monthEntries, now, caps: CAPS, killSwitchOn: true });
+
+    expect(report).toBe(
+      [
+        "Model spend (UTC). Kill switch: ON, new calls are refused.",
+        "",
+        "Today, 2026-10-11: $0.0352 of $2.00, 3 calls",
+        "  aborted 1, failed 0, estimated 1, unsettled 1",
+        "  by model:",
+        `    ${HAIKU}  $0.0352  3 calls`,
+        "  by job:",
+        "    write-section  $0.0352  3 calls",
+        "",
+        "This month, 2026-10: $0.1352 of $20.00, 4 calls",
+        "  aborted 1, failed 0, estimated 1, unsettled 1",
+        "  by model:",
+        `    ${HAIKU}  $0.0352  3 calls`,
+        `    ${"us.model".padEnd(HAIKU.length)}  $0.1000  1 call`,
+        "  by job:",
+        "    write-section  $0.0352  3 calls",
+        "    write-toc      $0.1000  1 call",
+        "",
+        "Unsettled reservations, counted at their worst case:",
+        "  2026-10-11T11:00:00.000Z  c  write-section  $0.0200",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("npm run usage", () => {
+  async function runUsage(dataDir: string): Promise<string> {
+    const { stdout } = await promisify(execFile)(process.execPath, [USAGE_SCRIPT, dataDir]);
+    return stdout;
+  }
+
+  it("works on an empty ledger", async () => {
+    const output = await runUsage(await tempDataDir());
+    expect(output).toMatch(/Today, \d{4}-\d{2}-\d{2}: \$0\.0000 of \$2\.00, 0 calls/);
+  });
+
+  it("reads a test ledger and the kill switch from the data dir it is given", async () => {
+    const dataDir = await tempDataDir();
+    const ledger = createFileLedger(dataDir);
+    const reservedAt = new Date().toISOString();
+    for (const entry of [...call("a", reservedAt, { usd: 0.0081 }), ...call("b", reservedAt, "unsettled")]) {
+      await ledger.append(entry);
+    }
+    await writeFile(killSwitchPath(dataDir), "");
+
+    const output = await runUsage(dataDir);
+    expect(output).toContain("Kill switch: ON");
+    expect(output).toMatch(/Today, \d{4}-\d{2}-\d{2}: \$0\.0281 of \$2\.00, 2 calls/);
+    expect(output).toContain(`${HAIKU}  $0.0281  2 calls`);
+    expect(output).toContain(`${reservedAt}  b  write-section  $0.0200`);
+  });
+});

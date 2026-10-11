@@ -21,6 +21,6 @@ export function createFileLedger(dataDir: string): UsageLedger {
   };
 }
 
-function monthOf(isoTime: string): string {
+export function monthOf(isoTime: string): string {
   return isoTime.slice(0, "2026-10".length);
 }

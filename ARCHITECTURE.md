@@ -63,12 +63,14 @@ server/
     prompt.ts             builds the prompt (BE.5)
     validate.ts           cheap output checks (BE.5)
   gateway/
-    types.ts              ModelClient, ModelEvent, refusal errors
+    types.ts              ModelClient, ModelEvent, GatewayConfig, refusal errors
     gateway.ts            caps, reservations, concurrency, idle timeout, kill switch, ledger
-    prices.ts             the dated price table
+    ledger-calls.ts       pairs reserve and settle entries into calls (replay and usage)
+    prices.ts             the dated price table, cost and worst-case cost
     credentials.ts        reads the AWS keys from .env.local
     bedrock-client.ts     the only file that imports @anthropic-ai/bedrock-sdk
-    sdk-boundary.test.ts  fails if anything else imports the SDK
+    usage-report.ts       formats npm run usage
+    sdk-boundary.test.ts  fails if anything else imports the SDK or the client
 ```
 
 Tests sit next to the code (`*.test.ts`). Any test that starts a server binds port 0.
@@ -312,68 +314,149 @@ type ModelEvent =
   | { type: "stop"; reason: string };    // end_turn, max_tokens, refusal, …
 
 // server/gateway/gateway.ts
-function createGateway(deps: {
+async function createGateway(deps: {
   client: ModelClient; ledger: UsageLedger; config: GatewayConfig;
   prices: PriceTable; dataDir: string; now?: () => Date;
-}): { stream(job: Job, prompt: Prompt, signal: AbortSignal): AsyncIterable<ModelEvent> };
-// throws SpendingRefused ("daily-cap" | "monthly-cap" | "kill-switch") or GatewayBusy
+}): Promise<{ stream(job: Job, prompt: Prompt, signal: AbortSignal): AsyncIterable<ModelEvent> }>;
+// the stream's first step throws SpendingRefused ("daily-cap" | "monthly-cap" | "kill-switch")
+// or GatewayBusy; a stalled call throws ModelStalled, and a stream that ends without a stop
+// reason throws ModelStreamIncomplete
 ```
 
-`createGateway` throws `ModelNotPriced` if any job's model is missing from the price table, so the
-server refuses to start. Then, for each call:
+`createGateway` rejects with `ModelNotPriced` if any job's model is missing from the price table,
+so the server refuses to start. It is async because it replays the ledger before it returns. The
+stream is an async generator, so a refusal surfaces on the first `next()`, before any event. A
+signal that is already aborted is refused without a reservation.
 
-1. **Kill switch.** If `.data/STOP` exists, refuse. Creating the file stops new calls at once, with
-   no restart, and deleting it resumes them. A call already running finishes; it is bounded by
-   `max_tokens`.
+**Callers must read the stream with `for await`**, which calls `return()` when they stop early,
+so the call is aborted and settled. An iterator that is abandoned without `return()` never
+settles. The caps stay safe, because its reservation keeps counting at the worst case, but the
+call stays "running" until the server restarts.
+
+Then, for each call:
+
+1. **Kill switch.** If `.data/STOP` exists (`existsSync`, so steps 1–5 up to the ledger write are
+   one synchronous step), refuse. Creating the file stops new calls at once, with no restart, and
+   deleting it resumes them. A call already running finishes; it is bounded by `max_tokens`.
 2. **Concurrency.** If `maxConcurrentCalls` (3) calls are running, throw `GatewayBusy`.
-3. **Worst case.** `(inputBound × input price) + (max_tokens × output price)`.
-   - `inputBound` is the prompt's UTF-8 byte length plus 100 tokens for message framing.
+3. **Worst case.** `(inputBound × highest input price) + (max_tokens × output price)`.
+   - `inputBound` is the prompt's UTF-8 byte length, plus 100 tokens for the request's framing and
+     10 for each message's.
    - A token is at least one byte, so this is a true upper bound with no tokenizer.
+   - The input is priced at the highest of the input, cache-write and cache-read prices, so cache
+     writes can never cost more than the reservation.
+   - `inputTokenBound` counts only plain-text system prompts and messages. It must change if
+     prompts gain tools, images or system prompts made of blocks.
 4. **Caps.** For the day and the month (UTC, as AWS bills), `settled + reserved + worst case` must
    stay at or under the cap. The check and the reservation are one synchronous step on in-memory
    totals, so two calls can't both slip under.
 5. **Reserve.** Append `{ kind: "reserve", callId, reservedAt, job, model, worstCaseUsd }` and await
-   it.
+   it. If the append fails, the in-memory reservation is released and the error is rethrown.
 6. **Call.** `client.stream(...)`, re-yielding events.
-   - The writer's signal goes straight to the SDK request, so a disconnect aborts the HTTP call.
-   - **Idle timeout:** 30s with no event aborts the call, with outcome `failed`. BE.3 checks
-     whether the SDK's own `timeout` covers the stream body. It is set explicitly either way.
+   - The writer's signal goes straight to the SDK request, combined (`AbortSignal.any`) with the
+     gateway's own cut-off signal, so a disconnect aborts the HTTP call. If the writer stops
+     reading early, the gateway aborts the call itself.
+   - **Idle timeout:** 30s with no event aborts the call, with outcome `failed`, and the stream
+     throws `ModelStalled`. The timer starts before the request is sent, so it also covers a
+     request that never answers.
+   - The timer also runs while the caller holds an event. This is deliberate: a caller that
+     stops pulling for 30s is as stuck as a model that stops sending, and the HTTP call should
+     not stay open for it. The section writer only hands each chunk on, so it never comes close.
+   - **The SDK's `timeout` does not cover the stream body** (checked in 0.34.4): its timer wraps
+     only the `fetch` call and is cleared once the response headers arrive. The idle timeout is
+     therefore the only protection against a stalled body. The SDK `timeout` is still set
+     explicitly, to `idleTimeoutMs`, so a request that gets no headers fails after 30s rather than
+     the SDK's 10-minute default.
 7. **Settle** (in `finally`, so it runs after completion, error or abort). Append `{ kind:
    "settle", callId, reservedAt, at, job, model, inputTokens, outputTokens, cacheWriteTokens,
    cacheReadTokens, usd, outcome: "complete" | "aborted" | "failed", estimated }`.
    - It goes into the reservation's month file, and the cost is charged to the reservation's day
      and month, so a call that crosses midnight stays in one period.
-   - **Input tokens** come from `message_start`. If that never arrived, the input bound is used.
+   - **A call is `complete` only when a `stop` event arrived.** When the client's stream ends,
+     the gateway checks, in order: if its cut-off fired (a stall), it throws `ModelStalled`; if
+     the writer's signal aborted, it throws the abort; if no `stop` arrived, it throws
+     `ModelStreamIncomplete`. All three go through the same catch as an error from the client.
+     This matters because the SDK's stream can end quietly: its iterator marks itself done on an
+     abort or error, and only rejects a `next()` that is already waiting. If the abort, a stall,
+     an exception frame or a cut-off body lands while the gateway is paused at `yield`, the next
+     `next()` just returns `done`.
+   - **Outcome:** `complete` as above; `aborted` when the writer's signal aborts or the writer
+     stops reading; `failed` on a stall, a client error or a stream with no `stop`.
+   - **Input tokens** come from `message_start`. If that never arrived, the input bound is used,
+     at the plain input price.
    - **Output tokens:**
-     - On a complete call they come from the final `message_delta`.
-     - **An aborted or stalled call is charged its full reserved output (`max_tokens`)** and
-       marked `estimated: true`. The stream doesn't tell us what Bedrock billed after the cut.
-       BE.6 compares this against Cost Explorer before anything less conservative is used.
+     - On a complete call they come from the final `message_delta`. `message_start` also carries
+       an `output_tokens`, but it is a placeholder (1), so the client doesn't map it.
+     - **Any call that doesn't complete (aborted, stalled or failed) is charged its full reserved
+       output (`max_tokens`)** and marked `estimated: true`. The stream doesn't tell us what
+       Bedrock billed after the cut. BE.6 compares this against Cost Explorer before anything
+       less conservative is used.
+     - `estimated` is also set if a complete call never reported its input or output tokens.
 
 **The ledger is the durable record.** On start, the gateway replays this month's file into its
 totals. A `reserve` with no `settle` (the server died mid-call) counts at its worst case, and
 `npm run usage` lists it as unsettled.
+
+- **Totals in memory** are one map from period (`2026-10-11` or `2026-10`) to committed dollars.
+  Reserving adds the worst case to the reservation's day and month; settling adds `usd − worst
+  case` to the same two periods.
+- **One server process per data folder.** The totals live in one process's memory, so two
+  servers on the same `.data/` would each allow the full caps. The DynamoDB version (Later)
+  moves the check into the database.
+- **`gateway/ledger-calls.ts`** pairs `reserve` and `settle` entries into calls. The replay and
+  `npm run usage` both use it, so they count spend the same way. `monthOf` comes from
+  `storage/file-ledger.ts`, which files entries by it.
 
 **`bedrock-client.ts`** is the only importer of `@anthropic-ai/bedrock-sdk`:
 
 ```ts
 import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
 
-export function createBedrockClient(credentials: AwsCredentials, baseURL = regionalURL(credentials.region)): ModelClient {
+export function createBedrockClient(
+  credentials: AwsCredentials,
+  { timeoutMs, baseURL = regionalURL(credentials.region) }: { timeoutMs: number; baseURL?: string },
+): ModelClient {
   const client = new AnthropicBedrock({
     awsAccessKey: credentials.accessKeyId,       // from .env.local, never process.env
     awsSecretKey: credentials.secretAccessKey,   // not awsSecretAccessKey, which the SDK ignores
-    awsRegion: credentials.region,
-    baseURL,                                     // ignores ANTHROPIC_BEDROCK_BASE_URL; tests pass a local server
-    // Typed string | undefined; null is deliberate: it stops the SDK reading
-    // AWS_BEARER_TOKEN_BEDROCK, which would win over SigV4.
-    apiKey: null as unknown as undefined,
-    providerChainResolver: async () => { throw new Error("The AWS default credential chain is never used"); },
+    awsRegion: credentials.region,               // explicit, so AWS_REGION is never read
+    baseURL,                                     // explicit, so ANTHROPIC_BEDROCK_BASE_URL is never read
+    apiKey: null as unknown as undefined,        // see below
+    providerChainResolver: async () => { throw new Error(CREDENTIAL_CHAIN_REFUSED); },
     maxRetries: 0,                               // one reservation, one HTTP call
+    timeout: timeoutMs,                          // config.idleTimeoutMs
   });
-  // client.messages.stream({ model, max_tokens, system, messages }, { signal }), mapped to ModelEvent
+  // client.messages.stream({ model, max_tokens, system, messages }, { signal }), mapped to ModelEvent:
+  // message_start and message_delta → usage, text_delta → text, message_delta's stop_reason → stop
 }
 ```
+
+**Checked in the installed SDK** (`@anthropic-ai/bedrock-sdk` 0.34.4, on `@anthropic-ai/sdk`
+0.133.0):
+
+- **Option names:** `awsAccessKey`, `awsSecretKey`, `awsRegion`, `awsSessionToken`, `apiKey`,
+  `providerChainResolver`, `baseURL`, `maxRetries`, `timeout`. There is no `awsSecretAccessKey`.
+- **Static keys bypass the chain:** when both keys are non-empty, the signer builds the
+  credentials from them. `providerChainResolver` is called only when either is missing or empty;
+  without one, the SDK's default resolver runs `fromEnv` and then `fromNodeProviderChain`
+  (profiles, `~/.aws/*`, SSO, IMDS). Ours throws instead, so the call fails with its message before
+  any request is sent.
+- **`apiKey`** is typed `string | undefined` and defaults to `AWS_BEARER_TOKEN_BEDROCK`. A
+  destructuring default only applies to `undefined`, so `null` passes through as the base
+  client's `authToken: null`, and the SDK signs with SigV4 whenever there is no `authToken`. The
+  SDK itself passes `apiKey: null` to the base client and turns off its default-credential
+  lookup, so `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are never read either.
+- **`maxRetries`** defaults to 2, which would mean up to three billed attempts under one
+  reservation. It is set to 0.
+- **`timeout`** defaults to 10 minutes and covers only the wait for response headers (step 6).
+- **Streaming abort:** the signal passed in the request options stays attached until the body is
+  settled, so aborting it mid-stream closes the HTTP connection. But `MessageStream`'s iterator
+  does not always throw afterwards: an abort or error that lands between two `next()` calls
+  ends the iteration quietly. The gateway's checks after the loop (step 7) catch this.
+- **Response framing:** Bedrock answers with `application/vnd.amazon.eventstream`, which the SDK
+  transcodes to server-sent events in `core/streaming.js`. Exception frames become SSE `error`
+  events, which the stream throws.
+- **The model ID** goes into the path unencoded: `/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke-with-response-stream`.
 
 Haiku 4.5 has thinking off unless asked, and no `cache_control` is sent this phase, because the
 shared prefix is too short to cache.
@@ -383,58 +466,87 @@ shared prefix is too short to cache.
 
 - The result goes into a local object, never `process.env`.
 - It takes exactly `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`, and treats an
-  empty value as missing.
-- If any is missing, it throws an error that names the missing variables and never prints a
-  value, so the server refuses to start with the Bedrock writer.
+  empty or blank value, or a missing file, as missing.
+- If any is missing, it throws `CredentialsMissing`, which names the missing variables and never
+  prints a value, so the server refuses to start with the Bedrock writer. BE.5 calls it from
+  `app.ts` when `config.writer` is `"bedrock"`.
 
 **Tests (BE.3), all offline**
 
-- **SDK boundary.** `sdk-boundary.test.ts` scans the text of every `.ts`/`.tsx` file under `src/`,
-  `server/` and `scripts/`, and of the root `*.ts` files. It fails if any file other than
-  `bedrock-client.ts` imports or requires `@anthropic-ai/…` or `@aws-sdk/…`.
-- **Credentials.** `bedrock-client.ts` is pointed at a local `node:http` server, with fake keys,
-  and with `AWS_PROFILE` and `AWS_BEARER_TOKEN_BEDROCK` set. The test asserts that the request is
-  SigV4-signed with the fake key id, carries no bearer token, and that the chain resolver never
-  ran. This proves the `apiKey: null` cast works at runtime.
+- **SDK boundary.** `sdk-boundary.test.ts` scans the text of every source file (`.ts`, `.tsx`,
+  `.js` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`, and of the root source
+  files. It fails if any file other than `bedrock-client.ts` has a quoted or backticked string
+  starting with `@anthropic-ai/` or `@aws-sdk/`, which covers every form of import. It also fails
+  if anything outside `server/gateway/` and `server/app.ts` imports `bedrock-client`, so nothing
+  can call the client without going through the caps.
+- **Credentials.** `bedrock-client.test.ts` points the client at a local `node:http` server on
+  port 0 that answers with real `application/vnd.amazon.eventstream` frames (built with
+  `@smithy/eventstream-codec`, a dev dependency), with fake keys. `AWS_PROFILE`,
+  `AWS_BEARER_TOKEN_BEDROCK`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`,
+  `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BEDROCK_BASE_URL` are all set to
+  decoys.
+  - The request is SigV4-signed with the fake key id for `us-west-2/bedrock`, and carries no
+    bearer token, no `x-api-key` and no decoy value. This proves the `apiKey: null` cast works at
+    runtime.
+  - With an empty key, the call fails with the resolver's error and the server receives nothing.
+    This proves the default chain never runs: it would otherwise sign with the decoy env keys.
+  - Removing either guard makes these tests fail (checked by hand).
+  - The events are mapped, the stream's HTTP request closes when the signal aborts, and a 503
+    gets exactly one attempt.
+  - Through the real gateway: a complete stream settles at the reported usage; a mid-stream
+    exception frame, a body cut off mid-frame, and a body that ends between frames without a
+    stop each settle as `failed` at the full reserved output.
+  - `credentials.test.ts` covers reading the three keys from a temp file without touching
+    `process.env`, and refusing a missing or empty key, or a missing file.
 - **Gateway.** A fake `ModelClient` covers:
-  - each cap, including a call refused on its worst case;
+  - each cap, including a call refused on its worst case, running calls and unsettled
+    reservations counting at their worst case, and last month's spend not counting;
   - settling, and a settle that crosses midnight;
   - an unpriced model at start-up;
-  - the concurrency limit, the kill switch and the idle timeout;
-  - an aborted stream, recorded at its full reserved output.
+  - the concurrency limit, the kill switch, and the idle timeout, including a call that never
+    sends its first event and a caller that holds an event too long;
+  - an aborted stream, recorded at its full reserved output, and a failed one;
+  - a client that ends without a `stop`, and one that ends quietly after the signal aborts;
+  - a failed reserve append, which releases the reservation.
 
-**`npm run usage`** (`server/usage.ts`) prints today's and this month's spend (UTC) against the
-caps, by model and by job. It also shows call counts, aborted and estimated calls, unsettled
-reservations, and whether the kill switch is on.
+**`npm run usage`** (`server/usage.ts`, with the formatting in `gateway/usage-report.ts`) prints
+today's and this month's spend (UTC) against the caps, by model and by job. It also shows call
+counts, aborted, failed and estimated calls, unsettled reservations, and whether the kill switch
+is on. `npm run usage -- <dataDir>` reads another data folder; the tests use this.
 
 ## 6. Configuration
 
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Writer, port, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
+| Writer, port, data dir, caps, concurrency, jobs, section length (BE.5) | `server/config.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
 ```ts
 // server/config.ts
 export const API_PORT = 8787;
-export const config = {
+export const config: ServerConfig & GatewayConfig = {
   port: API_PORT,
   dataDir: fileURLToPath(new URL("../.data", import.meta.url)),   // <repo>/.data, whatever the cwd
-  writer: writerFromEnv(process.env.RTFM_WRITER),   // "fake" (default) | "bedrock"; anything else throws
-  caps: { dailyUsd: 2, monthlyUsd: 20 },
+  writer: writerFromEnv(process.env.RTFM_WRITER),   // "fake" (default); BE.5 adds "bedrock"; anything else throws
   maxConcurrentRuns: 3,
+  caps: { dailyUsd: 2, monthlyUsd: 20 },
   maxConcurrentCalls: 3,
   idleTimeoutMs: 30_000,
   jobs: {
     "write-section": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 2048 },
   },
-  sectionTargetCharacters: 3800,
 };
+// BE.5 adds sectionTargetCharacters: 3800
 ```
 
+- **Types.** `config` is a `ServerConfig & GatewayConfig`. `GatewayConfig` (`caps`,
+  `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`) lives in `gateway/types.ts`, and the gateway
+  takes `config` as it is. `ServerConfig` stays as BE.2 left it until BE.5 passes the gateway into
+  `startServer`. `sectionTargetCharacters` arrives with BE.5's writer, which is its only user.
 - **`maxTokens: 2048`.** The sample sections are 460–660 words (about 650–950 tokens), so this
-  leaves room, and its worst case is about $0.01.
+  leaves room. Its output costs at most about $0.01 (2,048 × $5 per million), and with the input
+  bound a call's worst-case reservation is about $0.02.
 - **The tiny-cap check (BE.6)** edits `caps` here and then reverts the edit.
 - **`BEDROCK_MODEL_ID` in `.env.local`** is ignored: `credentials.ts` takes only the three names
   above, and `.env.local` never reaches `process.env`. The user should delete the line, so that
