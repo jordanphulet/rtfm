@@ -97,7 +97,7 @@ make each of those a straightforward later step.
 - **Spending caps:** $2 a day and $20 a month, as configuration.
 
 ### BE.1 — Architecture
-- **Status:** todo
+- **Status:** doing (agent: ab5e108f668853cda)
 - **Depends on:** —
 - **Files:** `ARCHITECTURE.md`
 - **Do:** write the plan for this phase, short and concrete, for the user to approve before any
