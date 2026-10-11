@@ -26,6 +26,7 @@ export const config: ServerConfig = {
   idleTimeoutMs: 30_000,
   jobs: {
     "write-section": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 2048 },
+    librarian: { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 1024 },
   },
 };
 

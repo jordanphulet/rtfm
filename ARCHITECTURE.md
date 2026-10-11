@@ -1,8 +1,9 @@
 # RTFM — architecture
 
 A local Node server stores the manuals and their sections. It writes unwritten sections, with a fake
-writer or with Claude Haiku 4.5 on Amazon Bedrock, and streams them to the reader. Every model call
-goes through one gateway that caps spending.
+writer or with Claude Haiku 4.5 on Amazon Bedrock, and streams them to the reader. An agent loop runs
+a model with tools over several turns. Every model call, including each turn of the loop, goes
+through one gateway that caps spending.
 
 ```
 browser (Vite, :5173)                        server (node:http, :8787)
@@ -22,7 +23,7 @@ Node 22.18+, as `scripts/` does, with its own `tsconfig.server.json` (`module: n
 server/
   main.ts                 starts the server from config.ts (npm run server)
   dev.ts                  npm run dev: Vite plus `node --watch server/main.ts`
-  config.ts               committed settings (section 6)
+  config.ts               committed settings (section 7)
   app.ts                  startServer(config, writer?): builds storage, writer and gateway; routes
   testing.ts              helpers shared by the tests
   usage.ts                npm run usage
@@ -55,8 +56,12 @@ server/
     prompt.ts             builds the prompt
     section-text.ts       holds back the opening and yields whole words
     validate.ts           cheap output checks
+  agent/
+    loop.ts               runAgent: model turns and tool calls through the gateway (section 6)
+    tool.ts               defineTool: a tool's schema, status line and handler
+    scripted-client.ts    a fake ModelClient that plays scripted turns, tool calls included
   gateway/
-    types.ts              ModelClient, ModelEvent, GatewayConfig, refusal errors
+    types.ts              ModelClient, ModelPrompt, ModelEvent, GatewayConfig, refusal errors
     gateway.ts            caps, reservations, concurrency, idle timeout, kill switch, ledger
     ledger-calls.ts       pairs reserve and settle entries into calls (replay and usage)
     prices.ts             the dated price table, cost and worst-case cost
@@ -410,33 +415,49 @@ reported without reading any secret.
 
 ## 5. The model gateway
 
-`server/gateway/` is the only route to a model. The writer passes a job name, a prompt and a
-signal. It never sees a model ID, a price or the SDK.
+`server/gateway/` is the only route to a model. The section writer and the agent loop pass a job
+name, a prompt and a signal. They never see a model ID, a price or the SDK.
 
 ```ts
 // server/gateway/types.ts
-type Job = "write-section";              // later: "write-toc", "librarian"
-interface Prompt { system: string; messages: { role: "user" | "assistant"; content: string }[] }
+type Job = "write-section" | "librarian";
 
-interface ModelClient {                  // bedrock-client.ts, and a fake for tests
-  stream(request: { model: string; maxTokens: number; prompt: Prompt; signal: AbortSignal }):
+interface ModelPrompt {
+  system: string;
+  tools?: ToolDefinition[];              // { name, description, input_schema }
+  messages: { role: "user" | "assistant"; content: string | ContentBlock[] }[];
+}
+interface Prompt extends ModelPrompt {   // plain text, as the section writer builds it
+  messages: { role: "user" | "assistant"; content: string }[];
+}
+type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: unknown }
+  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
+
+interface ModelClient {                  // bedrock-client.ts, and fakes for tests
+  stream(request: { model: string; maxTokens: number; prompt: ModelPrompt; signal: AbortSignal }):
     AsyncIterable<ModelEvent>;
 }
 type ModelEvent =
   | { type: "text"; text: string }
+  | { type: "tool-use"; id: string; name: string; input: unknown }   // one per whole tool_use block
   | { type: "usage"; inputTokens?: number; outputTokens?: number;
       cacheWriteTokens?: number; cacheReadTokens?: number }
-  | { type: "stop"; reason: string };    // end_turn, max_tokens, refusal, …
+  | { type: "stop"; reason: string };    // end_turn, tool_use, max_tokens, refusal, …
 
 // server/gateway/gateway.ts
 async function createGateway(deps: {
   client: ModelClient; ledger: UsageLedger; config: GatewayConfig;
   prices: PriceTable; dataDir: string; now?: () => Date;
-}): Promise<{ stream(job: Job, prompt: Prompt, signal: AbortSignal): AsyncIterable<ModelEvent> }>;
+}): Promise<{ stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncIterable<ModelEvent> }>;
 // the stream's first step throws SpendingRefused ("daily-cap" | "monthly-cap" | "kill-switch")
 // or GatewayBusy; a stalled call throws ModelStalled, and a stream that ends without a stop
 // reason throws ModelStreamIncomplete
 ```
+
+Content blocks and tool definitions use Anthropic's field names, so `bedrock-client.ts` passes them
+to the SDK as they are.
 
 `createGateway` rejects with `ModelNotPriced` if any job's model is missing from the price table,
 so the server refuses to start. It is async because it replays the ledger before it returns. The
@@ -455,13 +476,22 @@ Then, for each call:
    deleting it resumes them. A call already running finishes; it is bounded by `max_tokens`.
 2. **Concurrency.** If `maxConcurrentCalls` (3) calls are running, throw `GatewayBusy`.
 3. **Worst case.** `(inputBound × highest input price) + (max_tokens × output price)`.
-   - `inputBound` is the prompt's UTF-8 byte length, plus 100 tokens for the request's framing and
-     10 for each message's.
-   - A token is at least one byte, so this is a true upper bound with no tokenizer.
+   - `inputBound` adds up:
+     - the UTF-8 bytes of the system prompt, of each message's text or, for block content, its
+       blocks as JSON, and of the tools as JSON;
+     - framing: 100 tokens for the request, 10 for each message, 10 for each content block and 10
+       for each tool;
+     - when the prompt has tools, the tool-use system prompt the API adds, whose size is per
+       model and lives with the model's prices (`toolUseSystemPromptTokens`).
+   - A token is at least one byte, so text counted by its bytes is a true upper bound with no
+     tokenizer. Blocks and tools are counted as their JSON plus framing per block and per tool,
+     which exceeds the rendered form the model sees.
+   - Each call sends the whole conversation, so each turn of an agent run reserves for all of it,
+     and the bound grows turn by turn.
    - The input is priced at the highest of the input, cache-write and cache-read prices, so cache
      writes can never cost more than the reservation.
-   - `inputTokenBound` counts only plain-text system prompts and messages. It must change if
-     prompts gain tools, images or system prompts made of blocks.
+   - Images and system prompts made of blocks aren't in `ModelPrompt`; the bound must count them
+     if they are added.
 4. **Caps.** For the day and the month (UTC, as AWS bills), `settled + reserved + worst case` must
    stay at or under the cap. The check and the reservation are one synchronous step on in-memory
    totals, so two calls can't both slip under.
@@ -541,10 +571,20 @@ export function createBedrockClient(
     maxRetries: 0,                               // one reservation, one HTTP call
     timeout: timeoutMs,                          // config.idleTimeoutMs
   });
-  // client.messages.stream({ model, max_tokens, system, messages }, { signal }), mapped to ModelEvent:
-  // message_start and message_delta → usage, text_delta → text, message_delta's stop_reason → stop
+  // client.messages.stream({ model, max_tokens, system, messages, tools }, { signal }), mapped to
+  // ModelEvent: message_start and message_delta → usage, text_delta → text, a tool_use block's
+  // content_block_start, input_json_delta and content_block_stop → one tool-use, message_delta's
+  // stop_reason → stop
 }
 ```
+
+**Tool calls.** `tools` is sent only when the prompt has some. A `tool_use` block's input arrives
+as `input_json_delta` fragments; the client joins them and parses the JSON once, at
+`content_block_stop`, with `JSON.parse` (no fragments means `{}`). The tools carry no
+`eager_input_streaming`, which Haiku 4.5 on Bedrock rejects, so the API buffers and validates each
+input before sending it. Input that still doesn't parse can only come from output cut off at
+`max_tokens`. That block is left out, with no event, so the stop reason (`max_tokens`) decides
+what happens: the agent loop then stops with `AgentStopped`.
 
 **Checked in the installed SDK** (`@anthropic-ai/bedrock-sdk` 0.34.4, on `@anthropic-ai/sdk`
 0.133.0):
@@ -608,7 +648,13 @@ prefix is too short to cache.
   - Removing either guard makes these tests fail (checked by hand).
   - The events are mapped, the stream's HTTP request closes when the signal aborts, and a 503
     gets exactly one attempt.
-  - Through the real gateway: a complete stream settles at the reported usage; a mid-stream
+  - A prompt with tools and block content is sent with `tools` and the blocks as they are, and
+    no `eager_input_streaming`; a prompt without tools sends no `tools`. Streamed `tool_use`
+    blocks, one with its input in fragments and one with none, become one `tool-use` event each.
+    A block whose input is cut off at `max_tokens` is left out, and the `max_tokens` stop still
+    arrives.
+  - Through the real gateway: a complete stream settles at the reported usage, and so does a
+    librarian turn that ends in tool calls; a mid-stream
     exception frame, a body cut off mid-frame, and a body that ends between frames without a
     stop each settle as `failed` at the full reserved output.
   - `credentials.test.ts` covers reading the three keys from a temp file without touching
@@ -616,6 +662,7 @@ prefix is too short to cache.
 - **Gateway.** A fake `ModelClient` covers:
   - each cap, including a call refused on its worst case, running calls and unsettled
     reservations counting at their worst case, and last month's spend not counting;
+  - the input bound of a prompt with tools and blocks;
   - settling, and a settle that crosses midnight;
   - an unpriced model at start-up;
   - the concurrency limit, the kill switch, and the idle timeout, including a call that never
@@ -629,7 +676,105 @@ today's and this month's spend (UTC) against the caps, by model and by job. It a
 counts, aborted, failed and estimated calls, unsettled reservations, and whether the kill switch
 is on. `npm run usage -- <dataDir>` reads another data folder; the tests use this.
 
-## 6. Configuration
+## 6. The agent loop
+
+`server/agent/` runs a model with tools: it calls the model, runs the tools it asks for, sends
+the results back, and repeats until the model ends its turn. Every turn is one gateway call, so
+each one is reserved, capped, settled and written to the ledger like any other, under the job the
+caller names.
+
+```ts
+// server/agent/tool.ts
+function defineTool<Shape extends z.core.$ZodShape>(tool: {
+  name: string;
+  description: string;
+  input: Shape;                          // the input's fields: { topic: z.string().min(1) }
+  status: string;                        // shown while it runs: "Looking through the library…"
+  run(input: z.infer<z.ZodObject<Shape, z.core.$strict>>, signal: AbortSignal): Promise<string>;
+}): AgentTool;
+
+interface AgentTool {
+  definition: ToolDefinition;            // what the model sees: name, description, input_schema
+  status: string;
+  run(input: unknown, signal: AbortSignal): Promise<{ content: string; isError?: boolean }>;
+}
+
+// server/agent/loop.ts
+type AgentEvent = { type: "status"; text: string } | { type: "text"; text: string };
+
+function runAgent(run: {
+  gateway: Gateway; job: Job; system: string; tools: AgentTool[];
+  messages: PromptMessage[];             // the conversation so far, ending with the user's message
+  signal: AbortSignal;
+}): AsyncGenerator<AgentEvent, PromptMessage[]>;   // returns the whole conversation
+```
+
+**A run, turn by turn:**
+
+1. Stream a turn through the gateway with the system prompt, every tool's definition and the
+   whole conversation. Each text delta is yielded as a `text` event as it arrives.
+2. Throw `AgentStopped` if the turn can't go into the conversation: an `end_turn` with no
+   content, or a `tool_use` stop with no `tool_use` block. Either would make the next request
+   invalid (an empty assistant message, or an empty user message of results).
+3. Append the assistant's message: its text and `tool_use` blocks, in order.
+4. If the stop reason is `end_turn`, return the conversation. If it is anything but `tool_use`
+   (`max_tokens`, `refusal`, …), throw `AgentStopped`.
+5. For each `tool_use` block, in order: stop if the signal has aborted, yield the tool's
+   `status`, then run it. Then append all the results as one user message of `tool_result`
+   blocks, and go back to step 1.
+
+**Tools.**
+
+- **The schema.** `defineTool` builds a `z.strictObject` from the input's fields and turns it
+  into the tool's JSON Schema with `z.toJSONSchema`, without its `$schema` key. The JSON Schema
+  has `additionalProperties: false`, and the check rejects extra keys to match.
+- **Input is checked before a tool runs.** Input that fails the schema never reaches `run`: the
+  model gets an error result (`is_error: true`) that starts "Invalid input:" and names each
+  problem, so it can try again.
+- **Other failures** also become error results rather than ending the run: a tool that throws
+  (the result is the error's text) and a call to a tool that doesn't exist.
+- **Tools run one after another**, even when the model asks for several at once, and all their
+  results go back in one message.
+
+**Stopping.**
+
+- **No turn limit.** The gateway's caps bound a run: every turn reserves its own worst case for
+  the whole conversation, so a long run is refused once the next turn would cross a cap.
+- **Errors end the run as they are.** A refusal (`SpendingRefused`, `GatewayBusy`), a stall or a
+  failed call is thrown from the generator unchanged, after the turns before it have settled.
+  The caller tells "budget" from "error" with `instanceof SpendingRefused`, as the section
+  writer does.
+- **Aborting.** The signal goes to every gateway call and every tool. An abort mid-turn aborts
+  the model call, which settles as `aborted`. An abort while a tool runs ends the run: none of
+  the turn's remaining tools runs, since one could delete or create a manual, and the next
+  turn's gateway call refuses an aborted signal before reserving anything.
+- **The caller reads the run with `for await`** (or calls `return()` when it stops early), so the
+  gateway call underneath is aborted and settled, as section 5 requires.
+
+**Events.** `status` and `text` are the only events, so a route can forward each as a
+server-sent event as it is. Text from different turns arrives in order, with the statuses of the
+tools run between them.
+
+**Tests** (`loop.test.ts`) drive `runAgent` through the real gateway, with a temp data folder,
+the seed manuals and a file ledger. `scripted-client.ts` is the fake model: `scriptedClient(turns)`
+plays one list of `ModelEvent`s per call and records each prompt, and `textTurn(...)` and
+`toolUseTurn(toolUses, text?)` build the turns. They cover:
+
+- a run of three turns with two tool calls: the events in order, the tools and schemas sent, the
+  conversation sent and returned, one complete `librarian` call in the ledger per turn, and a
+  reservation that grows with the conversation;
+- input that fails a tool's schema (wrong type, missing field), and an unknown tool: error
+  results, the tool never run, and the run carrying on;
+- a tool that throws;
+- a cap set to the first turn's reservation, which refuses the second turn: `SpendingRefused`,
+  after the first turn settled;
+- an abort mid-stream, settled as `aborted`;
+- an abort by the first of two tools in a turn: the second never runs, and there is no further
+  model call;
+- a turn that stops at `max_tokens`, one that ends with nothing in it, and one that stops for a
+  tool without calling one: `AgentStopped`.
+
+## 7. Configuration
 
 | Setting | Where | Secret |
 | --- | --- | --- |
@@ -652,6 +797,7 @@ export const config: ServerConfig = {
   idleTimeoutMs: 30_000,
   jobs: {
     "write-section": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 2048 },
+    librarian: { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 1024 },
   },
 };
 ```
@@ -661,11 +807,15 @@ export const config: ServerConfig = {
   writer, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
   `startServer` and the gateway take it as it is, so tests and the shot script spread `config`
   and override what they need.
-- **The `global.` model ID.** `write-section` uses the `global.` inference profile rather than
-  `us.`, which costs 10% more; nothing here needs routing that stays in the US.
+- **The `global.` model ID.** Both jobs use the `global.` inference profile rather than `us.`,
+  which costs 10% more; nothing here needs routing that stays in the US.
 - **`maxTokens: 2048`.** The sample sections are 460–660 words (about 650–950 tokens), so this
   leaves room. Its output costs at most about $0.01 (2,048 × $5 per million), and with the input
   bound a call's worst-case reservation is about $0.025.
+- **`librarian: maxTokens 1024`** is sized for a few short paragraphs and short JSON tool inputs.
+  Its output costs at most about $0.005 a turn. With
+  the tool definitions, the conversation and the 588-token tool-use system prompt in the input
+  bound, a turn of a few thousand input tokens reserves about $0.01.
 - **`sectionWordsRequested: 650`** is the length the prompt asks for, about the sample's own
   sections (460–660 words). **`sectionExpectedCharacters: 4800`** is the length the Bedrock
   writer's progress counts to, set from what Haiku actually writes (see section 4).
@@ -679,11 +829,19 @@ export const config: ServerConfig = {
 export const prices = {
   checkedOn: "2026-10-11",
   models: {
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0": { input: 1.00, output: 5.00, cacheWrite: 1.25, cacheRead: 0.10 },
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0": { input: 1.10, output: 5.50, cacheWrite: 1.375, cacheRead: 0.11 },
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0":
+      { input: 1.00, output: 5.00, cacheWrite: 1.25, cacheRead: 0.10, toolUseSystemPromptTokens: 588 },
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0":
+      { input: 1.10, output: 5.50, cacheWrite: 1.375, cacheRead: 0.11, toolUseSystemPromptTokens: 588 },
   },
 };
 ```
+
+- **`toolUseSystemPromptTokens`** is the size of the system prompt the API adds whenever a request
+  has tools. It is per model, so it sits with the model's prices. Haiku 4.5's is 496 tokens with
+  `tool_choice` `auto` or `none` and 588 with `any` or `tool` (Anthropic's tool-use pricing table,
+  checked 2026-10-11). The table holds the larger, so the bound holds whatever `tool_choice` is
+  sent.
 
 - **Sources:**
   - Anthropic's Haiku 4.5 list price, $1 / $5 (the `claude-api` skill, cached 2026-10-06).
@@ -695,7 +853,7 @@ export const prices = {
   tokens), with a worst-case reservation of about $0.025. A call aborted mid-section is charged
   its full `max_tokens`, about $0.013. Not yet checked against Cost Explorer.
 
-## 7. The reader's store (`src/manual/`)
+## 8. The reader's store (`src/manual/`)
 
 **How it reads the API**
 
@@ -761,7 +919,7 @@ export const prices = {
 - **Credentials:** an IAM role replaces `.env.local`. Only `bedrock-client.ts` changes.
 - **The passphrase:** it must travel as a cookie or a query parameter, because `EventSource`
   can't send headers.
-- **New jobs:** writing the table of contents and the librarian become new `Job` names through the
-  same gateway. Creating a manual is `putManual`.
+- **New jobs:** writing the table of contents becomes a new `Job` name through the same gateway.
+  Creating a manual is `putManual`.
 - **Bedrock Mantle:** moving to the Mantle endpoint (`AnthropicBedrockMantle`) changes only
   `bedrock-client.ts` and the price table.

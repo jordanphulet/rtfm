@@ -3,6 +3,7 @@ export interface ModelPrice {
   output: number;
   cacheWrite: number;
   cacheRead: number;
+  toolUseSystemPromptTokens: number;
 }
 
 export interface PriceTable {
@@ -20,8 +21,20 @@ export interface TokenCounts {
 export const prices: PriceTable = {
   checkedOn: "2026-10-11",
   models: {
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0": { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0": { input: 1.1, output: 5.5, cacheWrite: 1.375, cacheRead: 0.11 },
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      input: 1.0,
+      output: 5.0,
+      cacheWrite: 1.25,
+      cacheRead: 0.1,
+      toolUseSystemPromptTokens: 588,
+    },
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      input: 1.1,
+      output: 5.5,
+      cacheWrite: 1.375,
+      cacheRead: 0.11,
+      toolUseSystemPromptTokens: 588,
+    },
   },
 };
 

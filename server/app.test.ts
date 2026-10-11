@@ -10,7 +10,7 @@ import { tempDataDir } from "./testing.ts";
 
 describe("starting with the Bedrock writer", () => {
   it("refuses a model that isn't in the price table, before reading any credentials", async () => {
-    const jobs = { "write-section": { model: "anthropic.not-priced", maxTokens: 2048 } };
+    const jobs = { ...config.jobs, "write-section": { model: "anthropic.not-priced", maxTokens: 2048 } };
     await expect(
       startServer({ ...config, port: 0, dataDir: await tempDataDir(), writer: "bedrock", jobs }),
     ).rejects.toThrow(ModelNotPriced);

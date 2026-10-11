@@ -9,7 +9,16 @@ import { createBedrockClient, CREDENTIAL_CHAIN_REFUSED } from "./bedrock-client.
 import type { AwsCredentials } from "./credentials.ts";
 import { createGateway } from "./gateway.ts";
 import { prices } from "./prices.ts";
-import { ModelStreamIncomplete, type GatewayConfig, type ModelClient, type ModelEvent, type ModelRequest } from "./types.ts";
+import {
+  ModelStreamIncomplete,
+  type GatewayConfig,
+  type Job,
+  type ModelClient,
+  type ModelEvent,
+  type ModelPrompt,
+  type ModelRequest,
+  type ToolDefinition,
+} from "./types.ts";
 
 const MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
 const MAX_TOKENS = 2048;
@@ -50,6 +59,39 @@ const MESSAGE_EVENTS = [
   { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "listen." } },
   { type: "content_block_stop", index: 0 },
   { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 9 } },
+  { type: "message_stop" },
+];
+
+const TOOLS: ToolDefinition[] = [
+  {
+    name: "find_manuals",
+    description: "Finds manuals about a topic.",
+    input_schema: { type: "object", properties: { topic: { type: "string" } }, required: ["topic"] },
+  },
+  { name: "list_manuals", description: "Lists the manuals.", input_schema: { type: "object", properties: {} } },
+];
+const TOOL_PROMPT: ModelPrompt = {
+  system: "You are the librarian.",
+  tools: TOOLS,
+  messages: [
+    { role: "user", content: "Anything about geese?" },
+    { role: "assistant", content: [{ type: "tool_use", id: "toolu_1", name: "list_manuals", input: {} }] },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: '["negotiating-with-geese"]' }] },
+  ],
+};
+const TOOL_USE_EVENTS = [
+  MESSAGE_START,
+  { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+  { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Let me look." } },
+  { type: "content_block_stop", index: 0 },
+  { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_2", name: "find_manuals", input: {} } },
+  { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "" } },
+  { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"topic": "ge' } },
+  { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: 'ese"}' } },
+  { type: "content_block_stop", index: 1 },
+  { type: "content_block_start", index: 2, content_block: { type: "tool_use", id: "toolu_3", name: "list_manuals", input: {} } },
+  { type: "content_block_stop", index: 2 },
+  { type: "message_delta", delta: { stop_reason: "tool_use", stop_sequence: null }, usage: { output_tokens: 31 } },
   { type: "message_stop" },
 ];
 
@@ -189,6 +231,7 @@ describe("Bedrock client", () => {
       messages: [{ role: "user", content: "Write the section." }],
     });
     expect(body).not.toHaveProperty("model");
+    expect(body).not.toHaveProperty("tools");
 
     expect(events).toEqual([
       { type: "usage", inputTokens: 42, cacheWriteTokens: 0, cacheReadTokens: 0 },
@@ -196,6 +239,48 @@ describe("Bedrock client", () => {
       { type: "text", text: "listen." },
       { type: "usage", outputTokens: 9 },
       { type: "stop", reason: "end_turn" },
+    ]);
+  });
+
+  it("sends tools and block content, and turns each streamed tool_use block into one tool-use event", async () => {
+    respond = (response) => {
+      startEventStream(response, TOOL_USE_EVENTS);
+      response.end();
+    };
+
+    const events = await collect(bedrockClient().stream({ ...request(), prompt: TOOL_PROMPT }));
+
+    expect(received[0]!.body).toMatchObject({ system: TOOL_PROMPT.system, tools: TOOLS, messages: TOOL_PROMPT.messages });
+    expect(received[0]!.body).not.toHaveProperty("eager_input_streaming");
+    expect(JSON.stringify(received[0]!.body.tools)).not.toContain("eager_input_streaming");
+    expect(events).toEqual([
+      { type: "usage", inputTokens: 42, cacheWriteTokens: 0, cacheReadTokens: 0 },
+      { type: "text", text: "Let me look." },
+      { type: "tool-use", id: "toolu_2", name: "find_manuals", input: { topic: "geese" } },
+      { type: "tool-use", id: "toolu_3", name: "list_manuals", input: {} },
+      { type: "usage", outputTokens: 31 },
+      { type: "stop", reason: "tool_use" },
+    ]);
+  });
+
+  it("leaves out a tool_use block whose input is cut off at max_tokens, so the stop reason decides", async () => {
+    respond = (response) => {
+      startEventStream(response, [
+        ...TOOL_USE_EVENTS.slice(0, 7),
+        { type: "content_block_stop", index: 1 },
+        { type: "message_delta", delta: { stop_reason: "max_tokens", stop_sequence: null }, usage: { output_tokens: 1024 } },
+        { type: "message_stop" },
+      ]);
+      response.end();
+    };
+
+    const events = await collect(bedrockClient().stream({ ...request(), prompt: TOOL_PROMPT }));
+
+    expect(events).toEqual([
+      { type: "usage", inputTokens: 42, cacheWriteTokens: 0, cacheReadTokens: 0 },
+      { type: "text", text: "Let me look." },
+      { type: "usage", outputTokens: 1024 },
+      { type: "stop", reason: "max_tokens" },
     ]);
   });
 
@@ -228,14 +313,20 @@ describe("Bedrock client", () => {
       caps: { dailyUsd: 2, monthlyUsd: 20 },
       maxConcurrentCalls: 3,
       idleTimeoutMs: 5000,
-      jobs: { "write-section": { model: MODEL, maxTokens: MAX_TOKENS } },
+      jobs: {
+        "write-section": { model: MODEL, maxTokens: MAX_TOKENS },
+        librarian: { model: MODEL, maxTokens: MAX_TOKENS },
+      },
     };
 
-    async function streamThroughGateway(): Promise<{ result: Promise<ModelEvent[]>; settles: () => Promise<SettleEntry[]> }> {
+    async function streamThroughGateway(
+      job: Job = "write-section",
+      prompt: ModelPrompt = request().prompt,
+    ): Promise<{ result: Promise<ModelEvent[]>; settles: () => Promise<SettleEntry[]> }> {
       const dataDir = await tempDataDir();
       const ledger = createFileLedger(dataDir);
       const gateway = await createGateway({ client: bedrockClient(), ledger, config, prices, dataDir });
-      const result = collect(gateway.stream("write-section", request().prompt, new AbortController().signal));
+      const result = collect(gateway.stream(job, prompt, new AbortController().signal));
       const month = monthOf(new Date().toISOString());
       const settles = async () =>
         (await ledger.entriesForMonth(month)).filter((entry): entry is SettleEntry => entry.kind === "settle");
@@ -250,6 +341,18 @@ describe("Bedrock client", () => {
       const { result, settles } = await streamThroughGateway();
       await result;
       expect(await settles()).toMatchObject([{ outcome: "complete", inputTokens: 42, outputTokens: 9, estimated: false }]);
+    });
+
+    it("settles a librarian turn that ends in tool calls at the usage Bedrock reported", async () => {
+      respond = (response) => {
+        startEventStream(response, TOOL_USE_EVENTS);
+        response.end();
+      };
+      const { result, settles } = await streamThroughGateway("librarian", TOOL_PROMPT);
+      expect((await result).filter(({ type }) => type === "tool-use")).toHaveLength(2);
+      expect(await settles()).toMatchObject([
+        { job: "librarian", outcome: "complete", inputTokens: 42, outputTokens: 31, estimated: false },
+      ]);
     });
 
     it("fails a stream that sends an exception frame partway, charged at its full output", async () => {

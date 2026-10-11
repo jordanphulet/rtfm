@@ -1,14 +1,35 @@
-export type Job = "write-section";
+export type Job = "write-section" | "librarian";
 
-export interface Prompt {
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  input_schema: { type: "object"; [keyword: string]: unknown };
+}
+
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: unknown }
+  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
+
+export interface PromptMessage {
+  role: "user" | "assistant";
+  content: string | ContentBlock[];
+}
+
+export interface ModelPrompt {
   system: string;
+  tools?: ToolDefinition[];
+  messages: PromptMessage[];
+}
+
+export interface Prompt extends ModelPrompt {
   messages: { role: "user" | "assistant"; content: string }[];
 }
 
 export interface ModelRequest {
   model: string;
   maxTokens: number;
-  prompt: Prompt;
+  prompt: ModelPrompt;
   signal: AbortSignal;
 }
 
@@ -18,6 +39,7 @@ export interface ModelClient {
 
 export type ModelEvent =
   | { type: "text"; text: string }
+  | { type: "tool-use"; id: string; name: string; input: unknown }
   | { type: "usage"; inputTokens?: number; outputTokens?: number; cacheWriteTokens?: number; cacheReadTokens?: number }
   | { type: "stop"; reason: string };
 

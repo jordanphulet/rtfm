@@ -15,7 +15,7 @@ import { WriteFailed, type WrittenChunk } from "./types.ts";
 const MODEL = "test-model";
 const PRICES: PriceTable = {
   checkedOn: "2026-10-11",
-  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 } },
+  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
 };
 const WORDS_REQUESTED = 650;
 const EXPECTED_CHARACTERS = 100;
@@ -28,7 +28,10 @@ function gatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
     caps: { dailyUsd: 2, monthlyUsd: 20 },
     maxConcurrentCalls: 3,
     idleTimeoutMs: 1000,
-    jobs: { "write-section": { model: MODEL, maxTokens: 2048 } },
+    jobs: {
+      "write-section": { model: MODEL, maxTokens: 2048 },
+      librarian: { model: MODEL, maxTokens: 1024 },
+    },
     ...overrides,
   };
 }

@@ -14,15 +14,21 @@ import {
   type GatewayConfig,
   type ModelClient,
   type ModelEvent,
+  type ModelPrompt,
   type ModelRequest,
   type Prompt,
+  type ToolDefinition,
 } from "./types.ts";
 
 const MODEL = "test-model";
 const MAX_TOKENS = 100_000;
 const PRICES: PriceTable = {
   checkedOn: "2026-10-11",
-  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 } },
+  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
+};
+const JOBS: GatewayConfig["jobs"] = {
+  "write-section": { model: MODEL, maxTokens: MAX_TOKENS },
+  librarian: { model: MODEL, maxTokens: MAX_TOKENS },
 };
 const EMPTY_PROMPT: Prompt = { system: "", messages: [{ role: "user", content: "" }] };
 const EMPTY_PROMPT_BOUND = 100 + 10;
@@ -42,7 +48,7 @@ function gatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
     caps: { dailyUsd: 2, monthlyUsd: 20 },
     maxConcurrentCalls: 3,
     idleTimeoutMs: 1000,
-    jobs: { "write-section": { model: MODEL, maxTokens: MAX_TOKENS } },
+    jobs: JOBS,
     ...overrides,
   };
 }
@@ -137,7 +143,7 @@ describe("model gateway", () => {
   }
 
   it("refuses at start-up a job whose model is not in the price table", async () => {
-    const config = gatewayConfig({ jobs: { "write-section": { model: "unpriced-model", maxTokens: 10 } } });
+    const config = gatewayConfig({ jobs: { ...JOBS, librarian: { model: "unpriced-model", maxTokens: 10 } } });
     await expect(gateway(fakeClient().client, { config })).rejects.toThrow(ModelNotPriced);
   });
 
@@ -168,6 +174,24 @@ describe("model gateway", () => {
     await collect((await gateway(fakeClient().client)).stream("write-section", prompt, signal()));
     const [reserve] = await ledger.entriesForMonth("2026-10");
     const inputBound = 2 + 2 + 100 + 10;
+    expect(reserve).toMatchObject({ worstCaseUsd: (inputBound * 1.25 + MAX_TOKENS * 5) / 1_000_000 });
+  });
+
+  it("bounds a prompt with tools by every tool and block as JSON, their framing, and the model's tool-use system prompt", async () => {
+    const tools: ToolDefinition[] = [
+      { name: "list_manuals", description: "Lists the manuals.", input_schema: { type: "object", properties: {} } },
+    ];
+    const content = [
+      { type: "tool_use" as const, id: "call-1", name: "list_manuals", input: {} },
+      { type: "text" as const, text: "é" },
+    ];
+    const prompt: ModelPrompt = { system: "ab", tools, messages: [{ role: "assistant", content }] };
+    await collect((await gateway(fakeClient().client)).stream("write-section", prompt, signal()));
+
+    const [reserve] = await ledger.entriesForMonth("2026-10");
+    const bytes = 2 + Buffer.byteLength(JSON.stringify(tools)) + Buffer.byteLength(JSON.stringify(content));
+    const framing = 100 + 10 + (2 + 1) * 10;
+    const inputBound = bytes + framing + 588;
     expect(reserve).toMatchObject({ worstCaseUsd: (inputBound * 1.25 + MAX_TOKENS * 5) / 1_000_000 });
   });
 

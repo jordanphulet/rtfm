@@ -15,11 +15,12 @@ import {
   type Job,
   type ModelClient,
   type ModelEvent,
-  type Prompt,
+  type ModelPrompt,
+  type PromptMessage,
 } from "./types.ts";
 
 export interface Gateway {
-  stream(job: Job, prompt: Prompt, signal: AbortSignal): AsyncIterable<ModelEvent>;
+  stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncIterable<ModelEvent>;
 }
 
 export interface GatewayDeps {
@@ -47,6 +48,7 @@ type UsageEvent = Extract<ModelEvent, { type: "usage" }>;
 
 const REQUEST_FRAMING_TOKENS = 100;
 const MESSAGE_FRAMING_TOKENS = 10;
+const BLOCK_FRAMING_TOKENS = 10;
 const TOKEN_FIELDS = ["inputTokens", "outputTokens", "cacheWriteTokens", "cacheReadTokens"] as const;
 
 export function killSwitchPath(dataDir: string): string {
@@ -75,13 +77,13 @@ export async function createGateway({ client, ledger, config, prices, dataDir, n
     return (committedUsd.get(period) ?? 0) + worstCaseUsd > capUsd;
   }
 
-  function reserve(job: Job, prompt: Prompt): Reservation {
+  function reserve(job: Job, prompt: ModelPrompt): Reservation {
     if (existsSync(killSwitchPath(dataDir))) throw new SpendingRefused("kill-switch");
     if (runningCalls >= config.maxConcurrentCalls) throw new GatewayBusy(config.maxConcurrentCalls);
 
     const { model, maxTokens } = config.jobs[job];
     const price = prices.models[model]!;
-    const inputBound = inputTokenBound(prompt);
+    const inputBound = inputTokenBound(prompt, price.toolUseSystemPromptTokens);
     const worstCaseUsd = worstCaseCostUsd(price, inputBound, maxTokens);
     const reservedAt = now().toISOString();
     if (wouldCross(dayOf(reservedAt), worstCaseUsd, config.caps.dailyUsd)) throw new SpendingRefused("daily-cap");
@@ -122,7 +124,7 @@ export async function createGateway({ client, ledger, config, prices, dataDir, n
     });
   }
 
-  async function* stream(job: Job, prompt: Prompt, signal: AbortSignal): AsyncGenerator<ModelEvent> {
+  async function* stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncGenerator<ModelEvent> {
     signal.throwIfAborted();
     const reservation = reserve(job, prompt);
     const { callId, reservedAt, model, maxTokens, worstCaseUsd } = reservation;
@@ -168,10 +170,19 @@ export async function createGateway({ client, ledger, config, prices, dataDir, n
   return { stream };
 }
 
-function inputTokenBound(prompt: Prompt): number {
-  const texts = [prompt.system, ...prompt.messages.map((message) => message.content)];
+function inputTokenBound({ system, tools = [], messages }: ModelPrompt, toolUseSystemPromptTokens: number): number {
+  const texts = [system, ...messages.map(messageText)];
+  if (tools.length > 0) texts.push(JSON.stringify(tools));
   const bytes = texts.reduce((total, text) => total + Buffer.byteLength(text, "utf8"), 0);
-  return bytes + REQUEST_FRAMING_TOKENS + prompt.messages.length * MESSAGE_FRAMING_TOKENS;
+  const blocks = messages.reduce((total, { content }) => total + (typeof content === "string" ? 0 : content.length), 0);
+  const framing =
+    REQUEST_FRAMING_TOKENS + messages.length * MESSAGE_FRAMING_TOKENS + (blocks + tools.length) * BLOCK_FRAMING_TOKENS;
+  const toolUseSystemPrompt = tools.length > 0 ? toolUseSystemPromptTokens : 0;
+  return bytes + framing + toolUseSystemPrompt;
+}
+
+function messageText({ content }: PromptMessage): string {
+  return typeof content === "string" ? content : JSON.stringify(content);
 }
 
 function recordUsage(reported: Partial<TokenCounts>, event: UsageEvent) {
