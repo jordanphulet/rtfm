@@ -182,7 +182,7 @@ make each of those a straightforward later step.
     opening the same unwritten section show the same text.
 
 ### BE.4b — Dev and test hygiene
-- **Status:** doing (agent: ae8cc0d6a0fdad0e7)
+- **Status:** done
 - **Depends on:** BE.3, BE.4
 - **Files:** `server/testing.ts`, the server tests that create data folders, `server/dev.ts`,
   `vite.config.ts`
