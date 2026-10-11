@@ -169,11 +169,12 @@ describe("runs", () => {
     const first = recorder();
     const second = recorder();
 
-    await runs.join(manual, UNWRITTEN_ID, first.listener);
+    const firstLeaves = await runs.join(manual, UNWRITTEN_ID, first.listener);
     await runs.join(manual, OTHER_UNWRITTEN_ID, second.listener);
 
     expect(second.events).toEqual([{ event: "failed", data: { reason: "error" } }]);
     expect(await runs.statusOf(SAMPLE_ID, OTHER_UNWRITTEN_ID)).toBe("unwritten");
+    firstLeaves();
   });
 
   it("frees a run's slot once it is aborted or written", async () => {

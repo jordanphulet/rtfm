@@ -1,6 +1,7 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { onTestFinished } from "vitest";
 import type { StoredManual } from "./storage/types.ts";
 import { createFakeWriter } from "./writer/fake.ts";
 import type { SectionWriter } from "./writer/types.ts";
@@ -10,8 +11,10 @@ export const UNWRITTEN_ID = "the-room-controller";
 export const OTHER_UNWRITTEN_ID = "anatomy-of-a-scare";
 export const WRITTEN_ID = "sensing-the-guest";
 
-export function tempDataDir(): Promise<string> {
-  return mkdtemp(path.join(tmpdir(), "rtfm-test-"));
+export async function tempDataDir(): Promise<string> {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "rtfm-test-"));
+  onTestFinished(() => rm(dataDir, { recursive: true, force: true, maxRetries: 3 }));
+  return dataDir;
 }
 
 export function fastFakeWriter(): SectionWriter {
