@@ -1,3 +1,4 @@
+import type { AgentMessage } from "../agent";
 import type { LibraryManual } from "../library";
 
 const STOP_WORDS = new Set([
@@ -36,6 +37,18 @@ export function namedManuals(message: string, manuals: LibraryManual[]): Library
   return matches
     .filter((match) => match.title === best.title && match.subtitle === best.subtitle)
     .map((match) => match.manual);
+}
+
+const namedAtSend = new WeakMap<AgentMessage, LibraryManual[]>();
+
+/** The manuals a message named when it was sent, kept after any of them is deleted. */
+export function namedWhenSent(message: AgentMessage, manuals: LibraryManual[]): LibraryManual[] {
+  let named = namedAtSend.get(message);
+  if (!named) {
+    named = namedManuals(message.text, manuals);
+    namedAtSend.set(message, named);
+  }
+  return named;
 }
 
 function topicWords(title: string): Set<string> {

@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import type { AgentMessage } from "../agent";
 import type { LibraryManual } from "../library";
 import { ReplyMarkdown } from "../ui";
-import { namedManuals } from "./references";
+import { namedWhenSent } from "./references";
 
 interface TurnProps {
   message: AgentMessage;
@@ -22,17 +22,20 @@ export function Turn({ message, live, manuals, onJump, onHover }: TurnProps) {
     );
   }
 
-  const named = namedManuals(message.text, manuals);
+  const named = namedWhenSent(message, manuals);
+  const currentIds = new Set(manuals.map((manual) => manual.id));
+  const inLibrary = named.filter((manual) => currentIds.has(manual.id));
+  const gone = named.filter((manual) => !currentIds.has(manual.id));
   return (
     <li className="turn-user">
       <p className="said">
         <span className="visually-hidden">You: </span>
         {message.text}
       </p>
-      {named.length > 0 && (
+      {inLibrary.length > 0 && (
         <p className="named">
           In your library:{" "}
-          {named.map((manual, index) => (
+          {inLibrary.map((manual, index) => (
             <Fragment key={manual.id}>
               {index > 0 && ", "}
               <button
@@ -50,6 +53,11 @@ export function Turn({ message, live, manuals, onJump, onHover }: TurnProps) {
           ))}
         </p>
       )}
+      {gone.map((manual) => (
+        <p key={manual.id} className="named">
+          {manual.title} — no longer in your library
+        </p>
+      ))}
     </li>
   );
 }

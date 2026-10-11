@@ -11,7 +11,7 @@ import { LibrarianPanel } from "./LibrarianPanel";
 import { LibraryHead } from "./LibraryHead";
 import { collapse, flash } from "./motion";
 import { PhoneAgent } from "./PhoneAgent";
-import { namedManuals } from "./references";
+import { namedManuals, namedWhenSent } from "./references";
 import { useFocusShortcut } from "./useFocusShortcut";
 import { useMediaQuery } from "./useMediaQuery";
 import "./tokens.css";
@@ -57,10 +57,8 @@ export default function Home() {
 
   const findRow = useCallback((id: string) => rows.current.get(id) ?? null, []);
 
-  const lastSent = agent.messages.findLast((message) => message.role === "user")?.text ?? "";
-  const namedIds = new Set(
-    namedManuals(draft.trim() ? draft : lastSent, manuals).map((manual) => manual.id),
-  );
+  const lastSent = agent.messages.findLast((message) => message.role === "user");
+  const namedIds = new Set(markedManuals(draft, lastSent, manuals).map((manual) => manual.id));
 
   const canSend = agent.status === "idle" && draft.trim() !== "";
 
@@ -166,6 +164,17 @@ export default function Home() {
       <DeleteConfirmation manual={toDelete} findRow={findRow} onKeep={keep} onDelete={confirmDelete} />
     </div>
   );
+}
+
+/** The manuals named by the draft, or else by the latest message sent. */
+function markedManuals(
+  draft: string,
+  lastSent: AgentMessage | undefined,
+  manuals: LibraryManual[],
+): LibraryManual[] {
+  if (draft.trim()) return namedManuals(draft, manuals);
+  if (lastSent) return namedWhenSent(lastSent, manuals);
+  return [];
 }
 
 function agentNotice(messages: AgentMessage[], status: AgentStatus): string {
