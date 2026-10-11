@@ -141,7 +141,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   unchanged, and `npm test` runs only this checkout's tests.
 
 ### RL.4 — Harness prototypes
-- **Status:** doing (agent: adf46c7799a2aec81)
+- **Status:** needs-human (the user chooses: our own loop or Strands; see prototypes/harness/COMPARISON.md)
 - **Depends on:** —
 - **Files:** `prototypes/harness/**` (new), `package.json` and `package-lock.json` (the Strands
   dependency only)
@@ -220,7 +220,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   section of it can be written; this task's real spend is under $0.10.
 
 ### RL.8 — Research: Claude Platform on AWS and the AgentCore harness
-- **Status:** doing (agent: a247f5c2833f56330)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `research/aws-hosting.md` (new)
 - **Do:** research from official documentation, with dates, and make no AWS changes or calls:
