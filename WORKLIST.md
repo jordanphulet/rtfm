@@ -165,7 +165,8 @@ Out of scope: web access for any model, the passphrase, and deploying.
 - **Status:** doing (agent: a65877ec651ba401f)
 - **Depends on:** RL.4
 - **Files:** `server/agent/**` (new), `server/gateway/**`, `server/config.ts`, `package.json`,
-  `package-lock.json`, `ARCHITECTURE.md`, `prototypes/**` (to delete it)
+  `package-lock.json`, `ARCHITECTURE.md`, `prototypes/**` (to delete it), and the configs in
+  `server/app.test.ts` and `server/writer/bedrock.test.ts`
 - **Do:**
   - Build our own agent loop on the gateway, starting from `prototypes/harness/own-loop/` and
     `prototypes/harness/gateway/`: tool definitions and tool results go through it, and the
