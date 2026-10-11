@@ -61,178 +61,120 @@ of any existing task that must now wait for it.
 ---
 
 
-## Backend foundation
+## Library on the server
 
-The reader stops faking its writing. A local server stores manuals and sections, and Claude
-writes unwritten sections live through Amazon Bedrock. Every model call goes through one gateway
-that caps spending. When this phase is done:
+The landing page's library comes from the server instead of seven hard-coded entries, and the
+reader opens any manual, not only the sample. When this phase is done:
 
-- opening an unwritten section of the sample manual has Claude Haiku 4.5 write it live,
-  streaming into the reader the way the fake writer does now;
-- a written section survives a reload and is never written twice;
-- `npm run usage` shows today's and this month's spend, by model and by job;
-- when the budget is used up, the reader says so instead of failing silently.
+- the library lists the manuals in storage, with live "n of m written" counts;
+- all seven manuals are real: the six that were only library entries get a table of contents and
+  a voice on the server, with no sections written, so Claude writes them on demand;
+- deleting a manual removes it on the server, and it stays deleted after a reload or a restart;
+- the reader opens whichever manual you pick, at `/read/<manual>` and `/read/<manual>/<section>`;
+- "last opened" times are gone. The library is sorted by title.
 
-Out of scope: creating new manuals (the model writing the table of contents), the agent using real
-tools, the model bake-off, the passphrase, and deploying to Lambda and DynamoDB. The design must
-make each of those a straightforward later step.
+The canned librarian, the delete confirmation and the rest of the landing page's design stay as
+they are. Out of scope: creating manuals, renaming them, and the librarian using real tools.
 
 ### Rules for this phase
 
 - **AWS credentials come only from `.env.local`.** There are profiles in `~/.aws/config`, and
-  they **must never be used**. Code passes the keys from `.env.local` to the client explicitly
-  and never falls back to the default credential chain, `AWS_PROFILE`, `~/.aws/config` or
-  `~/.aws/credentials`. If the keys are missing, it refuses to start. Never read, print, copy or
-  edit `.env.local`: code may load it at runtime, and checks may only confirm which variable
-  names are set.
-- **Real Bedrock calls happen only in BE.5 and BE.6, and only through the gateway.** Every other
-  task, and every test, uses the fake writer or a fake model client.
-- **What works on Bedrock today** (us-west-2): `us.anthropic.claude-haiku-4-5-20251001-v1:0` and
-  `global.anthropic.claude-haiku-4-5-20251001-v1:0` through `bedrock-runtime`. The newer Claude
-  models are refused for this account until AWS grants access, so the model ID must be
-  configuration.
-  - In `@anthropic-ai/bedrock-sdk`, use the `AnthropicBedrock` client with `awsRegion`,
-    `awsAccessKey` and `awsSecretKey`; it ignores `awsSecretAccessKey`.
-  - `research/bedrock-models.md` covers pricing, request rules and pitfalls.
-- **Spending caps:** $2 a day and $20 a month, as configuration.
+  they **must never be used**. Never read, print, copy or edit `.env.local`.
+- **Real Bedrock calls happen only in LS.5**, only through the gateway, and under $0.10 in total.
+  Every other task and every test uses the fake writer.
+- **`.data/` holds the real usage ledger** and the user's manuals. Never delete or edit the
+  ledger, and deleting a manual never touches it. Live checks that delete manuals use a
+  temporary data folder, never `.data/`.
 
-### BE.1 — Architecture
-- **Status:** done
+### LS.1 — Six more seed manuals
+- **Status:** todo
 - **Depends on:** —
-- **Files:** `ARCHITECTURE.md`
-- **Do:** write the plan for this phase, short and concrete, for the user to approve before any
-  code is written:
-  - The server: where it lives, its layout, how `npm run dev` runs it alongside Vite (requests
-    to `/api` go to the server), and how plain handlers can be wrapped for Lambda later. Prefer
-    Node's built-in HTTP and the packages already in the repo, and justify anything new.
-  - The API: routes, request and response shapes, and streaming a section over server-sent
-    events. That includes joining a section that's already being written, and the errors the
-    reader shows ("budget reached", "couldn't write this section").
-  - Storage: a narrow interface for manuals, sections and the usage ledger. Locally it's files in
-    a gitignored folder; later it's DynamoDB. Say what the DynamoDB version of each piece would
-    be.
-  - The section writer: one interface with a fake and a Bedrock version, chosen by
-    configuration. One writer runs per section at a time.
-  - The model gateway: the only code that imports the Bedrock SDK.
-    - Daily and monthly dollar caps, enforced by reserving the worst case (input plus
-      `max_tokens` at the model's price) before each call and settling to the real usage after.
-    - A `max_tokens` limit for each job; a dated price table, refusing models not in it; a limit
-      on calls running at once; a kill switch.
-    - A durable ledger. When the reader disconnects mid-stream, the call stops and the tokens
-      already generated are still recorded.
-    - How a test keeps every other module from importing the SDK.
-  - Configuration: which settings are secret (only the credentials and region, in `.env.local`)
-    and which are committed (model IDs, caps, per-job limits, prices).
-  - How the reader's store in `src/manual/` changes to read from the API, and what moves out of
-    the browser.
-  - What stays the same: the reader's streaming rules in `DESIGN.md`, and the landing page,
-    which keeps its seed library and canned agent this phase.
-- **Done when:** the orchestrator's review passes, and then **the user approves it**. After the
-  review, mark it `needs-human` and ask the user. It becomes `done` only on the user's approval.
-
-### BE.2 — Server, storage and the fake writer
-- **Status:** done
-- **Depends on:** BE.1
-- **Files:** the server folder named in `ARCHITECTURE.md`, `package.json`, `package-lock.json`,
-  `vite.config.ts`, `tsconfig*.json`, `.gitignore`, `.claude/launch.json`
-- **Do:** build the server, the storage interface and its file version, the section API with
-  server-sent events, and the fake writer. The fake writer has the same pacing and failure
-  behaviour as today's browser streamer (1.2s delay, then about 20 characters every 85ms). Seed
-  storage with the sample manual. Keep one writer per section; a second request joins the
-  stream. `npm run dev` starts everything.
-- **Done when:**
-  - `npm run build` and `npm test` pass, and the new tests cover storage, the API, joining a
-    stream, and a disconnect mid-stream;
-  - with `npm run dev`, `curl` streams a section over the API, and a written section is still
-    there after a server restart.
-
-### BE.3 — The model gateway
-- **Status:** done
-- **Depends on:** BE.2
-- **Files:** the gateway folder named in `ARCHITECTURE.md`, its tests, the `usage` script,
-  `server/config.ts` (caps and per-job limits), `package.json`, `package-lock.json`
-- **Do:** build the gateway as `ARCHITECTURE.md` describes, with a fake model client for the
-  tests. Also:
-  - `npm run usage`: today's and this month's spend, by model and by job;
-  - a test that fails if any file other than the gateway imports the Bedrock SDK;
-  - the credentials rule above, with a test that the client never uses a profile or the default
-    chain.
-- **Done when:**
-  - `npm run build` and `npm test` pass;
-  - tests cover the caps (including a call refused because its worst case would cross a cap),
-    settling a reservation, refusing a model not in the price table, the limit on calls running
-    at once, the kill switch, and recording a stream aborted partway;
-  - `npm run usage` works on an empty ledger and on a test one.
-
-### BE.4 — The reader reads from the server
-- **Status:** done
-- **Depends on:** BE.2
-- **Files:** `src/manual/**`, `src/reader/**`, `DESIGN.md`, `scripts/**`, `src/library/seed.ts`,
-  `src/library/store.test.tsx`, `src/library/README.md`
+- **Files:** `server/seed/**` (new manual folders only; the Haunt's folder stays as it is)
 - **Do:**
-  - The reader gets the manual and its sections from the API and streams unwritten sections from
-    it. Remove the browser-side fake streamer and anything else the server now owns.
-  - Keep `?freeze` (or its equivalent) for the screenshots.
-  - Design the two new section states, "budget reached" and "couldn't write this section", within
-    the existing design and rules. Add them to `DESIGN.md` and to the screenshot states.
-- **Done when:**
-  - `npm run build`, `npm test` and `npm run shot` pass;
-  - the existing reader shots are unchanged, and the new states are captured at every width;
-  - live, a section written in one tab shows as written in another after a reload, and two tabs
-    opening the same unwritten section show the same text.
+  - Write a `manual.json` for each of the other six library manuals, in the Haunt's format, with
+    the same ids, titles and subtitles as `src/library/seed.ts`: *The Birthday Party Field
+    Manual*, *Negotiating With Geese*, *Keeping a Sourdough Starter Alive*, *Running Your Own
+    Mail Server Without Losing Your Mind*, *Moving House Without Losing the Cat* and *Building a
+    Backyard Observatory*.
+  - Keep each one's chapter and section counts from `src/library/seed.ts`, appendices
+    included.
+  - Each gets a distinct voice brief and a table of contents with a one-line summary for every
+    section, the kind a reader would want to open.
+  - No section bodies: none of the six starts with anything written.
+- **Done when:** every `manual.json` parses with the server's seed types, ids are unique slugs,
+  `section:` ids are unique within a manual, the counts match, and `npm test` passes.
 
-### BE.4b — Dev and test hygiene
-- **Status:** done
-- **Depends on:** BE.3, BE.4
-- **Files:** `server/testing.ts`, the server tests that create data folders, `server/dev.ts`,
-  `vite.config.ts`
+### LS.2 — The library API
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/**` except `server/seed/**`, `ARCHITECTURE.md`
 - **Do:**
-  - Server tests clean up the temporary data folders they create. Remove the `rtfm-test-*`
-    folders earlier test runs left in `$TMPDIR`.
-  - When the API server stops or restarts mid-section during `npm run dev` (for example a
-    `node --watch` restart), the browser's stream ends with an error instead of hanging on
-    "Being written".
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; a test run leaves no
-  `rtfm-test-*` folders behind; live, restarting the server mid-section shows "couldn't write
-  this section" in the open tab.
+  - `GET /api/manuals`: summaries of every manual in storage (id, title, subtitle, chapter
+    count, section count, written count), sorted by title, with the counts computed from storage.
+  - `DELETE /api/manuals/:manualId`: removes the manual and its sections from storage. It
+    refuses while a section of that manual is being written, or stops those runs first; choose
+    and document which. The ledger is never touched.
+  - Seeding: every manual in `server/seed/` is seeded once. A deleted seed manual stays deleted
+    after a restart (for example, with a record of what has been seeded), and a seed manual
+    added later is seeded on the next start, so the user's existing `.data/` gains the six new
+    manuals and keeps the Haunt's written sections.
+  - Add a `?library=empty` preview (or an equivalent) so the screenshots can show the empty
+    library without deleting anything.
+  - Tests for the routes, deleting during a write, and seeding after a delete and a restart.
+    Update ARCHITECTURE.md.
+- **Done when:** `npm run build` and `npm test` pass; with `npm run dev`, `curl` lists the
+  manuals, deletes one, and it is still gone after a server restart.
 
-### BE.5 — Claude writes the sections
-- **Status:** done
-- **Depends on:** BE.3, BE.4
-- **Files:** the section writer's folder named in `ARCHITECTURE.md`, its prompt files and tests,
-  committed configuration, `server/app.ts` (wiring the Bedrock writer, the gateway and the
-  credentials)
+### LS.3 — The reader takes a manual id
+- **Status:** todo
+- **Depends on:** LS.2
+- **Files:** `src/manual/**`, `src/reader/**`, `src/App.tsx`, `scripts/**`, `DESIGN.md`
 - **Do:**
-  - Build the Bedrock section writer on the gateway.
-  - The prompt carries the manual's voice brief, its table of contents, and summaries of
-    nearby sections, and asks for exactly the markdown `DESIGN.md` › Markdown allows.
-  - Validate the output where it's cheap: footnote references have definitions, `section:` links
-    point at real sections, and there is no H1 and no preamble.
-  - Configuration chooses the writer; the fake stays the default for tests and screenshots.
-  - Keep real calls few and short while you iterate.
-- **Done when:**
-  - `npm run build` and `npm test` pass (the tests use a fake model client);
-  - live with the Bedrock writer: opening an unwritten section has Haiku 4.5 write it streaming,
-    following the streaming rules, and it is still there after a reload;
-  - the ledger and `npm run usage` show each call's real cost;
-  - the report gives the cost per section and samples of the writing, and this task's real
-    calls cost under $0.50 in total.
+  - Routes become `/read/:manualId` (the start page) and `/read/:manualId/:sectionId`. Bare
+    `/read` and unknown paths go to `/`.
+  - The store keeps its state per manual, so moving between manuals never mixes their sections
+    or streams.
+  - An unknown manual shows the existing "Couldn’t open this manual" notice.
+  - The screenshot script opens the sample manual by its id.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the reader shots are
+  pixel-identical to before; live, two different manuals open, and moving between them keeps each
+  one's sections and streams separate.
 
-### BE.6 — Final check
-- **Status:** done
-- **Depends on:** BE.4b, BE.5
+### LS.4 — The landing page reads from the server
+- **Status:** todo
+- **Depends on:** LS.1, LS.3
+- **Files:** `src/library/**`, `src/home/**`, `src/agent/**`, `DESIGN.md`, `scripts/**`
+- **Do:**
+  - `src/library` loads the library from the API and deletes through it. Delete the hard-coded
+    seed list and everything about "last opened" (`lastOpenedAt`, `formatLastOpened`, the
+    fixed "now" and the "Opened …" text). Sort by title.
+  - Rows open `/read/<id>`. The librarian's canned replies and named-manual links keep working
+    against the loaded library.
+  - Loading and failure: follow the reader's patterns (suspend on the first load; if the server
+    can't be reached, a notice in the landing page's style instead of a blank page). A failed
+    delete leaves the row and says so.
+  - Update DESIGN.md: the ledger row without "Opened …", the sort order, and the new loading
+    and failure behaviour.
+  - Screenshots: `?library=empty` still works; the changed counts and the removed "Opened …"
+    are reviewed, and every other pixel stays the same.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; live, the library lists
+  seven manuals with real counts, a delete survives a reload and a server restart, every manual
+  opens in the reader, and the conversation's named-manual links still work.
+
+### LS.5 — Final check
+- **Status:** todo
+- **Depends on:** LS.4
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
 - **Do:**
-  - Run `npm run build`, `npm test` and `npm run shot`.
+  - Run `npm run build`, `npm test` and `npm run shot`, and look at the screenshots.
   - Live at 1440 and 375:
-    - Claude writes a section;
-    - a second tab joins the same section;
-    - close the tab mid-section and confirm the ledger records it;
-    - a tiny cap set through configuration gives "budget reached";
-    - the kill switch stops calls.
-  - Update the docs: `CLAUDE.md` no longer says there's no back-end; the README covers running
-    the server, configuration and `npm run usage`; `ARCHITECTURE.md` matches the code.
-  - Read the repo as a newcomer would.
+    - open each of the seven manuals;
+    - Claude writes one section of a manual other than the Haunt, and the library's count for
+      that manual goes up;
+    - delete a manual, reload, restart the server, and confirm it stays gone;
+    - the empty library;
+    - the server unreachable, on the landing page and in the reader.
+  - Update the docs so they match the code. Read the repo as a newcomer would.
 - **Done when:** all commands pass, every live check behaves as described, the docs match the
-  code, and the report gives the phase's total Bedrock spend from the ledger.
+  code, and the report gives this phase's Bedrock spend from the ledger.
