@@ -53,6 +53,8 @@ of any existing task that must now wait for it.
 - Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
   `src/manual/README.md`. It asks the agent to report back with the files it changed, how it
   checked its work, and anything left unresolved.
+- Every agent prompt carries the rule against decision lists (`CLAUDE.md` › Code standards):
+  agents record a decision by changing the doc, code or task it governs.
 - Agents work in the same checkout at the same time, so they **must stay inside their task's
   Files**. Two tasks that touch the same file never run at the same time.
 
@@ -91,6 +93,17 @@ Out of scope: web access for any model, the passphrase, and deploying.
   - Live checks with Bedrock run on `.data/`, so the ledger records what they cost.
   - On `.data/`, delete only manuals the check itself created. Deleting other manuals is
     checked on a temporary data folder with a fake model.
+
+### RL.0 — Fold the architecture doc's decisions into its sections
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `ARCHITECTURE.md`
+- **Do:** following `CLAUDE.md`'s rule against decision lists, move each item in
+  `ARCHITECTURE.md`'s "Decisions" section into the section it governs, stated as how the system
+  works (with a short reason where a reader needs one), and delete the "Decisions" section.
+  Change nothing else.
+- **Done when:** no decision list is left in `ARCHITECTURE.md`, each former decision is stated
+  where it applies, and nothing else changed.
 
 ### RL.1 — A way back to the library
 - **Status:** todo
@@ -133,7 +146,8 @@ Out of scope: web access for any model, the passphrase, and deploying.
   client, so nothing costs money:
   - **our own loop** on the gateway;
   - **Strands Agents** (TypeScript SDK) with a custom model provider that calls the gateway.
-  Write `prototypes/harness/COMPARISON.md`: code size, readability, how cleanly the gateway fits
+  Write `prototypes/harness/COMPARISON.md`, a temporary input to the user's choice that RL.5
+  deletes with the prototypes: code size, readability, how cleanly the gateway fits
   (reservation per call, the worst-case bound with tools, aborts, the ledger), what Strands pulls
   into `node_modules` (including any AWS SDK and its credential chain), streaming status to the
   page, testing with a fake model, and how each would move to the AgentCore harness later. End
@@ -154,8 +168,8 @@ Out of scope: web access for any model, the passphrase, and deploying.
   - The loop reports status as it goes (for example "Looking through the library…"), for the
     page to show.
   - A fake model client scripts tool calls for tests.
-  - Delete `prototypes/` and anything only the losing prototype needed. Document the loop in
-    ARCHITECTURE.md.
+  - Delete `prototypes/`, including the comparison, and anything only the losing prototype
+    needed. Describe the loop in ARCHITECTURE.md as it is, with no record of the choice.
 - **Done when:** `npm run build` and `npm test` pass; tests cover a multi-turn run with tool
   calls, a tool given bad input, a refusal from the gateway's caps in the middle of a run, and
   an abort.
@@ -219,7 +233,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
 
 ### RL.9 — Final check
 - **Status:** todo
-- **Depends on:** RL.1, RL.2, RL.3, RL.7, RL.8
+- **Depends on:** RL.0, RL.1, RL.2, RL.3, RL.7, RL.8
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
 - **Do:**
