@@ -38,11 +38,13 @@ Optimize for a human reading the code for the first time.
 - **No historical cruft.** No comments, names, flags or leftover code describing what used to be
   ("previously…", "old approach", `legacyX`, commented-out code). The code describes only what
   it is now.
-- **No decision lists.** No "Decisions" sections, decision logs or answered "open questions" in
-  any doc. Record a decision by changing what it governs, such as `DESIGN.md`,
+- **Docs describe what exists.** No decision lists, plans or status in any doc: no "Decisions"
+  sections, decision logs or answered "open questions", no "Later" sections, no "for now", "not
+  yet", "so far" or "today". Record a decision by changing what it governs, such as `DESIGN.md`,
   `ARCHITECTURE.md`, the code, or a task in `WORKLIST.md`. A short reason can sit next to what it
-  explains. Research write-ups in `research/` may weigh options and recommend one; the choice
-  itself goes into what it governs.
+  explains. Planned work lives in `WORKLIST.md`. Research write-ups in `research/` may weigh
+  options and recommend one; each is dated and opens with a status line saying what was adopted,
+  and the choice itself goes into what it governs.
 - **Refactor when needed.** If a change makes nearby code awkward, clean it up as part of the
   change, within the files your task allows.
 - **Small, focused units.** Short functions and components with one job. Files organized so the
