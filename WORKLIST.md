@@ -165,7 +165,7 @@ make each of those a straightforward later step.
   - `npm run usage` works on an empty ledger and on a test one.
 
 ### BE.4 — The reader reads from the server
-- **Status:** doing (agent: a1398fd4693fd8c57)
+- **Status:** done
 - **Depends on:** BE.2
 - **Files:** `src/manual/**`, `src/reader/**`, `DESIGN.md`, `scripts/**`, `src/library/seed.ts`,
   `src/library/store.test.tsx`, `src/library/README.md`
@@ -182,7 +182,7 @@ make each of those a straightforward later step.
     opening the same unwritten section show the same text.
 
 ### BE.4b — Dev and test hygiene
-- **Status:** todo
+- **Status:** doing (agent: ae8cc0d6a0fdad0e7)
 - **Depends on:** BE.3, BE.4
 - **Files:** `server/testing.ts`, the server tests that create data folders, `server/dev.ts`,
   `vite.config.ts`
@@ -197,7 +197,7 @@ make each of those a straightforward later step.
   this section" in the open tab.
 
 ### BE.5 — Claude writes the sections
-- **Status:** todo
+- **Status:** doing (agent: af197bce0d5eef59e)
 - **Depends on:** BE.3, BE.4
 - **Files:** the section writer's folder named in `ARCHITECTURE.md`, its prompt files and tests,
   committed configuration, `server/app.ts` (wiring the Bedrock writer, the gateway and the
