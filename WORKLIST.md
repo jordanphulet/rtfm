@@ -126,7 +126,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   manuals, deletes one, and it is still gone after a server restart.
 
 ### LS.3 — The reader takes a manual id
-- **Status:** doing (agent: a063064ecef217f10)
+- **Status:** done
 - **Depends on:** LS.2
 - **Files:** `src/manual/**`, `src/reader/**`, `src/App.tsx`, `scripts/**`, `DESIGN.md`,
   `src/ui/README.md`, and `src/home/LedgerRow.tsx` (its link only)
@@ -143,7 +143,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   one's sections and streams separate.
 
 ### LS.4 — The landing page reads from the server
-- **Status:** todo
+- **Status:** doing (agent: ad6b2a14ea72c49a9)
 - **Depends on:** LS.1, LS.3
 - **Files:** `src/library/**`, `src/home/**`, `src/agent/**`, `DESIGN.md`, `scripts/**`
 - **Do:**
