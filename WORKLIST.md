@@ -99,7 +99,7 @@ the comparison live at the `library-comparison` tag.
   - the landing page looks exactly as variant A did (compare against `shots/library/a/`).
 
 ### AL.3 — Share what the reader and the landing page duplicate
-- **Status:** doing (agent: af20bcf902a024d43)
+- **Status:** done
 - **Depends on:** AL.2
 - **Files:** `src/ui/**`, `src/reader/**`, `src/home/**`
 - **Do:** move the pieces both the reader and the landing page now carry their own copies of into
@@ -116,7 +116,7 @@ the comparison live at the `library-comparison` tag.
   - no copy remains.
 
 ### AL.3b — Keep a named manual's link stable after a delete
-- **Status:** todo
+- **Status:** doing (agent: af9c983ed89d800d9)
 - **Depends on:** AL.3 (same files)
 - **Files:** `src/home/**`
 - **Do:**
