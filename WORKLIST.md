@@ -106,7 +106,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   where it applies, and nothing else changed.
 
 ### RL.1 — A way back to the library
-- **Status:** doing (agent: afdb5317f6d9bbfe0)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `src/reader/**`, `DESIGN.md`, `scripts/**`
 - **Do:** add a "Library" link to the reader, leading to `/`: above the manual's title at the top
@@ -128,7 +128,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   ARCHITECTURE.md describe it.
 
 ### RL.3 — The delete confirmation's hidden title
-- **Status:** todo
+- **Status:** doing (agent: a1f387cd4a8cad47d)
 - **Depends on:** —
 - **Files:** `src/home/DeleteConfirmation.tsx` and its test, `vite.config.ts` (test settings
   only)
