@@ -181,6 +181,23 @@ make each of those a straightforward later step.
   - live, a section written in one tab shows as written in another after a reload, and two tabs
     opening the same unwritten section show the same text.
 
+### BE.4b — Dev and test hygiene
+- **Status:** todo
+- **Depends on:** BE.3, BE.4
+- **Files:** `server/testing.ts`, `server/dev.ts`, `vite.config.ts`, `tsconfig*.json`,
+  `src/manual/repair.test.tsx` (its Node types reference only), `package.json` (scripts only)
+- **Do:**
+  - Server tests clean up the temporary data folders they create. Remove the `rtfm-test-*`
+    folders earlier test runs left in `$TMPDIR`.
+  - When the API server stops or restarts mid-section during `npm run dev` (for example a
+    `node --watch` restart), the browser's stream ends with an error instead of hanging on
+    "Being written".
+  - Tests that need Node (`node:fs` on the seed) type-check under their own tsconfig, so Node's
+    globals don't leak into the app's type-check. Remove the `/// <reference types="node" />`.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; a test run leaves no
+  `rtfm-test-*` folders behind; live, restarting the server mid-section shows "couldn't write
+  this section" in the open tab.
+
 ### BE.5 — Claude writes the sections
 - **Status:** todo
 - **Depends on:** BE.3, BE.4
@@ -205,7 +222,7 @@ make each of those a straightforward later step.
 
 ### BE.6 — Final check
 - **Status:** todo
-- **Depends on:** BE.5
+- **Depends on:** BE.4b, BE.5
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
 - **Do:**
