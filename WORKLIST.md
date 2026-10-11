@@ -53,8 +53,9 @@ of any existing task that must now wait for it.
 - Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
   `src/manual/README.md`. It asks the agent to report back with the files it changed, how it
   checked its work, and anything left unresolved.
-- Every agent prompt carries the rule against decision lists (`CLAUDE.md` › Code standards):
-  agents record a decision by changing the doc, code or task it governs.
+- Every agent prompt carries the rule that docs describe what exists (`CLAUDE.md` › Code
+  standards): no decision lists, plans or status in docs; a decision changes the doc, code or task
+  it governs, and planned work goes into `WORKLIST.md`.
 - Agents work in the same checkout at the same time, so they **must stay inside their task's
   Files**. Two tasks that touch the same file never run at the same time.
 
@@ -98,7 +99,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
 - **Status:** done
 - **Depends on:** —
 - **Files:** `ARCHITECTURE.md`
-- **Do:** following `CLAUDE.md`'s rule against decision lists, move each item in
+- **Do:** following `CLAUDE.md`'s rule that docs describe what exists, move each item in
   `ARCHITECTURE.md`'s "Decisions" section into the section it governs, stated as how the system
   works (with a short reason where a reader needs one), and delete the "Decisions" section.
   Change nothing else.
@@ -239,9 +240,34 @@ Out of scope: web access for any model, the passphrase, and deploying.
 - **Done when:** the write-up exists, cites its sources, and ends with the recommendations and
   the user's steps.
 
+### RL.8b — Docs describe what exists
+- **Status:** todo
+- **Depends on:** RL.7
+- **Files:** `ARCHITECTURE.md`, `README.md`, `DESIGN.md`, `research/**`, the folder READMEs,
+  and comments in `server/**` and `src/**`
+- **Do:** apply `CLAUDE.md`'s rule that docs describe what exists, across the docs and code
+  comments:
+  - **ARCHITECTURE.md:** the "Later: Lambda and DynamoDB" section and "The DynamoDB version
+    (Later)": move that design thinking into a dated research doc (for example
+    `research/lambda-and-dynamodb.md`, with a status line) and remove it from ARCHITECTURE.md;
+    also "TOC creation later", the `// later:` comment on the `Job` type, "Not yet checked
+    against Cost Explorer" and "has not been done yet", and the contradiction between "so it can
+    be cached later" and "too short to cache".
+  - **README.md:** "Today the app has two pages". **DESIGN.md:** "So far an LLM writes only…".
+  - **research/bedrock-models.md:** add a date and a status line (adopted: Claude Haiku 4.5,
+    because this account's Bedrock access block refuses the newer models) and correct "gpt-oss-120b
+    is already wired up", which is false. **research/aws-hosting.md:** add a status line (nothing
+    adopted yet; the agent loop is our own, on the gateway).
+  - Grep for any others ("later", "for now", "not yet", "so far", "today", "planned") and fix
+    what the rule covers. Report anything that looks like real pending work, so the orchestrator
+    can add a task for it.
+- **Done when:** the greps come back clean except for words used in their ordinary sense, the
+  research docs open with dates and status lines, `npm run build` and `npm test` pass, and
+  nothing but wording changed.
+
 ### RL.9 — Final check
 - **Status:** todo
-- **Depends on:** RL.0, RL.1, RL.2, RL.3, RL.7, RL.8
+- **Depends on:** RL.0, RL.1, RL.2, RL.3, RL.7, RL.8, RL.8b
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
 - **Do:**
