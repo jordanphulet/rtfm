@@ -97,7 +97,7 @@ make each of those a straightforward later step.
 - **Spending caps:** $2 a day and $20 a month, as configuration.
 
 ### BE.1 — Architecture
-- **Status:** needs-human (awaiting the user's approval of ARCHITECTURE.md)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `ARCHITECTURE.md`
 - **Do:** write the plan for this phase, short and concrete, for the user to approve before any
@@ -131,7 +131,7 @@ make each of those a straightforward later step.
   review, mark it `needs-human` and ask the user. It becomes `done` only on the user's approval.
 
 ### BE.2 — Server, storage and the fake writer
-- **Status:** todo
+- **Status:** doing (agent: ae64dcbf13dc89c20)
 - **Depends on:** BE.1
 - **Files:** the server folder named in `ARCHITECTURE.md`, `package.json`, `package-lock.json`,
   `vite.config.ts`, `tsconfig*.json`, `.gitignore`, `.claude/launch.json`
