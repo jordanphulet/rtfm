@@ -95,7 +95,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
     checked on a temporary data folder with a fake model.
 
 ### RL.0 — Fold the architecture doc's decisions into its sections
-- **Status:** todo
+- **Status:** doing (agent: ae55cd69d689085bd)
 - **Depends on:** —
 - **Files:** `ARCHITECTURE.md`
 - **Do:** following `CLAUDE.md`'s rule against decision lists, move each item in
@@ -106,7 +106,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   where it applies, and nothing else changed.
 
 ### RL.1 — A way back to the library
-- **Status:** todo
+- **Status:** doing (agent: afdb5317f6d9bbfe0)
 - **Depends on:** —
 - **Files:** `src/reader/**`, `DESIGN.md`, `scripts/**`
 - **Do:** add a "Library" link to the reader, leading to `/`: above the manual's title at the top
@@ -137,7 +137,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   unchanged.
 
 ### RL.4 — Harness prototypes
-- **Status:** todo
+- **Status:** doing (agent: adf46c7799a2aec81)
 - **Depends on:** —
 - **Files:** `prototypes/harness/**` (new), `package.json` and `package-lock.json` (the Strands
   dependency only)
