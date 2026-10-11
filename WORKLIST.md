@@ -87,7 +87,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   temporary data folder, never `.data/`.
 
 ### LS.1 — Six more seed manuals
-- **Status:** doing (agent: a6596be493457218c)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `server/seed/**` (new manual folders only; the Haunt's folder stays as it is)
 - **Do:**
