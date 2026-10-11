@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { LibraryManual } from "../library";
+import type { DeleteResult, ManualSummary } from "../library";
 import { Sheet } from "../ui";
 import "./delete-confirmation.css";
 
@@ -7,14 +7,17 @@ const GAP_PX = 8;
 const EDGE_PX = 16;
 const MIN_WIDTH_PX = 360;
 
+export type DeleteStage = "confirming" | "deleting" | Exclude<DeleteResult, "deleted">;
+
 interface DeleteConfirmationProps {
-  manual: LibraryManual | null;
+  manual: ManualSummary | null;
+  stage: DeleteStage;
   findRow: (id: string) => HTMLElement | null;
   onKeep: () => void;
-  onDelete: (manual: LibraryManual) => void;
+  onDelete: (manual: ManualSummary) => void;
 }
 
-export function DeleteConfirmation({ manual, findRow, onKeep, onDelete }: DeleteConfirmationProps) {
+export function DeleteConfirmation({ manual, stage, findRow, onKeep, onDelete }: DeleteConfirmationProps) {
   const [shown, setShown] = useState(manual);
   if (manual && manual !== shown) setShown(manual);
 
@@ -24,10 +27,11 @@ export function DeleteConfirmation({ manual, findRow, onKeep, onDelete }: Delete
     const anchor = anchorRef.current;
     const row = manual && findRow(manual.id);
     if (anchor && row) placeUnderRow(anchor, row);
-  }, [manual, findRow]);
+  }, [manual, stage, findRow]);
 
   const open = manual !== null;
-  const written = shown?.writtenCount ?? 0;
+  const deleting = stage === "deleting";
+  const failed = stage === "being-written" || stage === "failed";
 
   return (
     <>
@@ -44,18 +48,28 @@ export function DeleteConfirmation({ manual, findRow, onKeep, onDelete }: Delete
           focusOnOpen={(sheet) => sheet.querySelector<HTMLElement>("[data-keep]")}
         >
           <h2 id="delete-title" className="confirm-title">
-            Delete “{shown?.title}”?
+            {failed ? `Couldn’t delete “${shown?.title}”` : `Delete “${shown?.title}”?`}
           </h2>
           <p id="delete-body" className="confirm-body">
-            {written === 0
-              ? "It leaves your library. This can’t be undone."
-              : `It leaves your library with its ${written} written ${written === 1 ? "section" : "sections"}. This can’t be undone.`}
+            {failed ? failureText(stage) : warningText(shown?.writtenCount ?? 0)}
           </p>
           <div className="confirm-actions">
-            <button type="button" className="confirm-delete" onClick={() => shown && onDelete(shown)}>
-              Delete manual
+            <button
+              type="button"
+              className="confirm-delete"
+              data-shot="confirm-delete"
+              aria-disabled={deleting || undefined}
+              onClick={() => shown && !deleting && onDelete(shown)}
+            >
+              {deleteLabel(stage)}
             </button>
-            <button type="button" className="text-button confirm-keep" data-keep onClick={onKeep}>
+            <button
+              type="button"
+              className="text-button confirm-keep"
+              data-keep
+              aria-disabled={deleting || undefined}
+              onClick={onKeep}
+            >
               Keep it
             </button>
           </div>
@@ -63,6 +77,24 @@ export function DeleteConfirmation({ manual, findRow, onKeep, onDelete }: Delete
       </div>
     </>
   );
+}
+
+function warningText(written: number): string {
+  if (written === 0) return "It leaves your library. This can’t be undone.";
+  const sections = written === 1 ? "section" : "sections";
+  return `It leaves your library with its ${written} written ${sections}. This can’t be undone.`;
+}
+
+export function failureText(stage: DeleteStage): string {
+  return stage === "being-written"
+    ? "One of its sections is being written right now, so it stays in your library. Try again once that section is finished."
+    : "Your library didn’t confirm the delete. Try again in a moment.";
+}
+
+function deleteLabel(stage: DeleteStage): string {
+  if (stage === "deleting") return "Deleting…";
+  if (stage === "confirming") return "Delete manual";
+  return "Try again";
 }
 
 /**

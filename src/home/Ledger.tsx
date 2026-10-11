@@ -1,13 +1,13 @@
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 import { LedgerRow } from "./LedgerRow";
 import "./ledger.css";
 
 interface LedgerProps {
-  manuals: LibraryManual[];
+  manuals: ManualSummary[];
   namedIds: Set<string>;
   hoveredId: string | null;
   liftedId: string | null;
-  onDelete: (manual: LibraryManual) => void;
+  onDelete: (manual: ManualSummary) => void;
   registerRow: (id: string, row: HTMLLIElement | null) => void;
   onStartNewManual: () => void;
   onAskLibrarian: () => void;
@@ -46,7 +46,6 @@ export function Ledger({
       <div className="ledger-header" aria-hidden="true">
         <span>Manual</span>
         <span>Written</span>
-        <span className="ledger-header-opened">Last opened ↓</span>
       </div>
       <ul className="ledger-rows">
         {manuals.map((manual) => (

@@ -1,5 +1,5 @@
 import type { AgentMessage } from "../agent";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 
 const STOP_WORDS = new Set([
   // Function words
@@ -18,7 +18,7 @@ const STOP_WORDS = new Set([
  * subtitle words) wins, ties included. Title words ending in "-ing" are ignored: they name an
  * activity ("Building a…", "Moving House…"), not the manual's topic.
  */
-export function namedManuals(message: string, manuals: LibraryManual[]): LibraryManual[] {
+export function namedManuals(message: string, manuals: ManualSummary[]): ManualSummary[] {
   const messageWords = wordsOf(message, 3);
   if (messageWords.size === 0) return [];
 
@@ -39,10 +39,10 @@ export function namedManuals(message: string, manuals: LibraryManual[]): Library
     .map((match) => match.manual);
 }
 
-const namedAtSend = new WeakMap<AgentMessage, LibraryManual[]>();
+const namedAtSend = new WeakMap<AgentMessage, ManualSummary[]>();
 
 /** The manuals a message named when it was sent, kept after any of them is deleted. */
-export function namedWhenSent(message: AgentMessage, manuals: LibraryManual[]): LibraryManual[] {
+export function namedWhenSent(message: AgentMessage, manuals: ManualSummary[]): ManualSummary[] {
   let named = namedAtSend.get(message);
   if (!named) {
     named = namedManuals(message.text, manuals);

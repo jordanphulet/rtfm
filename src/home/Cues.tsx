@@ -1,10 +1,10 @@
 import { useId } from "react";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 import { cuesFor } from "./cuePrompts";
 import "./cues.css";
 
 interface CuesProps {
-  manuals: LibraryManual[];
+  manuals: ManualSummary[];
   onCue: (prompt: string) => void;
 }
 

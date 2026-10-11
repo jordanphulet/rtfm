@@ -1,77 +1,114 @@
+import { Suspense } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LibraryManual } from "./types";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ManualSummary } from "./types";
 
-async function loadLibrary(search = "") {
-  vi.stubGlobal("window", { location: { search } });
-  vi.resetModules();
-  const { useLibrary, deleteManual } = await import("./store");
+const fake = vi.hoisted(() => ({
+  responses: [] as (() => Promise<ManualSummary[]>)[],
+}));
 
-  const readManuals = () => {
-    let manuals: LibraryManual[] = [];
-    function Probe() {
-      manuals = useLibrary();
-      return null;
-    }
-    renderToStaticMarkup(<Probe />);
-    return manuals;
-  };
-  return { readManuals, deleteManual };
+vi.mock("./api", () => ({
+  fetchLibrary: () => fake.responses.shift()!(),
+}));
+
+type Store = typeof import("./store");
+
+function summary(id: string, writtenCount = 0): ManualSummary {
+  return { id, title: id, subtitle: "", chapterCount: 1, sectionCount: 4, writtenCount };
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
+const GEESE = summary("geese");
+const HAUNT = summary("haunt", 7);
+
+async function loadStore(): Promise<Store> {
+  vi.resetModules();
+  return import("./store");
+}
+
+function read(store: Store): ManualSummary[] | undefined {
+  let manuals: ManualSummary[] | undefined;
+  function Probe() {
+    manuals = store.useLibrary();
+    return null;
+  }
+  renderToStaticMarkup(
+    <Suspense fallback={null}>
+      <Probe />
+    </Suspense>,
+  );
+  return manuals;
+}
+
+async function readLoaded(store: Store): Promise<ManualSummary[]> {
+  let manuals = read(store);
+  while (!manuals) {
+    await new Promise((resolve) => setTimeout(resolve));
+    manuals = read(store);
+  }
+  return manuals;
+}
+
+function respond(manuals: ManualSummary[]) {
+  fake.responses.push(async () => manuals);
+}
+
+beforeEach(() => {
+  fake.responses.length = 0;
 });
 
-describe("library store", () => {
-  it("lists every seed manual, most recently opened first", async () => {
-    const { readManuals } = await loadLibrary();
-    const manuals = readManuals();
-    expect(manuals).toHaveLength(7);
-    const times = manuals.map((manual) => manual.lastOpenedAt);
-    expect(times).toEqual([...times].sort((a, b) => b - a));
+describe("the library store", () => {
+  it("suspends until the library arrives, then lists it in the server's order", async () => {
+    respond([GEESE, HAUNT]);
+    const store = await loadStore();
+    expect(read(store)).toBeUndefined();
+    expect(await readLoaded(store)).toEqual([GEESE, HAUNT]);
   });
 
-  it("includes the sample manual with its seeded progress", async () => {
-    const { readManuals } = await loadLibrary();
-    const haunt = readManuals().find((manual) => manual.id === "the-haunt-that-listens");
-    expect(haunt).toMatchObject({
-      title: "The Haunt That Listens",
-      chapterCount: 7,
-      sectionCount: 18,
-      writtenCount: 7,
-    });
+  it("loads the library once per page load", async () => {
+    respond([GEESE, HAUNT]);
+    const store = await loadStore();
+    const first = await readLoaded(store);
+    expect(read(store)).toBe(first);
+    expect(fake.responses).toHaveLength(0);
   });
 
-  it("includes a manual about birthday parties", async () => {
-    const { readManuals } = await loadLibrary();
-    expect(readManuals().some((manual) => /birthday party/i.test(manual.title))).toBe(true);
+  it("removes a manual from the list", async () => {
+    respond([GEESE, HAUNT]);
+    const store = await loadStore();
+    await readLoaded(store);
+    store.removeFromLibrary("geese");
+    expect(read(store)).toEqual([HAUNT]);
   });
 
-  it("deletes a manual in memory", async () => {
-    const { readManuals, deleteManual } = await loadLibrary();
-    deleteManual("negotiating-with-geese");
-    const ids = readManuals().map((manual) => manual.id);
-    expect(ids).toHaveLength(6);
-    expect(ids).not.toContain("negotiating-with-geese");
+  it("refreshes the counts", async () => {
+    respond([GEESE, HAUNT]);
+    respond([GEESE, summary("haunt", 8)]);
+    const store = await loadStore();
+    await readLoaded(store);
+    await store.refreshLibrary();
+    expect(read(store)?.[1].writtenCount).toBe(8);
   });
 
-  it("ignores an unknown id", async () => {
-    const { readManuals, deleteManual } = await loadLibrary();
-    const before = readManuals();
-    deleteManual("no-such-manual");
-    expect(readManuals()).toBe(before);
+  it("keeps a removal made while a refresh was on its way", async () => {
+    respond([GEESE, HAUNT]);
+    let answerRefresh: (manuals: ManualSummary[]) => void = () => {};
+    fake.responses.push(() => new Promise((resolve) => (answerRefresh = resolve)));
+    const store = await loadStore();
+    await readLoaded(store);
+
+    const refresh = store.refreshLibrary();
+    store.removeFromLibrary("geese");
+    answerRefresh([GEESE, HAUNT]);
+    await refresh;
+    expect(read(store)).toEqual([HAUNT]);
   });
 
-  it("restores every manual on reload", async () => {
-    const first = await loadLibrary();
-    first.deleteManual("negotiating-with-geese");
-    const second = await loadLibrary();
-    expect(second.readManuals()).toHaveLength(7);
-  });
-
-  it("starts empty with ?library=empty", async () => {
-    const { readManuals } = await loadLibrary("?library=empty");
-    expect(readManuals()).toEqual([]);
+  it("keeps the list it has when a refresh fails", async () => {
+    respond([GEESE, HAUNT]);
+    fake.responses.push(() => Promise.reject(new Error("unreachable")));
+    const store = await loadStore();
+    await readLoaded(store);
+    await store.refreshLibrary();
+    expect(read(store)).toEqual([GEESE, HAUNT]);
   });
 });

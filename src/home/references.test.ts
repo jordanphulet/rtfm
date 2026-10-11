@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 import { namedManuals } from "./references";
 
-const MANUALS: LibraryManual[] = [
+const MANUALS: ManualSummary[] = [
   [
     "haunt",
     "The Haunt That Listens",
@@ -45,7 +45,6 @@ const MANUALS: LibraryManual[] = [
   chapterCount: 1,
   sectionCount: 1,
   writtenCount: 0,
-  lastOpenedAt: 0,
 }));
 
 function idsNamedBy(message: string) {

@@ -28,10 +28,9 @@ Opening a manual from this conversation isn’t wired up yet, so select it in th
   list: `Everything you own is in your library. Each manual shows:
 
 - its **title** and what it promises to teach;
-- how many of its sections are written so far;
-- when you last opened it.
+- how many of its sections are written so far.
 
-The ones you opened most recently come first. I can’t read the library aloud yet, but I’m told it’s very well kept.`,
+They’re in order by title. I can’t read the library aloud yet, but I’m told it’s very well kept.`,
 
   help: `I’m the librarian for your hypothetical manuals. Here’s what I understand so far:
 

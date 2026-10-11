@@ -1,15 +1,12 @@
-import { useSyncExternalStore } from "react";
-import { seedManuals } from "./seed";
-import type { LibraryManual } from "./types";
+import { use, useEffect, useSyncExternalStore } from "react";
+import { fetchLibrary } from "./api";
+import type { ManualSummary } from "./types";
 
-let manuals = startingManuals();
+let manuals: ManualSummary[] = [];
+let firstLoad: Promise<void> | undefined;
+let removalCount = 0;
+let mounts = 0;
 const listeners = new Set<() => void>();
-
-function startingManuals(): LibraryManual[] {
-  const startsEmpty = new URLSearchParams(window.location.search).get("library") === "empty";
-  if (startsEmpty) return [];
-  return [...seedManuals].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
-}
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -22,12 +19,35 @@ function getManuals() {
   return manuals;
 }
 
-export function useLibrary(): LibraryManual[] {
+function setManuals(next: ManualSummary[]) {
+  manuals = next;
+  listeners.forEach((listener) => listener());
+}
+
+function loadOnce(): Promise<void> {
+  firstLoad ??= fetchLibrary().then(setManuals);
+  return firstLoad;
+}
+
+export async function refreshLibrary() {
+  const removalsBefore = removalCount;
+  const fresh = await fetchLibrary().catch(() => undefined);
+  if (fresh && removalCount === removalsBefore) setManuals(fresh);
+}
+
+function refreshOnReturn() {
+  mounts += 1;
+  if (mounts > 1) void refreshLibrary();
+}
+
+export function useLibrary(): ManualSummary[] {
+  use(loadOnce());
+  useEffect(refreshOnReturn, []);
   return useSyncExternalStore(subscribe, getManuals, getManuals);
 }
 
-export function deleteManual(id: string) {
+export function removeFromLibrary(id: string) {
   if (!manuals.some((manual) => manual.id === id)) return;
-  manuals = manuals.filter((manual) => manual.id !== id);
-  listeners.forEach((listener) => listener());
+  removalCount += 1;
+  setManuals(manuals.filter((manual) => manual.id !== id));
 }

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "../agent";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 import { namedManuals } from "./references";
 import { Turn } from "./Turn";
 
@@ -16,11 +16,11 @@ const CAT = libraryManual(
   "Boxes, timelines and feline diplomacy",
 );
 
-function libraryManual(id: string, title: string, subtitle: string): LibraryManual {
-  return { id, title, subtitle, chapterCount: 1, sectionCount: 1, writtenCount: 0, lastOpenedAt: 0 };
+function libraryManual(id: string, title: string, subtitle: string): ManualSummary {
+  return { id, title, subtitle, chapterCount: 1, sectionCount: 1, writtenCount: 0 };
 }
 
-function render(message: AgentMessage, manuals: LibraryManual[]) {
+function render(message: AgentMessage, manuals: ManualSummary[]) {
   return renderToStaticMarkup(
     <Turn message={message} live={false} manuals={manuals} onJump={() => {}} onHover={() => {}} />,
   );

@@ -1,13 +1,13 @@
 import { Fragment } from "react";
 import type { AgentMessage } from "../agent";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 import { ReplyMarkdown } from "../ui";
 import { namedWhenSent } from "./references";
 
 interface TurnProps {
   message: AgentMessage;
   live: boolean;
-  manuals: LibraryManual[];
+  manuals: ManualSummary[];
   onJump: (id: string) => void;
   onHover: (id: string | null) => void;
 }

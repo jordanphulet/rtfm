@@ -1,86 +1,84 @@
 # src/library
 
-The manuals on the landing page (`src/home/`): seven seed manuals in an in-memory store.
-Deleting is real but only lasts until the page reloads. There is no create or rename.
+The manuals on the landing page (`src/home/`), as the API server stores them: it loads the
+library from `GET /api/manuals` and deletes through `DELETE /api/manuals/:manualId`
+(`ARCHITECTURE.md` › The API). There is no create or rename.
 
 Import everything from `src/library`:
 
 ```ts
-import { deleteManual, formatLastOpened, useLibrary, type LibraryManual } from "../library";
+import {
+  deleteManual, removeFromLibrary, useLibrary,
+  type DeleteResult, type ManualSummary,
+} from "../library";
 ```
 
-## `LibraryManual`
+## `ManualSummary`
 
-A summary of a manual, not the manual itself. It holds what a library entry shows.
+The API's summary of a manual: `types.ts` re-exports it from `server/api/types.ts` with
+`export type`, so nothing from `server/` reaches the bundle. It holds what a library entry shows.
 
-| Field          | Type     | Meaning                                                        |
-| -------------- | -------- | -------------------------------------------------------------- |
-| `id`           | `string` | Stable slug, e.g. `"negotiating-with-geese"`                   |
-| `title`        | `string` | e.g. `"Negotiating With Geese"`                                |
-| `subtitle`     | `string` | One sentence, from short to quite long                         |
-| `chapterCount` | `number` | Chapters, counting appendices                                  |
+| Field          | Type     | Meaning                                                         |
+| -------------- | -------- | --------------------------------------------------------------- |
+| `id`           | `string` | Stable slug, e.g. `"negotiating-with-geese"`                    |
+| `title`        | `string` | e.g. `"Negotiating With Geese"`                                 |
+| `subtitle`     | `string` | One sentence, from short to quite long                          |
+| `chapterCount` | `number` | Chapters, counting appendices                                   |
 | `sectionCount` | `number` | Sections in the table of contents (the *m* in "n of m written") |
-| `writtenCount` | `number` | Sections written so far (the *n*); from 0 up to `sectionCount` |
-| `lastOpenedAt` | `number` | Millisecond timestamp; format it with `formatLastOpened`       |
+| `writtenCount` | `number` | Sections written so far (the *n*), counted from storage         |
 
-## `useLibrary(): LibraryManual[]`
+## `useLibrary(): ManualSummary[]`
 
-The manuals, most recently opened first. Re-renders when one is deleted. The array is a new one
-after each delete and the same one otherwise, so it is safe to use as a dependency.
+The manuals, sorted by title (the server sorts them).
 
-## `deleteManual(id: string): void`
+- **The first call suspends** until `GET /api/manuals` answers, once per page load, so render it
+  inside a `Suspense` (the lazy route's covers it). If that request fails it throws, so render it
+  inside an error boundary too (the landing page's `LibraryErrorBoundary`).
+- **Each later mount** (coming back to the landing page from the reader) returns the list it
+  already has at once and fetches it again in the background, so new written counts appear. If
+  that fetch fails, the list stays as it was. A refresh that started before a
+  `removeFromLibrary` is dropped, so it can't bring a deleted manual back. In development,
+  StrictMode mounts the page twice, so the first visit fetches twice too; that is harmless.
+- It re-renders when the list changes. The array is a new one after each change and the same one
+  otherwise, so it is safe to use as a dependency.
 
-Removes a manual from the list, in memory. A reload restores every manual. Deleting an id that
-isn't there does nothing. The store asks for no confirmation; the landing page does.
+## `deleteManual(id: string): Promise<DeleteResult>`
 
-## `formatLastOpened(time: number): string`
+Deletes a manual on the server. It never throws, and it **doesn't change the list**: call
+`removeFromLibrary(id)` once it resolves to `"deleted"`, after any exit animation.
 
-Formats a `lastOpenedAt` for display. The library's "now" is fixed at **4:00pm on Saturday,
-October 10, 2026, local time**, not the real clock, so screenshots never change.
+| `DeleteResult`    | When                                                          |
+| ----------------- | ------------------------------------------------------------- |
+| `"deleted"`       | `204`, or `404`: it was already gone                          |
+| `"being-written"` | `409`: a section of it is being written; it can be tried again once that's done |
+| `"failed"`        | Any other answer, no answer within 10 seconds, or no server   |
 
-| Opened                                  | Shows          |
-| --------------------------------------- | -------------- |
-| the same calendar day as "now"          | `today`        |
-| the calendar day before                 | `yesterday`    |
-| 2 to 6 calendar days before             | `3 days ago`   |
-| earlier the same year                   | `Mar 2`        |
-| an earlier year                         | `Dec 28, 2025` |
+The store asks for no confirmation; the landing page does.
 
-Callers add any wording around it (the landing page's "Opened yesterday").
+## `removeFromLibrary(id: string): void`
 
-## The seed manuals
-
-As shown by `useLibrary()`:
-
-| Title                                                 | Written  | Last opened  |
-| ----------------------------------------------------- | -------- | ------------ |
-| The Haunt That Listens                                | 7 of 18  | today        |
-| The Birthday Party Field Manual                       | 3 of 14  | yesterday    |
-| Negotiating With Geese                                | 1 of 6   | 3 days ago   |
-| Keeping a Sourdough Starter Alive                     | 9 of 9   | 5 days ago   |
-| Running Your Own Mail Server Without Losing Your Mind | 12 of 31 | Sep 21       |
-| Moving House Without Losing the Cat                   | 0 of 17  | Aug 2        |
-| Building a Backyard Observatory                       | 15 of 22 | Dec 28, 2025 |
-
-Open a manual by going to `/read`. The reader's URL has no manual id; it always shows the sample
-manual, *The Haunt That Listens*, which the API server serves from `server/seed/`. Its entry here
-is a literal with the seed's counts (7 of 18 written), so it doesn't follow what the reader
-writes.
+Removes a deleted manual from the list. Removing an id that isn't there does nothing.
 
 ## URL options
 
-| Option           | Effect                                     |
-| ---------------- | ------------------------------------------ |
-| `?library=empty` | The library starts with no manuals, for the empty state. |
+| Option           | Effect                                                            |
+| ---------------- | ----------------------------------------------------------------- |
+| `?library=empty` | Passed on to `GET /api/manuals`, whose preview answers `[]`: the empty state, with nothing deleted. |
 
 ## Example
 
 ```tsx
-import { deleteManual, formatLastOpened, useLibrary } from "../library";
+import { deleteManual, removeFromLibrary, useLibrary } from "../library";
 
 function Shelf() {
   const manuals = useLibrary();
   if (manuals.length === 0) return <p>No manuals yet.</p>;
+
+  async function remove(id: string) {
+    const result = await deleteManual(id);
+    if (result === "deleted") removeFromLibrary(id);
+    else alert(result === "being-written" ? "It's being written; try again soon." : "Couldn't delete it.");
+  }
 
   return (
     <ul>
@@ -89,10 +87,9 @@ function Shelf() {
           <h2>{manual.title}</h2>
           <p>{manual.subtitle}</p>
           <p>
-            {manual.writtenCount} of {manual.sectionCount} sections written · opened{" "}
-            {formatLastOpened(manual.lastOpenedAt)}
+            {manual.writtenCount} of {manual.sectionCount} sections written
           </p>
-          <button onClick={() => deleteManual(manual.id)}>Delete</button>
+          <button onClick={() => remove(manual.id)}>Delete</button>
         </li>
       ))}
     </ul>
@@ -102,7 +99,6 @@ function Shelf() {
 
 ## Files
 
-- `types.ts`: `LibraryManual`.
-- `seed.ts`: the seed manuals.
-- `store.ts`: `useLibrary` and `deleteManual`.
-- `time.ts`: the fixed "now" and `formatLastOpened`.
+- `types.ts`: `ManualSummary` (re-exported from the server) and `DeleteResult`.
+- `api.ts`: the API's URLs: `fetchLibrary` and `deleteManual`.
+- `store.ts`: `useLibrary`, `removeFromLibrary`, and the background refresh.

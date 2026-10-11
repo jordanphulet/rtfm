@@ -79,8 +79,19 @@ html:has(.home .confirm[data-open]) {
   transition: color var(--dur-quick) var(--ease-out);
 }
 
+.home .confirm-delete[aria-disabled] {
+  color: var(--ink-muted);
+  cursor: progress;
+}
+
+.home .confirm-keep[aria-disabled] {
+  background: none;
+  color: var(--ink-muted);
+  cursor: progress;
+}
+
 @media (hover: hover) {
-  .home .confirm-delete:hover {
+  .home .confirm-delete:not([aria-disabled]):hover {
     color: var(--cue);
   }
 }

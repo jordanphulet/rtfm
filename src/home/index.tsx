@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
 import { useAgent, type AgentMessage, type AgentStatus } from "../agent";
-import { deleteManual, useLibrary, type LibraryManual } from "../library";
+import { deleteManual, removeFromLibrary, useLibrary, type ManualSummary } from "../library";
 import "../ui";
 import type { AgentSideProps } from "./agentSide";
 import { STARTER_PROMPT } from "./cuePrompts";
-import { DeleteConfirmation } from "./DeleteConfirmation";
+import { DeleteConfirmation, failureText, type DeleteStage } from "./DeleteConfirmation";
 import { Ledger } from "./Ledger";
 import { LibrarianPanel } from "./LibrarianPanel";
+import { LibraryErrorBoundary } from "./LibraryErrorBoundary";
 import { LibraryHead } from "./LibraryHead";
 import { collapse, flash } from "./motion";
 import { PhoneAgent } from "./PhoneAgent";
@@ -21,6 +22,14 @@ const WIDE = "(min-width: 1024px)";
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 
 export default function Home() {
+  return (
+    <LibraryErrorBoundary>
+      <HomePage />
+    </LibraryErrorBoundary>
+  );
+}
+
+function HomePage() {
   const manuals = useLibrary();
   const agent = useAgent();
   const wide = useMediaQuery(WIDE);
@@ -28,9 +37,10 @@ export default function Home() {
   const [hasBeenWide, setHasBeenWide] = useState(wide);
   if (wide && !hasBeenWide) setHasBeenWide(true);
   const [draft, setDraft] = useState("");
-  const [toDelete, setToDelete] = useState<LibraryManual | null>(null);
+  const [toDelete, setToDelete] = useState<ManualSummary | null>(null);
+  const [deleteStage, setDeleteStage] = useState<DeleteStage>("confirming");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [deletedNotice, setDeletedNotice] = useState("");
+  const [deleteNotice, setDeleteNotice] = useState("");
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const startRef = useRef<HTMLButtonElement>(null);
   const rows = useRef(new Map<string, HTMLLIElement>());
@@ -95,19 +105,34 @@ export default function Home() {
     flash(row);
   }
 
+  function askToDelete(manual: ManualSummary) {
+    setDeleteStage("confirming");
+    setToDelete(manual);
+  }
+
   function keep() {
+    if (deleteStage === "deleting") return;
     if (toDelete) focusAfterKeep.current = findRow(toDelete.id)?.querySelector(".row-delete") ?? null;
     setToDelete(null);
   }
 
-  async function confirmDelete(manual: LibraryManual) {
+  async function confirmDelete(manual: ManualSummary) {
+    setDeleteStage("deleting");
+    setDeleteNotice("");
+    const result = await deleteManual(manual.id);
+    if (result !== "deleted") {
+      setDeleteStage(result);
+      setDeleteNotice(`Couldn’t delete ${manual.title}. ${failureText(result)}`);
+      return;
+    }
+
     const index = manuals.findIndex((each) => each.id === manual.id);
     const neighbour = manuals[index + 1] ?? manuals[index - 1];
     const row = findRow(manual.id);
     setToDelete(null);
     if (row) await collapse(row);
-    deleteManual(manual.id);
-    setDeletedNotice(`Deleted ${manual.title}.`);
+    removeFromLibrary(manual.id);
+    setDeleteNotice(`Deleted ${manual.title}.`);
     requestAnimationFrame(() => {
       const next = neighbour && findRow(neighbour.id)?.querySelector<HTMLElement>(".row-title");
       (next ?? startRef.current)?.focus();
@@ -131,7 +156,7 @@ export default function Home() {
   return (
     <div className="ui home">
       <p className="visually-hidden" aria-live="polite">
-        {deletedNotice}
+        {deleteNotice}
       </p>
       <p className="visually-hidden" aria-live="polite">
         {agentNotice(agent.messages, agent.status)}
@@ -148,7 +173,7 @@ export default function Home() {
               namedIds={namedIds}
               hoveredId={hoveredId}
               liftedId={toDelete?.id ?? null}
-              onDelete={setToDelete}
+              onDelete={askToDelete}
               registerRow={registerRow}
               onStartNewManual={startNewManual}
               onAskLibrarian={focusField}
@@ -161,7 +186,13 @@ export default function Home() {
           <PhoneAgent {...side} openOnMount={loadedWithConversation && !hasBeenWide} />
         )}
       </div>
-      <DeleteConfirmation manual={toDelete} findRow={findRow} onKeep={keep} onDelete={confirmDelete} />
+      <DeleteConfirmation
+        manual={toDelete}
+        stage={deleteStage}
+        findRow={findRow}
+        onKeep={keep}
+        onDelete={confirmDelete}
+      />
     </div>
   );
 }
@@ -170,8 +201,8 @@ export default function Home() {
 function markedManuals(
   draft: string,
   lastSent: AgentMessage | undefined,
-  manuals: LibraryManual[],
-): LibraryManual[] {
+  manuals: ManualSummary[],
+): ManualSummary[] {
   if (draft.trim()) return namedManuals(draft, manuals);
   if (lastSent) return namedWhenSent(lastSent, manuals);
   return [];

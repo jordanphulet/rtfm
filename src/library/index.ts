@@ -1,3 +1,3 @@
-export { deleteManual, useLibrary } from "./store";
-export { formatLastOpened } from "./time";
-export type { LibraryManual } from "./types";
+export { deleteManual } from "./api";
+export { removeFromLibrary, useLibrary } from "./store";
+export type { DeleteResult, ManualSummary } from "./types";

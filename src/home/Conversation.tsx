@@ -1,5 +1,5 @@
 import type { AgentMessage, AgentStatus } from "../agent";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 import { Cues } from "./Cues";
 import { Turn } from "./Turn";
 import type { StickToBottom } from "./useStickToBottom";
@@ -8,7 +8,7 @@ import "./conversation.css";
 interface ConversationProps {
   messages: AgentMessage[];
   status: AgentStatus;
-  manuals: LibraryManual[];
+  manuals: ManualSummary[];
   stick: StickToBottom;
   onJump: (id: string) => void;
   onHover: (id: string | null) => void;

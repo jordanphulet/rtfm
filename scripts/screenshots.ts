@@ -11,7 +11,9 @@ type Capture = {
   path: string;
   file: string;
   fullPage?: boolean;
+  beforeLoad?: (page: Page) => Promise<void>;
   prepare?: (page: Page) => Promise<void>;
+  expectedErrors?: RegExp[];
 };
 
 export type CaptureGroup = { options: BrowserContextOptions; captures: Capture[] };
@@ -56,18 +58,22 @@ export async function captureAll(baseURL: string, groups: CaptureGroup[]): Promi
 
 async function capture(
   context: BrowserContext,
-  { path, file, fullPage, prepare }: Capture,
+  { path, file, fullPage, beforeLoad, prepare, expectedErrors = [] }: Capture,
 ): Promise<ShotResult> {
   const errors = new Set<string>();
+  const addError = (error: string) => {
+    if (!expectedErrors.some((expected) => expected.test(error))) errors.add(briefly(error));
+  };
   let saved = false;
 
   const page = await context.newPage();
   page.on("console", (message) => {
-    if (message.type() === "error") errors.add(briefly(`${message.text()}\n${message.location().url}`));
+    if (message.type() === "error") addError(`${message.text()}\n${message.location().url}`);
   });
-  page.on("pageerror", (error) => errors.add(briefly(error.stack ?? error.message)));
+  page.on("pageerror", (error) => addError(error.stack ?? error.message));
 
   try {
+    await beforeLoad?.(page);
     await page.goto(path, { waitUntil: "networkidle" });
     await settle(page);
     await prepare?.(page);

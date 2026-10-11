@@ -36,7 +36,9 @@ type Shot = {
   state: string;
   path: string;
   fullPage?: boolean;
+  beforeLoad?: (page: Page) => Promise<void>;
   prepare?: (page: Page, size: Size) => Promise<void>;
+  expectedErrors?: RegExp[];
 };
 
 type Size = {
@@ -120,6 +122,19 @@ function homeShots(fallbackReply: string): Shot[] {
     { state: "delete-confirm", path: "/", prepare: openDeleteConfirmation },
     { state: "fallback", path: "/", prepare: (page) => sendUnhandledMessage(page, fallbackReply) },
     { state: "empty", path: "/?library=empty" },
+    {
+      state: "library-unreachable",
+      path: "/",
+      beforeLoad: failLibraryRequests,
+      expectedErrors: [/net::ERR_CONNECTION_REFUSED/, /TypeError: Failed to fetch/],
+    },
+    {
+      state: "delete-failed",
+      path: "/",
+      beforeLoad: refuseDeletes,
+      prepare: deleteFirstManual,
+      expectedErrors: [/Failed to load resource: the server responded with a status of 409/],
+    },
   ];
 }
 
@@ -128,10 +143,9 @@ function captureGroups(dir: string, sizes: Size[], shots: Shot[]): CaptureGroup[
     options: size.options,
     captures: shots
       .filter((shot) => !size.onlyStates || size.onlyStates.includes(shot.state))
-      .map(({ state, path, fullPage, prepare }) => ({
-        path,
+      .map(({ state, prepare, ...shot }) => ({
+        ...shot,
         file: `${dir}/${state}-${size.name}.png`,
-        fullPage,
         prepare: prepare && ((page) => prepare(page, size)),
       })),
   }));
@@ -161,6 +175,23 @@ async function sendUnhandledMessage(page: Page, reply: string) {
 
 async function openDeleteConfirmation(page: Page) {
   await clickHook(page, "delete");
+}
+
+async function failLibraryRequests(page: Page) {
+  await page.route("**/api/manuals", (route) => route.abort("connectionrefused"));
+}
+
+async function refuseDeletes(page: Page) {
+  await page.route("**/api/manuals/*", (route) =>
+    route.request().method() === "DELETE"
+      ? route.fulfill({ status: 409, json: { error: "A section of this manual is being written" } })
+      : route.fallback(),
+  );
+}
+
+async function deleteFirstManual(page: Page) {
+  await clickHook(page, "delete");
+  await clickHook(page, "confirm-delete");
 }
 
 async function clickHook(page: Page, hook: string): Promise<Locator> {

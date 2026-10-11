@@ -1,0 +1,7 @@
+.home .library-error-title {
+  margin: 0 0 var(--space-1);
+  font: 600 var(--text-h3) / var(--leading-h3) var(--font-sans);
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}

@@ -1,9 +1,3 @@
-export interface LibraryManual {
-  id: string;
-  title: string;
-  subtitle: string;
-  chapterCount: number;
-  sectionCount: number;
-  writtenCount: number;
-  lastOpenedAt: number;
-}
+export type { ManualSummary } from "../../server/api/types";
+
+export type DeleteResult = "deleted" | "being-written" | "failed";

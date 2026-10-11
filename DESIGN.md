@@ -19,11 +19,12 @@ code and this doc disagree, one of them is a bug.
   - the reader shows the manual named in its URL, which a local API server (`server/`, described
     in `ARCHITECTURE.md`) stores, writes and streams in, with a fake writer by default or with
     Claude Haiku 4.5 on Amazon Bedrock;
-  - the library is seven seed manuals held in memory (`src/library/`);
+  - the library lists the manuals the same server stores (`src/library/`);
   - the librarian gives canned replies (`src/agent/`).
 - **Failure states only where something can fail:** a section the server couldn't write has two
-  (see [When a section can’t be written](#when-a-section-cant-be-written)); the landing page has
-  none. Creating a manual is out of scope.
+  (see [When a section can’t be written](#when-a-section-cant-be-written)); on the landing page,
+  the library can fail to load ([The library can’t be reached](#the-library-cant-be-reached)) and a
+  delete can fail ([When a delete fails](#when-a-delete-fails)). Creating a manual is out of scope.
 - **Dark only.**
 
 ## Data model
@@ -62,8 +63,8 @@ and the section becomes `written`. If the server can't write it, the section goe
 `unwritten` and the reader says why. The hooks and the markdown renderer that expose this are
 documented in `src/manual/README.md`, and the API in `ARCHITECTURE.md`.
 
-The landing page lists summaries of manuals (`LibraryManual`), documented in
-`src/library/README.md`.
+The landing page lists summaries of manuals (`ManualSummary`, from the same file: id, title,
+subtitle and the chapter, section and written counts), documented in `src/library/README.md`.
 
 ## Reader behavior
 
@@ -113,9 +114,11 @@ These rules are locked: any change to the landing page keeps them.
 - If you've scrolled up in the conversation, a new reply never pulls you back down.
 
 **The library**
-- Each manual shows its title, subtitle, progress (*n* of *m* sections written) and when it was
-  last opened.
-- Deleting removes the manual from the list (in memory; a reload restores it).
+- Each manual shows its title, subtitle and progress (*n* of *m* sections written), counted by the
+  server.
+- Manuals are in title order, as the server sends them.
+- Deleting removes the manual on the server, so it stays gone after a reload or a restart. A
+  delete that fails leaves the manual in place and says so.
 - There is an empty state for when every manual is deleted.
 - Opening a manual goes to the reader, at `/read/<its id>`.
 
@@ -824,8 +827,7 @@ holds controls that act on the library.
 
 ### 1024–1279px
 
-The panel narrows to **384px** and the library gutter to **32px**. The ledger drops its "Last
-opened" column: the time moves into the manual cell, under the subtitle (see the ledger).
+The panel narrows to **384px** and the library gutter to **32px**. The ledger keeps its columns.
 
 ### Below 1024px, designed at 375
 
@@ -844,7 +846,6 @@ In `src/home/tokens.css`, on `.home`:
 | `--gutter` | 64px (32px below 1280, 16px below 768) | Library side space; the dock's side padding |
 | `--ledger-max` | 960px | The ledger's widest |
 | `--written-col` | 136px | The progress column (the reader's `--status-col`) |
-| `--opened-col` | 112px | The "Last opened" column |
 | `--action-col` | 72px | The Delete column |
 | `--panel-pad` | 24px (16px below 768) | Panel side padding |
 | `--panel-gutter` | 40px (28px below 768) | Panel left padding: room for the write head |
@@ -863,12 +864,13 @@ In `src/home/tokens.css`, on `.home`:
 ### Head (in the library area, left-aligned)
 
 1. **Title** `Library`, `<h1>`, `--text-title` (35/40, phone 29/36) 600 `--ink-strong`, 12px below.
-2. **Meta**, `--text-micro` mono `--ink-faint`, tabular, live: `7 manuals · 47 of 117 sections
+2. **Meta**, `--text-micro` mono `--ink-faint`, tabular, live: `7 manuals · 7 of 117 sections
    written` (`1 manual · …`; empty: `No manuals`). 24px below.
 3. **Start a new manual ›**, a `<button>` in the plain `.link` style: `--text-body` 400 `--ink`
    with the 1px `--cue-deep` underline, `--cue` on hover. Deliberately quieter than the reader's
    green "Begin" link, so it never competes with the librarian's input. Always here, in every
-   state, so it has one home. What it does is under "Direct controls".
+   state but the unreachable library, so it has one home. What it does is under "Direct
+   controls".
 
 48px below: the ledger.
 
@@ -878,10 +880,11 @@ A list, not cards: the reader's start-page rows with a column header, so the she
 console's channel list.
 
 - **Column header** (`aria-hidden`; each cell carries its own words for screen readers):
-  `--text-micro` Sans 600 `--ink-muted`, sentence case: `Manual` · `Written` · `Last opened ↓`
-  (the arrow says the sort: most recent first, from `useLibrary()`). 8px below, a 1px
+  `--text-micro` Sans 600 `--ink-muted`, sentence case: `Manual` · `Written`. 8px below, a 1px
   `--rule-strong` line across the ledger.
-- **Row** (`<li>`), grid `1fr | --written-col | --opened-col | --action-col`, 24px column gap,
+- **Order:** by title, as the server sends them (`localeCompare` in English, so *The Haunt That
+  Listens* sorts under T). It is the only order, so the header carries no sort arrow.
+- **Row** (`<li>`), grid `1fr | --written-col | --action-col`, 24px column gap,
   padding 12px, `--radius-m`, 4px between rows; 8px of space above the first row and below the
   last, then a closing 1px `--rule` line.
   - **Manual cell:** title `--text-body` (17/28) 500 `--ink-strong`, `text-wrap: balance`; the
@@ -889,8 +892,6 @@ console's channel list.
     the row is one click target. Subtitle `--text-ui` (14/20) `--ink-muted`, `text-wrap: pretty`.
   - **Written cell:** the readout `3 of 14`, `--text-micro` mono, tabular, `--ink-muted` (`--ink-faint`
     at 0), with a visually hidden ` sections written`; 4px below, the **section strip**.
-  - **Last opened cell:** `--text-micro` mono `--ink-faint`, `formatLastOpened()` as is (`today`,
-    `3 days ago`, `Dec 28, 2025`), with a visually hidden `Opened `.
   - **Delete cell:** a `.text-button` `Delete` (`--text-ui`, wdth 85), `--ink-faint`, aligned to
     the first line of the title, pulled right by `--space-2` so its text meets the ledger edge.
     Accessible name `Delete The Birthday Party Field Manual`. `data-shot="delete"`. It sits above
@@ -907,23 +908,18 @@ see at a glance which manuals are big and how far each has got. It is the channe
 concept: data, not decoration, and never a gradient bar. It never uses `--cue`: nothing in the
 library is live.
 
-**At 7 manuals** the head and ledger end around y = 800, inside 900: the whole shelf, no scroll.
+**At 7 manuals** the head and ledger end around y = 820, inside 900: the whole shelf, no scroll.
 **At 1** the ledger is one row and its closing line; nothing stretches to fill the page.
 
-### The ledger at 768–1279
-
-Grid `1fr | --written-col | --action-col`. The header reads `Manual` · `Written`. Last opened
-moves into the manual cell, 4px under the subtitle: `Opened yesterday`, `--text-micro` mono
-`--ink-faint`.
+From 768 to 1279 the ledger is the same, in the narrower library area.
 
 ### The ledger on phone (below 768)
 
 - No column header. Rows are full width (padding 12px 0 4px), separated by 1px `--rule` lines (a
   job: the rows have no hover tint to separate them on touch).
 - Title `--text-body` (16/24 on phone) 500 `--ink-strong`; subtitle `--text-ui` `--ink-muted`.
-- 8px below, one meta line: the section strip, `3 of 14`, `·`, `yesterday` (`--text-micro` mono,
-  tabular), and **Delete** at the right end: `--text-ui`, `--ink-faint`, a 44 × 44 hit area
-  (`--tap`).
+- 8px below, one meta line: the section strip, `3 of 14` (`--text-micro` mono, tabular), and
+  **Delete** at the right end: `--text-ui`, `--ink-faint`, a 44 × 44 hit area (`--tap`).
 
 ### Named in the conversation (the shelf mark)
 
@@ -1093,7 +1089,8 @@ same place):
   (`cuePrompts.ts`):
   1. “Let’s start a new manual about…” (loads exactly `Let’s start a new manual about `)
   2. “What do I have?”
-  3. “Open ‹the most recently opened manual’s title›” (omitted when the library is empty)
+  3. “Open ‹the first manual’s title›”, the first row of the ledger (omitted when the library is
+     empty)
   4. “How do I delete a manual?”
 - **A cue loads, it doesn't send.** It replaces the draft (you chose that line), focuses the
   field with the caret at the end, and flashes the field `--cue-tint` over `--dur-target`. Enter
@@ -1199,12 +1196,66 @@ A true modal, anchored to the row it deletes, so you see exactly what's going.
 - **Focus:** opens on **Keep it**, the safe answer, which sits on the right, under where the
   pointer just clicked Delete, so a double click never deletes. Tab stays inside. Escape, the
   scrim and Keep it all close it and **return focus to that row's Delete**.
-- **After Delete manual:** the row collapses (height, padding, margin and opacity to 0 with the
-  Web Animations API, timed by `--dur-base` and `--ease-in-out` read from the tokens, so reduced
-  motion makes it instant), then `deleteManual(id)`, and the rows below close up.
+- **After Delete manual:** the confirmation stays open while the server deletes the manual
+  (`deleteManual(id)`). Its button reads `Deleting…`, and both buttons are `aria-disabled`,
+  `--ink-muted` with no hover; Escape, the scrim and Keep it do nothing until the server answers.
+  The request gives up after 10 seconds. A local server answers in a few milliseconds, so this is rarely seen.
+- **Once it's deleted** (or the server says it was already gone, a 404): the confirmation closes,
+  the row collapses (height, padding, margin and opacity to 0 with the Web Animations API, timed
+  by `--dur-base` and `--ease-in-out` read from the tokens, so reduced motion makes it instant),
+  then `removeFromLibrary(id)`, and the rows below close up.
   Focus moves to the next row's title link, else the previous row's, else **Start a new manual ›**.
   A polite live region says `Deleted The Birthday Party Field Manual.` The librarian says nothing:
   it didn't do it.
+
+### When a delete fails
+
+The server refuses a delete while a section of that manual is being written (a 409: in another
+tab, or in this one, since a section keeps streaming after you leave the reader), and the delete
+fails if the server doesn't answer or answers with an error. The manual is then still on the
+server, so the row stays exactly where it is, still lit above the scrim, and the confirmation says
+so in place, in its own style (re-measured, so it still clears the row):
+
+- Title: `Couldn’t delete “The Birthday Party Field Manual”` (no question mark).
+- Text, `--text-ui` `--ink-muted`:
+  - being written: “One of its sections is being written right now, so it stays in your library.
+    Try again once that section is finished.”
+  - anything else (an error, no answer within 10 seconds, no server): “Your library didn’t confirm
+    the delete. Try again in a moment.” The delete may still have happened; if so, Try again gets
+    a 404 and the row collapses as usual.
+- Buttons: **Try again** in Delete manual's place and style, then **Keep it**. Focus stays where
+  it was (on the button you pressed, now Try again). Try again deletes again, through the same
+  steps; Keep it, Escape and the scrim close it and return focus to the row's Delete, as before.
+- The polite live region says `Couldn’t delete The Birthday Party Field Manual.` and the text.
+- No red, no warning glyph: the words carry it.
+
+## Loading the library
+
+- **The first load suspends.** The landing page renders nothing until `GET /api/manuals` answers
+  (the lazy route's `Suspense`, as in the reader), so the ledger and the cues never appear
+  half-filled. A local server answers in a few milliseconds.
+- **Coming back** to `/` in the same page load (from the reader, say) shows the list already
+  loaded at once and fetches it again in the background, so counts written in the meantime
+  appear; nothing blanks or jumps. If that fetch fails, the list already shown stays. In
+  development, StrictMode's double mount makes the first visit fetch twice, which is harmless.
+- **`?library=empty`** is passed on to the server, whose preview answers with no manuals.
+
+### The library can’t be reached
+
+If the first load fails (the server isn't running, or answers with an error), the page shows a
+notice instead of a blank page, like the reader's `Couldn’t open this manual`:
+
+- The library area as usual (same padding and position, left of where the panel would be), with
+  only the `Library` title in the head: no meta line and no **Start a new manual ›**, which would
+  point at a librarian that isn't there.
+- In the ledger's place, framed like the empty library (a 1px `--rule-strong` line, padding 24px
+  12px, the closing `--rule` line; on phone padding 20px 0): `Couldn’t open your library`
+  (`--text-h3` 600 `--ink-strong`, `balance`), 4px above one sentence in `--text-lead`
+  `--ink-muted`, capped at `--measure`: `Your manuals didn’t load, so there’s nothing to show yet.
+  Try again.` **Try again** is a `.link` button in `--ink-strong` that reloads the page.
+- No panel and no dock: the librarian talks about your manuals, and there are none to talk about.
+- Like the reader's boundary, `LibraryErrorBoundary` catches any error thrown while the page
+  renders, not only a failed load, and shows the same notice.
 
 ## The empty library
 
@@ -1266,12 +1317,14 @@ switched off where it is defined; all the information stays.
 
 ## States
 
-Each state is set up by a URL option (`src/library/README.md`, `src/agent/README.md`) or a few
-clicks, and `npm run shot` captures it at both sizes.
+Each state is set up by a URL option (`src/library/README.md`, `src/agent/README.md`), a few
+clicks, or (for the failures) the shot script answering the page's API requests itself, and
+`npm run shot` captures it at both sizes. The library is the seven seed manuals as a fresh server
+serves them: *The Haunt That Listens* 7 of 18 written, the others 0.
 
 | State | 1440 × 900 | 375 × 812 |
 | --- | --- | --- |
-| `first-visit` | Full ledger (7 rows); panel with the intro and four cues above the field, which has focus | Head and rows; dock reading `Librarian · Try asking` |
+| `first-visit` | Full ledger (7 rows, in title order); panel with the intro and four cues above the field, which has focus | Head and rows; dock reading `Librarian · Try asking` |
 | `typing` | Draft in the field (focus ring, hint `Enter sends…`); the Birthday Party row marked | Draft in the dock's field; the Birthday Party row marked |
 | `thinking` | Your treehouse line, then the thinking lamp, at the bottom of the panel | Sheet open (conversation loaded), same, above the dock; toggle `Thinking…` |
 | `streaming` | The create reply half-written: numbered list growing, bar and lamp on the live block | The same in the sheet; toggle `Replying…` |
@@ -1279,8 +1332,11 @@ clicks, and `npm run shot` captures it at both sizes.
 | `delete-confirm` | First row lit above the scrim, confirmation anchored under it on the Written column, focus on Keep it | Confirmation at the bottom edge, first row lit |
 | `fallback` | Your geese line, the fallback reply settled; the Geese row marked | Sheet open on the reply |
 | `empty` | Head, the empty line; three cues | Head and the empty line; dock |
+| `library-unreachable` | `GET /api/manuals` fails: the `Library` title and the notice in the ledger's place; no panel | The same; no dock |
+| `delete-failed` | The delete answered 409: first row lit, the confirmation reading `Couldn’t delete …` with Try again and Keep it | The same at the bottom edge |
 
-Hooks: `agent-input` on the field (one is visible at every width), `delete` on each Delete.
+Hooks: `agent-input` on the field (one is visible at every width), `delete` on each Delete,
+`confirm-delete` on the confirmation's Delete manual.
 
 ## Avoiding the generic
 
@@ -1301,12 +1357,15 @@ Hooks: `agent-input` on the field (one is visible at every width), `delete` on e
 ## Build structure
 
 The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/library/` (the manuals:
-`useLibrary()`, `deleteManual()`) and `src/agent/` (the librarian: `useAgent()`).
+`useLibrary()`, `deleteManual()`, `removeFromLibrary()`) and `src/agent/` (the librarian:
+`useAgent()`).
 
-- `index.tsx`: the `ui home` root. It owns what the library and the librarian share (the draft,
-  the named manuals, the hovered row, the jump, the delete flow and focus return) and the two
-  live regions. `page.css` holds the two-column page, the narrow-width padding and the touch
-  overrides for shared hovers; `tokens.css` the sizes above.
+- `index.tsx`: `Home` wraps `HomePage` in `LibraryErrorBoundary` (its own file, styled by
+  `library-error.css`), which shows the unreachable notice. `HomePage` is the `ui home` root. It
+  owns what the library and the librarian share (the draft, the named manuals, the hovered row,
+  the jump, the delete flow and focus return) and the two live regions. `page.css` holds the
+  two-column page, the narrow-width padding and the touch overrides for shared hovers;
+  `tokens.css` the sizes above.
 - One component per file, each importing its own stylesheet: `LibraryHead`, `Ledger`, `LedgerRow`
   (styled by `ledger.css`), `SectionStrip`, `DeleteConfirmation` (with the scrim),
   `LibrarianPanel` (desktop), `PhoneAgent` (the dock and the conversation sheet),
@@ -1317,5 +1376,5 @@ The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/libra
   starter prompt), `agentSide.ts` (the props the panel and the phone dock share), `motion.ts`
   (the target flash and the row collapse), `useStickToBottom.ts`, `useFocusShortcut.ts`,
   `useMediaQuery.ts`.
-- Tests: `references.test.ts` (the matcher) and `Turn.test.tsx` (the named-manual line after a
-  delete).
+- Tests: `references.test.ts` (the matcher), `Turn.test.tsx` (the named-manual line after a
+  delete) and `DeleteConfirmation.test.tsx` (its words in each stage).

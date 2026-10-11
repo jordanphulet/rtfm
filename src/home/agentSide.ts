@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type { UseAgentResult } from "../agent";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 
 interface ComposerState {
   draft: string;
@@ -14,7 +14,7 @@ interface ComposerState {
 /** What the librarian's side of the page needs, whether it is the docked panel or the phone dock. */
 export interface AgentSideProps {
   agent: UseAgentResult;
-  manuals: LibraryManual[];
+  manuals: ManualSummary[];
   composer: ComposerState;
   onJump: (id: string) => void;
   onHover: (id: string | null) => void;

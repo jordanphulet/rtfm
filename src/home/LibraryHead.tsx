@@ -1,9 +1,9 @@
 import type { Ref } from "react";
-import type { LibraryManual } from "../library";
+import type { ManualSummary } from "../library";
 import "./library-head.css";
 
 interface LibraryHeadProps {
-  manuals: LibraryManual[];
+  manuals: ManualSummary[];
   onStartNewManual: () => void;
   startRef: Ref<HTMLButtonElement>;
 }
@@ -20,7 +20,7 @@ export function LibraryHead({ manuals, onStartNewManual, startRef }: LibraryHead
   );
 }
 
-function summary(manuals: LibraryManual[]): string {
+function summary(manuals: ManualSummary[]): string {
   if (manuals.length === 0) return "No manuals";
   const written = sum(manuals.map((manual) => manual.writtenCount));
   const sections = sum(manuals.map((manual) => manual.sectionCount));
