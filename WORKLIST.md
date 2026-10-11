@@ -162,7 +162,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   `needs-human`: the user chooses. It becomes `done` on the user's choice.
 
 ### RL.5 — The agent loop
-- **Status:** doing (agent: a65877ec651ba401f)
+- **Status:** done
 - **Depends on:** RL.4
 - **Files:** `server/agent/**` (new), `server/gateway/**`, `server/config.ts`, `package.json`,
   `package-lock.json`, `ARCHITECTURE.md`, `prototypes/**` (to delete it), and the configs in
@@ -185,10 +185,11 @@ Out of scope: web access for any model, the passphrase, and deploying.
   an abort.
 
 ### RL.6 — The librarian with real tools
-- **Status:** todo
+- **Status:** doing (agent: a9f6016a7a512a70a)
 - **Depends on:** RL.5
 - **Files:** `server/agent/**`, `server/api/**`, `server/app.ts`, `server/config.ts`,
-  `src/agent/**`, `src/home/**`, `DESIGN.md`, `scripts/**`, `ARCHITECTURE.md`
+  `src/agent/**`, `src/home/**`, `DESIGN.md`, `scripts/**`, `ARCHITECTURE.md`, the READMEs for
+  `src/agent` and `src/library`, and `README.md`'s lines about the librarian and configuration
 - **Do:**
   - Replace the canned replies with the librarian agent. Its tools: list the manuals, find
     manuals by topic, open a manual (the page navigates to it), delete a manual, and create a
