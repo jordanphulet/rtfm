@@ -4,6 +4,7 @@ import "../ui";
 import { CompactBar } from "./CompactBar";
 import { rememberStreamingSections } from "./streamedThisLoad";
 import { Toc } from "./Toc";
+import { useManualId } from "./useManualId";
 import "./tokens.css";
 import "./shell.css";
 
@@ -18,7 +19,7 @@ interface ShellProps {
 }
 
 export function Shell({ current, previous, next, currentOutline, aside, asideLabel, children }: ShellProps) {
-  const manual = useManual();
+  const manual = useManual(useManualId());
   rememberStreamingSections(manual);
 
   return (

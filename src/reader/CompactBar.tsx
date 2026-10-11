@@ -4,6 +4,7 @@ import type { Section } from "../manual";
 import { Sheet, StatusRing } from "../ui";
 import { sectionPath } from "./manualParts";
 import { Toc } from "./Toc";
+import { useManualId } from "./useManualId";
 import "./compact-bar.css";
 
 interface CompactBarProps {
@@ -69,11 +70,12 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
 }
 
 function StepLink({ section, direction }: { section?: Section; direction: "Previous" | "Next" }) {
+  const manualId = useManualId();
   if (!section) return null;
   const glyph = direction === "Previous" ? "‹" : "›";
   return (
     <Link
-      to={sectionPath(section.id)}
+      to={sectionPath(manualId, section.id)}
       className="step"
       aria-label={`${direction}: ${section.label} ${section.title}`}
     >

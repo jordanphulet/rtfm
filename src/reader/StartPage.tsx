@@ -6,10 +6,11 @@ import { allSections, chapterAnchor, sectionPath } from "./manualParts";
 import { ManualOutline } from "./Outline";
 import { Shell } from "./Shell";
 import { STATUS_WORDS } from "./statusWords";
+import { useManualId } from "./useManualId";
 import "./start-page.css";
 
 export function StartPage() {
-  const manual = useManual();
+  const manual = useManual(useManualId());
   const sections = allSections(manual);
   const writtenCount = sections.filter((section) => section.status === "written").length;
   const first = manual.chapters[0].sections[0];
@@ -25,7 +26,7 @@ export function StartPage() {
             <span>{manual.chapters.length} chapters</span> · <span>{manual.appendices.length} appendices</span> ·{" "}
             <span>{sections.length} sections</span> · <span>{writtenCount} written</span>
           </p>
-          <Link to={sectionPath(first.id)} className="start-begin">
+          <Link to={sectionPath(manual.id, first.id)} className="start-begin">
             Begin at {first.label} {first.title} ›
           </Link>
         </header>
@@ -40,6 +41,7 @@ export function StartPage() {
 }
 
 function ChapterBlocks({ chapters }: { chapters: Chapter[] }) {
+  const manualId = useManualId();
   return chapters.map((chapter) => (
     <section key={chapter.id} id={chapterAnchor(chapter)} className="start-chapter">
       <h2 className="start-chapter-title">
@@ -48,7 +50,7 @@ function ChapterBlocks({ chapters }: { chapters: Chapter[] }) {
       <ol className="start-sections">
         {chapter.sections.map((section) => (
           <li key={section.id}>
-            <Link to={sectionPath(section.id)} className="start-row" data-status={section.status}>
+            <Link to={sectionPath(manualId, section.id)} className="start-row" data-status={section.status}>
               <span className="start-label">{section.label}</span>
               <span className="start-row-text">
                 <span className="start-row-title">{section.title}</span>

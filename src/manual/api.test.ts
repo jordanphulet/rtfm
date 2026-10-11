@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { streamSection, type StreamEvent } from "./api";
+import { fetchManual, fetchSectionState, streamSection, type StreamEvent } from "./api";
 
 class FakeEventSource {
   static last: FakeEventSource;
@@ -29,7 +29,7 @@ function open(search = "") {
   vi.stubGlobal("window", { location: { search } });
   vi.stubGlobal("EventSource", FakeEventSource);
   const events: StreamEvent[] = [];
-  const close = streamSection("the-director", (event) => events.push(event));
+  const close = streamSection("the-haunt-that-listens", "the-director", (event) => events.push(event));
   return { source: FakeEventSource.last, events, close };
 }
 
@@ -76,5 +76,30 @@ describe("streamSection", () => {
   it("passes ?freeze and ?fail through, and no other options", () => {
     const { source } = open("?freeze=0.5&fail=budget&conversation=demo");
     expect(source.url).toBe("/api/manuals/the-haunt-that-listens/sections/the-director/stream?freeze=0.5&fail=budget");
+  });
+});
+
+describe("fetching", () => {
+  function stubFetch() {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      urls.push(url);
+      return { ok: true, json: async () => ({}) };
+    });
+    return urls;
+  }
+
+  it("requests the manual and a section by their ids", async () => {
+    const urls = stubFetch();
+    await fetchManual("x");
+    await fetchSectionState("x", "y");
+    expect(urls).toEqual(["/api/manuals/x", "/api/manuals/x/sections/y"]);
+  });
+
+  it("encodes ids that aren't safe in a path", async () => {
+    const urls = stubFetch();
+    await fetchManual("a/b c");
+    await fetchSectionState("a/b c", "d?e");
+    expect(urls).toEqual(["/api/manuals/a%2Fb%20c", "/api/manuals/a%2Fb%20c/sections/d%3Fe"]);
   });
 });

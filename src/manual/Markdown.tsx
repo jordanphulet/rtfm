@@ -13,6 +13,7 @@ export interface SectionLinkProps {
 }
 
 export interface MarkdownProps {
+  manualId: string;
   source: string;
   SectionLink: ComponentType<SectionLinkProps>;
   components?: Components;
@@ -20,13 +21,14 @@ export interface MarkdownProps {
 }
 
 export const Markdown = memo(function Markdown({
+  manualId,
   source,
   SectionLink,
   components,
   className,
 }: MarkdownProps) {
   const OtherLink = components?.a ?? "a";
-  const a = useMemo(() => linkComponent(SectionLink, OtherLink), [SectionLink, OtherLink]);
+  const a = useMemo(() => linkComponent(manualId, SectionLink, OtherLink), [manualId, SectionLink, OtherLink]);
 
   return (
     <div className={className}>
@@ -41,9 +43,9 @@ export const Markdown = memo(function Markdown({
   );
 });
 
-function linkComponent(SectionLink: ComponentType<SectionLinkProps>, OtherLink: ElementType) {
+function linkComponent(manualId: string, SectionLink: ComponentType<SectionLinkProps>, OtherLink: ElementType) {
   return function Link({ node: _node, href = "", children, ...props }: ComponentProps<"a"> & ExtraProps) {
-    const manual = useManual();
+    const manual = useManual(manualId);
     if (!href.startsWith(SECTION_URL_PREFIX)) {
       return <OtherLink href={href} {...props}>{children}</OtherLink>;
     }

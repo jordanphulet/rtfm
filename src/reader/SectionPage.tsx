@@ -15,7 +15,7 @@ import {
 import type { RingStatus } from "../ui";
 import { ArticleHead, TITLE_ID } from "./ArticleHead";
 import { FailureNotice } from "./FailureNotice";
-import { chapterName } from "./manualParts";
+import { chapterName, sectionPath } from "./manualParts";
 import { headingsOf, sectionIdsLinkedFrom, wordCount, type Heading } from "./markdownScan";
 import { isOutlineLevel, OutlineList, ReferencedSections } from "./Outline";
 import { Pager } from "./Pager";
@@ -25,11 +25,13 @@ import { FAILURE_NOTICES, FAILURE_WORDS, STATUS_WORDS } from "./statusWords";
 import { loadedAlreadyWritten } from "./streamedThisLoad";
 import { TailLine } from "./TailLine";
 import { useActiveHeading } from "./useActiveHeading";
+import { useManualId } from "./useManualId";
 import { usePrevNextKeys } from "./usePrevNextKeys";
 
 export function SectionPage({ id }: { id: string }) {
-  const manual = useManual();
-  const sectionState = useSection(id);
+  const manualId = useManualId();
+  const manual = useManual(manualId);
+  const sectionState = useSection(manualId, id);
   const { section, text } = sectionState;
   const chapter = chapterOf(manual, id)!;
   const previous = previousSection(manual, id);
@@ -42,7 +44,7 @@ export function SectionPage({ id }: { id: string }) {
     .filter((linked): linked is Section => linked !== undefined);
   const outlineHeadings = headings.filter(isOutlineLevel);
   const activeId = useActiveHeading(outlineHeadings.map((heading) => heading.id));
-  usePrevNextKeys(previous?.id, next?.id);
+  usePrevNextKeys(previous && sectionPath(manualId, previous.id), next && sectionPath(manualId, next.id));
 
   const outline = (
     <OutlineList
@@ -93,7 +95,8 @@ interface ArticleProps {
 
 function Article({ sectionState, headings, chapter, chapterName, previous, next }: ArticleProps) {
   const { section, text, progress, failure } = sectionState;
-  const [wrap] = useState<"pretty" | "plain">(() => (loadedAlreadyWritten(section) ? "pretty" : "plain"));
+  const manualId = useManualId();
+  const [wrap] = useState<"pretty" | "plain">(() => (loadedAlreadyWritten(manualId, section) ? "pretty" : "plain"));
   const phase = phaseOf(sectionState);
   const hasText = text !== "";
 
@@ -118,7 +121,7 @@ function Article({ sectionState, headings, chapter, chapterName, previous, next 
         <Prose source={text} headings={headings} sectionLabel={section.label} wrap={wrap} live={phase === "writing"} />
       )}
       {phase === "writing" && <TailLine progress={progress} isWaiting={!hasText} />}
-      {failure && <FailureNotice {...FAILURE_NOTICES[failure]} onRetry={() => retryInPlace(section.id)} />}
+      {failure && <FailureNotice {...FAILURE_NOTICES[failure]} onRetry={() => retryInPlace(manualId, section.id)} />}
       <p className="visually-hidden" aria-live="polite">
         {announcement(sectionState, phase)}
       </p>
@@ -140,8 +143,8 @@ function phaseOf({ status, failure }: UseSectionResult): Phase {
   return status === "written" ? "written" : "writing";
 }
 
-function retryInPlace(id: string) {
-  retrySection(id);
+function retryInPlace(manualId: string, id: string) {
+  retrySection(manualId, id);
   document.getElementById(TITLE_ID)?.focus();
 }
 

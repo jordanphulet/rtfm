@@ -24,7 +24,10 @@ described in `DESIGN.md`, and the API in `ARCHITECTURE.md` › The API. The samp
 
 - `api.ts`: the API's URLs, `fetch` for the manual and a section, and the `EventSource` for a
   section's stream (closed after its first event that isn't `append`).
-- `store.ts`: `useManual`, `useSection` and `retrySection`.
+- `store.ts`: `useManual`, `useSection` and `retrySection`. It keeps each manual's state apart,
+  keyed by manual id: the manual, its cached requests, section texts, opened sections, open
+  streams and failures. Only the queue of streams waiting for a slot is shared, because the limit
+  on open streams is the page's.
 - `repair.ts`: closes or holds back unfinished markdown, so a partial text renders cleanly.
 - `streamer.ts`: `chunkEnds`, `streamChunks` and `frozenLength`, for the librarian's canned
   replies. `server/writer/fake.ts` has its own copy of `chunkEnds`, so server code
@@ -34,27 +37,27 @@ described in `DESIGN.md`, and the API in `ARCHITECTURE.md` › The API. The samp
 
 ## Hooks and actions
 
-### `useManual(): Manual`
+### `useManual(manualId: string): Manual`
 
-The whole manual, with live section statuses. The first call fetches
-`GET /api/manuals/the-haunt-that-listens`, once per page load, and **suspends** until it arrives,
+The whole manual, with live section statuses. The first call for a manual fetches
+`GET /api/manuals/<manualId>`, once per manual per page load, and **suspends** until it arrives,
 so render it inside a `Suspense` (the lazy route's covers it). If the fetch fails it throws, so
-render it inside an error boundary too (the reader's `ManualErrorBoundary`). Components re-render when any
-section changes status, so a TOC built from it is always current. It does not re-render on every
-streamed chunk.
+render it inside an error boundary too (the reader's `ManualErrorBoundary`); an unknown manual id
+fails the same way. Components re-render when any section changes status, so a TOC built from it
+is always current. It does not re-render on every streamed chunk.
 
 Statuses start as the server reported them when the page loaded (`writing` for a section another
 tab is writing). After that they change only for sections this page opens: a section another tab
 was writing at load keeps its `writing` ring until this page opens it or is reloaded.
 
-### `useSection(id: string): UseSectionResult`
+### `useSection(manualId: string, id: string): UseSectionResult`
 
 `UseSectionResult` is `{ section, status, text, progress, failure? }`.
 
 For the section page. It **suspends** on the section's JSON route (fetched once per section per
 page load). **Calling it opens the section**: a section that isn't written opens its stream, which
-starts the writing or joins it. Use `useManual()` + `findSection()` for anything that should not
-open a section (TOC entries, hover previews).
+starts the writing or joins it. Use `useManual(manualId)` + `findSection()` for anything that
+should not open a section (TOC entries, hover previews).
 
 | Field      | Value                                                                              |
 | ---------- | ---------------------------------------------------------------------------------- |
@@ -85,21 +88,21 @@ The stream:
 - The source is closed after `written`, `frozen`, `failed`, `error` or a mismatched `append`, and
   never reconnects: reconnecting would pay for a second run. **A failure sticks** until
   `retrySection` is called.
-- **At most 3 streams are open at once** (`MAX_OPEN_STREAMS`, the server's `maxConcurrentRuns`).
-  Sections opened beyond that wait as `writing` with `text` `""`, and their streams open in order
-  as others end.
+- **At most 3 streams are open at once** across all manuals (`MAX_OPEN_STREAMS`, the server's
+  `maxConcurrentRuns`, which also counts every manual). Sections opened beyond that wait as
+  `writing` with `text` `""`, and their streams open in the order they were opened as others end.
 - A section streams once per page load and keeps streaming if the reader navigates away. The
   pace is the writer's (the fake writer: about 1.2s of waiting, then about 20 characters every
   85ms, split at word boundaries).
 
-### `retrySection(id: string): void`
+### `retrySection(manualId: string, id: string): void`
 
 Writes a failed section again, in place: it clears the failure and the text, marks the section
 `writing` and opens its stream (or queues it). It does nothing for a section that hasn't failed.
 
 ## Navigation helpers
 
-All take the manual from `useManual()`. Reading order is every chapter, then every appendix.
+All take the manual from `useManual(manualId)`. Reading order is every chapter, then every appendix.
 
 | Function                              | Returns                                          |
 | ------------------------------------- | ------------------------------------------------ |
@@ -114,6 +117,7 @@ Renders markdown with GitHub-flavored extensions (tables, checklists, footnotes)
 
 | Prop          | Type                                  | Notes                                                |
 | ------------- | ------------------------------------- | ---------------------------------------------------- |
+| `manualId`    | `string`                              | The manual its `section:` links point into.          |
 | `source`      | `string`                              | Pass `text` from `useSection` as is.                 |
 | `SectionLink` | `ComponentType<SectionLinkProps>`     | Required. Renders every `[…](section:<id>)` link.    |
 | `components`  | react-markdown `Components`           | Optional. Replace any element (`h2`, `table`, `sup`, `section`, …). |
@@ -147,18 +151,19 @@ import {
   Markdown, nextSection, previousSection, useManual, useSection, type SectionLinkProps,
 } from "../manual";
 
-const sectionPath = (id: string) => `/read/${id}`;
+const useManualId = () => useParams().manualId!;
+const sectionPath = (manualId: string, id: string) => `/read/${manualId}/${id}`;
 
 function SectionLink({ section, children }: SectionLinkProps) {
   return (
-    <Link to={sectionPath(section.id)} data-status={section.status}>
+    <Link to={sectionPath(useManualId(), section.id)} data-status={section.status}>
       {children}
     </Link>
   );
 }
 
 function Toc({ currentId }: { currentId?: string }) {
-  const manual = useManual();
+  const manual = useManual(useManualId());
   return (
     <nav>
       {[...manual.chapters, ...manual.appendices].map((chapter) => (
@@ -167,7 +172,7 @@ function Toc({ currentId }: { currentId?: string }) {
           {chapter.sections.map((section) => (
             <Link
               key={section.id}
-              to={sectionPath(section.id)}
+              to={sectionPath(manual.id, section.id)}
               data-status={section.status}
               aria-current={section.id === currentId ? "page" : undefined}
             >
@@ -181,8 +186,9 @@ function Toc({ currentId }: { currentId?: string }) {
 }
 
 function SectionPage({ id }: { id: string }) {
-  const manual = useManual();
-  const { section, status, text } = useSection(id);
+  const manualId = useManualId();
+  const manual = useManual(manualId);
+  const { section, status, text } = useSection(manualId, id);
   const previous = previousSection(manual, id);
   const next = nextSection(manual, id);
 
@@ -190,9 +196,11 @@ function SectionPage({ id }: { id: string }) {
     <article data-status={status}>
       <h1>{section.label} {section.title}</h1>
       <p>{section.summary}</p>
-      {text !== "" && <Markdown source={text} SectionLink={SectionLink} className="prose" />}
-      {previous && <Link to={sectionPath(previous.id)}>{previous.title}</Link>}
-      {next && <Link to={sectionPath(next.id)}>{next.title}</Link>}
+      {text !== "" && (
+        <Markdown manualId={manualId} source={text} SectionLink={SectionLink} className="prose" />
+      )}
+      {previous && <Link to={sectionPath(manualId, previous.id)}>{previous.title}</Link>}
+      {next && <Link to={sectionPath(manualId, next.id)}>{next.title}</Link>}
     </article>
   );
 }

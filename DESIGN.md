@@ -1,9 +1,9 @@
 # RTFM — design
 
-The single source of truth for RTFM's design: the landing page at `/` and the reader at `/read`.
-The first part holds what both pages share: what each must do, the craft bar, the concept and the
-tokens. Then come the reader's design and the landing page's design. Where the code and this doc
-disagree, one of them is a bug.
+The single source of truth for RTFM's design: the landing page at `/` and the reader at
+`/read/<manual>`. The first part holds what both pages share: what each must do, the craft bar,
+the concept and the tokens. Then come the reader's design and the landing page's design. Where the
+code and this doc disagree, one of them is a bug.
 
 ## What RTFM is
 
@@ -12,13 +12,13 @@ disagree, one of them is a bug.
 - Two pages, both loaded lazily by `src/App.tsx`:
   - **The landing page** (`/`, `src/home/`): your library of manuals, beside a librarian agent
     you talk to.
-  - **The reader** (`/read` is a manual's start page, `/read/:sectionId` a section;
-    `src/reader/`): one manual whose table of contents already exists.
-  - Every other path redirects to `/`.
+  - **The reader** (`/read/:manualId` is a manual's start page, `/read/:manualId/:sectionId` a
+    section; `src/reader/`): one manual whose table of contents already exists.
+  - Every other path, bare `/read` included, redirects to `/`.
 - So far an LLM writes only the reader's sections, and only with the Bedrock writer:
-  - the reader always shows the sample manual, which a local API server (`server/`, described in
-    `ARCHITECTURE.md`) stores, writes and streams in, with a fake writer by default or with Claude
-    Haiku 4.5 on Amazon Bedrock;
+  - the reader shows the manual named in its URL, which a local API server (`server/`, described
+    in `ARCHITECTURE.md`) stores, writes and streams in, with a fake writer by default or with
+    Claude Haiku 4.5 on Amazon Bedrock;
   - the library is seven seed manuals held in memory (`src/library/`);
   - the librarian gives canned replies (`src/agent/`).
 - **Failure states only where something can fail:** a section the server couldn't write has two
@@ -117,7 +117,7 @@ These rules are locked: any change to the landing page keeps them.
   last opened.
 - Deleting removes the manual from the list (in memory; a reload restores it).
 - There is an empty state for when every manual is deleted.
-- Opening any manual goes to the reader, which always shows the sample manual for now.
+- Opening a manual goes to the reader, at `/read/<its id>`.
 
 It handles every state in [Landing page states](#states), at desktop and phone size.
 
@@ -404,8 +404,8 @@ The head is identical in every state, so nothing in it ever reflows.
 
 ### The TOC
 
-- **Masthead** (padding 20/16/8): the manual title, 14/20 600 ink-strong, linking to `/read` (it
-  takes the current-row tint on the start page); under it `7 of 18 sections written`, micro mono
+- **Masthead** (padding 20/16/8): the manual title, 14/20 600 ink-strong, linking to the manual's
+  start page (it takes the current-row tint there); under it `7 of 18 sections written`, micro mono
   ink-faint, live; then the status legend (see Section states).
 - **Chapter row:** 14/20 600 ink-strong, wdth 85; the label in a 36px tabular column, ink-faint. A
   heading, not a link (chapters have no page). 8px above each chapter group.
@@ -438,7 +438,7 @@ The head is identical in every state, so nothing in it ever reflows.
   appearance: label (tabular, ink-faint) · title · ring. It tells the reader where this section
   points and what is still unwritten, and also grows during streaming.
 
-### Start page (`/read`)
+### Start page (`/read/<manual>`)
 
 The annotated contents, in the same shell. A reference is entered through its index: the sidebar
 (compact, no summaries) and this page (summaries and states) do different jobs.
@@ -548,10 +548,10 @@ manager says plainly what happened. It is the settle without the finish.
   keep going. The kept text is cleared, the page returns to the waiting state (it moves, but only
   because the reader asked), and focus moves to the title, which is scrolled into view if needed.
 - **Otherwise it sticks for the page load.** Leaving and coming back shows the same state.
-- **If the manual itself can’t be loaded** (the server can’t be reached, or the section doesn’t
-  exist), the reader shows only the same notice in the text column: `Couldn’t open this manual`,
-  “The manual didn’t load, so there’s nothing to show yet. Try again.”, where Try again reloads
-  the page.
+- **If the manual itself can’t be loaded** (the server can’t be reached, or the manual or the
+  section doesn’t exist), the reader shows only the same notice in the text column: `Couldn’t
+  open this manual`, “The manual didn’t load, so there’s nothing to show yet. Try again.”, where
+  Try again reloads the page.
 - **Screen readers:** the live region announces `Not written: budget reached` or `Not written:
   couldn’t write this section`.
 - **Phone:** the same, at the phone body size.
@@ -635,9 +635,10 @@ to text that streams:
 - The prose (`.prose`, around the prose root) carries `data-wrap="pretty"` **only if the section
   was already written when this page load first saw it**. Otherwise it gets `data-wrap="plain"`
   (ordinary wrapping) and keeps it after completion. There is no switch at the end, so finishing never re-flows anything.
-- "Streamed this load" is a module-level `Set` of section ids (`streamedThisLoad.ts`), filled by
-  the shell from `useManual()` whenever a section is seen `writing`. This also catches a section
-  that kept streaming while the reader was elsewhere. It resets on reload, like the store.
+- "Streamed this load" is a module-level `Set` of manual and section ids (`streamedThisLoad.ts`),
+  filled by the shell from `useManual(manualId)` whenever a section is seen `writing`. This also
+  catches a section that kept streaming while the reader was elsewhere. It resets on reload, like
+  the store.
 - Under `[data-wrap="pretty"]`: `pretty` on paragraphs, list items, blockquotes and table cells,
   and `balance` on prose H2–H4. A chunk can end mid-heading (`## The Half`), so under
   `[data-wrap="plain"]` headings wrap normally too.
@@ -758,15 +759,20 @@ forking it.
   - Helpers: `markdownScan.ts` (headings with unique ids, source lines and clause numbers; linked
     sections; word count), `manualParts.ts` (every section in reading order, chapter names, paths
     and chapter anchors), `statusWords.ts` (the status and failure words), `streamedThisLoad.ts`,
-    `useActiveHeading.ts`, `usePrevNextKeys.ts`.
+    `useActiveHeading.ts`, `useManualId.ts`, `usePrevNextKeys.ts`.
 - `Shell` stays mounted while moving between sections (only the article is keyed by section id),
-  so the TOC keeps its scroll position.
+  so the TOC keeps its scroll position. Moving to another manual remounts the whole reader (it is
+  keyed by manual id), so nothing on the page carries over between manuals.
+- **Every link carries the manual id**, which the reader takes from the route (`useManualId.ts`):
+  the TOC, the start page, the pager, the eyebrow, the compact bar, "Referenced here", the
+  cross-references and the arrow keys. The store keeps each manual's state apart (see
+  `src/manual/README.md`).
 - Heading ids come from one scan of the text: `Prose` looks each heading's id up by its source
   line, so the outline and the page always agree, and duplicates get `-2`, `-3`.
 - The contents sheet locks page scroll with CSS only (`html:has(.reader .sheet[data-open])`, below
   1024px, in `compact-bar.css`), so widening the window releases it.
 - `useSection` is called only by the section page. The TOC, outline, previews and pager read
-  `useManual()` and `findSection()`, so they never open a section.
+  `useManual(manualId)` and `findSection()`, so they never open a section.
 - `SectionLink` and the renderer `components` are defined at module level, so focus and hover
   survive each streamed chunk.
 - The control that opens the TOC at narrow widths carries `data-shot="toc-toggle"`, so
@@ -879,8 +885,8 @@ console's channel list.
   padding 12px, `--radius-m`, 4px between rows; 8px of space above the first row and below the
   last, then a closing 1px `--rule` line.
   - **Manual cell:** title `--text-body` (17/28) 500 `--ink-strong`, `text-wrap: balance`; the
-    title is the row's link to `/read`, stretched over the whole row with an `::after`, so the row
-    is one click target. Subtitle `--text-ui` (14/20) `--ink-muted`, `text-wrap: pretty`.
+    title is the row's link to `/read/<its id>`, stretched over the whole row with an `::after`, so
+    the row is one click target. Subtitle `--text-ui` (14/20) `--ink-muted`, `text-wrap: pretty`.
   - **Written cell:** the readout `3 of 14`, `--text-micro` mono, tabular, `--ink-muted` (`--ink-faint`
     at 0), with a visually hidden ` sections written`; 4px below, the **section strip**.
   - **Last opened cell:** `--text-micro` mono `--ink-faint`, `formatLastOpened()` as is (`today`,
@@ -1154,7 +1160,7 @@ One `Conversation` component renders in the panel at 1024px and up and in the sh
 
 | Action | Control | Result |
 | --- | --- | --- |
-| Open a manual | The row (its title link, stretched) | Goes to `/read` |
+| Open a manual | The row (its title link, stretched) | Goes to `/read/<its id>` |
 | Delete a manual | The row's **Delete** | Opens the confirmation |
 | Start a new manual | **Start a new manual ›** in the head | Fills the field with exactly `Let’s start a new manual about ` (caret at the end), focuses it and flashes it `--cue-tint`. **An existing draft is kept**: it only focuses and flashes the field. On phone the sheet stays closed: the field is in the dock |
 | Ask the librarian | The field; `/`; the cues | As above |

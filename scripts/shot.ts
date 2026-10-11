@@ -17,6 +17,7 @@ const UNHANDLED_MESSAGE = "Sing me a sea shanty about geese";
 const CLICK_TIMEOUT_MS = 3000;
 const REPLY_TIMEOUT_MS = 10_000;
 
+const SHOT_MANUAL = "the-haunt-that-listens";
 const SHOT_SECTIONS = {
   written: "sensing-the-guest",
   dense: "the-half-second-problem",
@@ -92,10 +93,11 @@ async function clearShots() {
 }
 
 function readerShots(): Shot[] {
-  const sectionPath = (id: string) => `/read/${id}`;
+  const contentsPath = `/read/${SHOT_MANUAL}`;
+  const sectionPath = (id: string) => `${contentsPath}/${id}`;
   const unwrittenPath = sectionPath(SHOT_SECTIONS.unwritten);
   return [
-    { state: "start", path: "/read" },
+    { state: "start", path: contentsPath },
     { state: "toc", path: sectionPath(SHOT_SECTIONS.written), prepare: openTocIfCollapsed },
     { state: "written", path: sectionPath(SHOT_SECTIONS.written), fullPage: true },
     { state: "dense", path: sectionPath(SHOT_SECTIONS.dense), fullPage: true },

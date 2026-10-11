@@ -2,20 +2,23 @@ import type { Manual, SectionEvent, SectionState } from "./types";
 
 export type StreamEvent = SectionEvent | { event: "error" };
 
-const MANUAL_URL = "/api/manuals/the-haunt-that-listens";
 const SECTION_EVENTS = ["append", "written", "frozen", "failed"] as const;
 const PREVIEW_OPTIONS = ["freeze", "fail"];
 
-export function fetchManual(): Promise<Manual> {
-  return fetchJson(MANUAL_URL);
+export function fetchManual(manualId: string): Promise<Manual> {
+  return fetchJson(manualUrl(manualId));
 }
 
-export function fetchSectionState(id: string): Promise<SectionState> {
-  return fetchJson(sectionUrl(id));
+export function fetchSectionState(manualId: string, sectionId: string): Promise<SectionState> {
+  return fetchJson(sectionUrl(manualId, sectionId));
 }
 
-export function streamSection(id: string, onEvent: (event: StreamEvent) => void): () => void {
-  const source = new EventSource(`${sectionUrl(id)}/stream${previewQuery()}`);
+export function streamSection(
+  manualId: string,
+  sectionId: string,
+  onEvent: (event: StreamEvent) => void,
+): () => void {
+  const source = new EventSource(`${sectionUrl(manualId, sectionId)}/stream${previewQuery()}`);
   const handle = (event: StreamEvent) => {
     if (event.event !== "append") source.close();
     onEvent(event);
@@ -27,8 +30,12 @@ export function streamSection(id: string, onEvent: (event: StreamEvent) => void)
   return () => source.close();
 }
 
-function sectionUrl(id: string): string {
-  return `${MANUAL_URL}/sections/${encodeURIComponent(id)}`;
+function manualUrl(manualId: string): string {
+  return `/api/manuals/${encodeURIComponent(manualId)}`;
+}
+
+function sectionUrl(manualId: string, sectionId: string): string {
+  return `${manualUrl(manualId)}/sections/${encodeURIComponent(sectionId)}`;
 }
 
 function previewQuery(): string {

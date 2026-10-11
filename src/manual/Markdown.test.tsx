@@ -28,7 +28,12 @@ const { manual } = vi.hoisted(() => {
   return { manual };
 });
 
-vi.mock("./store", () => ({ useManual: () => manual }));
+vi.mock("./store", () => ({
+  useManual(manualId: string) {
+    if (manualId !== manual.id) throw new Error(`Unexpected manual "${manualId}"`);
+    return manual;
+  },
+}));
 
 function SectionLink({ section, children }: SectionLinkProps) {
   return (
@@ -39,7 +44,7 @@ function SectionLink({ section, children }: SectionLinkProps) {
 }
 
 function render(source: string) {
-  return renderToStaticMarkup(<Markdown source={source} SectionLink={SectionLink} />);
+  return renderToStaticMarkup(<Markdown manualId={manual.id} source={source} SectionLink={SectionLink} />);
 }
 
 describe("Markdown", () => {
@@ -60,6 +65,7 @@ describe("Markdown", () => {
   it("uses the given components and class name", () => {
     const html = renderToStaticMarkup(
       <Markdown
+        manualId={manual.id}
         source="## Title"
         SectionLink={SectionLink}
         className="prose"

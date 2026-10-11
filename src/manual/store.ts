@@ -10,16 +10,26 @@ interface SectionText {
   failure?: FailureReason;
 }
 
+interface ManualState {
+  id: string;
+  manual?: Manual;
+  manualRequest?: Promise<Manual>;
+  sectionRequests: Map<string, Promise<void>>;
+  sectionTexts: Map<string, SectionText>;
+  openedSections: Set<string>;
+  openStreams: Map<string, () => void>;
+}
+
+interface QueuedStream {
+  state: ManualState;
+  id: string;
+}
+
 const NO_TEXT: SectionText = { raw: "", progress: 0 };
 const MAX_OPEN_STREAMS = 3;
 
-let manual: Manual | undefined;
-let manualRequest: Promise<Manual> | undefined;
-const sectionRequests = new Map<string, Promise<void>>();
-const sectionTexts = new Map<string, SectionText>();
-const openedSections = new Set<string>();
-const queuedStreams: string[] = [];
-const openStreams = new Map<string, () => void>();
+const manualStates = new Map<string, ManualState>();
+const queuedStreams: QueuedStream[] = [];
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void) {
@@ -33,35 +43,46 @@ function emitChange() {
   listeners.forEach((listener) => listener());
 }
 
-function loadManual(): Promise<Manual> {
-  manualRequest ??= fetchManual().then((fetched) => (manual = fetched));
-  return manualRequest;
+function stateOf(manualId: string): ManualState {
+  let state = manualStates.get(manualId);
+  if (!state) {
+    state = {
+      id: manualId,
+      sectionRequests: new Map(),
+      sectionTexts: new Map(),
+      openedSections: new Set(),
+      openStreams: new Map(),
+    };
+    manualStates.set(manualId, state);
+  }
+  return state;
 }
 
-function loadSection(id: string): Promise<void> {
-  let request = sectionRequests.get(id);
+function loadManual(state: ManualState): Promise<Manual> {
+  state.manualRequest ??= fetchManual(state.id).then((fetched) => (state.manual = fetched));
+  return state.manualRequest;
+}
+
+function loadSection(state: ManualState, id: string): Promise<void> {
+  let request = state.sectionRequests.get(id);
   if (!request) {
-    request = fetchSectionState(id).then(({ status, body }) => {
-      if (body !== undefined) setText(id, { raw: body, progress: 1 });
-      setStatus(id, status);
+    request = fetchSectionState(state.id, id).then(({ status, body }) => {
+      if (body !== undefined) setText(state, id, { raw: body, progress: 1 });
+      setStatus(state, id, status);
     });
-    sectionRequests.set(id, request);
+    state.sectionRequests.set(id, request);
   }
   return request;
 }
 
-function getManual(): Manual {
-  return manual!;
-}
-
-function setStatus(id: string, status: SectionStatus) {
-  const current = getManual();
+function setStatus(state: ManualState, id: string, status: SectionStatus) {
+  const current = state.manual!;
   if (findSection(current, id)?.status === status) return;
   const updateChapter = (chapter: Chapter): Chapter => ({
     ...chapter,
     sections: chapter.sections.map((section) => (section.id === id ? { ...section, status } : section)),
   });
-  manual = {
+  state.manual = {
     ...current,
     chapters: current.chapters.map(updateChapter),
     appendices: current.appendices.map(updateChapter),
@@ -69,76 +90,86 @@ function setStatus(id: string, status: SectionStatus) {
   emitChange();
 }
 
-function setText(id: string, text: SectionText) {
-  sectionTexts.set(id, text);
+function setText(state: ManualState, id: string, text: SectionText) {
+  state.sectionTexts.set(id, text);
   emitChange();
 }
 
-export function openSection(id: string) {
-  if (openedSections.has(id) || findSection(getManual(), id)?.status === "written") return;
-  openedSections.add(id);
-  startWriting(id);
+export function openSection(manualId: string, id: string) {
+  const state = stateOf(manualId);
+  if (state.openedSections.has(id) || findSection(state.manual!, id)?.status === "written") return;
+  state.openedSections.add(id);
+  startWriting(state, id);
 }
 
-export function retrySection(id: string) {
-  if (!sectionTexts.get(id)?.failure) return;
-  setText(id, NO_TEXT);
-  startWriting(id);
+export function retrySection(manualId: string, id: string) {
+  const state = stateOf(manualId);
+  if (!state.sectionTexts.get(id)?.failure) return;
+  setText(state, id, NO_TEXT);
+  startWriting(state, id);
 }
 
-function startWriting(id: string) {
-  setStatus(id, "writing");
-  queuedStreams.push(id);
+function startWriting(state: ManualState, id: string) {
+  setStatus(state, id, "writing");
+  queuedStreams.push({ state, id });
   openQueuedStreams();
 }
 
 function openQueuedStreams() {
-  while (openStreams.size < MAX_OPEN_STREAMS && queuedStreams.length > 0) {
-    const id = queuedStreams.shift()!;
-    openStreams.set(id, streamSection(id, (event) => applyEvent(id, event)));
+  while (openStreamCount() < MAX_OPEN_STREAMS && queuedStreams.length > 0) {
+    const { state, id } = queuedStreams.shift()!;
+    state.openStreams.set(id, streamSection(state.id, id, (event) => applyEvent(state, id, event)));
   }
 }
 
-function endStream(id: string) {
-  openStreams.get(id)?.();
-  openStreams.delete(id);
+function openStreamCount(): number {
+  let count = 0;
+  for (const state of manualStates.values()) count += state.openStreams.size;
+  return count;
+}
+
+function endStream(state: ManualState, id: string) {
+  state.openStreams.get(id)?.();
+  state.openStreams.delete(id);
   openQueuedStreams();
 }
 
-function applyEvent(id: string, event: StreamEvent) {
-  const current = sectionTexts.get(id) ?? NO_TEXT;
+function applyEvent(state: ManualState, id: string, event: StreamEvent) {
+  const current = state.sectionTexts.get(id) ?? NO_TEXT;
   switch (event.event) {
     case "append":
       if (event.data.at === current.raw.length) {
-        setText(id, { raw: current.raw + event.data.text, progress: event.data.progress });
+        setText(state, id, { raw: current.raw + event.data.text, progress: event.data.progress });
       } else {
-        fail(id, current, "error");
+        fail(state, id, current, "error");
       }
       return;
     case "written":
-      endStream(id);
-      setStatus(id, "written");
+      endStream(state, id);
+      setStatus(state, id, "written");
       return;
     case "frozen":
-      endStream(id);
+      endStream(state, id);
       return;
     case "failed":
-      fail(id, current, event.data.reason);
+      fail(state, id, current, event.data.reason);
       return;
     case "error":
-      fail(id, current, "error");
+      fail(state, id, current, "error");
       return;
   }
 }
 
-function fail(id: string, current: SectionText, failure: FailureReason) {
-  endStream(id);
-  setText(id, { ...current, failure });
-  setStatus(id, "unwritten");
+function fail(state: ManualState, id: string, current: SectionText, failure: FailureReason) {
+  endStream(state, id);
+  setText(state, id, { ...current, failure });
+  setStatus(state, id, "unwritten");
 }
 
-export function useManual(): Manual {
-  use(loadManual());
+export function useManual(manualId: string): Manual {
+  const state = stateOf(manualId);
+  use(loadManual(state));
+  const getManual = () => state.manual!;
   return useSyncExternalStore(subscribe, getManual, getManual);
 }
 
@@ -150,15 +181,16 @@ export interface UseSectionResult {
   failure?: FailureReason;
 }
 
-export function useSection(id: string): UseSectionResult {
-  const currentManual = useManual();
+export function useSection(manualId: string, id: string): UseSectionResult {
+  const currentManual = useManual(manualId);
   const section = findSection(currentManual, id);
-  if (!section) throw new Error(`No section with id "${id}"`);
+  if (!section) throw new Error(`No section with id "${id}" in manual "${manualId}"`);
 
-  use(loadSection(id));
-  const getText = () => sectionTexts.get(id) ?? NO_TEXT;
+  const state = stateOf(manualId);
+  use(loadSection(state, id));
+  const getText = () => state.sectionTexts.get(id) ?? NO_TEXT;
   const { raw, progress, failure } = useSyncExternalStore(subscribe, getText, getText);
-  useLayoutEffect(() => openSection(id), [id]);
+  useLayoutEffect(() => openSection(manualId, id), [manualId, id]);
 
   if (section.status === "written") return { section, status: section.status, text: raw, progress: 1 };
   return { section, status: section.status, text: repairPartialMarkdown(raw), progress, failure };

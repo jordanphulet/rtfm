@@ -5,6 +5,7 @@ import { ExternalLink } from "../ui";
 import { CodeBlock } from "./CodeBlock";
 import type { Heading } from "./markdownScan";
 import { SectionLink } from "./SectionLink";
+import { useManualId } from "./useManualId";
 import "./prose.css";
 
 type HastElement = NonNullable<ExtraProps["node"]>;
@@ -103,13 +104,14 @@ interface ProseProps {
 }
 
 export function Prose({ source, headings, sectionLabel, wrap, live }: ProseProps) {
+  const manualId = useManualId();
   const idsByLine = useMemo(() => new Map(headings.map((heading) => [heading.line, heading.id])), [headings]);
   const style = { "--section-label": `"${sectionLabel}"` } as CSSProperties;
 
   return (
     <div className="prose write-head" data-live={live || undefined} data-wrap={wrap} style={style}>
       <HeadingIdsByLine.Provider value={idsByLine}>
-        <Markdown source={source} SectionLink={SectionLink} components={components} className="markdown prose-root" />
+        <Markdown manualId={manualId} source={source} SectionLink={SectionLink} components={components} className="markdown prose-root" />
       </HeadingIdsByLine.Provider>
     </div>
   );

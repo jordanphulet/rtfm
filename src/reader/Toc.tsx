@@ -2,9 +2,10 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { useManual, type Chapter, type Section } from "../manual";
 import { StatusRing } from "../ui";
-import { CONTENTS_PATH, allSections, sectionPath } from "./manualParts";
+import { allSections, contentsPath, sectionPath } from "./manualParts";
 import { StatusLegend } from "./StatusLegend";
 import { STATUS_WORDS } from "./statusWords";
+import { useManualId } from "./useManualId";
 import "./toc.css";
 
 interface TocProps {
@@ -13,14 +14,14 @@ interface TocProps {
 }
 
 export function Toc({ currentId, currentOutline }: TocProps) {
-  const manual = useManual();
+  const manual = useManual(useManualId());
   const sections = allSections(manual);
   const writtenCount = sections.filter((section) => section.status === "written").length;
 
   return (
     <nav className="toc" aria-label="Contents">
       <div className="toc-masthead">
-        <Link to={CONTENTS_PATH} className="toc-manual-title" aria-current={currentId ? undefined : "page"}>
+        <Link to={contentsPath(manual.id)} className="toc-manual-title" aria-current={currentId ? undefined : "page"}>
           {manual.title}
         </Link>
         <p className="toc-count">
@@ -65,9 +66,10 @@ function ChapterList({ chapters, currentId, currentOutline }: TocProps & { chapt
 }
 
 function TocRow({ section, isCurrent }: { section: Section; isCurrent: boolean }) {
+  const manualId = useManualId();
   return (
     <Link
-      to={sectionPath(section.id)}
+      to={sectionPath(manualId, section.id)}
       className="toc-row"
       data-status={section.status}
       aria-current={isCurrent ? "page" : undefined}

@@ -4,9 +4,9 @@ import { SectionPage } from "./SectionPage";
 import { StartPage } from "./StartPage";
 
 export default function Reader() {
-  const { sectionId } = useParams();
+  const { manualId, sectionId } = useParams();
   return (
-    <ManualErrorBoundary resetKey={sectionId ?? ""}>
+    <ManualErrorBoundary key={manualId} resetKey={sectionId ?? ""}>
       {sectionId ? <SectionPage id={sectionId} /> : <StartPage />}
     </ManualErrorBoundary>
   );

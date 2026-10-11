@@ -4,6 +4,7 @@ import { StatusRing } from "../ui";
 import { TITLE_ID } from "./ArticleHead";
 import type { Heading } from "./markdownScan";
 import { chapterAnchor, sectionPath } from "./manualParts";
+import { useManualId } from "./useManualId";
 import "./outline.css";
 
 interface OutlineListProps {
@@ -62,6 +63,7 @@ function OutlineItem({ id, level, number, isActive, children }: OutlineItemProps
 }
 
 export function ReferencedSections({ sections }: { sections: Section[] }) {
+  const manualId = useManualId();
   if (sections.length === 0) return null;
   return (
     <>
@@ -69,7 +71,7 @@ export function ReferencedSections({ sections }: { sections: Section[] }) {
       <ul className="outline-refs">
         {sections.map((section) => (
           <li key={section.id}>
-            <Link to={sectionPath(section.id)} data-status={section.status}>
+            <Link to={sectionPath(manualId, section.id)} data-status={section.status}>
               <span className="outline-ref-label">{section.label}</span>
               <span className="outline-ref-title">{section.title}</span>
               <StatusRing status={section.status} />

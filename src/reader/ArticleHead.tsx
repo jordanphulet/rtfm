@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { Chapter, Section } from "../manual";
 import { StatusRing, type RingStatus } from "../ui";
 import { chapterPath, sectionPath } from "./manualParts";
+import { useManualId } from "./useManualId";
 import "./article-head.css";
 
 export const TITLE_ID = "section-title";
@@ -25,20 +26,21 @@ export function ArticleHead({
   ringStatus,
   statusText,
 }: ArticleHeadProps) {
+  const manualId = useManualId();
   return (
     <header className="article-head">
       <div className="eyebrow">
-        <Link to={chapterPath(chapter)} className="eyebrow-chapter">
+        <Link to={chapterPath(manualId, chapter)} className="eyebrow-chapter">
           {chapterName} · {chapter.title}
         </Link>
         <nav className="eyebrow-steps" aria-label="Previous and next section">
           {previous && (
-            <Link to={sectionPath(previous.id)} aria-label={`Previous: ${previous.label} ${previous.title}`}>
+            <Link to={sectionPath(manualId, previous.id)} aria-label={`Previous: ${previous.label} ${previous.title}`}>
               ‹ {previous.label}
             </Link>
           )}
           {next && (
-            <Link to={sectionPath(next.id)} aria-label={`Next: ${next.label} ${next.title}`}>
+            <Link to={sectionPath(manualId, next.id)} aria-label={`Next: ${next.label} ${next.title}`}>
               {next.label} ›
             </Link>
           )}

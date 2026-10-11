@@ -1,7 +1,8 @@
 import { Link } from "react-router";
 import { chapterOf, useManual, type Chapter, type Section } from "../manual";
 import { StatusRing } from "../ui";
-import { CONTENTS_PATH, chapterName, sectionPath } from "./manualParts";
+import { chapterName, contentsPath, sectionPath } from "./manualParts";
+import { useManualId } from "./useManualId";
 import "./pager.css";
 
 interface PagerProps {
@@ -34,7 +35,7 @@ interface PagerLinkProps {
 }
 
 function PagerLink({ direction, section, from }: PagerLinkProps) {
-  const manual = useManual();
+  const manual = useManual(useManualId());
   const target = chapterOf(manual, section.id);
   const crossing = target && target.id !== from.id ? ` · ${chapterName(manual, target)}` : "";
   const caption =
@@ -43,7 +44,7 @@ function PagerLink({ direction, section, from }: PagerLinkProps) {
       : `Next${crossing} · ${section.label} ›`;
 
   return (
-    <Link to={sectionPath(section.id)} className="pager-link" data-direction={direction}>
+    <Link to={sectionPath(manual.id, section.id)} className="pager-link" data-direction={direction}>
       <span className="pager-caption">{caption}</span>
       <span className="pager-title">
         {section.title}
@@ -54,8 +55,9 @@ function PagerLink({ direction, section, from }: PagerLinkProps) {
 }
 
 function ContentsLink({ caption, isNext = false }: { caption: string; isNext?: boolean }) {
+  const manualId = useManualId();
   return (
-    <Link to={CONTENTS_PATH} className="pager-link" data-direction={isNext ? "next" : "previous"}>
+    <Link to={contentsPath(manualId)} className="pager-link" data-direction={isNext ? "next" : "previous"}>
       <span className="pager-caption">{caption}</span>
       <span className="pager-title">Back to contents</span>
     </Link>

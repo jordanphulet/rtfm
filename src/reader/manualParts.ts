@@ -12,16 +12,18 @@ export function chapterName(manual: Manual, chapter: Chapter): string {
   return `${isAppendix(manual, chapter) ? "Appendix" : "Chapter"} ${chapter.label}`;
 }
 
-export const CONTENTS_PATH = "/read";
+export function contentsPath(manualId: string): string {
+  return `/read/${manualId}`;
+}
 
-export function sectionPath(id: string): string {
-  return `${CONTENTS_PATH}/${id}`;
+export function sectionPath(manualId: string, sectionId: string): string {
+  return `${contentsPath(manualId)}/${sectionId}`;
 }
 
 export function chapterAnchor(chapter: Chapter): string {
   return `chapter-${chapter.id}`;
 }
 
-export function chapterPath(chapter: Chapter): string {
-  return `${CONTENTS_PATH}#${chapterAnchor(chapter)}`;
+export function chapterPath(manualId: string, chapter: Chapter): string {
+  return `${contentsPath(manualId)}#${chapterAnchor(chapter)}`;
 }

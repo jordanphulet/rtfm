@@ -1,9 +1,9 @@
 # src/ui
 
 The shared design system: the tokens, fonts, base type, focus style, the write head and the
-components that aren't specific to one page. The reader (`src/reader/`, at `/read`) and the landing
-page (`src/home/`, at `/`) are both built on it. The design rules, the banned list and the
-reasoning behind every value are in `DESIGN.md`.
+components that aren't specific to one page. The reader (`src/reader/`, at `/read/<manual>`) and
+the landing page (`src/home/`, at `/`) are both built on it. The design rules, the banned list and
+the reasoning behind every value are in `DESIGN.md`.
 
 ## Using it
 
@@ -342,5 +342,5 @@ reader shifts it right for a code block, which bleeds into the margin:
 
 ```tsx
 <button type="button" className="text-button" onClick={cancel}>Cancel</button>
-<Link to="/read" className="link">Open the reader</Link>
+<Link to="/read/the-haunt-that-listens" className="link">Open the reader</Link>
 ```

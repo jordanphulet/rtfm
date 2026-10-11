@@ -20,7 +20,7 @@ export function LedgerRow({ manual, named, hovered, lifted, onDelete, registerRo
       data-hovered={hovered || undefined}
       data-lifted={lifted || undefined}
     >
-      <Link to="/read" className="row-title">
+      <Link to={`/read/${manual.id}`} className="row-title">
         {manual.title}
         {named && <span className="visually-hidden"> — named in the conversation</span>}
       </Link>

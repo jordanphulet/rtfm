@@ -14,15 +14,15 @@ const fake = vi.hoisted(() => {
     chapters: [{ id: "1", label: "1", title: "One", sections: ["a", "b", "c", "d", "e"].map(section) }],
     appendices: [],
   };
-  const streams: { id: string; send: (event: StreamEvent) => void; closed: boolean }[] = [];
+  const streams: { manualId: string; id: string; send: (event: StreamEvent) => void; closed: boolean }[] = [];
   return { manual, streams };
 });
 
 vi.mock("./api", () => ({
-  fetchManual: async () => fake.manual,
+  fetchManual: async (manualId: string) => ({ ...fake.manual, id: manualId }),
   fetchSectionState: async () => ({ status: "unwritten" }),
-  streamSection(id: string, send: (event: StreamEvent) => void) {
-    const stream = { id, send, closed: false };
+  streamSection(manualId: string, id: string, send: (event: StreamEvent) => void) {
+    const stream = { manualId, id, send, closed: false };
     fake.streams.push(stream);
     return () => {
       stream.closed = true;
@@ -38,10 +38,13 @@ async function loadStore(): Promise<Store> {
   return import("./store");
 }
 
-function read(store: Store, id: string): UseSectionResult | undefined {
+const MANUAL = "fixture";
+const OTHER_MANUAL = "other-fixture";
+
+function read(store: Store, id: string, manualId = MANUAL): UseSectionResult | undefined {
   let result: UseSectionResult | undefined;
   function Probe() {
-    result = store.useSection(id);
+    result = store.useSection(manualId, id);
     return null;
   }
   renderToStaticMarkup(
@@ -52,14 +55,17 @@ function read(store: Store, id: string): UseSectionResult | undefined {
   return result;
 }
 
-async function open(store: Store, ...ids: string[]) {
+async function openIn(store: Store, manualId: string, ...ids: string[]) {
   for (const id of ids) {
-    while (!read(store, id)) await new Promise((resolve) => setTimeout(resolve));
-    store.openSection(id);
+    while (!read(store, id, manualId)) await new Promise((resolve) => setTimeout(resolve));
+    store.openSection(manualId, id);
   }
 }
 
-const streamFor = (id: string) => fake.streams.findLast((stream) => stream.id === id)!;
+const open = (store: Store, ...ids: string[]) => openIn(store, MANUAL, ...ids);
+
+const streamFor = (id: string, manualId = MANUAL) =>
+  fake.streams.findLast((stream) => stream.manualId === manualId && stream.id === id)!;
 const append = (at: number, text: string): StreamEvent => ({ event: "append", data: { at, text, progress: 0.5 } });
 
 describe("the manual store", () => {
@@ -106,7 +112,7 @@ describe("the manual store", () => {
     streamFor("a").send({ event: "failed", data: { reason: "budget" } });
     expect(read(store, "a")).toMatchObject({ status: "unwritten", failure: "budget" });
 
-    store.retrySection("a");
+    store.retrySection(MANUAL, "a");
     expect(read(store, "a")).toEqual(expect.objectContaining({ status: "writing", text: "", failure: undefined }));
     expect(fake.streams.map((stream) => stream.id)).toEqual(["a", "a"]);
     streamFor("a").send(append(0, "Fresh words "));
@@ -119,7 +125,7 @@ describe("the manual store", () => {
     streamFor("a").send({ event: "error" });
     expect(streamFor("d")).toBeDefined();
 
-    store.retrySection("a");
+    store.retrySection(MANUAL, "a");
     expect(fake.streams.filter((stream) => stream.id === "a")).toHaveLength(1);
     expect(read(store, "a")).toMatchObject({ status: "writing", text: "" });
     streamFor("b").send({ event: "written", data: {} });
@@ -129,7 +135,69 @@ describe("the manual store", () => {
   it("does nothing when asked to retry a section that hasn't failed", async () => {
     const store = await loadStore();
     await open(store, "a");
-    store.retrySection("a");
+    store.retrySection(MANUAL, "a");
     expect(fake.streams).toHaveLength(1);
+  });
+
+  it("keeps each manual's sections and streams separate", async () => {
+    const store = await loadStore();
+    await openIn(store, MANUAL, "a");
+    await openIn(store, OTHER_MANUAL, "a");
+    expect(fake.streams.map((stream) => [stream.manualId, stream.id])).toEqual([
+      [MANUAL, "a"],
+      [OTHER_MANUAL, "a"],
+    ]);
+
+    streamFor("a", MANUAL).send(append(0, "First manual "));
+    streamFor("a", OTHER_MANUAL).send({ event: "failed", data: { reason: "budget" } });
+    expect(read(store, "a", MANUAL)).toMatchObject({ status: "writing", text: "First manual " });
+    expect(read(store, "a", OTHER_MANUAL)).toMatchObject({ status: "unwritten", text: "", failure: "budget" });
+
+    streamFor("a", MANUAL).send({ event: "written", data: {} });
+    expect(read(store, "a", MANUAL)).toMatchObject({ status: "written" });
+    expect(read(store, "a", OTHER_MANUAL)).toMatchObject({ status: "unwritten" });
+  });
+
+  it("shares the three open streams between manuals, in the order they were opened", async () => {
+    const store = await loadStore();
+    await openIn(store, MANUAL, "a", "b");
+    await openIn(store, OTHER_MANUAL, "a", "b");
+    expect(fake.streams.map((stream) => [stream.manualId, stream.id])).toEqual([
+      [MANUAL, "a"],
+      [MANUAL, "b"],
+      [OTHER_MANUAL, "a"],
+    ]);
+
+    streamFor("a", MANUAL).send({ event: "written", data: {} });
+    expect(fake.streams.at(-1)).toMatchObject({ manualId: OTHER_MANUAL, id: "b" });
+  });
+
+  it.each<[string, StreamEvent]>([
+    ["failed", { event: "failed", data: { reason: "error" } }],
+    ["a mismatched append", append(5, "a gap ")],
+    ["frozen", { event: "frozen", data: {} }],
+  ])("opens a stream queued for another manual when one ends with %s", async (_name, event) => {
+    const store = await loadStore();
+    await openIn(store, MANUAL, "a", "b", "c");
+    await openIn(store, OTHER_MANUAL, "a");
+    expect(fake.streams).toHaveLength(3);
+
+    streamFor("a", MANUAL).send(event);
+    expect(fake.streams.at(-1)).toMatchObject({ manualId: OTHER_MANUAL, id: "a" });
+  });
+
+  it("queues a retry in one manual behind another manual's open streams", async () => {
+    const store = await loadStore();
+    await openIn(store, MANUAL, "a");
+    await openIn(store, OTHER_MANUAL, "a", "b", "c");
+    streamFor("a", MANUAL).send({ event: "failed", data: { reason: "error" } });
+    expect(fake.streams.at(-1)).toMatchObject({ manualId: OTHER_MANUAL, id: "c" });
+
+    store.retrySection(MANUAL, "a");
+    expect(fake.streams.filter((stream) => stream.manualId === MANUAL)).toHaveLength(1);
+    expect(read(store, "a", MANUAL)).toMatchObject({ status: "writing", text: "" });
+
+    streamFor("b", OTHER_MANUAL).send({ event: "written", data: {} });
+    expect(fake.streams.at(-1)).toMatchObject({ manualId: MANUAL, id: "a" });
   });
 });

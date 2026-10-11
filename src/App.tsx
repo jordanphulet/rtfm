@@ -9,8 +9,8 @@ export default function App() {
     <Suspense>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/read" element={<Reader />} />
-        <Route path="/read/:sectionId" element={<Reader />} />
+        <Route path="/read/:manualId" element={<Reader />} />
+        <Route path="/read/:manualId/:sectionId" element={<Reader />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

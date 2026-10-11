@@ -4,12 +4,13 @@ import { chapterOf, useManual, type SectionLinkProps } from "../manual";
 import { StatusRing } from "../ui";
 import { chapterName, sectionPath } from "./manualParts";
 import { STATUS_WORDS } from "./statusWords";
+import { useManualId } from "./useManualId";
 import "./section-link.css";
 
 const OPENING_NOTE = " — opening it starts the writing.";
 
 export function SectionLink({ section, children }: SectionLinkProps) {
-  const manual = useManual();
+  const manual = useManual(useManualId());
   const chapter = chapterOf(manual, section.id);
   const id = useId();
   const anchorName = `--xref-${id}`;
@@ -18,7 +19,7 @@ export function SectionLink({ section, children }: SectionLinkProps) {
   return (
     <span className="xref">
       <Link
-        to={sectionPath(section.id)}
+        to={sectionPath(manual.id, section.id)}
         className="link xref-link"
         data-status={section.status}
         aria-describedby={previewId}
