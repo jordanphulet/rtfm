@@ -6,6 +6,7 @@
     "module": "nodenext",
     "types": ["node"],
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,

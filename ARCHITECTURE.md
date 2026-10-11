@@ -3,7 +3,8 @@
 The plan for the "Backend foundation" phase in `WORKLIST.md`. A local Node server stores the
 manual and its sections. It writes unwritten sections, with a fake writer or with Claude Haiku 4.5
 on Amazon Bedrock, and streams them to the reader. Every model call goes through one gateway that
-caps spending. Nothing here is built yet.
+caps spending. BE.2 built the server, storage, the fake writer and the API; the gateway and the
+Bedrock writer come in BE.3 and BE.5.
 
 ```
 browser (Vite, :5173)                        server (node:http, :8787)
@@ -12,20 +13,15 @@ browser (Vite, :5173)                        server (node:http, :8787)
                                                   └──▶ storage/ (manuals, sections, ledger: files in .data/)
 ```
 
-## Open questions
+## Decisions
 
-1. **Model: `global.` or `us.`?** Both work. **Recommendation: `global.`.** It is 10% cheaper,
-   and nothing here needs routing that stays in the US.
-2. **The last reader leaves mid-section.** The phase requires the call to stop, so reloading the
-   page mid-section starts the writing again from scratch. **Recommendation: stop at once, as
-   required.** The alternative is a grace period of a few seconds before aborting, which would
-   survive a reload.
-3. **Kill switch wording.** The kill switch is reported as `reason: "budget"`, so the reader shows
-   "budget reached". **Recommendation: keep it.** Both mean that spending has stopped, and a third
-   designed state isn't needed.
-4. **Progress while Claude writes** is an estimate: characters against a target length, capped at
-   99%. "Being written · 46%" is approximate and may jump at the end. **Recommendation: accept
-   it.** An indeterminate meter would change the design.
+1. **Model: `global.`.** It is 10% cheaper than `us.`, and nothing here needs routing that stays
+   in the US.
+2. **The last reader leaving mid-section stops the call at once.** Reloading mid-section starts
+   the writing again from scratch; there is no grace period.
+3. **The kill switch is reported as `reason: "budget"`**, so the reader shows "budget reached".
+4. **Progress while Claude writes is approximate**: characters against a target length, capped at
+   99%, so "Being written · 46%" may jump at the end.
 
 ## 1. The server
 
@@ -38,11 +34,14 @@ server/
   main.ts                 starts the server from config.ts (npm run server)
   dev.ts                  npm run dev: Vite plus `node --watch server/main.ts`
   config.ts               committed settings (section 6)
-  app.ts                  startServer(config): builds storage, writer and gateway; routes
+  app.ts                  startServer(config, writer?): builds storage, writer and gateway; routes
+  testing.ts              helpers shared by the tests
   usage.ts                npm run usage
   api/
     types.ts              the API contract shared with the browser (section 2)
+    route.ts              Route, ApiRequest, EventSink: what handlers see
     node-adapter.ts       node:http ⇄ ApiRequest, JSON responses, the event stream
+    lookup.ts             finds a manual that has a given section
     manual.ts             GET /api/manuals/:manualId
     section.ts            GET /api/manuals/:manualId/sections/:sectionId
     section-stream.ts     GET /api/manuals/:manualId/sections/:sectionId/stream
@@ -51,6 +50,7 @@ server/
     types.ts              ManualStore, UsageLedger
     file-manual-store.ts  manuals and sections as files
     file-ledger.ts        the usage ledger as JSON lines
+    files.ts              reads a file that may not exist
     seed.ts               seeds an empty store from server/seed/
   seed/the-haunt-that-listens/
     manual.json           the sample TOC, voice, and which sections start written
@@ -90,22 +90,25 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   dataDir: <temp dir>, writer: "fake" })` and points its Vite proxy at it. Every run starts from
   the seed and never touches `.data/` or Bedrock.
 
-**Plain handlers, ready for Lambda.** Handlers know nothing about `node:http`.
+**Plain handlers, ready for Lambda.** Handlers import only `api/route.ts`, never `node:http` or
+the Node adapter.
 
 ```ts
-// server/api/node-adapter.ts (sketch)
+// server/api/route.ts
 export interface ApiRequest {
   params: Record<string, string>;   // from the route pattern
   query: URLSearchParams;
   signal: AbortSignal;              // aborts when the client disconnects
 }
+export interface JsonResponse { status: number; body: unknown }
 export interface EventSink {
   send(event: string, data: unknown): void;   // `event: …\ndata: <json>\n\n`
-  end(): void;
 }
-export type Route =
-  | { pattern: string; json(request: ApiRequest): Promise<{ status: number; body: unknown }> }
-  | { pattern: string; events(request: ApiRequest, sink: EventSink): Promise<void> };
+export type EventStream = (sink: EventSink) => Promise<void>;   // the stream ends when it resolves
+export interface Route {
+  pattern: string;
+  handle(request: ApiRequest): Promise<JsonResponse | EventStream>;   // so a stream route can 404
+}
 ```
 
 The Node adapter:
@@ -417,7 +420,7 @@ reservations, and whether the kill switch is on.
 export const API_PORT = 8787;
 export const config = {
   port: API_PORT,
-  dataDir: ".data",
+  dataDir: fileURLToPath(new URL("../.data", import.meta.url)),   // <repo>/.data, whatever the cwd
   writer: writerFromEnv(process.env.RTFM_WRITER),   // "fake" (default) | "bedrock"; anything else throws
   caps: { dailyUsd: 2, monthlyUsd: 20 },
   maxConcurrentRuns: 3,
