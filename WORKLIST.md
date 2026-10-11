@@ -116,7 +116,7 @@ the comparison live at the `library-comparison` tag.
   - no copy remains.
 
 ### AL.3b — Keep a named manual's link stable after a delete
-- **Status:** doing (agent: af9c983ed89d800d9)
+- **Status:** done
 - **Depends on:** AL.3 (same files)
 - **Files:** `src/home/**`
 - **Do:**
@@ -149,7 +149,7 @@ the comparison live at the `library-comparison` tag.
   script remains.
 
 ### AL.5 — One design doc, updated docs
-- **Status:** todo
+- **Status:** doing (agent: a78c4b2b4e5150035)
 - **Depends on:** AL.3b, AL.4
 - **Files:** `DESIGN.md`, `README.md`, `CLAUDE.md`, `src/ui/README.md`, `src/manual/README.md`,
   `src/library/README.md`, `src/agent/README.md`
