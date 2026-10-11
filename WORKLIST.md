@@ -141,7 +141,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   unchanged, and `npm test` runs only this checkout's tests.
 
 ### RL.4 — Harness prototypes
-- **Status:** needs-human (the user chooses: our own loop or Strands; see prototypes/harness/COMPARISON.md)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `prototypes/harness/**` (new), `package.json` and `package-lock.json` (the Strands
   dependency only)
@@ -162,18 +162,22 @@ Out of scope: web access for any model, the passphrase, and deploying.
 
 ### RL.5 — The agent loop
 - **Status:** todo
-- **Depends on:** RL.4 and the user's choice
+- **Depends on:** RL.4
 - **Files:** `server/agent/**` (new), `server/gateway/**`, `server/config.ts`, `package.json`,
   `package-lock.json`, `ARCHITECTURE.md`, `prototypes/**` (to delete it)
 - **Do:**
-  - Build the chosen harness on the gateway: tool definitions and tool results go through it,
-    and the worst-case input bound counts the tool definitions and the whole conversation.
+  - Build our own agent loop on the gateway, starting from `prototypes/harness/own-loop/` and
+    `prototypes/harness/gateway/`: tool definitions and tool results go through it, and the
+    worst-case input bound counts the tool definitions, the whole conversation and the tool-use
+    system prompt (per model, with the prices). No turn limit: the gateway's caps bound a run.
+  - `bedrock-client.ts` sends tools and block content, and turns a streamed `tool_use` block
+    into one tool-use event.
   - Tools are defined with a schema and their input is checked before they run.
   - The loop reports status as it goes (for example "Looking through the library…"), for the
     page to show.
   - A fake model client scripts tool calls for tests.
-  - Delete `prototypes/`, including the comparison, and anything only the losing prototype
-    needed. Describe the loop in ARCHITECTURE.md as it is, with no record of the choice.
+  - Delete `prototypes/`, including the comparison, and remove `@strands-agents/sdk` with
+    `npm uninstall`. Describe the loop in ARCHITECTURE.md as it is, with no record of the choice.
 - **Done when:** `npm run build` and `npm test` pass; tests cover a multi-turn run with tool
   calls, a tool given bad input, a refusal from the gateway's caps in the middle of a run, and
   an abort.
