@@ -149,8 +149,8 @@ make each of those a straightforward later step.
 ### BE.3 — The model gateway
 - **Status:** todo
 - **Depends on:** BE.2
-- **Files:** the gateway folder named in `ARCHITECTURE.md`, its tests, the `usage` script and its
-  `package.json` entry
+- **Files:** the gateway folder named in `ARCHITECTURE.md`, its tests, the `usage` script,
+  `server/config.ts` (caps and per-job limits), `package.json`, `package-lock.json`
 - **Do:** build the gateway as `ARCHITECTURE.md` describes, with a fake model client for the
   tests. Also:
   - `npm run usage`: today's and this month's spend, by model and by job;
@@ -167,7 +167,8 @@ make each of those a straightforward later step.
 ### BE.4 — The reader reads from the server
 - **Status:** todo
 - **Depends on:** BE.2
-- **Files:** `src/manual/**`, `src/reader/**`, `DESIGN.md`, `scripts/**`
+- **Files:** `src/manual/**`, `src/reader/**`, `DESIGN.md`, `scripts/**`, `src/library/seed.ts`,
+  `src/library/store.test.tsx`, `src/library/README.md`
 - **Do:**
   - The reader gets the manual and its sections from the API and streams unwritten sections from
     it. Remove the browser-side fake streamer and anything else the server now owns.
@@ -184,7 +185,8 @@ make each of those a straightforward later step.
 - **Status:** todo
 - **Depends on:** BE.3, BE.4
 - **Files:** the section writer's folder named in `ARCHITECTURE.md`, its prompt files and tests,
-  committed configuration
+  committed configuration, `server/app.ts` (wiring the Bedrock writer, the gateway and the
+  credentials)
 - **Do:**
   - Build the Bedrock section writer on the gateway.
   - The prompt carries the manual's voice brief, its table of contents, and summaries of
