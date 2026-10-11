@@ -95,7 +95,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
     checked on a temporary data folder with a fake model.
 
 ### RL.0 — Fold the architecture doc's decisions into its sections
-- **Status:** doing (agent: ae55cd69d689085bd)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `ARCHITECTURE.md`
 - **Do:** following `CLAUDE.md`'s rule against decision lists, move each item in
@@ -117,7 +117,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   the library from the start page and from a section.
 
 ### RL.2 — The fake writer saves no placeholders
-- **Status:** todo
+- **Status:** doing (agent: aef85a766b900cf5d)
 - **Depends on:** —
 - **Files:** `server/writer/**` except `server/writer/bedrock.ts` and its prompt files,
   `README.md`, `ARCHITECTURE.md`
