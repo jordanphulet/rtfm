@@ -12,16 +12,6 @@ browser (Vite, :5173)                        server (node:http, :8787)
                                                   └──▶ storage/ (manuals, sections, ledger: files in .data/)
 ```
 
-## Decisions
-
-1. **Model: `global.`.** It is 10% cheaper than `us.`, and nothing here needs routing that stays
-   in the US.
-2. **The last reader leaving mid-section stops the call at once.** Reloading mid-section starts
-   the writing again from scratch; there is no grace period.
-3. **The kill switch is reported as `reason: "budget"`**, so the reader shows "budget reached".
-4. **Progress while Claude writes is approximate**: characters against the expected length
-   (`sectionExpectedCharacters`), capped at 99%, so "Being written · 46%" may jump at the end.
-
 ## 1. The server
 
 The server lives in the top-level `server/` folder, next to `src/` and `scripts/`. It runs as TypeScript directly on
@@ -405,8 +395,9 @@ reported without reading any secret.
 - **Ending:**
   - When the writer finishes, `saveBody`, then `written`.
   - When the writer throws, `failed`, and the entry is removed. Nothing is stored.
-  - **When the last listener disconnects, the run is aborted**, which aborts the Bedrock call
-    (section 5), and the partial text is discarded.
+  - **When the last listener disconnects, the run is aborted** at once, with no grace period,
+    which aborts the Bedrock call (section 5), and the partial text is discarded. Reloading
+    mid-section therefore starts the writing again from scratch.
 - **At most 3 runs at once** (`config.maxConcurrentRuns`). A fourth request gets `failed:
   "error"`. Each writing section holds one browser connection, and HTTP/1.1 allows 6 per origin,
   so this keeps the page's other requests flowing. The reader keeps a section's stream open while
@@ -665,6 +656,8 @@ export const config: ServerConfig = {
   writer, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
   `startServer` and the gateway take it as it is, so tests and the shot script spread `config`
   and override what they need.
+- **The `global.` model ID.** `write-section` uses the `global.` inference profile rather than
+  `us.`, which costs 10% more; nothing here needs routing that stays in the US.
 - **`maxTokens: 2048`.** The sample sections are 460–660 words (about 650–950 tokens), so this
   leaves room. Its output costs at most about $0.01 (2,048 × $5 per million), and with the input
   bound a call's worst-case reservation is about $0.025.
