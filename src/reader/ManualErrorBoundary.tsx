@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Link } from "react-router";
 import "../ui";
 import { FailureNotice } from "./FailureNotice";
 import "./tokens.css";
@@ -29,7 +30,15 @@ export class ManualErrorBoundary extends Component<ManualErrorBoundaryProps, { f
             <FailureNotice
               title="Couldn’t open this manual"
               lead="The manual didn’t load, so there’s nothing to show yet."
-              afterRetry="."
+              afterRetry={
+                <>
+                  , or go back to the{" "}
+                  <Link to="/" className="link">
+                    library
+                  </Link>
+                  .
+                </>
+              }
               onRetry={() => window.location.reload()}
             />
           </div>

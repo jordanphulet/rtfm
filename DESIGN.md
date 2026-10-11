@@ -354,7 +354,10 @@ cross-references carry their status anyway.
 The phone at 375px is the design target.
 
 - **Sticky header**, 48px, `--ground`, 1px `--rule` bottom line:
-  - Left, flexible: the **location button** (40px tall, `data-shot="toc-toggle"`): status ring ·
+  - Left: **`Library`**, a link to `/`, 14/20 400 wdth 85 ink-muted, 44px tall with 8px side
+    padding, so its text lines up with the 16px phone gutter. Hover `--ground-tint` and cue text,
+    like `‹ ›`. No glyph: `‹` already means "previous" here.
+  - Then, flexible: the **location button** (40px tall, `data-shot="toc-toggle"`): status ring ·
     `2.4` (tabular, ink-faint) · title (14/20, 500, wdth 85, ellipsis) · a CSS chevron that turns
     when open. On the start page it reads "Contents".
   - Right: `‹` and `›` links, 44×44, `aria-label="Previous: 2.3 Staying in Character"`. A missing
@@ -407,9 +410,15 @@ The head is identical in every state, so nothing in it ever reflows.
 
 ### The TOC
 
-- **Masthead** (padding 20/16/8): the manual title, 14/20 600 ink-strong, linking to the manual's
-  start page (it takes the current-row tint there); under it `7 of 18 sections written`, micro mono
-  ink-faint, live; then the status legend (see Section states).
+- **Masthead** (padding 20/16/8): first **`Library`**, a link to `/` that takes you back to the
+  library: 14/20 400 ink-muted, the same voice as the eyebrow's chapter link (each goes up a
+  level), with no glyph and no underline; cue text on hover, `--dur-quick`. Its box is padding 4/8
+  with the padding hung outside the text edge, like the title's, so the focus ring sits around
+  the word. It adds 28px to the masthead, and the whole index still fits in 900px. The contents
+  sheet leaves it out, because the compact header already has it. Then the manual title, 14/20
+  600 ink-strong, linking to the manual's start page (it takes the current-row tint there); under
+  it `7 of 18 sections written`, micro mono ink-faint, live; then the status legend (see Section
+  states).
 - **Chapter row:** 14/20 600 ink-strong, wdth 85; the label in a 36px tabular column, ink-faint. A
   heading, not a link (chapters have no page). 8px above each chapter group.
 - **Section row:** 24px tall (padding 2/12), so the dense index fits the screen. Grid
@@ -491,8 +500,8 @@ tables and deserve the same craft.
 ### Keyboard and focus
 
 - First focusable: "Skip to text", the shared `.skip-link`, shown on focus at the top left.
-- DOM order: compact header and sheet → TOC → main (eyebrow links, body links, Copy, Follow or
-  Try again, pager) → outline.
+- DOM order: compact header (`Library`, location, `‹ ›`) and sheet → TOC (`Library`, manual
+  title, rows) → main (eyebrow links, body links, Copy, Follow or Try again, pager) → outline.
 - Focus ring everywhere: `outline: var(--focus-ring); outline-offset: var(--focus-offset)` (2px
   cue, 2px out), radius 2, or the control's own radius where it has one (offset −2px inside the
   TOC). `:focus-visible` only.
@@ -555,8 +564,9 @@ manager says plainly what happened. It is the settle without the finish.
 - **Otherwise it sticks for the page load.** Leaving and coming back shows the same state.
 - **If the manual itself can’t be loaded** (the server can’t be reached, or the manual or the
   section doesn’t exist), the reader shows only the same notice in the text column: `Couldn’t
-  open this manual`, “The manual didn’t load, so there’s nothing to show yet. Try again.”, where
-  Try again reloads the page.
+  open this manual`, “The manual didn’t load, so there’s nothing to show yet. Try again, or go
+  back to the library.”, where Try again reloads the page and **library** is a `.link` to `/`,
+  styled like Try again: the only way back on a page with no TOC or header.
 - **Screen readers:** the live region announces `Not written: budget reached` or `Not written:
   couldn’t write this section`.
 - **Phone:** the same, at the phone body size.
@@ -768,9 +778,9 @@ forking it.
 - `Shell` stays mounted while moving between sections (only the article is keyed by section id),
   so the TOC keeps its scroll position. Moving to another manual remounts the whole reader (it is
   keyed by manual id), so nothing on the page carries over between manuals.
-- **Every link carries the manual id**, which the reader takes from the route (`useManualId.ts`):
-  the TOC, the start page, the pager, the eyebrow, the compact bar, "Referenced here", the
-  cross-references and the arrow keys. The store keeps each manual's state apart (see
+- **Every link within the manual carries the manual id** (only `Library` leaves the manual, for
+  `/`), which the reader takes from the route (`useManualId.ts`): the TOC, the start page, the
+  pager, the eyebrow, the compact bar, "Referenced here", the cross-references and the arrow keys. The store keeps each manual's state apart (see
   `src/manual/README.md`).
 - Heading ids come from one scan of the text: `Prose` looks each heading's id up by its source
   line, so the outline and the page always agree, and duplicates get `-2`, `-3`.

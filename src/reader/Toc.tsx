@@ -21,6 +21,9 @@ export function Toc({ currentId, currentOutline }: TocProps) {
   return (
     <nav className="toc" aria-label="Contents">
       <div className="toc-masthead">
+        <Link to="/" className="toc-library">
+          Library
+        </Link>
         <Link to={contentsPath(manual.id)} className="toc-manual-title" aria-current={currentId ? undefined : "page"}>
           {manual.title}
         </Link>

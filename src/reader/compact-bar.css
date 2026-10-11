@@ -21,6 +21,27 @@
   border-bottom: 1px solid var(--rule);
 }
 
+.reader .library-link {
+  display: grid;
+  place-items: center;
+  flex: none;
+  height: var(--tap);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-m);
+  font: 400 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition:
+    background-color var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
+}
+
+.reader .library-link:hover {
+  background: var(--ground-tint);
+  color: var(--cue);
+}
+
 .reader .location {
   display: flex;
   align-items: center;
@@ -96,6 +117,10 @@
 .reader .sheet {
   position: fixed;
   inset: var(--header-height) 0 0;
+}
+
+.reader .sheet .toc-library {
+  display: none;
 }
 
 .reader .sheet .toc {

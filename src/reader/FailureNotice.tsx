@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import "../ui";
 import "./failure-notice.css";
 
 interface FailureNoticeProps {
   title: string;
   lead: string;
-  afterRetry: string;
+  afterRetry: ReactNode;
   onRetry: () => void;
 }
 

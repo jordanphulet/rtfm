@@ -31,6 +31,9 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
   return (
     <div ref={barRef} className="compact-bar">
       <header className="compact-header">
+        <Link to="/" className="library-link">
+          Library
+        </Link>
         <button
           ref={toggleRef}
           type="button"
