@@ -219,7 +219,7 @@ make each of those a straightforward later step.
     calls cost under $0.50 in total.
 
 ### BE.6 — Final check
-- **Status:** doing (agent: a9501ec1cc65cf185)
+- **Status:** done
 - **Depends on:** BE.4b, BE.5
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
