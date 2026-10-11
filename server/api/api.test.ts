@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../app.ts";
-import type { ServerConfig } from "../config.ts";
+import { config as committedConfig, type ServerConfig } from "../config.ts";
 import { readSeedBody } from "../storage/seed.ts";
 import { recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil, WRITTEN_ID } from "../testing.ts";
 import type { SectionWriter } from "../writer/types.ts";
@@ -14,6 +14,7 @@ afterEach(async () => {
 
 async function start(writer: SectionWriter = recordingWriter(), dataDir?: string) {
   const config: ServerConfig = {
+    ...committedConfig,
     port: 0,
     dataDir: dataDir ?? (await tempDataDir()),
     writer: "fake",
