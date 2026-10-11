@@ -184,16 +184,14 @@ make each of those a straightforward later step.
 ### BE.4b — Dev and test hygiene
 - **Status:** todo
 - **Depends on:** BE.3, BE.4
-- **Files:** `server/testing.ts`, `server/dev.ts`, `vite.config.ts`, `tsconfig*.json`,
-  `src/manual/repair.test.tsx` (its Node types reference only), `package.json` (scripts only)
+- **Files:** `server/testing.ts`, the server tests that create data folders, `server/dev.ts`,
+  `vite.config.ts`
 - **Do:**
   - Server tests clean up the temporary data folders they create. Remove the `rtfm-test-*`
     folders earlier test runs left in `$TMPDIR`.
   - When the API server stops or restarts mid-section during `npm run dev` (for example a
     `node --watch` restart), the browser's stream ends with an error instead of hanging on
     "Being written".
-  - Tests that need Node (`node:fs` on the seed) type-check under their own tsconfig, so Node's
-    globals don't leak into the app's type-check. Remove the `/// <reference types="node" />`.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; a test run leaves no
   `rtfm-test-*` folders behind; live, restarting the server mid-section shows "couldn't write
   this section" in the open tab.
