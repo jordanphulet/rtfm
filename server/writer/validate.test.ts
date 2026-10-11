@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { readSeedBody } from "../storage/seed.ts";
 import { SAMPLE_ID } from "../testing.ts";
-import { sectionsInReadingOrder } from "./prompt.ts";
+import { sectionsInReadingOrder } from "../storage/manual.ts";
 import { sectionProblems } from "./validate.ts";
 
 const CONTEXT = { sectionId: "the-room-controller", sectionIds: new Set(["the-room-controller", "the-show-must-stop"]) };

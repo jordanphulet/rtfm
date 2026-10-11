@@ -1,6 +1,6 @@
 # RTFM — architecture
 
-A local Node server stores the manual and its sections. It writes unwritten sections, with a fake
+A local Node server stores the manuals and their sections. It writes unwritten sections, with a fake
 writer or with Claude Haiku 4.5 on Amazon Bedrock, and streams them to the reader. Every model call
 goes through one gateway that caps spending.
 
@@ -40,19 +40,22 @@ server/
     route.ts              Route, ApiRequest, EventSink: what handlers see
     node-adapter.ts       node:http ⇄ ApiRequest, JSON responses, the event stream
     lookup.ts             finds a manual that has a given section
+    library.ts            GET /api/manuals
     manual.ts             GET /api/manuals/:manualId
+    delete-manual.ts      DELETE /api/manuals/:manualId
     section.ts            GET /api/manuals/:manualId/sections/:sectionId
     section-stream.ts     GET /api/manuals/:manualId/sections/:sectionId/stream
-    preview.ts            ?freeze and ?fail: canned, never stored, never billed
+    preview.ts            ?freeze, ?fail and ?library=empty: canned, never stored, never billed
   storage/
     types.ts              ManualStore, UsageLedger
     file-manual-store.ts  manuals and sections as files
     file-ledger.ts        the usage ledger as JSON lines
-    files.ts              reads a file that may not exist
-    seed.ts               seeds an empty store from server/seed/
-  seed/the-haunt-that-listens/
-    manual.json           the sample TOC, voice, and which sections start written
-    sections/*.md         the 18 sample bodies
+    files.ts              reads a file or folder that may not exist
+    manual.ts             a manual's chapters and sections in reading order
+    seed.ts               seeds each manual in server/seed/ once
+  seed/<manualId>/
+    manual.json           a TOC, a voice, and which sections start written
+    sections/*.md         bodies (only the sample, the-haunt-that-listens, has them: all 18)
   writer/
     types.ts              SectionWriter, WriteFailed
     runs.ts               one run per section; later requests join it
@@ -110,6 +113,7 @@ export interface EventSink {
 }
 export type EventStream = (sink: EventSink) => Promise<void>;   // the stream ends when it resolves
 export interface Route {
+  method: "GET" | "DELETE";
   pattern: string;
   handle(request: ApiRequest): Promise<JsonResponse | EventStream>;   // so a stream route can 404
 }
@@ -117,9 +121,10 @@ export interface Route {
 
 The Node adapter:
 
-- matches `pattern` by splitting the path on `/`;
+- matches `method` exactly, and `pattern` by splitting the path on `/`;
 - turns `res.on("close")` into the `AbortSignal`;
-- writes the SSE headers (`content-type: text/event-stream`, `cache-control: no-cache`).
+- writes the SSE headers (`content-type: text/event-stream`, `cache-control: no-cache`);
+- writes a response whose `body` is `undefined` with no body and no content type (`noContent`, 204).
 
 ## 2. The API
 
@@ -127,6 +132,7 @@ The wire types live in `server/api/types.ts`. The browser imports them with `imp
 nothing from `server/` reaches the bundle: `src/manual/types.ts` re-exports them.
 
 ```ts
+interface ManualSummary { id; title; subtitle; chapterCount; sectionCount; writtenCount }
 interface Manual  { id; title; subtitle; chapters: Chapter[]; appendices: Chapter[] }   // no voice
 interface Chapter { id; label; title; sections: Section[] }
 interface Section { id; label; title; summary; status: "unwritten" | "writing" | "written" }  // no body
@@ -140,12 +146,41 @@ type SectionEvent =
 
 | Route | Response |
 | --- | --- |
+| `GET /api/manuals` | `200 ManualSummary[]`, every manual in storage, sorted by title |
 | `GET /api/manuals/:manualId` | `200 Manual` (`writing` while a run is active), or `404` |
+| `DELETE /api/manuals/:manualId` | `204` (no body), `404`, or `409 { error }` while a section of it is being written |
 | `GET /api/manuals/:manualId/sections/:sectionId` | `200 { status, body? }`, with the body only when written, or `404` |
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
 
 Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
 `500 { error: "Internal error" }` (or, once a stream has started, the stream just ends).
+
+**The library** (`api/library.ts`). A summary's counts come from storage, never from the seed:
+
+- `chapterCount` counts chapters and appendices;
+- `sectionCount` counts every section in the table of contents;
+- `writtenCount` counts the sections that have a stored body. A section being written counts once
+  it is saved.
+
+Titles are sorted with `localeCompare(…, "en")`, so "The Haunt That Listens" sorts under T.
+
+**Deleting a manual** (`api/delete-manual.ts`) removes its table of contents and every written
+section. Nothing else is touched: not the ledger, not the seeding record (section 3), so a deleted
+seed manual stays deleted.
+
+- **It refuses while writing.** If any section of the manual has a run in progress
+  (`runs.isWriting`), the answer is `409 { error: "A section of this manual is being written" }`
+  and nothing changes. The reader keeps streaming, and the caller can try again once the section
+  is written. Stopping the runs instead would mean sending their readers a failure and paying for
+  calls cut short, for a delete that can simply wait a few seconds.
+- **A run that starts while the delete is under way** can't bring the manual back. The store
+  removes the manual's folder in one `rename`, and `saveBody` refuses a manual that doesn't exist.
+  Such a run either saved before the rename, and its body is deleted with the rest, or ends with
+  `failed: "error"` and stores nothing. A run that starts in the narrow window between the check
+  and the rename may still call the writer, possibly a paid Bedrock call, before it fails at
+  `saveBody`. That is rare, and bounded by one section's `max_tokens`.
+- A run's finished `written` entry may stay in the runs map after a delete. That is harmless:
+  statuses are read from storage for any section not being written.
 
 The reader suspends on the JSON section route. If the section is written, it renders the body and
 never opens a stream. Otherwise it opens the stream with `EventSource`.
@@ -172,10 +207,13 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
 - **Retrying** is the reader's **Try again**, in place with no reload: the store opens the stream
   again, which starts a new run because the server kept the section unwritten. Until then a
   failure sticks for the page load. A reload would also abort this tab's other running sections.
-- **Preview options**, for screenshots: `?freeze=<0–1>` and `?fail=budget|error`.
-  - `api/preview.ts` handles them before any run or writer is touched, so they cost nothing and
-    change nothing, whichever writer is configured.
-  - They only apply to sections that aren't written.
+- **Preview options**, for screenshots: `?freeze=<0–1>` and `?fail=budget|error` on a stream, and
+  `?library=empty` on `GET /api/manuals`.
+  - `api/preview.ts` handles them before any run, writer or storage write is touched, so they cost
+    nothing and change nothing, whichever writer is configured.
+  - **Empty library** answers `200 []`, so the landing page's empty state can be shown without
+    deleting anything.
+  - The stream options only apply to sections that aren't written.
   - **Freeze** cuts the seed body at the last chunk end at or before the fraction (the rule in
     `frozenLength`). It sends one `append` (none for 0) with `progress = cut / body.length`, then
     `frozen`, and ends the stream. The client closes the source and stays in the writing state.
@@ -201,10 +239,15 @@ and no bodies.
 
 ```ts
 interface ManualStore {
+  listManuals(): Promise<StoredManual[]>;
   getManual(manualId: string): Promise<StoredManual | undefined>;
+  putManual(manual: StoredManual): Promise<void>;   // the seed now; TOC creation later
+  deleteManual(manualId: string): Promise<void>;    // the manual and its sections; nothing if missing
   getBody(manualId: string, sectionId: string): Promise<string | undefined>;
   saveBody(manualId: string, sectionId: string, body: string): Promise<"saved" | "already-written">;
-  putManual(manual: StoredManual): Promise<void>;   // the seed now; TOC creation later
+  writtenSectionIds(manualId: string): Promise<string[]>;
+  seededManualIds(): Promise<string[]>;             // the seeding record
+  markSeeded(manualId: string): Promise<void>;
 }
 
 interface UsageLedger {
@@ -218,6 +261,7 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 ```
 .data/manuals/<manualId>/manual.json         StoredManual
 .data/manuals/<manualId>/sections/<id>.md    one file per written section
+.data/seeded.json                            the ids of the seed manuals already seeded
 .data/ledger/2026-10.jsonl                   one JSON line per ledger entry, append-only
 .data/STOP                                   the kill switch (section 5)
 ```
@@ -225,12 +269,31 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 - **Written sections:** a section is written when its `.md` file exists, so there is no status
   to keep in sync.
 - **`saveBody`** writes a temp file, then `link`s it into place. `link` fails if the file already
-  exists, so a section can't be written twice.
+  exists, so a section can't be written twice. It throws if the manual doesn't exist, rather than
+  creating its folder, so a late write can't leave a deleted manual's sections behind.
+- **`listManuals`** reads every folder in `manuals/` whose name is a slug and has a
+  `manual.json`.
+- **`deleteManual`** renames the manual's folder to `<manualId>.<uuid>.deleting`, which isn't a
+  slug and so is never listed, then removes it. The manual disappears in that one step. If the
+  removal fails part-way, the failure is logged and the delete still succeeds: the manual is
+  already gone, and the leftover folder is ignored.
+- **`markSeeded`** rewrites `seeded.json` through a temp file and a `rename`.
 - **Replay:** reading the ledger skips a cut-off last line, left by a crash mid-append.
-- **Seeding:** on start, `seed.ts` puts the sample manual into an empty store. That is its TOC and
-  the bodies of the sections the seed marks written: 7 of 18.
-- **Reset:** to reset the manual, delete `.data/manuals/`. Never delete `.data/ledger/`, because
-  the caps are computed from it.
+- **Seeding:** on start, `seedStore` seeds each manual in `server/seed/` once. The store keeps a
+  record of the seed manuals it has seeded (`seededManualIds`), and for each seed manual not in
+  it:
+  - if the store has no manual with that id, it puts the TOC, then saves the bodies of the
+    sections the seed marks written (the sample's 7 of 18; none for the others);
+  - if the store already has it (a data folder from before the record existed), it leaves it
+    exactly as it is, written sections included;
+  - either way, it then records the id.
+
+  So a seed manual added to `server/seed/` later is seeded on the next start, and a deleted seed
+  manual stays in the record and is never seeded again. A crash after the TOC is put but before
+  every seed body is saved leaves that manual with fewer sections written; they are written on
+  demand like any other.
+- **Reset:** to reset the manuals, stop the server and delete `.data/manuals/` and
+  `.data/seeded.json`. Never delete `.data/ledger/`, because the caps are computed from it.
 
 ## 4. The section writer
 
@@ -331,6 +394,8 @@ reported without reading any secret.
 - **Finished runs stay in the map** as `written`, which closes the gap between a request reading
   storage and a run finishing. If `saveBody` returns `already-written`, the run sends `written`
   anyway: the stored body is the one that counts.
+- **`isWriting(manualId)`** says whether any section of a manual has a run in progress, for the
+  delete route.
 - **Statuses come from storage** for any section not being written. If a written section's file
   has been deleted by hand, opening it drops the stale `written` entry and writes it again.
 - **Listeners:** the first request starts the writer with its own `AbortController`. Later
@@ -675,14 +740,17 @@ export const prices = {
 
   | Piece | DynamoDB version |
   | --- | --- |
-  | Manual | Table `manuals`, key `manualId`: one item with the TOC and voice. |
-  | Section body | Table `sections`, key `manualId` + `sectionId`. `saveBody` is a `PutItem` with `attribute_not_exists(body)`. |
+  | Manual | Table `manuals`, key `manualId`: one item with the TOC and voice. `listManuals` is a `Scan` of the table. |
+  | Section body | Table `sections`, key `manualId` + `sectionId`. `saveBody` is a `TransactWriteItems`: a `Put` with `attribute_not_exists(body)`, plus a `ConditionCheck` that the manual item exists, so a deleted manual gets no sections. `writtenSectionIds` is a `Query` on the manual's sections with `attribute_exists(body)`, because a lease item may have no body yet. |
+  | Deleting a manual | Delete the manual item first, which plays the part of the rename, then `Query` its sections and remove them with `BatchWriteItem`. This isn't atomic, so the order matters: once the manual item is gone, the manual is deleted and no section can be saved into it. |
+  | Seeding record | One config item holding a string set of seeded ids. `markSeeded` is an `UpdateItem` with `ADD`. |
   | Ledger entries | Table `ledger`, key `month` + `reservedAt#callId`, so `entriesForMonth` is one `Query`. |
   | Spending totals | Counter items `day#2026-10-11` and `month#2026-10`. Reserving is an `UpdateItem` that adds the worst case on the condition that the total stays under the cap: one atomic step across instances. |
   | Kill switch | An SSM parameter or a config item, read before each call. |
 - **One writer per section across instances:** a lease on the section item (`writer`,
   `leaseExpiresAt`, taken with a conditional update). Joiners on other instances poll partial
-  text that the writer saves about once a second.
+  text that the writer saves about once a second. `runs.isWriting` then has to read the
+  manual's section leases, because another instance may hold one.
 - **Concurrency:** Lambda reserved concurrency caps calls across all instances.
 - **Credentials:** an IAM role replaces `.env.local`. Only `bedrock-client.ts` changes.
 - **The passphrase:** it must travel as a cookie or a query parameter, because `EventSource`

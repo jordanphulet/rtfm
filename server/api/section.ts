@@ -6,6 +6,7 @@ import type { SectionState } from "./types.ts";
 
 export function sectionRoute(store: ManualStore, runs: Runs): Route {
   return {
+    method: "GET",
     pattern: "/api/manuals/:manualId/sections/:sectionId",
     async handle({ params: { manualId, sectionId } }) {
       if (!(await manualWithSection(store, manualId, sectionId))) return notFound;

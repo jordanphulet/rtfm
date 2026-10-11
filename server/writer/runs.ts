@@ -8,6 +8,7 @@ export type Leave = () => void;
 export interface Runs {
   join(manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave>;
   statusOf(manualId: string, sectionId: string): Promise<SectionStatus>;
+  isWriting(manualId: string): boolean;
 }
 
 interface Run {
@@ -110,11 +111,15 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
     return (await store.getBody(manualId, sectionId)) === undefined ? "unwritten" : "written";
   }
 
+  function isWriting(manualId: string): boolean {
+    return [...runs].some(([key, run]) => run !== WRITTEN && key.startsWith(`${manualId}/`));
+  }
+
   function activeRunCount(): number {
     return [...runs.values()].filter((run) => run !== WRITTEN).length;
   }
 
-  return { join, statusOf };
+  return { join, statusOf, isWriting };
 }
 
 function runKey(manualId: string, sectionId: string): string {

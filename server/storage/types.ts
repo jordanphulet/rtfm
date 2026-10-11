@@ -19,10 +19,15 @@ export interface StoredChapter {
 export type StoredSection = Omit<Section, "status">;
 
 export interface ManualStore {
+  listManuals(): Promise<StoredManual[]>;
   getManual(manualId: string): Promise<StoredManual | undefined>;
+  putManual(manual: StoredManual): Promise<void>;
+  deleteManual(manualId: string): Promise<void>;
   getBody(manualId: string, sectionId: string): Promise<string | undefined>;
   saveBody(manualId: string, sectionId: string, body: string): Promise<"saved" | "already-written">;
-  putManual(manual: StoredManual): Promise<void>;
+  writtenSectionIds(manualId: string): Promise<string[]>;
+  seededManualIds(): Promise<string[]>;
+  markSeeded(manualId: string): Promise<void>;
 }
 
 export interface UsageLedger {

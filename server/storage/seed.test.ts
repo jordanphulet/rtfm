@@ -1,7 +1,45 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, WRITTEN_ID } from "../testing.ts";
 import { createFileManualStore } from "./file-manual-store.ts";
+import { sectionsInReadingOrder } from "./manual.ts";
 import { readSeedBody, seedStore } from "./seed.ts";
+import type { StoredManual } from "./types.ts";
+
+function fixtureManual(id: string): StoredManual {
+  return {
+    id,
+    title: `Manual ${id}`,
+    subtitle: "A fixture",
+    voice: "Plain",
+    chapters: [
+      {
+        id: "one",
+        label: "1",
+        title: "One",
+        sections: [
+          { id: "first", label: "1.1", title: "First", summary: "." },
+          { id: "second", label: "1.2", title: "Second", summary: "." },
+        ],
+      },
+    ],
+    appendices: [],
+  };
+}
+
+async function tempSeedDir(): Promise<URL> {
+  return pathToFileURL(`${await tempDataDir()}${path.sep}`);
+}
+
+async function addSeedManual(seedDir: URL, id: string) {
+  const sectionsDir = new URL(`${id}/sections/`, seedDir);
+  await mkdir(sectionsDir, { recursive: true });
+  const seed = { manual: fixtureManual(id), writtenAtStart: ["first"] };
+  await writeFile(new URL(`${id}/manual.json`, seedDir), JSON.stringify(seed));
+  await writeFile(new URL("first.md", sectionsDir), `The first section of ${id}.\n`);
+}
 
 describe("seedStore", () => {
   it("puts the sample manual and its 7 written sections into an empty store", async () => {
@@ -9,7 +47,7 @@ describe("seedStore", () => {
     await seedStore(store);
 
     const manual = await store.getManual(SAMPLE_ID);
-    const sections = [...manual!.chapters, ...manual!.appendices].flatMap((chapter) => chapter.sections);
+    const sections = sectionsInReadingOrder(manual!);
     expect(sections).toHaveLength(18);
 
     const bodies = await Promise.all(sections.map((section) => store.getBody(SAMPLE_ID, section.id)));
@@ -18,22 +56,81 @@ describe("seedStore", () => {
     expect(await store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBeUndefined();
   });
 
-  it("has a seed body for every section", async () => {
+  it("has a seed body for every section of the sample", async () => {
     const store = createFileManualStore(await tempDataDir());
     await seedStore(store);
-    const manual = await store.getManual(SAMPLE_ID);
-    for (const chapter of [...manual!.chapters, ...manual!.appendices]) {
-      for (const section of chapter.sections) {
-        expect(await readSeedBody(SAMPLE_ID, section.id), section.id).toBeTruthy();
-      }
+    for (const section of sectionsInReadingOrder((await store.getManual(SAMPLE_ID))!)) {
+      expect(await readSeedBody(SAMPLE_ID, section.id), section.id).toBeTruthy();
     }
   });
 
-  it("leaves a seeded store as it is", async () => {
+  it("seeds every manual in the seed folder, with the sections it starts with", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    await addSeedManual(seedDir, "beta");
     const store = createFileManualStore(await tempDataDir());
-    await seedStore(store);
-    await store.saveBody(SAMPLE_ID, UNWRITTEN_ID, "written since");
-    await seedStore(store);
-    expect(await store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe("written since");
+    await seedStore(store, seedDir);
+
+    expect((await store.listManuals()).map(({ id }) => id).sort()).toEqual(["alpha", "beta"]);
+    expect(await store.getManual("alpha")).toEqual(fixtureManual("alpha"));
+    expect(await store.writtenSectionIds("beta")).toEqual(["first"]);
+    expect(await store.getBody("beta", "first")).toBe("The first section of beta.\n");
+  });
+
+  it("leaves a seeded manual as it is", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    const store = createFileManualStore(await tempDataDir());
+    await seedStore(store, seedDir);
+    await store.saveBody("alpha", "second", "written since");
+    await seedStore(store, seedDir);
+    expect(await store.getBody("alpha", "second")).toBe("written since");
+  });
+
+  it("keeps a deleted seed manual deleted when the store is seeded again", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    await addSeedManual(seedDir, "beta");
+    const dataDir = await tempDataDir();
+    await seedStore(createFileManualStore(dataDir), seedDir);
+    await createFileManualStore(dataDir).deleteManual("alpha");
+
+    const restarted = createFileManualStore(dataDir);
+    await seedStore(restarted, seedDir);
+    expect((await restarted.listManuals()).map(({ id }) => id)).toEqual(["beta"]);
+  });
+
+  it("seeds a seed manual added later, and leaves the others as they are", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    const dataDir = await tempDataDir();
+    const store = createFileManualStore(dataDir);
+    await seedStore(store, seedDir);
+    await store.saveBody("alpha", "second", "written since");
+
+    await addSeedManual(seedDir, "beta");
+    const restarted = createFileManualStore(dataDir);
+    await seedStore(restarted, seedDir);
+
+    expect((await restarted.listManuals()).map(({ id }) => id).sort()).toEqual(["alpha", "beta"]);
+    expect(await restarted.writtenSectionIds("beta")).toEqual(["first"]);
+    expect((await restarted.writtenSectionIds("alpha")).sort()).toEqual(["first", "second"]);
+  });
+
+  it("adopts a manual stored before seeding was recorded, without changing it", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    await addSeedManual(seedDir, "beta");
+    const store = createFileManualStore(await tempDataDir());
+    const storedEarlier = { ...fixtureManual("alpha"), title: "Stored earlier" };
+    await store.putManual(storedEarlier);
+    await store.saveBody("alpha", "second", "written earlier");
+
+    await seedStore(store, seedDir);
+
+    expect(await store.getManual("alpha")).toEqual(storedEarlier);
+    expect(await store.writtenSectionIds("alpha")).toEqual(["second"]);
+    expect(await store.writtenSectionIds("beta")).toEqual(["first"]);
+    expect((await store.seededManualIds()).sort()).toEqual(["alpha", "beta"]);
   });
 });

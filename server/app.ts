@@ -1,5 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { deleteManualRoute } from "./api/delete-manual.ts";
+import { libraryRoute } from "./api/library.ts";
 import { manualRoute } from "./api/manual.ts";
 import { createRequestHandler } from "./api/node-adapter.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
@@ -29,7 +31,13 @@ export async function startServer(config: ServerConfig, writer?: SectionWriter):
   writer ??= await createWriter(config, store);
   await seedStore(store);
   const runs = createRuns({ store, writer, maxConcurrentRuns: config.maxConcurrentRuns });
-  const routes = [manualRoute(store, runs), sectionRoute(store, runs), sectionStreamRoute(store, runs)];
+  const routes = [
+    libraryRoute(store),
+    manualRoute(store, runs),
+    deleteManualRoute(store, runs),
+    sectionRoute(store, runs),
+    sectionStreamRoute(store, runs),
+  ];
 
   const server = createServer(createRequestHandler(routes));
   await new Promise<void>((resolve, reject) => {

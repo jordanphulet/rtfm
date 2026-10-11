@@ -1,8 +1,9 @@
 import type { Gateway } from "../gateway/gateway.ts";
 import { SpendingRefused } from "../gateway/types.ts";
+import { sectionsInReadingOrder } from "../storage/manual.ts";
 import { readSeedBody } from "../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
-import { sectionPrompt, sectionsInReadingOrder, sectionsNearestFirst, type WrittenExample } from "./prompt.ts";
+import { sectionPrompt, sectionsNearestFirst, type WrittenExample } from "./prompt.ts";
 import { createSectionText } from "./section-text.ts";
 import { WriteFailed, type SectionWriter, type WrittenChunk } from "./types.ts";
 import { sectionProblems } from "./validate.ts";

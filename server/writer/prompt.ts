@@ -1,4 +1,5 @@
 import type { Prompt } from "../gateway/types.ts";
+import { chaptersInReadingOrder, sectionsInReadingOrder } from "../storage/manual.ts";
 import type { StoredChapter, StoredManual, StoredSection } from "../storage/types.ts";
 
 const INSTRUCTIONS = `You write one section of a manual at a time for RTFM, a reader for hypothetical manuals. Each manual's table of contents already exists. A section is written only when a reader opens it, and your words appear on their screen as you write them.
@@ -42,10 +43,6 @@ A section reads like a page from a real engineering manual by this author, not l
 <consistency>
 You can't see the other sections' text, only their summaries. Stay within this section's summary, leave other sections' subjects to them, and don't invent specifics that would contradict what their summaries promise.
 </consistency>`;
-
-export function sectionsInReadingOrder(manual: StoredManual): StoredSection[] {
-  return chaptersInReadingOrder(manual).flatMap((chapter) => chapter.sections);
-}
 
 export interface WrittenExample {
   section: StoredSection;
@@ -132,10 +129,6 @@ That section of this manual is already written. Match its voice, its density and
 
 function neighbour(section: StoredSection): string {
   return `${section.label} “${section.title}”, which covers this: ${section.summary}`;
-}
-
-function chaptersInReadingOrder(manual: StoredManual): StoredChapter[] {
-  return [...manual.chapters, ...manual.appendices];
 }
 
 function chapterName(manual: StoredManual, chapter: StoredChapter): string {

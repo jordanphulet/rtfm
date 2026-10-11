@@ -5,6 +5,7 @@ import type { Chapter, Manual } from "./types.ts";
 
 export function manualRoute(store: ManualStore, runs: Runs): Route {
   return {
+    method: "GET",
     pattern: "/api/manuals/:manualId",
     async handle({ params }) {
       const stored = await store.getManual(params.manualId);

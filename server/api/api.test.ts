@@ -1,10 +1,12 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../app.ts";
 import { config as committedConfig, type ServerConfig } from "../config.ts";
 import { readSeedBody } from "../storage/seed.ts";
 import { recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil, WRITTEN_ID } from "../testing.ts";
 import type { SectionWriter } from "../writer/types.ts";
-import type { Manual, SectionEvent, SectionState } from "./types.ts";
+import type { Manual, ManualSummary, SectionEvent, SectionState } from "./types.ts";
 
 const servers: RunningServer[] = [];
 
@@ -22,8 +24,9 @@ async function start(writer: SectionWriter = recordingWriter(), dataDir?: string
   };
   const server = await startServer(config, writer);
   servers.push(server);
-  const base = `http://localhost:${server.port}/api/manuals/${SAMPLE_ID}`;
-  return { server, config, base };
+  const library = `http://localhost:${server.port}/api/manuals`;
+  const base = `${library}/${SAMPLE_ID}`;
+  return { server, config, library, base };
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -223,5 +226,100 @@ describe("the API", () => {
       const events = await streamAll(`${base}/sections/${WRITTEN_ID}/stream?fail=budget`);
       expect(events.map((event) => event.event)).toEqual(["append", "written"]);
     });
+  });
+});
+
+describe("the library", () => {
+  it("lists every stored manual by title, with counts from storage", async () => {
+    const { library, base } = await start();
+    const listed = await getJson<ManualSummary[]>(library);
+    const manual = await getJson<Manual>(base);
+
+    const titles = listed.map(({ title }) => title);
+    expect(titles).toEqual(titles.toSorted((a, b) => a.localeCompare(b, "en")));
+    expect(listed.find(({ id }) => id === SAMPLE_ID)).toEqual({
+      id: SAMPLE_ID,
+      title: manual.title,
+      subtitle: manual.subtitle,
+      chapterCount: manual.chapters.length + manual.appendices.length,
+      sectionCount: 18,
+      writtenCount: 7,
+    });
+  });
+
+  it("counts a section once it is written", async () => {
+    const { library, base } = await start();
+    await streamAll(`${base}/sections/${UNWRITTEN_ID}/stream`);
+    expect((await getJson<ManualSummary[]>(library)).find(({ id }) => id === SAMPLE_ID)?.writtenCount).toBe(8);
+  });
+
+  it("lists no manuals for ?library=empty, and deletes nothing", async () => {
+    const { library } = await start();
+    expect(await getJson<ManualSummary[]>(`${library}?library=empty`)).toEqual([]);
+    expect((await getJson<ManualSummary[]>(library)).some(({ id }) => id === SAMPLE_ID)).toBe(true);
+  });
+
+  it("deletes a manual and its sections, and leaves the ledger alone", async () => {
+    const { config, library, base } = await start();
+    const ledgerFile = path.join(config.dataDir, "ledger", "2026-10.jsonl");
+    await mkdir(path.dirname(ledgerFile), { recursive: true });
+    await writeFile(ledgerFile, '{"kind":"reserve"}\n');
+
+    const response = await fetch(base, { method: "DELETE" });
+
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+    expect((await fetch(base)).status).toBe(404);
+    expect((await fetch(`${base}/sections/${WRITTEN_ID}`)).status).toBe(404);
+    expect((await getJson<ManualSummary[]>(library)).some(({ id }) => id === SAMPLE_ID)).toBe(false);
+    expect(await readFile(ledgerFile, "utf8")).toBe('{"kind":"reserve"}\n');
+  });
+
+  it("answers 404 when deleting a manual that isn't there", async () => {
+    const { library, base } = await start();
+    const missing = await fetch(`${library}/no-such-manual`, { method: "DELETE" });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "Not found" });
+    expect((await fetch(`${library}/..%2F..`, { method: "DELETE" })).status).toBe(404);
+    expect((await fetch(base, { method: "DELETE" })).status).toBe(204);
+    expect((await fetch(base, { method: "DELETE" })).status).toBe(404);
+  });
+
+  it("answers 404 for other methods and paths", async () => {
+    const { library, base } = await start();
+    expect((await fetch(library, { method: "POST" })).status).toBe(404);
+    expect((await fetch(library, { method: "DELETE" })).status).toBe(404);
+    expect((await fetch(`${library}/`)).status).toBe(404);
+    expect((await fetch(`${base}/sections/${WRITTEN_ID}`, { method: "DELETE" })).status).toBe(404);
+  });
+
+  it("refuses to delete a manual while one of its sections is being written", async () => {
+    const writer = recordingWriter();
+    const { base } = await start(writer);
+    const events: SectionEvent[] = [];
+    const streamDone = (async () => {
+      for await (const event of readEvents(await fetch(`${base}/sections/${UNWRITTEN_ID}/stream`))) events.push(event);
+    })();
+    await waitUntil(() => events.length >= 2);
+
+    const refused = await fetch(base, { method: "DELETE" });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: "A section of this manual is being written" });
+    expect(writer.signals[0].aborted).toBe(false);
+
+    await streamDone;
+    expect(events.at(-1)).toEqual({ event: "written", data: {} });
+    expect((await fetch(base, { method: "DELETE" })).status).toBe(204);
+  });
+
+  it("keeps a deleted manual deleted after a restart", async () => {
+    const dataDir = await tempDataDir();
+    const first = await start(recordingWriter(), dataDir);
+    expect((await fetch(first.base, { method: "DELETE" })).status).toBe(204);
+    await first.server.close();
+
+    const second = await start(recordingWriter(), dataDir);
+    expect((await fetch(second.base)).status).toBe(404);
+    expect((await getJson<ManualSummary[]>(second.library)).some(({ id }) => id === SAMPLE_ID)).toBe(false);
   });
 });

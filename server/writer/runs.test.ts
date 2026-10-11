@@ -75,6 +75,36 @@ describe("runs", () => {
     expect(await runs.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("written");
   });
 
+  it("knows whether a section of a manual is being written", async () => {
+    const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3 });
+    const reader = recorder();
+    expect(runs.isWriting(SAMPLE_ID)).toBe(false);
+
+    await runs.join(manual, UNWRITTEN_ID, reader.listener);
+    expect(runs.isWriting(SAMPLE_ID)).toBe(true);
+    expect(runs.isWriting("the-haunt")).toBe(false);
+
+    await waitUntil(() => reader.last() === "written");
+    expect(runs.isWriting(SAMPLE_ID)).toBe(false);
+  });
+
+  it("fails a run whose manual is deleted before it finishes, and stores nothing", async () => {
+    const writer = signalIgnoringWriter();
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const reader = recorder();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await runs.join(manual, UNWRITTEN_ID, reader.listener);
+    await store.deleteManual(SAMPLE_ID);
+    writer.carryOn();
+    await waitUntil(() => reader.last() === "failed");
+
+    expect(reader.events.at(-1)).toEqual({ event: "failed", data: { reason: "error" } });
+    expect(await store.listManuals()).not.toContainEqual(expect.objectContaining({ id: SAMPLE_ID }));
+    expect(await store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBeUndefined();
+    consoleError.mockRestore();
+  });
+
   it("writes a section again when its body file was deleted after it was written", async () => {
     const writer = recordingWriter();
     const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });

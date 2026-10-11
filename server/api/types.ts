@@ -1,5 +1,14 @@
 export type SectionStatus = "unwritten" | "writing" | "written";
 
+export interface ManualSummary {
+  id: string;
+  title: string;
+  subtitle: string;
+  chapterCount: number;
+  sectionCount: number;
+  writtenCount: number;
+}
+
 export interface Manual {
   id: string;
   title: string;

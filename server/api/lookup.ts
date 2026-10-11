@@ -1,4 +1,5 @@
 import type { ManualStore, StoredManual } from "../storage/types.ts";
+import { sectionsInReadingOrder } from "../storage/manual.ts";
 
 export async function manualWithSection(
   store: ManualStore,
@@ -6,6 +7,6 @@ export async function manualWithSection(
   sectionId: string,
 ): Promise<StoredManual | undefined> {
   const manual = await store.getManual(manualId);
-  const sections = manual ? [...manual.chapters, ...manual.appendices].flatMap((chapter) => chapter.sections) : [];
+  const sections = manual ? sectionsInReadingOrder(manual) : [];
   return sections.some((section) => section.id === sectionId) ? manual : undefined;
 }

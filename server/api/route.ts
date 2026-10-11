@@ -16,8 +16,10 @@ export interface EventSink {
 export type EventStream = (sink: EventSink) => Promise<void>;
 
 export interface Route {
+  method: "GET" | "DELETE";
   pattern: string;
   handle(request: ApiRequest): Promise<JsonResponse | EventStream>;
 }
 
 export const notFound: JsonResponse = { status: 404, body: { error: "Not found" } };
+export const noContent: JsonResponse = { status: 204, body: undefined };

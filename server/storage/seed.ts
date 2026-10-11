@@ -9,29 +9,35 @@ interface SeedManual {
   writtenAtStart: string[];
 }
 
-export async function seedStore(store: ManualStore): Promise<void> {
-  for (const manualId of await seedManualIds()) {
-    if (await store.getManual(manualId)) continue;
-    const seed = await readSeedManual(manualId);
-    for (const sectionId of seed.writtenAtStart) {
-      const body = await readSeedBody(manualId, sectionId);
-      if (body === undefined) throw new Error(`The seed has no body for "${sectionId}"`);
-      await store.saveBody(manualId, sectionId, body);
-    }
-    await store.putManual(seed.manual);
+export async function seedStore(store: ManualStore, seedDir: URL = SEED_DIR): Promise<void> {
+  const seeded = new Set(await store.seededManualIds());
+  for (const manualId of await seedManualIds(seedDir)) {
+    if (seeded.has(manualId)) continue;
+    if (!(await store.getManual(manualId))) await putSeedManual(store, seedDir, manualId);
+    await store.markSeeded(manualId);
   }
 }
 
-export function readSeedBody(manualId: string, sectionId: string): Promise<string | undefined> {
-  return readIfExists(new URL(`${manualId}/sections/${sectionId}.md`, SEED_DIR));
+export function readSeedBody(manualId: string, sectionId: string, seedDir: URL = SEED_DIR): Promise<string | undefined> {
+  return readIfExists(new URL(`${manualId}/sections/${sectionId}.md`, seedDir));
 }
 
-async function seedManualIds(): Promise<string[]> {
-  const entries = await readdir(SEED_DIR, { withFileTypes: true });
+async function putSeedManual(store: ManualStore, seedDir: URL, manualId: string) {
+  const seed = await readSeedManual(seedDir, manualId);
+  await store.putManual(seed.manual);
+  for (const sectionId of seed.writtenAtStart) {
+    const body = await readSeedBody(manualId, sectionId, seedDir);
+    if (body === undefined) throw new Error(`The seed has no body for "${sectionId}"`);
+    await store.saveBody(manualId, sectionId, body);
+  }
+}
+
+async function seedManualIds(seedDir: URL): Promise<string[]> {
+  const entries = await readdir(seedDir, { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 }
 
-async function readSeedManual(manualId: string): Promise<SeedManual> {
-  const json = await readFile(new URL(`${manualId}/manual.json`, SEED_DIR), "utf8");
+async function readSeedManual(seedDir: URL, manualId: string): Promise<SeedManual> {
+  const json = await readFile(new URL(`${manualId}/manual.json`, seedDir), "utf8");
   return JSON.parse(json) as SeedManual;
 }

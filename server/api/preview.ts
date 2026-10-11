@@ -11,6 +11,10 @@ export function previewFrom(query: URLSearchParams): Preview | undefined {
   return undefined;
 }
 
+export function wantsEmptyLibrary(query: URLSearchParams): boolean {
+  return query.get("library") === "empty";
+}
+
 export function previewStream(preview: Preview, manualId: string, sectionId: string): EventStream {
   return async (sink) => {
     if ("fail" in preview) sink.send("failed", { reason: preview.fail });

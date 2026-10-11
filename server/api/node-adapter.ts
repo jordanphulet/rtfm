@@ -7,7 +7,7 @@ export function createRequestHandler(routes: Route[]) {
     response.on("close", () => controller.abort());
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
-      const match = request.method === "GET" ? matchRoute(routes, url.pathname) : undefined;
+      const match = matchRoute(routes, request.method, url.pathname);
       if (!match) return writeJson(response, notFound);
 
       const result = await match.route.handle({
@@ -25,9 +25,10 @@ export function createRequestHandler(routes: Route[]) {
   };
 }
 
-function matchRoute(routes: Route[], pathname: string) {
+function matchRoute(routes: Route[], method: string | undefined, pathname: string) {
   const pathParts = pathname.split("/");
   for (const route of routes) {
+    if (route.method !== method) continue;
     const patternParts = route.pattern.split("/");
     if (patternParts.length !== pathParts.length) continue;
     const params: Record<string, string> = {};
@@ -51,6 +52,11 @@ function decodedOrUndefined(pathPart: string): string | undefined {
 }
 
 function writeJson(response: ServerResponse, { status, body }: JsonResponse) {
+  if (body === undefined) {
+    response.writeHead(status);
+    response.end();
+    return;
+  }
   response.writeHead(status, { "content-type": "application/json" });
   response.end(JSON.stringify(body));
 }

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
+import { sectionsInReadingOrder } from "../storage/manual.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { StoredManual } from "../storage/types.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID } from "../testing.ts";
-import { sectionPrompt, sectionsInReadingOrder, sectionsNearestFirst } from "./prompt.ts";
+import { sectionPrompt, sectionsNearestFirst } from "./prompt.ts";
 
 function request(manual: StoredManual, sectionId: string) {
   const section = sectionsInReadingOrder(manual).find(({ id }) => id === sectionId)!;

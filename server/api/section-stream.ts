@@ -6,6 +6,7 @@ import { previewFrom, previewStream } from "./preview.ts";
 
 export function sectionStreamRoute(store: ManualStore, runs: Runs): Route {
   return {
+    method: "GET",
     pattern: "/api/manuals/:manualId/sections/:sectionId/stream",
     async handle({ params: { manualId, sectionId }, query, signal }) {
       const manual = await manualWithSection(store, manualId, sectionId);
