@@ -164,7 +164,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   opens in the reader, and the conversation's named-manual links still work.
 
 ### LS.5 — Final check
-- **Status:** doing (agent: af428383558bb7400)
+- **Status:** done
 - **Depends on:** LS.4
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
