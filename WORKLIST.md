@@ -166,7 +166,7 @@ the comparison live at the `library-comparison` tag.
   the comparison or deleted files.
 
 ### AL.6 — Final check
-- **Status:** doing (agent: a05965fb91f680793)
+- **Status:** done
 - **Depends on:** AL.5
 - **Files:** anything, for small fixes only
 - **Do:**
