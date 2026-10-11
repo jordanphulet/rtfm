@@ -128,7 +128,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   ARCHITECTURE.md describe it.
 
 ### RL.3 — The delete confirmation's hidden title
-- **Status:** doing (agent: a1f387cd4a8cad47d)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `src/home/DeleteConfirmation.tsx` and its test, `vite.config.ts` (test settings
   only)
