@@ -147,7 +147,7 @@ make each of those a straightforward later step.
     there after a server restart.
 
 ### BE.3 — The model gateway
-- **Status:** doing (agent: a5459e35a19d1c4e9)
+- **Status:** done
 - **Depends on:** BE.2
 - **Files:** the gateway folder named in `ARCHITECTURE.md`, its tests, the `usage` script,
   `server/config.ts` (caps and per-job limits), `package.json`, `package-lock.json`
