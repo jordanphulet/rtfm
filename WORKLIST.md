@@ -143,7 +143,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   one's sections and streams separate.
 
 ### LS.4 — The landing page reads from the server
-- **Status:** doing (agent: ad6b2a14ea72c49a9)
+- **Status:** done
 - **Depends on:** LS.1, LS.3
 - **Files:** `src/library/**`, `src/home/**`, `src/agent/**`, `DESIGN.md`, `scripts/**`
 - **Do:**
@@ -164,7 +164,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   opens in the reader, and the conversation's named-manual links still work.
 
 ### LS.5 — Final check
-- **Status:** todo
+- **Status:** doing (agent: af428383558bb7400)
 - **Depends on:** LS.4
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
