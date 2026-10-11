@@ -1,14 +1,14 @@
 # src/agent
 
-A scripted stand-in for the librarian agent. You send a message; it thinks for 600ms, then streams
-a canned markdown reply at the same pace as the reader's fake streamer. Replies **change
-nothing**: the agent never touches the library. The conversation lives in memory for the life of
-the page (it survives route changes, not reloads).
+A scripted stand-in for the librarian agent on the landing page (`src/home/`). You send a
+message; it thinks for 600ms, then streams a canned markdown reply at the same pace as the
+reader's fake streamer. Replies **change nothing**: the agent never touches the library. The
+conversation lives in memory for the life of the page (it survives route changes, not reloads).
 
 Import everything from `src/agent`:
 
 ```ts
-import { useAgent, type AgentMessage, type AgentStatus, type UseAgentResult } from "../../agent";
+import { useAgent, type AgentMessage, type AgentStatus, type UseAgentResult } from "../agent";
 ```
 
 ## `useAgent(): UseAgentResult`
@@ -46,8 +46,9 @@ Every component that calls `useAgent()` sees the same conversation.
   so show your thinking indicator after it.
 - While `status` is `"streaming"`, the **last message** is the reply being streamed. Its `text`
   is already repaired (unfinished bold closed, half-typed links held back, and so on), so render
-  it with `ReplyMarkdown` from `src/ui` like any other message. Add a cursor or other streaming
-  treatment to the last message only.
+  it with `ReplyMarkdown` from `src/ui` like any other message. Mark the live edge on the last
+  message only, by wrapping it in a `.write-head` with `data-live` (see The write head in
+  `src/ui/README.md`).
 - Every other message is complete.
 
 The text is GitHub-flavoured markdown: paragraphs, **bold**, bulleted and numbered lists.
@@ -70,7 +71,7 @@ and `'` alike, and only matches whole words (`renew` doesn't match `new`, `reade
 So "Delete the new manual" is a delete, and "Help me create a manual" is a create.
 
 Replies and the URL options' messages use typographic punctuation (`’ “ ” – — …`), so match
-their text with `replyTo()` rather than typing it out.
+their text with `replyTo()` from `replies.ts` rather than typing it out.
 
 ## URL options
 
@@ -94,8 +95,8 @@ state. They combine.
 
 ```tsx
 import { useState } from "react";
-import { useAgent } from "../../agent";
-import { ReplyMarkdown } from "../../ui";
+import { useAgent } from "../agent";
+import { ReplyMarkdown } from "../ui";
 
 function Conversation() {
   const { messages, status, send } = useAgent();
@@ -104,9 +105,13 @@ function Conversation() {
   return (
     <section>
       {messages.map((message, index) => (
-        <article key={message.id} data-role={message.role}>
+        <article
+          key={message.id}
+          data-role={message.role}
+          className="write-head"
+          data-live={(status === "streaming" && index === messages.length - 1) || undefined}
+        >
           <ReplyMarkdown>{message.text}</ReplyMarkdown>
-          {status === "streaming" && index === messages.length - 1 && <span>▍</span>}
         </article>
       ))}
       {status === "thinking" && <p>Thinking…</p>}

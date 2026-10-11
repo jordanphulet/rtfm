@@ -1,7 +1,9 @@
 # Manual runtime
 
 Everything the app needs to read a manual: the data model, a live store, the fake streamer that
-writes sections, and the markdown renderer. The reader in `src/reader/` is built on it.
+writes sections, and the markdown renderer. The reader in `src/reader/` is built on it. The
+librarian in `src/agent/` streams its replies with the same streamer and repair, imported straight
+from `streamer.ts` and `repair.ts` (they aren't part of the API below).
 
 ```ts
 import {

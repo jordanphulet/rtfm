@@ -8,7 +8,7 @@ reasoning behind every value are in `DESIGN.md`.
 ## Using it
 
 ```tsx
-import { ExternalLink, ReplyMarkdown, Sheet, StatusRing } from "../../ui";
+import { ExternalLink, ReplyMarkdown, Sheet, StatusRing } from "../ui";
 
 export default function Home() {
   return <div className="ui home">…</div>;
@@ -41,7 +41,7 @@ export default function Home() {
 | `markdown.css` | `.markdown` (shared by the reader's prose and `ReplyMarkdown`) and `.reply-markdown` |
 | `write-head.css` | The write head: `.write-head`, `.write-head-line`, `.write-head-lamp` |
 | `StatusRing.tsx`, `status-ring.css` | The state ring |
-| `Sheet.tsx`, `sheet.css` | The modal panel |
+| `Sheet.tsx`, `sheet.css` | A panel with a focus trap |
 | `ExternalLink.tsx` | A link that leaves the app |
 | `ReplyMarkdown.tsx` | Short markdown for the agent's replies |
 
@@ -70,7 +70,7 @@ Minor third on a 17px base; line heights on the 4px grid. Weights 400, 500 and 6
 | --- | --- | --- |
 | `--text-micro` / `--leading-micro` | 12 / 16 | Status readouts and meta (Mono, `letter-spacing: 0.02em`), small labels (Sans 600) |
 | `--text-ui` / `--leading-ui` | 14 / 20 | Lists, navigation, previews, secondary text (usually `--wdth-tight`) |
-| `--text-reply` / `--leading-reply` | 16 / 24 | The agent's replies (`ReplyMarkdown`) |
+| `--text-reply` / `--leading-reply` | 16 / 24 | The librarian's replies (`ReplyMarkdown`), your messages and the field |
 | `--text-body` / `--leading-body` | 17 / 28 (16 / 24) | Reading text, primary row titles |
 | `--text-lead` / `--leading-lead` | 20 / 28 (17 / 28) | Subtitles, summaries |
 | `--text-h3` / `--leading-h3` | 20 / 28 | Small headings (600, −0.005em) |
@@ -78,9 +78,7 @@ Minor third on a 17px base; line heights on the 4px grid. Weights 400, 500 and 6
 | `--text-h1` / `--leading-h1` | 29 / 36 | Page title (600, −0.012em) |
 | `--text-title` / `--leading-title` | 35 / 40 (29 / 36) | The largest title, once per page (600, −0.015em) |
 
-`--text-reply` is 16/24 at every width, the size the reader's body text takes on a phone: replies
-sit in narrower columns than the reader's text, and a short line wants tighter leading. It is the
-smallest size for text people read (DESIGN.md: body text at least 16px).
+`--text-reply` is 16/24 at every width; DESIGN.md (Type scale) says why.
 
 ### Spacing
 
@@ -115,7 +113,7 @@ There is no second accent, and the green never decorates.
 | Token | Value | Role |
 | --- | --- | --- |
 | `--radius-s` | 2px | Code, inline code, small buttons, the focus ring |
-| `--radius-m` | 4px | Row highlights, previews, header buttons. Nothing else is rounded |
+| `--radius-m` | 4px | Row highlights, previews, header buttons, the librarian's field (DESIGN.md lists every use) |
 | `--dur-quick` | 150ms | Hover color |
 | `--dur-base` | 200ms | Panels and previews appearing, rows arriving |
 | `--dur-settle` | 250ms | State changes (a ring filling, a meter settling) |

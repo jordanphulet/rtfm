@@ -1,12 +1,12 @@
 # src/library
 
-The manuals on the library page: seven seed manuals in an in-memory store. Deleting is real but
-only lasts until the page reloads. There is no create or rename.
+The manuals on the landing page (`src/home/`): seven seed manuals in an in-memory store.
+Deleting is real but only lasts until the page reloads. There is no create or rename.
 
 Import everything from `src/library`:
 
 ```ts
-import { deleteManual, formatLastOpened, useLibrary, type LibraryManual } from "../../library";
+import { deleteManual, formatLastOpened, useLibrary, type LibraryManual } from "../library";
 ```
 
 ## `LibraryManual`
@@ -31,7 +31,7 @@ after each delete and the same one otherwise, so it is safe to use as a dependen
 ## `deleteManual(id: string): void`
 
 Removes a manual from the list, in memory. A reload restores every manual. Deleting an id that
-isn't there does nothing. The library asks for no confirmation; that is the variant's job.
+isn't there does nothing. The store asks for no confirmation; the landing page does.
 
 ## `formatLastOpened(time: number): string`
 
@@ -46,7 +46,7 @@ October 10, 2026, local time**, not the real clock, so screenshots never change.
 | earlier the same year                   | `Mar 2`        |
 | an earlier year                         | `Dec 28, 2025` |
 
-Variants add any wording around it ("Opened today", "Last read Mar 2").
+Callers add any wording around it (the landing page's "Opened yesterday").
 
 ## The seed manuals
 
@@ -75,7 +75,7 @@ manual, *The Haunt That Listens*, whose id, title, subtitle and counts come from
 ## Example
 
 ```tsx
-import { deleteManual, formatLastOpened, useLibrary } from "../../library";
+import { deleteManual, formatLastOpened, useLibrary } from "../library";
 
 function Shelf() {
   const manuals = useLibrary();
