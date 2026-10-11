@@ -197,7 +197,7 @@ make each of those a straightforward later step.
   this section" in the open tab.
 
 ### BE.5 — Claude writes the sections
-- **Status:** doing (agent: af197bce0d5eef59e)
+- **Status:** done
 - **Depends on:** BE.3, BE.4
 - **Files:** the section writer's folder named in `ARCHITECTURE.md`, its prompt files and tests,
   committed configuration, `server/app.ts` (wiring the Bedrock writer, the gateway and the
@@ -219,7 +219,7 @@ make each of those a straightforward later step.
     calls cost under $0.50 in total.
 
 ### BE.6 — Final check
-- **Status:** todo
+- **Status:** doing (agent: a9501ec1cc65cf185)
 - **Depends on:** BE.4b, BE.5
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
