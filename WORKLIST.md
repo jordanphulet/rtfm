@@ -161,7 +161,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   `needs-human`: the user chooses. It becomes `done` on the user's choice.
 
 ### RL.5 — The agent loop
-- **Status:** todo
+- **Status:** doing (agent: a65877ec651ba401f)
 - **Depends on:** RL.4
 - **Files:** `server/agent/**` (new), `server/gateway/**`, `server/config.ts`, `package.json`,
   `package-lock.json`, `ARCHITECTURE.md`, `prototypes/**` (to delete it)
