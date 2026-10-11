@@ -47,9 +47,11 @@ export function DeleteConfirmation({ manual, stage, findRow, onKeep, onDelete }:
           onClose={onKeep}
           focusOnOpen={(sheet) => sheet.querySelector<HTMLElement>("[data-keep]")}
         >
-          <h2 id="delete-title" className="confirm-title">
-            {failed ? `Couldn’t delete “${shown?.title}”` : `Delete “${shown?.title}”?`}
-          </h2>
+          {shown && (
+            <h2 id="delete-title" className="confirm-title">
+              {failed ? `Couldn’t delete “${shown.title}”` : `Delete “${shown.title}”?`}
+            </h2>
+          )}
           <p id="delete-body" className="confirm-body">
             {failed ? failureText(stage) : warningText(shown?.writtenCount ?? 0)}
           </p>

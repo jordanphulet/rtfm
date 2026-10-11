@@ -12,13 +12,19 @@ const PARTY: ManualSummary = {
   writtenCount: 3,
 };
 
-function render(stage: DeleteStage) {
+function render(stage: DeleteStage, manual: ManualSummary | null = PARTY) {
   return renderToStaticMarkup(
-    <DeleteConfirmation manual={PARTY} stage={stage} findRow={() => null} onKeep={() => {}} onDelete={() => {}} />,
+    <DeleteConfirmation manual={manual} stage={stage} findRow={() => null} onKeep={() => {}} onDelete={() => {}} />,
   );
 }
 
 describe("DeleteConfirmation", () => {
+  it("has no title before a manual is chosen", () => {
+    const html = render("confirming", null);
+    expect(html).not.toContain('id="delete-title"');
+    expect(html).not.toContain("undefined");
+  });
+
   it("asks first", () => {
     const html = render("confirming");
     expect(html).toContain("Delete “The Birthday Party Field Manual”?");

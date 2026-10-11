@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig, type ProxyOptions } from "vite";
+import type { ProxyOptions } from "vite";
+import { configDefaults, defineConfig } from "vitest/config";
 import { API_PORT } from "./server/config.ts";
 
 const apiProxy: Record<string, ProxyOptions> = {
@@ -19,4 +20,5 @@ export default defineConfig({
   plugins: [react()],
   server: { port: 5173, strictPort: true, proxy: apiProxy },
   preview: { proxy: apiProxy },
+  test: { exclude: [...configDefaults.exclude, ".claude/**"] },
 });
