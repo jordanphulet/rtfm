@@ -7,16 +7,3 @@
   letter-spacing: 0.02em;
   color: var(--ink-muted);
 }
-
-.home .newest-lamp {
-  width: var(--lamp);
-  height: var(--lamp);
-  background: var(--cue);
-  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .home .newest-lamp {
-    animation: none;
-  }
-}

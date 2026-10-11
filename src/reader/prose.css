@@ -285,12 +285,6 @@
   animation: target-flash var(--dur-target) var(--ease-in-out);
 }
 
-@keyframes target-flash {
-  from {
-    background: var(--cue-tint);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .reader .prose-root :is(.footnotes li, sup):target {
     animation: none;
@@ -302,62 +296,15 @@
   display: none;
 }
 
-.reader .prose-root > :nth-last-child(1 of :not(.footnotes)) {
-  position: relative;
-}
-
-.reader .prose-root > :nth-last-child(1 of :not(.footnotes))::after {
-  content: "";
-  position: absolute;
-  top: var(--space-1);
-  bottom: var(--space-1);
-  left: calc(-1 * var(--write-head-offset));
-  width: var(--write-head-width);
-  background: var(--cue);
-  transform: scaleY(0);
-  transform-origin: bottom;
-  transition: transform var(--dur-settle) var(--ease-in-out);
-}
-
-.reader .prose-root > .code-block:nth-last-child(1 of :not(.footnotes))::after {
+.reader .write-head .prose-root > .code-block:nth-last-child(1 of :not(.footnotes))::after {
   left: calc(var(--code-bleed) - var(--write-head-offset));
 }
 
-.reader .prose-root > hr:nth-last-child(1 of :not(.footnotes))::after {
+.reader .write-head .prose-root > hr:nth-last-child(1 of :not(.footnotes))::after {
   top: calc(-1 * var(--space-3));
   bottom: calc(-1 * var(--space-3));
 }
 
-.reader [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::after {
-  transform: scaleY(1);
-  transform-origin: top;
-  animation: write-head-in var(--dur-quick) var(--ease-out);
-}
-
-.reader [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::before {
-  content: "";
-  position: absolute;
-  bottom: var(--space-1);
-  left: calc(-1 * var(--write-head-offset) - var(--write-head-lamp-inset));
-  width: var(--write-head-lamp);
-  height: var(--write-head-lamp);
-  background: var(--cue);
-  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
-}
-
-.reader [data-status="writing"] .prose-root > .code-block:nth-last-child(1 of :not(.footnotes))::before {
+.reader .write-head[data-live] .prose-root > .code-block:nth-last-child(1 of :not(.footnotes))::before {
   left: calc(var(--code-bleed) - var(--write-head-offset) - var(--write-head-lamp-inset));
-}
-
-@keyframes write-head-in {
-  from {
-    transform: scaleY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reader [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::after,
-  .reader [data-status="writing"] .prose-root > :nth-last-child(1 of :not(.footnotes))::before {
-    animation: none;
-  }
 }

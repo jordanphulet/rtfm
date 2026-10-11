@@ -32,13 +32,7 @@
 }
 
 .home .field[data-flash] {
-  animation: home-field-flash var(--dur-target) var(--ease-in-out);
-}
-
-@keyframes home-field-flash {
-  from {
-    background-color: var(--cue-tint);
-  }
+  animation: target-flash var(--dur-target) var(--ease-in-out);
 }
 
 .home .composer-row {

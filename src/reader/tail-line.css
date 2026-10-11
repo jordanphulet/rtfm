@@ -1,5 +1,4 @@
 .reader .tail-line {
-  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -8,16 +7,6 @@
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
-}
-
-.reader .tail-line::before {
-  content: "";
-  position: absolute;
-  top: var(--space-1);
-  bottom: var(--space-1);
-  left: calc(-1 * var(--write-head-offset));
-  width: var(--write-head-width);
-  background: var(--cue);
 }
 
 .reader .tail-progress {
@@ -31,21 +20,4 @@
 
 .reader .follow[aria-pressed="true"] {
   color: var(--cue);
-}
-
-.reader .tail-line[data-waiting]::after {
-  content: "";
-  position: absolute;
-  bottom: var(--space-1);
-  left: calc(-1 * var(--write-head-offset) - var(--write-head-lamp-inset));
-  width: var(--write-head-lamp);
-  height: var(--write-head-lamp);
-  background: var(--cue);
-  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reader .tail-line[data-waiting]::after {
-    animation: none;
-  }
 }

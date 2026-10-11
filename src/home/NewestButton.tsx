@@ -13,7 +13,7 @@ export function NewestButton({ replying, onJump, className }: NewestButtonProps)
       className={className ? `text-button newest ${className}` : "text-button newest"}
       onClick={onJump}
     >
-      {replying && <span className="newest-lamp" aria-hidden="true" />}
+      {replying && <span className="write-head-lamp" aria-hidden="true" />}
       {replying ? "Replying ↓" : "Newest ↓"}
     </button>
   );

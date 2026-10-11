@@ -68,6 +68,9 @@
   --measure: 576px;
   --tap: 44px;
   --ring: 10px;
+  --write-head-width: 3px;
+  --write-head-lamp: 7px;
+  --write-head-lamp-inset: calc((var(--write-head-lamp) - var(--write-head-width)) / 2);
   --list-indent: 28px;
 }
 

@@ -7,10 +7,7 @@
   --action-col: 72px;
   --panel-pad: var(--space-6);
   --panel-gutter: var(--space-10);
-  --head-width: 3px;
-  --lamp: 7px;
-  --lamp-inset: calc((var(--lamp) - var(--head-width)) / 2);
-  --head-offset: var(--space-4);
+  --write-head-offset: var(--space-4);
   --tick: 2px;
   --tick-pitch: 4px;
   --tick-height: 8px;
@@ -35,6 +32,6 @@
     --gutter: var(--space-4);
     --panel-pad: var(--space-4);
     --panel-gutter: 28px;
-    --head-offset: var(--space-3);
+    --write-head-offset: var(--space-3);
   }
 }

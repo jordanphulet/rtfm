@@ -40,7 +40,7 @@ export function TailLine({ progress, isWaiting }: TailLineProps) {
   }, [following]);
 
   return (
-    <div ref={lineRef} className="tail-line" data-waiting={isWaiting || undefined}>
+    <div ref={lineRef} className="tail-line write-head-line" data-live={isWaiting || undefined}>
       <span className="tail-progress">Being written · {Math.round(progress * 100)}%</span>
       <button
         type="button"

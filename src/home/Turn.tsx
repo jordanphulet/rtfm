@@ -15,7 +15,7 @@ interface TurnProps {
 export function Turn({ message, live, manuals, onJump, onHover }: TurnProps) {
   if (message.role === "agent") {
     return (
-      <li className="turn-reply" data-live={live || undefined}>
+      <li className="turn-reply write-head" data-live={live || undefined}>
         <span className="visually-hidden">Librarian: </span>
         <ReplyMarkdown className="reply">{message.text}</ReplyMarkdown>
       </li>

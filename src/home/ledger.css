@@ -80,13 +80,7 @@
 }
 
 .home .row[data-flash] {
-  animation: home-row-flash var(--dur-target) var(--ease-in-out);
-}
-
-@keyframes home-row-flash {
-  from {
-    background-color: var(--cue-tint);
-  }
+  animation: target-flash var(--dur-target) var(--ease-in-out);
 }
 
 .home .row::before {

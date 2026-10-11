@@ -1,8 +1,8 @@
 # src/ui
 
-The shared design system: the reader's tokens, fonts, base type, focus style and the components
-that aren't specific to reading a manual. The reader (`src/reader/`) and the library variants
-(`src/library-prototypes/<x>/`) are both built on it. The design rules, the banned list and the
+The shared design system: the tokens, fonts, base type, focus style, the write head and the
+components that aren't specific to one page. The reader (`src/reader/`, at `/read`) and the landing
+page (`src/home/`, at `/`) are both built on it. The design rules, the banned list and the
 reasoning behind every value are in `DESIGN.md`.
 
 ## Using it
@@ -10,8 +10,8 @@ reasoning behind every value are in `DESIGN.md`.
 ```tsx
 import { ExternalLink, ReplyMarkdown, Sheet, StatusRing } from "../../ui";
 
-export default function Library() {
-  return <div className="ui library">…</div>;
+export default function Home() {
+  return <div className="ui home">…</div>;
 }
 ```
 
@@ -20,13 +20,13 @@ export default function Library() {
 - **Put `className="ui"` on your page's root element.** It sets the ground, ink and font, and every
   shared style is scoped under it (`.ui .ring`, `.ui :focus-visible`, …).
 - **The specificity rule:** every shared rule is one root class plus the target (`.ui .x`). Scope
-  every one of your rules under your own root class the same way (`.library .x`, with
-  `className="ui library"` on the root). Your rules then match the shared ones in specificity and
+  every one of your rules under your own root class the same way (`.home .x` or `.reader .x`,
+  with `className="ui home"` on the root). Your rules then match the shared ones in specificity and
   win because they load later, so you can override any shared property (a radius, a color, a
   margin) without `!important` or extra selectors. A bare `.x` in your CSS loses to `.ui .x`.
 - **Use only these tokens** for color, type size, spacing, radii and timing. Don't define new
-  ones in a variant. Layout sizes that belong to one page (column widths, header heights) are the
-  page's own, like the reader's in `src/reader/tokens.css`.
+  ones in a page. Layout sizes that belong to one page (column widths, header heights) are the
+  page's own, in its `tokens.css` (`src/reader/tokens.css`, `src/home/tokens.css`).
 - Dark only. Desktop first, phone from 375px.
 
 ## Files
@@ -36,9 +36,10 @@ export default function Library() {
 | `index.ts` | The entry: loads `fonts.ts` and the stylesheets, exports the components |
 | `fonts.ts` | IBM Plex Sans (variable: weight and width axes, roman and italic) and IBM Plex Mono (400 and 700, roman and italic) |
 | `tokens.css` | Every shared token, on `:root` |
-| `base.css` | The page, the `.ui` root, selection, focus, `.visually-hidden`, `.scroll-x`, the `breathe` keyframes |
+| `base.css` | The page, the `.ui` root, selection, focus, `.visually-hidden`, `.skip-link`, `.scroll-x`, the `breathe` and `target-flash` keyframes |
 | `controls.css` | `.text-button`, `.link`, `.external-link` |
 | `markdown.css` | `.markdown` (shared by the reader's prose and `ReplyMarkdown`) and `.reply-markdown` |
+| `write-head.css` | The write head: `.write-head`, `.write-head-line`, `.write-head-lamp` |
 | `StatusRing.tsx`, `status-ring.css` | The state ring |
 | `Sheet.tsx`, `sheet.css` | The modal panel |
 | `ExternalLink.tsx` | A link that leaves the app |
@@ -48,10 +49,10 @@ export default function Library() {
 
 All on `:root`, in `src/ui/tokens.css`. "Phone" means below 768px.
 
-**What stays in `src/reader/tokens.css`** (on `.reader`): the reader's own geometry, which no
-other page uses: `--toc-width`, `--outline-width`, `--start-width`, `--header-height`,
-`--gutter`, `--bar-width`, the `--write-head-*` sizes, `--outline-number-col`, `--label-col`,
-`--label-col-wide`, `--status-col`, `--check-size`, `--preview-width` and `--code-bleed`.
+**What stays in each page's `tokens.css`** (on its root class): its own geometry, such as the
+reader's `--toc-width`, `--header-height` and `--code-bleed`, or the landing page's
+`--panel-width` and `--dock-height`. Each page also sets `--write-head-offset`, how far left of its
+text the write head sits (see The write head).
 
 ### Fonts
 
@@ -128,6 +129,9 @@ There is no second accent, and the green never decorates.
 | `--measure` | 576px | The longest line of reading text (about 76 characters at 17px) |
 | `--tap` | 44px | The smallest touch target |
 | `--ring` | 10px | The state ring's diameter |
+| `--write-head-width` | 3px | The write head's bar |
+| `--write-head-lamp` | 7px | The write head's lamp (a square) |
+| `--write-head-lamp-inset` | 2px | How far the lamp reaches past each side of the bar, so it is centred on it |
 | `--list-indent` | 28px | Markdown list indent |
 
 Under `prefers-reduced-motion: reduce`, `--dur-quick`, `--dur-base`, `--dur-settle` and
@@ -161,6 +165,9 @@ Under `prefers-reduced-motion: reduce`, `--dur-quick`, `--dur-base`, `--dur-sett
 - **`breathe`:** keyframes for the live pulse (opacity 1 → 0.35 → 1). Use it as
   `animation: breathe var(--dur-breathe) var(--ease-in-out) infinite`, and turn it off under
   reduced motion.
+- **`target-flash`:** keyframes for a briefly highlighted target (a `--cue-tint` background
+  fading out). Use it as `animation: target-flash var(--dur-target) var(--ease-in-out)`, and under
+  reduced motion replace it with a steady `--cue-tint` background while the target is current.
 
 ## Components
 
@@ -232,13 +239,13 @@ What it leaves to you:
   - `inert` on the rest of the page while it is open (e.g. on the element that wraps everything
     but the sheet), so nothing behind it can be clicked or focused.
 - **Position and size.** It is a plain block with `overflow-y: auto` and a `--ground`
-  background; place it in your CSS (e.g. `.library .confirm { position: fixed; inset: auto 0 0; }`).
+  background; place it in your CSS (e.g. `.home .confirm { position: fixed; inset: auto 0 0; }`).
 - **The trigger.** Give it `aria-expanded` and `aria-controls` (for a disclosure-style panel), and
   in `onClose` set `open` to false and return focus to it. Use `focusScope` when the trigger
   should stay reachable by Tab while the sheet is open (the reader's header and contents sheet
   share one scope).
 - **Page scroll.** It doesn't lock the page; if you need that, add
-  `html:has(.library .sheet[data-open]) { overflow: hidden; }`.
+  `html:has(.home .sheet[data-open]) { overflow: hidden; }`.
 
 ### `ExternalLink`
 
@@ -252,8 +259,8 @@ and a visually hidden "(opens in a new tab)". Takes every `<a>` prop; a `classNa
 
 ### `ReplyMarkdown`
 
-Renders one short markdown reply (the agent's) with the same treatment as the reader's prose, so
-replies look the same in every variant.
+Renders one short markdown reply (the agent's) with the same treatment as the reader's prose, so a
+reply reads like the manual's text.
 
 ```ts
 interface ReplyMarkdownProps {
@@ -280,8 +287,45 @@ interface ReplyMarkdownProps {
 - **Streaming:** pass the repaired text as it grows (`useAgent()` repairs it). Text only ever
   appears at the end, and it uses ordinary wrapping (never `text-wrap: pretty`), so earlier lines
   never re-flow. It is memoized: finished messages don't re-render while another streams. Mark the
-  live edge yourself (a cursor or a `breathe` pulse) on the last message only.
+  live edge yourself on the last message only (put it in a `.write-head`; see The write head).
 - It sets no width: cap it at `--measure` (or less) in your layout.
+
+## The write head
+
+The mark beside text that is being written: a `--cue` bar `--write-head-width` wide, inset
+`--space-1` top and bottom, with a `--write-head-lamp` square lamp at its foot that breathes. Both
+sit `--write-head-offset` left of the text edge; set that token on your page's root class. It is
+plain CSS in `write-head.css`; the reader's prose and tail line, and the landing page's replies,
+"Thinking…" line and "Replying ↓" button use it.
+
+- **`.write-head`** goes on an element that holds rendered markdown (a `.markdown`, at any
+  depth). The head marks the markdown's last block, not counting footnotes, and makes that block
+  `position: relative`. While the element has `data-live`, the bar stands at full height (growing
+  in over `--dur-quick` when a new block starts) and the lamp is lit. When `data-live` goes, the
+  lamp goes out and the bar retracts downwards over `--dur-settle`.
+- **`.write-head-line`** goes on a line of its own (a status line, "Thinking…"). It always has the
+  bar; `data-live` adds the lamp. On a line, `data-live` means the text will be written here next
+  (the reader's tail line has it until the first words arrive). It becomes `position: relative`.
+- **`.write-head-lamp`** is the lamp on its own, for an element in a line of text: an inline-block
+  with its size, colour and breathing. Place it yourself.
+
+Under reduced motion the lamp is steady, and the bar appears and goes at once.
+
+```tsx
+<li className="turn-reply write-head" data-live={live || undefined}>
+  <ReplyMarkdown>{message.text}</ReplyMarkdown>
+</li>
+<li className="thinking write-head-line" data-live>Thinking…</li>
+```
+
+To move the head for one kind of block, repeat the shared selector under your root class. The
+reader shifts it right for a code block, which bleeds into the margin:
+
+```css
+.reader .write-head .prose-root > .code-block:nth-last-child(1 of :not(.footnotes))::after {
+  left: calc(var(--code-bleed) - var(--write-head-offset));
+}
+```
 
 ## CSS classes
 
@@ -290,9 +334,13 @@ interface ReplyMarkdownProps {
 | `ui` | Your page's root | See Base styles |
 | `visually-hidden` | Text for screen readers only | See Base styles |
 | `scroll-x` | A sideways-scrolling region | See Base styles |
+| `skip-link` | The page's first focusable element, a link past its header or navigation ("Skip to text") | Hidden above the viewport until focused by keyboard, then fixed 8px from the top left (above everything, `z-index` 40) on `--ground-raised`, 500 `--text-ui` in `--ink-strong` |
 | `text-button` | A quiet `<button>` in a line of text or a readout ("Copy", "Follow ↓", "Cancel") | No border or fill; padding 4/8, `--radius-s`; inherits the font but not `letter-spacing` (add `letter-spacing: inherit` inside a Mono readout); `--ink-muted`, and on hover `--ink-strong` on `--ground-tint`. Pull it back by `calc(-1 * var(--space-2))` on the aligned side so its text lines up |
 | `link` | An inline text link | The surrounding text color with a 1px `--cue-deep` underline at 0.18em; `--cue` text and underline on hover, over `--dur-quick` |
 | `markdown` | A container of rendered markdown | The shared prose treatment (paragraphs, bold, inline code, lists); set its font size yourself. `ReplyMarkdown` and the reader's prose use it |
+| `write-head` | An element holding markdown that is being written; add `data-live` while it is | See The write head |
+| `write-head-line` | A line of its own beside text being written; `data-live` lights the lamp | See The write head |
+| `write-head-lamp` | An inline lamp ("Replying ↓") | See The write head |
 
 ```tsx
 <button type="button" className="text-button" onClick={cancel}>Cancel</button>

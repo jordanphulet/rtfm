@@ -99,14 +99,15 @@ interface ProseProps {
   headings: Heading[];
   sectionLabel: string;
   wrap: "pretty" | "plain";
+  live: boolean;
 }
 
-export function Prose({ source, headings, sectionLabel, wrap }: ProseProps) {
+export function Prose({ source, headings, sectionLabel, wrap, live }: ProseProps) {
   const idsByLine = useMemo(() => new Map(headings.map((heading) => [heading.line, heading.id])), [headings]);
   const style = { "--section-label": `"${sectionLabel}"` } as CSSProperties;
 
   return (
-    <div className="prose" data-wrap={wrap} style={style}>
+    <div className="prose write-head" data-live={live || undefined} data-wrap={wrap} style={style}>
       <HeadingIdsByLine.Provider value={idsByLine}>
         <Markdown source={source} SectionLink={SectionLink} components={components} className="markdown prose-root" />
       </HeadingIdsByLine.Provider>

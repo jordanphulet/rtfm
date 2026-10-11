@@ -114,7 +114,9 @@ function Article({ sectionState, headings, chapter, chapterName, previous, next 
         next={next}
         statusText={statusText(isWriting, isWaiting, progress, text)}
       />
-      {!isWaiting && <Prose source={text} headings={headings} sectionLabel={section.label} wrap={wrap} />}
+      {!isWaiting && (
+        <Prose source={text} headings={headings} sectionLabel={section.label} wrap={wrap} live={isWriting} />
+      )}
       {isWriting && <TailLine progress={progress} isWaiting={isWaiting} />}
       <p className="visually-hidden" aria-live="polite">
         {STATUS_WORDS[isWriting ? "writing" : "written"]}

@@ -1,0 +1,63 @@
+.ui :is(.write-head .markdown > :nth-last-child(1 of :not(.footnotes))),
+.ui .write-head-line {
+  position: relative;
+}
+
+.ui :is(.write-head .markdown > :nth-last-child(1 of :not(.footnotes)))::after,
+.ui .write-head-line::after {
+  content: "";
+  position: absolute;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  left: calc(-1 * var(--write-head-offset));
+  width: var(--write-head-width);
+  background: var(--cue);
+}
+
+.ui :is(.write-head .markdown > :nth-last-child(1 of :not(.footnotes)))::after {
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform var(--dur-settle) var(--ease-in-out);
+}
+
+.ui :is(.write-head[data-live] .markdown > :nth-last-child(1 of :not(.footnotes)))::after {
+  transform: scaleY(1);
+  transform-origin: top;
+  animation: write-head-in var(--dur-quick) var(--ease-out);
+}
+
+.ui :is(.write-head[data-live] .markdown > :nth-last-child(1 of :not(.footnotes)))::before,
+.ui .write-head-line[data-live]::before {
+  content: "";
+  position: absolute;
+  bottom: var(--space-1);
+  left: calc(-1 * var(--write-head-offset) - var(--write-head-lamp-inset));
+}
+
+.ui :is(.write-head[data-live] .markdown > :nth-last-child(1 of :not(.footnotes)))::before,
+.ui .write-head-line[data-live]::before,
+.ui .write-head-lamp {
+  width: var(--write-head-lamp);
+  height: var(--write-head-lamp);
+  background: var(--cue);
+  animation: breathe var(--dur-breathe) var(--ease-in-out) infinite;
+}
+
+.ui .write-head-lamp {
+  display: inline-block;
+}
+
+@keyframes write-head-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui :is(.write-head[data-live] .markdown > :nth-last-child(1 of :not(.footnotes)))::after,
+  .ui :is(.write-head[data-live] .markdown > :nth-last-child(1 of :not(.footnotes)))::before,
+  .ui .write-head-line[data-live]::before,
+  .ui .write-head-lamp {
+    animation: none;
+  }
+}

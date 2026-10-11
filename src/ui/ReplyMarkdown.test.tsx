@@ -26,7 +26,7 @@ describe("ReplyMarkdown", () => {
   });
 
   it("keeps other links in the same tab", () => {
-    expect(render("[library](/library/a)")).toContain('<a href="/library/a" class="link">library</a>');
+    expect(render("[the reader](/read)")).toContain('<a href="/read" class="link">the reader</a>');
   });
 
   it("renders anything else as its plain text", () => {

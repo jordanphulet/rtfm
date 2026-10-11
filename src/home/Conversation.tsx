@@ -41,7 +41,7 @@ export function Conversation({ messages, status, manuals, stick, onJump, onHover
               />
             ))}
             {status === "thinking" && (
-              <li className="thinking">
+              <li className="thinking write-head-line" data-live>
                 <span className="visually-hidden">Librarian: </span>Thinking…
               </li>
             )}
