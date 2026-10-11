@@ -63,8 +63,9 @@ As shown by `useLibrary()`:
 | Building a Backyard Observatory                       | 15 of 22 | Dec 28, 2025 |
 
 Open a manual by going to `/read`. The reader's URL has no manual id; it always shows the sample
-manual, *The Haunt That Listens*, whose id, title, subtitle and counts come from
-`src/manual/sample`.
+manual, *The Haunt That Listens*, which the API server serves from `server/seed/`. Its entry here
+is a literal with the seed's counts (7 of 18 written), so it doesn't follow what the reader
+writes.
 
 ## URL options
 

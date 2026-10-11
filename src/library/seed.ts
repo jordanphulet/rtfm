@@ -1,18 +1,15 @@
-import { sampleManual } from "../manual/sample";
 import { localTime } from "./time";
 import type { LibraryManual } from "./types";
 
-const sampleChapters = [...sampleManual.chapters, ...sampleManual.appendices];
-const sampleSections = sampleChapters.flatMap((chapter) => chapter.sections);
-
 export const seedManuals: LibraryManual[] = [
   {
-    id: sampleManual.id,
-    title: sampleManual.title,
-    subtitle: sampleManual.subtitle,
-    chapterCount: sampleChapters.length,
-    sectionCount: sampleSections.length,
-    writtenCount: sampleSections.filter((section) => section.status === "written").length,
+    id: "the-haunt-that-listens",
+    title: "The Haunt That Listens",
+    subtitle:
+      "Building haunted houses with improvising animatronics, rooms that notice you, and scares that learn as you walk through",
+    chapterCount: 7,
+    sectionCount: 18,
+    writtenCount: 7,
     lastOpenedAt: localTime("2026-10-10T14:05"),
   },
   {

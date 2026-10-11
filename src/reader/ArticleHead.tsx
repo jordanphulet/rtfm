@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { Chapter, Section } from "../manual";
-import { StatusRing } from "../ui";
+import { StatusRing, type RingStatus } from "../ui";
 import { chapterPath, sectionPath } from "./manualParts";
 import "./article-head.css";
 
@@ -12,10 +12,19 @@ interface ArticleHeadProps {
   chapterName: string;
   previous?: Section;
   next?: Section;
+  ringStatus: RingStatus;
   statusText: string;
 }
 
-export function ArticleHead({ section, chapter, chapterName, previous, next, statusText }: ArticleHeadProps) {
+export function ArticleHead({
+  section,
+  chapter,
+  chapterName,
+  previous,
+  next,
+  ringStatus,
+  statusText,
+}: ArticleHeadProps) {
   return (
     <header className="article-head">
       <div className="eyebrow">
@@ -40,7 +49,7 @@ export function ArticleHead({ section, chapter, chapterName, previous, next, sta
       </h1>
       <p className="summary">{section.summary}</p>
       <p className="status-line">
-        <StatusRing status={section.status === "unwritten" ? "writing" : section.status} />
+        <StatusRing status={ringStatus} />
         {statusText}
       </p>
       <div className="head-rule" />

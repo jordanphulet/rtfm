@@ -20,7 +20,7 @@
   color: var(--ink-faint);
 }
 
-.reader [data-status="writing"] .code-copy {
+.reader .article:not([data-status="written"]) .code-copy {
   visibility: hidden;
 }
 

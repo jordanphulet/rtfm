@@ -1,6 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sampleManual } from "../manual/sample";
 import type { LibraryManual } from "./types";
 
 async function loadLibrary(search = "") {
@@ -33,9 +32,9 @@ describe("library store", () => {
     expect(times).toEqual([...times].sort((a, b) => b - a));
   });
 
-  it("includes the sample manual with its real progress", async () => {
+  it("includes the sample manual with its seeded progress", async () => {
     const { readManuals } = await loadLibrary();
-    const haunt = readManuals().find((manual) => manual.id === sampleManual.id);
+    const haunt = readManuals().find((manual) => manual.id === "the-haunt-that-listens");
     expect(haunt).toMatchObject({
       title: "The Haunt That Listens",
       chapterCount: 7,

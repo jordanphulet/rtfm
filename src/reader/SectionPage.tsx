@@ -5,20 +5,23 @@ import {
   findSection,
   nextSection,
   previousSection,
+  retrySection,
   useManual,
   useSection,
   type Chapter,
   type Section,
   type UseSectionResult,
 } from "../manual";
+import type { RingStatus } from "../ui";
 import { ArticleHead, TITLE_ID } from "./ArticleHead";
+import { FailureNotice } from "./FailureNotice";
 import { chapterName } from "./manualParts";
 import { headingsOf, sectionIdsLinkedFrom, wordCount, type Heading } from "./markdownScan";
 import { isOutlineLevel, OutlineList, ReferencedSections } from "./Outline";
 import { Pager } from "./Pager";
 import { Prose } from "./Prose";
 import { Shell } from "./Shell";
-import { STATUS_WORDS } from "./statusWords";
+import { FAILURE_NOTICES, FAILURE_WORDS, STATUS_WORDS } from "./statusWords";
 import { loadedAlreadyWritten } from "./streamedThisLoad";
 import { TailLine } from "./TailLine";
 import { useActiveHeading } from "./useActiveHeading";
@@ -27,7 +30,7 @@ import { usePrevNextKeys } from "./usePrevNextKeys";
 export function SectionPage({ id }: { id: string }) {
   const manual = useManual();
   const sectionState = useSection(id);
-  const { section, status, text } = sectionState;
+  const { section, text } = sectionState;
   const chapter = chapterOf(manual, id)!;
   const previous = previousSection(manual, id);
   const next = nextSection(manual, id);
@@ -47,7 +50,7 @@ export function SectionPage({ id }: { id: string }) {
       title={section.title}
       headings={outlineHeadings}
       activeId={activeId}
-      isWriting={status !== "written"}
+      isWriting={phaseOf(sectionState) === "writing"}
     />
   );
 
@@ -89,10 +92,10 @@ interface ArticleProps {
 }
 
 function Article({ sectionState, headings, chapter, chapterName, previous, next }: ArticleProps) {
-  const { section, status, text, progress } = sectionState;
+  const { section, text, progress, failure } = sectionState;
   const [wrap] = useState<"pretty" | "plain">(() => (loadedAlreadyWritten(section) ? "pretty" : "plain"));
-  const isWriting = status !== "written";
-  const isWaiting = text === "";
+  const phase = phaseOf(sectionState);
+  const hasText = text !== "";
 
   const navigationType = useNavigationType();
   useLayoutEffect(() => {
@@ -101,33 +104,55 @@ function Article({ sectionState, headings, chapter, chapterName, previous, next 
   }, [navigationType]);
 
   return (
-    <article
-      className="column article"
-      data-status={isWriting ? "writing" : "written"}
-      style={{ "--progress": progress } as CSSProperties}
-    >
+    <article className="column article" data-status={phase} style={{ "--progress": progress } as CSSProperties}>
       <ArticleHead
         section={section}
         chapter={chapter}
         chapterName={chapterName}
         previous={previous}
         next={next}
-        statusText={statusText(isWriting, isWaiting, progress, text)}
+        ringStatus={RING_STATUS[phase]}
+        statusText={statusText(sectionState, phase)}
       />
-      {!isWaiting && (
-        <Prose source={text} headings={headings} sectionLabel={section.label} wrap={wrap} live={isWriting} />
+      {hasText && (
+        <Prose source={text} headings={headings} sectionLabel={section.label} wrap={wrap} live={phase === "writing"} />
       )}
-      {isWriting && <TailLine progress={progress} isWaiting={isWaiting} />}
+      {phase === "writing" && <TailLine progress={progress} isWaiting={!hasText} />}
+      {failure && <FailureNotice {...FAILURE_NOTICES[failure]} onRetry={() => retryInPlace(section.id)} />}
       <p className="visually-hidden" aria-live="polite">
-        {STATUS_WORDS[isWriting ? "writing" : "written"]}
+        {announcement(sectionState, phase)}
       </p>
       <Pager chapter={chapter} previous={previous} next={next} />
     </article>
   );
 }
 
-function statusText(isWriting: boolean, isWaiting: boolean, progress: number, text: string): string {
-  if (!isWriting) return `Written · ${wordCount(text).toLocaleString("en-US")} words`;
-  if (isWaiting) return "Waiting for the first words…";
+type Phase = "writing" | "written" | "failed";
+
+const RING_STATUS: Record<Phase, RingStatus> = {
+  writing: "writing",
+  written: "written",
+  failed: "unwritten",
+};
+
+function phaseOf({ status, failure }: UseSectionResult): Phase {
+  if (failure) return "failed";
+  return status === "written" ? "written" : "writing";
+}
+
+function retryInPlace(id: string) {
+  retrySection(id);
+  document.getElementById(TITLE_ID)?.focus();
+}
+
+function announcement({ failure }: UseSectionResult, phase: Phase): string {
+  if (failure) return `Not written: ${FAILURE_WORDS[failure]}`;
+  return STATUS_WORDS[phase === "written" ? "written" : "writing"];
+}
+
+function statusText({ text, progress, failure }: UseSectionResult, phase: Phase): string {
+  if (failure) return `Not written · ${FAILURE_WORDS[failure]}`;
+  if (phase === "written") return `Written · ${wordCount(text).toLocaleString("en-US")} words`;
+  if (text === "") return "Waiting for the first words…";
   return `Being written · ${Math.round(progress * 100)}%`;
 }

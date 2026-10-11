@@ -1,39 +1,60 @@
 # Manual runtime
 
-Everything the app needs to read a manual: the data model, a live store, the fake streamer that
-writes sections, and the markdown renderer. The reader in `src/reader/` is built on it. The
-librarian in `src/agent/` streams its replies with the same streamer and repair, imported straight
-from `streamer.ts` and `repair.ts` (they aren't part of the API below).
+Everything the app needs to read a manual: the data model, a live store that reads the manual from
+the API server and streams unwritten sections from it, and the markdown renderer. The reader in
+`src/reader/` is built on it. The librarian in `src/agent/` streams its canned replies with
+`streamChunks` and `frozenLength` from `streamer.ts` and repairs them with `repair.ts`, imported
+straight from those files (they aren't part of the API below).
 
 ```ts
 import {
-  useManual, useSection, Markdown,
+  useManual, useSection, retrySection, Markdown,
   findSection, chapterOf, previousSection, nextSection,
-  type Manual, type Chapter, type Section,
+  type Manual, type Chapter, type Section, type FailureReason,
   type UseSectionResult, type SectionLinkProps, type MarkdownProps,
 } from "../manual";
 ```
 
-The data model (`Manual`, `Chapter`, `Section`) is defined in `types.ts` and described in
-`DESIGN.md`. The sample manual lives in `sample/` (its structure in `sample/index.ts`, one `.md`
-file per section body under `sample/sections/`). UI code never imports it directly:
-`useManual()` returns it with live statuses. `sample/index.ts` also exports `SHOT_SECTIONS`, the
-sections `npm run shot` and the tests use.
+The data model (`Manual`, `Chapter`, `Section`) is the API's: `types.ts` re-exports it from
+`server/api/types.ts` with `export type`, so nothing from `server/` reaches the bundle. It is
+described in `DESIGN.md`, and the API in `ARCHITECTURE.md` › The API. The sample manual lives in
+`server/seed/`; the browser has no copy.
 
-## Hooks
+## Files
+
+- `api.ts`: the API's URLs, `fetch` for the manual and a section, and the `EventSource` for a
+  section's stream (closed after its first event that isn't `append`).
+- `store.ts`: `useManual`, `useSection` and `retrySection`.
+- `repair.ts`: closes or holds back unfinished markdown, so a partial text renders cleanly.
+- `streamer.ts`: `chunkEnds`, `streamChunks` and `frozenLength`, for the librarian's canned
+  replies. `server/writer/fake.ts` has its own copy of `chunkEnds`, so server code
+  never imports from `src/`; `scripts/chunk-ends.test.ts` checks the two agree on every seed body.
+- `reading-order.ts`: the navigation helpers.
+- `Markdown.tsx`: the renderer.
+
+## Hooks and actions
 
 ### `useManual(): Manual`
 
-The whole manual, with live section statuses. Components re-render when any section changes
-status, so a TOC built from it is always current. It does not re-render on every streamed chunk.
+The whole manual, with live section statuses. The first call fetches
+`GET /api/manuals/the-haunt-that-listens`, once per page load, and **suspends** until it arrives,
+so render it inside a `Suspense` (the lazy route's covers it). If the fetch fails it throws, so
+render it inside an error boundary too (the reader's `ManualErrorBoundary`). Components re-render when any
+section changes status, so a TOC built from it is always current. It does not re-render on every
+streamed chunk.
+
+Statuses start as the server reported them when the page loaded (`writing` for a section another
+tab is writing). After that they change only for sections this page opens: a section another tab
+was writing at load keeps its `writing` ring until this page opens it or is reloaded.
 
 ### `useSection(id: string): UseSectionResult`
 
-`UseSectionResult` is `{ section, status, text, progress }`.
+`UseSectionResult` is `{ section, status, text, progress, failure? }`.
 
-For the section page. **Calling it opens the section**: an `unwritten` section starts writing
-immediately. Use `useManual()` + `findSection()` for anything that should not open a section
-(TOC entries, hover previews).
+For the section page. It **suspends** on the section's JSON route (fetched once per section per
+page load). **Calling it opens the section**: a section that isn't written opens its stream, which
+starts the writing or joins it. Use `useManual()` + `findSection()` for anything that should not
+open a section (TOC entries, hover previews).
 
 | Field      | Value                                                                              |
 | ---------- | ---------------------------------------------------------------------------------- |
@@ -41,18 +62,40 @@ immediately. Use `useManual()` + `findSection()` for anything that should not op
 | `status`   | `"unwritten"`, `"writing"` or `"written"`. Same as `section.status`.               |
 | `text`     | Markdown to render: `""` until the first words arrive, then the streamed text (already repaired, safe to render), then the full body. |
 | `progress` | 0–1: how much of the body has streamed in.                                         |
+| `failure`  | `"budget"` or `"error"` when the server couldn't write the section; otherwise absent. |
 
 A section moves through these states:
 
-| State      | `status`    | `text`        | What to show                                 |
-| ---------- | ----------- | ------------- | -------------------------------------------- |
-| unwritten  | `unwritten` | `""`          | Never painted (writing starts first); treat it like waiting. |
-| waiting    | `writing`   | `""`          | Title and summary (never a blank page).      |
-| streaming  | `writing`   | partial       | `<Markdown source={text} />` in the final layout. |
-| written    | `written`   | full body     | `<Markdown source={text} />`.                |
+| State      | `status`    | `text`        | `failure` | What to show                                 |
+| ---------- | ----------- | ------------- | --------- | -------------------------------------------- |
+| unwritten  | `unwritten` | `""`          | —         | Never painted (writing starts first); treat it like waiting. |
+| waiting    | `writing`   | `""`          | —         | Title and summary (never a blank page).      |
+| streaming  | `writing`   | partial       | —         | `<Markdown source={text} />` in the final layout. |
+| written    | `written`   | full body     | —         | `<Markdown source={text} />`.                |
+| failed     | `unwritten` | `""` or partial | set     | Why it wasn't written (`DESIGN.md` › When a section can’t be written). |
 
-Timing: about 1.2s of waiting, then about 20 characters every 85ms, split at word boundaries.
-A section streams once per page load and keeps streaming if the reader navigates away.
+The stream:
+
+- `append` puts its text at its offset (a joining tab's first `append` carries everything so far);
+  `written` keeps the text and marks the section written; `frozen` leaves it writing.
+- `failed`, or an `error` on the `EventSource`, records the failure and marks the section
+  `unwritten`. The text that arrived stays in `text`, although the server kept none of it.
+- An `append` whose `at` isn't the length of the text so far counts as `failure: "error"`: the
+  store never rewrites text already shown, and never leaves a gap.
+- The source is closed after `written`, `frozen`, `failed`, `error` or a mismatched `append`, and
+  never reconnects: reconnecting would pay for a second run. **A failure sticks** until
+  `retrySection` is called.
+- **At most 3 streams are open at once** (`MAX_OPEN_STREAMS`, the server's `maxConcurrentRuns`).
+  Sections opened beyond that wait as `writing` with `text` `""`, and their streams open in order
+  as others end.
+- A section streams once per page load and keeps streaming if the reader navigates away. The
+  pace is the writer's (the fake writer: about 1.2s of waiting, then about 20 characters every
+  85ms, split at word boundaries).
+
+### `retrySection(id: string): void`
+
+Writes a failed section again, in place: it clears the failure and the text, marks the section
+`writing` and opens its stream (or queues it). It does nothing for a section that hasn't failed.
 
 ## Navigation helpers
 
@@ -167,10 +210,13 @@ export default function Reader() {
 
 ## URL options
 
-For screenshots. They apply to an `unwritten` section opened while the option is in the URL;
-written sections are unaffected.
+For screenshots. The store passes them from the page's URL to the stream's, and the server
+answers them without writing, storing or billing anything. They apply to a section that isn't
+written, opened while the option is in the URL; written sections are unaffected.
 
-| Option        | Effect                                                              |
-| ------------- | ------------------------------------------------------------------- |
-| `?freeze=0`   | The section stays in the waiting state (`writing`, `text` is `""`). |
-| `?freeze=0.5` | The section jumps straight to 50% and stays `writing`. Any fraction 0–1 works. |
+| Option          | Effect                                                              |
+| --------------- | ------------------------------------------------------------------- |
+| `?freeze=0`     | The section stays in the waiting state (`writing`, `text` is `""`). |
+| `?freeze=0.5`   | The section jumps straight to 50% and stays `writing`. Any fraction 0–1 works. |
+| `?fail=budget`  | The section fails at once with `failure: "budget"`.                 |
+| `?fail=error`   | The section fails at once with `failure: "error"`.                  |

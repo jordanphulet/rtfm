@@ -15,24 +15,26 @@ disagree, one of them is a bug.
   - **The reader** (`/read` is a manual's start page, `/read/:sectionId` a section;
     `src/reader/`): one manual whose table of contents already exists.
   - Every other path redirects to `/`.
-- There is no back-end or LLM yet:
-  - the reader always shows the sample manual in `src/manual/sample/`, and a fake streamer in
-    `src/manual/` plays each section's body in;
+- There is no LLM yet:
+  - the reader always shows the sample manual, which a local API server (`server/`, described in
+    `ARCHITECTURE.md`) stores, writes with a fake writer and streams in;
   - the library is seven seed manuals held in memory (`src/library/`);
   - the librarian gives canned replies (`src/agent/`).
-- **Happy path only:** no error or failure states. Creating a manual is out of scope.
+- **Failure states only where something can fail:** a section the server couldn't write has two
+  (see [When a section can’t be written](#when-a-section-cant-be-written)); the landing page has
+  none. Creating a manual is out of scope.
 - **Dark only.**
 
 ## Data model
 
-Defined in `src/manual/types.ts`. The reader reads it and never changes it.
+The API's types, defined in `server/api/types.ts` and re-exported by `src/manual/types.ts`. The
+reader reads them and never changes them.
 
 ```ts
 interface Manual {
   id: string;
   title: string;
   subtitle: string;
-  voice: string;          // writing-style brief for the (future) LLM; the reader may ignore it
   chapters: Chapter[];
   appendices: Chapter[];  // same shape as chapters, lettered A, B, …
 }
@@ -50,13 +52,14 @@ interface Section {
   title: string;
   summary: string;        // one line, always available (it comes with the TOC)
   status: "unwritten" | "writing" | "written";
-  body: string;           // markdown; only shown once the section is written or streaming
 }
 ```
 
-Opening an `unwritten` section switches it to `writing`. The fake streamer then plays its `body`
-in, and the section becomes `written`. The hooks and the markdown renderer that expose this are
-documented in `src/manual/README.md`.
+A section's body is not part of the manual: the reader fetches it when the section is opened.
+Opening an `unwritten` section switches it to `writing`; the server writes it and streams it in,
+and the section becomes `written`. If the server can't write it, the section goes back to
+`unwritten` and the reader says why. The hooks and the markdown renderer that expose this are
+documented in `src/manual/README.md`, and the API in `ARCHITECTURE.md`.
 
 The landing page lists summaries of manuals (`LibraryManual`), documented in
 `src/library/README.md`.
@@ -270,7 +273,7 @@ job. A muted signal green (not neon, not teal), so it reads as an indicator lamp
 | `--rule-strong` | `#3C4044` | Head rule, `hr`, table header line, pager rules, preview border, appendix dividers, the ledger's header line, the rule beside your messages | — |
 | `--ink-strong` | `#EDEFEF` | Headings, `strong`, current items | 16.1:1 |
 | `--ink` | `#D3D7D8` | Body text (cool off-white, no cream) | 12.8:1 |
-| `--ink-muted` | `#AEB4B7` | Summaries, labels, outline, footnotes, written-ring fill and written ticks (1.5:1 above ink-faint, so the two meta tiers stay apart) | 8.9:1 |
+| `--ink-muted` | `#AEB4B7` | Summaries, labels, outline, footnotes, the failed status line, written-ring fill and written ticks (1.5:1 above ink-faint, so the two meta tiers stay apart) | 8.9:1 |
 | `--ink-faint` | `#8C9296` | Unwritten titles, label numerals, meta, the field's border (at least 4.7:1 on every ground, including tint) | 5.9:1 |
 | `--cue` | `#5FC48A` | GO green: live/writing state, link hover, footnote references, focus ring (at least 7.0:1 on every ground) | 8.6:1 |
 | `--cue-deep` | `#377D57` | Link underlines and the writing-link dash (non-text, at least 3:1 on ground) | 3.8:1 |
@@ -391,10 +394,12 @@ Top to bottom (phone values in brackets):
    - waiting: writing ring + `Waiting for the first words…` (cue)
    - streaming: writing ring + `Being written · 46%` (cue, tabular)
    - written: solid ring + `Written · 1,184 words` (ink-faint; ring ink-muted)
+   - failed: hollow ring + `Not written · budget reached` or `Not written · couldn’t write this
+     section` (ink-muted; see [When a section can’t be written](#when-a-section-cant-be-written))
 5. **Head rule**: 1px `--rule-strong` across the measure, 16px below the status line, 32px above
    the body. While writing it doubles as the progress meter (see The write head).
 
-The head is identical in the waiting, streaming and written states, so nothing in it ever reflows.
+The head is identical in every state, so nothing in it ever reflows.
 
 ### The TOC
 
@@ -465,7 +470,7 @@ tables and deserve the same craft.
 
 ### Previous and next
 
-- **Pager**, 64px below the body (or the tail line): two cells, `1fr 1fr`, 16px apart, each with
+- **Pager**, 64px below the body (or the tail line, or the failure notice): two cells, `1fr 1fr`, 16px apart, each with
   a 1px `--rule-strong` top line and 12px above its text. Line 1, micro mono ink-faint:
   `‹ Previous · 2.3` / `Next · Chapter 3 · 3.1 ›` (the chapter or appendix is named whenever the
   link crosses a boundary). Line 2: the title, 17/28 500 wdth 85 ink-strong, with its status ring.
@@ -480,8 +485,8 @@ tables and deserve the same craft.
 ### Keyboard and focus
 
 - First focusable: "Skip to text", the shared `.skip-link`, shown on focus at the top left.
-- DOM order: compact header and sheet → TOC → main (eyebrow links, body links, Copy, Follow, pager)
-  → outline.
+- DOM order: compact header and sheet → TOC → main (eyebrow links, body links, Copy, Follow or
+  Try again, pager) → outline.
 - Focus ring everywhere: `outline: var(--focus-ring); outline-offset: var(--focus-offset)` (2px
   cue, 2px out), radius 2, or the control's own radius where it has one (offset −2px inside the
   TOC). `:focus-visible` only.
@@ -500,13 +505,64 @@ tables and deserve the same craft.
 | **writing, waiting** | Title ink; green ring with a half-size green centre that breathes (opacity 1 → 0.35 → 1 over 1.6s) | The head with `Waiting for the first words…`; the body holds only the tail line, with the write head beside it; the outline shows the title row and its hint | Dashed underline (cue-deep), green ring |
 | **writing, streaming** | Same as waiting | The final layout growing at the bottom; the write head on the live block; the head rule filling; the tail line `Being written · 46%  Follow ↓` | Same as waiting |
 | **written** | Title ink; solid ink-muted disc | No green anywhere; status `Written · n words`; no tail line | Solid 1px cue-deep underline, no ring |
+| **not written: budget reached** | As unwritten | No green anywhere; status `Not written · budget reached`; the failure notice where the tail line was | As unwritten |
+| **not written: couldn’t write** | As unwritten | The same, with `Not written · couldn’t write this section` | As unwritten |
 
 The shape differs by state (hollow, centre dot, solid), so state never depends on color alone. A
 legend in the TOC masthead explains the three rings in one line (`Written · Writing · Not written`,
 micro, ink-faint, rings drawn in CSS). Rings are the shared `StatusRing` component (`src/ui`).
 
+### When a section can’t be written
+
+The server can fail to write a section: **budget reached** when a spending cap would be crossed
+or the kill switch is on, and **couldn’t write this section** for anything else (the model failed,
+stalled or wrote something invalid, too many sections were being written, or the stream broke).
+Either way nothing is kept, and the section is `unwritten` again on the server.
+
+In the show-control desk this is a cue that didn’t go: the GO light goes out and the stage
+manager says plainly what happened. It is the settle without the finish.
+
+- **No green, no alarm.** Writing stopped, so nothing is live: the gutter bar retracts and the
+  lamp goes out, the meter fades to `--rule-strong`, and the TOC ring and every ring pointing at
+  the section turn hollow, exactly as for an unwritten section. There is no red, no warning
+  glyph and no second accent; the words carry it, as on the landing page.
+- **Status line:** the hollow ring and `Not written · budget reached` or `Not written · couldn’t
+  write this section`, in ink-muted: one tier above the written state’s ink-faint, because the
+  reader needs to notice it, but never cue.
+- **The failure notice** takes the tail line’s place, the lowest thing above the pager, so
+  nothing above the reading position moves. Body type at the measure:
+  - a title at 17/28 600 ink-strong (the H4 treatment), 4px above the text: `Budget reached` or
+    `Couldn’t write this section`;
+  - one sentence in ink saying what happened and that nothing was kept, with an inline **Try
+    again** (a `.link` button: cue-deep underline, cue on hover):
+    - budget: “The writing budget won’t cover this section right now, so it stays unwritten, and
+      nothing was charged for it. Try again once the budget allows.”
+    - error: “Something went wrong while it was being written, so none of it was kept. Try again
+      to write it from the start.”
+- **Text already streamed stays** where it is, 32px above the notice, because removing it would
+  move the page under the reader. It keeps its plain wrapping, its footnotes stay hidden and its
+  code blocks keep Copy hidden, as while writing. Footnote references in it stay links to notes
+  that are hidden; that is accepted, since the notice says none of it was kept.
+- **Try again works in place**, without a reload, so sections still writing elsewhere on the page
+  keep going. The kept text is cleared, the page returns to the waiting state (it moves, but only
+  because the reader asked), and focus moves to the title, which is scrolled into view if needed.
+- **Otherwise it sticks for the page load.** Leaving and coming back shows the same state.
+- **If the manual itself can’t be loaded** (the server can’t be reached, or the section doesn’t
+  exist), the reader shows only the same notice in the text column: `Couldn’t open this manual`,
+  “The manual didn’t load, so there’s nothing to show yet. Try again.”, where Try again reloads
+  the page.
+- **Screen readers:** the live region announces `Not written: budget reached` or `Not written:
+  couldn’t write this section`.
+- **Phone:** the same, at the phone body size.
+- **Screenshots:** `?fail=budget` and `?fail=error` on an unwritten section give the two states
+  straight away, with no text; `npm run shot` captures them as `budget` and `error`.
+
 ## Streaming
 
+- **At most three sections write at once** on one page: the server's limit on runs, so one page
+  never overruns it (other tabs still can, which gives `couldn’t write this section`). A fourth
+  section opened meanwhile waits in the waiting state (`Waiting for the first words…`) and starts
+  when one of the three ends.
 - Text renders with `<Markdown>` in the final layout from the first chunk. Chunks just appear,
   with no fade; the live edge is marked by the write head.
 - **Nothing above the reading position moves:** the head is a fixed height; the progress fill and
@@ -517,10 +573,10 @@ micro, ink-faint, rings drawn in CSS). Rings are the shared `StatusRing` compone
   the readout `Being written · 46%` in cue, and a **Follow ↓** text button (`aria-pressed`). When
   pressed it reads `Following ↓` in cue and keeps the tail line 24px above the viewport bottom after
   each chunk (an instant scroll, never smooth). Any upward scroll (wheel, touch, PageUp, ↑, Home)
-  or a second press stops it. The tail line is removed when writing ends; it is the lowest thing
-  on the page, so nothing above moves.
+  or a second press stops it. The tail line is removed when writing ends or fails; it is the lowest
+  thing on the page, so nothing above moves.
 - Screen readers: a visually hidden `aria-live="polite"` region announces only state changes
-  ("Being written", "Written"), never percentages.
+  ("Being written", "Written", or a failure), never percentages.
 
 ### The write head
 
@@ -683,8 +739,8 @@ reader's own, in `prose.css`.
 ## Build structure
 
 The reader lives in `src/reader/`. It is built on `src/ui/` (the design system, documented in
-`src/ui/README.md`) and `src/manual/` (the manual's data, store, streaming and markdown renderer,
-documented in `src/manual/README.md`). The reader styles the renderer's output rather than
+`src/ui/README.md`) and `src/manual/` (the manual's store, which reads from the API, and the
+markdown renderer, documented in `src/manual/README.md`). The reader styles the renderer's output rather than
 forking it.
 
 - One component per file; each one that has styles imports its own stylesheet, after its import
@@ -695,11 +751,12 @@ forking it.
     sheet as a `Sheet` whose focus scope includes the header) · `Toc` · `StatusLegend` ·
     `SectionPage` · `ArticleHead` · `Prose` (renderer components; `prose.css` holds the
     reader-only markdown treatment and its write-head adjustments) · `CodeBlock` · `SectionLink`
-    (and its preview) · `TailLine` (and Follow) · `Pager` · `Outline` (the outline, "Referenced
+    (and its preview) · `TailLine` (and Follow) · `FailureNotice` · `ManualErrorBoundary` (the
+    reader when the manual can't be loaded) · `Pager` · `Outline` (the outline, "Referenced
     here" and "In this manual") · `StartPage`.
   - Helpers: `markdownScan.ts` (headings with unique ids, source lines and clause numbers; linked
     sections; word count), `manualParts.ts` (every section in reading order, chapter names, paths
-    and chapter anchors), `statusWords.ts` (the status words), `streamedThisLoad.ts`,
+    and chapter anchors), `statusWords.ts` (the status and failure words), `streamedThisLoad.ts`,
     `useActiveHeading.ts`, `usePrevNextKeys.ts`.
 - `Shell` stays mounted while moving between sections (only the article is keyed by section id),
   so the TOC keeps its scroll position.

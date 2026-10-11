@@ -1,7 +1,34 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { SHOT_SECTIONS } from "./sample";
+import { describe, expect, it, vi } from "vitest";
 import { Markdown, type SectionLinkProps } from "./Markdown";
+import type { Manual, Section } from "./types";
+
+const { manual } = vi.hoisted(() => {
+  const section = (id: string, status: Section["status"]): Section => ({
+    id,
+    label: id,
+    title: id,
+    summary: "",
+    status,
+  });
+  const manual: Manual = {
+    id: "fixture",
+    title: "Fixture",
+    subtitle: "",
+    chapters: [
+      {
+        id: "1",
+        label: "1",
+        title: "One",
+        sections: [section("written-one", "written"), section("unwritten-one", "unwritten")],
+      },
+    ],
+    appendices: [],
+  };
+  return { manual };
+});
+
+vi.mock("./store", () => ({ useManual: () => manual }));
 
 function SectionLink({ section, children }: SectionLinkProps) {
   return (
@@ -17,13 +44,9 @@ function render(source: string) {
 
 describe("Markdown", () => {
   it("hands cross-references to SectionLink with the target section and its status", () => {
-    const html = render(
-      `See [written](section:${SHOT_SECTIONS.written}) and [unwritten](section:${SHOT_SECTIONS.unwritten}).`,
-    );
-    expect(html).toContain(`<a href="/test/${SHOT_SECTIONS.written}" data-status="written">written</a>`);
-    expect(html).toContain(
-      `<a href="/test/${SHOT_SECTIONS.unwritten}" data-status="unwritten">unwritten</a>`,
-    );
+    const html = render("See [written](section:written-one) and [unwritten](section:unwritten-one).");
+    expect(html).toContain('<a href="/test/written-one" data-status="written">written</a>');
+    expect(html).toContain('<a href="/test/unwritten-one" data-status="unwritten">unwritten</a>');
   });
 
   it("renders a cross-reference to an unknown section as plain text", () => {

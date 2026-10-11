@@ -18,9 +18,14 @@ export type CaptureGroup = { options: BrowserContextOptions; captures: Capture[]
 
 type ShotResult = { file: string; saved: boolean; errors: string[] };
 
-export async function startServer(port: number): Promise<ViteDevServer> {
+export async function startViteServer(port: number, apiPort: number): Promise<ViteDevServer> {
   const server = await createServer({
-    server: { port, strictPort: true, forwardConsole: false },
+    server: {
+      port,
+      strictPort: true,
+      forwardConsole: false,
+      proxy: { "/api": `http://localhost:${apiPort}` },
+    },
     clearScreen: false,
     customLogger: createLoggerWithoutRepeatedErrors(),
   });

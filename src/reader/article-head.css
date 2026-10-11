@@ -80,6 +80,10 @@
   color: var(--cue);
 }
 
+.reader [data-status="failed"] .status-line {
+  color: var(--ink-muted);
+}
+
 .reader .head-rule {
   position: relative;
   height: 1px;

@@ -292,7 +292,7 @@
   }
 }
 
-.reader [data-status="writing"] .prose-root > .footnotes {
+.reader .article:not([data-status="written"]) .prose-root > .footnotes {
   display: none;
 }
 

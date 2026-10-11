@@ -2,10 +2,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { describe, expect, it } from "vitest";
-import { sampleManual } from "./sample";
 import { repairPartialMarkdown } from "./repair";
 import { chunkEnds } from "./streamer";
-import type { Manual } from "./types";
+
+const SEED_BODIES = import.meta.glob<string>("../../server/seed/the-haunt-that-listens/sections/*.md", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
 
 describe("repairPartialMarkdown", () => {
   it.each([
@@ -78,10 +82,12 @@ describe("repairPartialMarkdown", () => {
   });
 
   it("never shows raw syntax while streaming the sample manual", () => {
-    for (const section of allSections(sampleManual)) {
-      expect(repairPartialMarkdown(section.body), section.id).toBe(section.body);
-      for (const end of chunkEnds(section.body)) {
-        expectNoRawSyntax(section.body.slice(0, end), section.id);
+    const bodies = Object.entries(SEED_BODIES);
+    expect(bodies).toHaveLength(18);
+    for (const [file, body] of bodies) {
+      expect(repairPartialMarkdown(body), file).toBe(body);
+      for (const end of chunkEnds(body)) {
+        expectNoRawSyntax(body.slice(0, end), file);
       }
     }
   });
@@ -90,10 +96,6 @@ describe("repairPartialMarkdown", () => {
 function expectNoRawSyntax(partial: string, label = "") {
   const visible = visibleProse(repairPartialMarkdown(partial));
   expect(visible, `${label} after ${JSON.stringify(partial.slice(-40))}`).not.toMatch(RAW_SYNTAX);
-}
-
-function allSections(manual: Manual) {
-  return [...manual.chapters, ...manual.appendices].flatMap((chapter) => chapter.sections);
 }
 
 const RAW_SYNTAX_PATTERNS = {

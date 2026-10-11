@@ -166,8 +166,9 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
 - **No auto-reconnect.** After `written`, `frozen` or `failed`, and on any `error` event, the
   client closes the `EventSource`. An `error` counts as `failure: "error"`. Reconnecting would pay
   for a second run.
-- **Retrying** needs a reload. A failure sticks for the page load, and the next load's visit starts
-  a new run, because the server kept the section unwritten.
+- **Retrying** is the reader's **Try again**, in place with no reload: the store opens the stream
+  again, which starts a new run because the server kept the section unwritten. Until then a
+  failure sticks for the page load. A reload would also abort this tab's other running sections.
 - **Preview options**, for screenshots: `?freeze=<0–1>` and `?fail=budget|error`.
   - `api/preview.ts` handles them before any run or writer is touched, so they cost nothing and
     change nothing, whichever writer is configured.

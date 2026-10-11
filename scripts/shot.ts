@@ -1,8 +1,12 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { BrowserContextOptions, Locator, Page } from "playwright";
+import type { ViteDevServer } from "vite";
+import { startServer } from "../server/app.ts";
+import { config } from "../server/config.ts";
 import type * as RepliesModule from "../src/agent/replies.ts";
-import type * as ManualModule from "../src/manual/sample/index.ts";
-import { captureAll, printSummary, settle, startServer, type CaptureGroup } from "./screenshots.ts";
+import { captureAll, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
 
 const PORT = 5174;
 const SHOTS_DIR = "shots";
@@ -12,6 +16,13 @@ const TYPED_MESSAGE = "Delete the manual about birthday parties";
 const UNHANDLED_MESSAGE = "Sing me a sea shanty about geese";
 const CLICK_TIMEOUT_MS = 3000;
 const REPLY_TIMEOUT_MS = 10_000;
+
+const SHOT_SECTIONS = {
+  written: "sensing-the-guest",
+  dense: "the-half-second-problem",
+  unwritten: "the-room-controller",
+  appendix: "servos-steppers-and-pneumatics",
+} as const;
 
 const DESKTOP: BrowserContextOptions = { viewport: { width: 1440, height: 900 } };
 const PHONE: BrowserContextOptions = {
@@ -49,20 +60,29 @@ const HOME_SIZES: Size[] = [
   { name: "phone", options: PHONE },
 ];
 
-const server = await startServer(PORT);
-
+const dataDir = await mkdtemp(path.join(tmpdir(), "rtfm-shots-"));
+const apiServer = await startServer({ ...config, port: 0, dataDir, writer: "fake" });
 try {
+  const viteServer = await startViteServer(PORT, apiServer.port);
+  try {
+    process.exitCode = (await captureShots(viteServer)) ? 0 : 1;
+  } finally {
+    await viteServer.close();
+  }
+} finally {
+  await apiServer.close();
+  await rm(dataDir, { recursive: true, force: true });
+}
+
+async function captureShots(viteServer: ViteDevServer): Promise<boolean> {
   await clearShots();
-  const manual = (await server.ssrLoadModule("/src/manual/sample/index.ts")) as typeof ManualModule;
-  const replies = (await server.ssrLoadModule("/src/agent/replies.ts")) as typeof RepliesModule;
+  const replies = (await viteServer.ssrLoadModule("/src/agent/replies.ts")) as typeof RepliesModule;
   const fallbackReply = withoutEmphasis(replies.replyTo(UNHANDLED_MESSAGE));
   const results = await captureAll(`http://localhost:${PORT}`, [
-    ...captureGroups(READER_DIR, READER_SIZES, readerShots(manual.SHOT_SECTIONS)),
+    ...captureGroups(READER_DIR, READER_SIZES, readerShots()),
     ...captureGroups(HOME_DIR, HOME_SIZES, homeShots(fallbackReply)),
   ]);
-  process.exitCode = printSummary(results) ? 0 : 1;
-} finally {
-  await server.close();
+  return printSummary(results);
 }
 
 async function clearShots() {
@@ -71,21 +91,20 @@ async function clearShots() {
   await mkdir(HOME_DIR, { recursive: true });
 }
 
-function readerShots(sections: typeof ManualModule.SHOT_SECTIONS): Shot[] {
+function readerShots(): Shot[] {
   const sectionPath = (id: string) => `/read/${id}`;
+  const unwrittenPath = sectionPath(SHOT_SECTIONS.unwritten);
   return [
     { state: "start", path: "/read" },
-    { state: "toc", path: sectionPath(sections.written), prepare: openTocIfCollapsed },
-    { state: "written", path: sectionPath(sections.written), fullPage: true },
-    { state: "dense", path: sectionPath(sections.dense), fullPage: true },
-    { state: "waiting", path: `${sectionPath(sections.unwritten)}?freeze=0` },
-    { state: "streaming", path: `${sectionPath(sections.unwritten)}?freeze=0.5` },
-    {
-      state: "streaming-full",
-      path: `${sectionPath(sections.unwritten)}?freeze=0.5`,
-      fullPage: true,
-    },
-    { state: "appendix", path: sectionPath(sections.appendix), fullPage: true },
+    { state: "toc", path: sectionPath(SHOT_SECTIONS.written), prepare: openTocIfCollapsed },
+    { state: "written", path: sectionPath(SHOT_SECTIONS.written), fullPage: true },
+    { state: "dense", path: sectionPath(SHOT_SECTIONS.dense), fullPage: true },
+    { state: "waiting", path: `${unwrittenPath}?freeze=0` },
+    { state: "streaming", path: `${unwrittenPath}?freeze=0.5` },
+    { state: "streaming-full", path: `${unwrittenPath}?freeze=0.5`, fullPage: true },
+    { state: "budget", path: `${unwrittenPath}?fail=budget` },
+    { state: "error", path: `${unwrittenPath}?fail=error` },
+    { state: "appendix", path: sectionPath(SHOT_SECTIONS.appendix), fullPage: true },
   ];
 }
 

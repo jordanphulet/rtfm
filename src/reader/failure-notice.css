@@ -1,0 +1,27 @@
+.reader .failure-notice {
+  font: 400 var(--text-body) / var(--leading-body) var(--font-sans);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.reader .prose + .failure-notice {
+  margin-top: var(--space-8);
+}
+
+.reader .failure-notice p {
+  margin: 0;
+}
+
+.reader .failure-notice .failure-title {
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.reader .failure-retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}

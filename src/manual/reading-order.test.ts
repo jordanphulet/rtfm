@@ -13,7 +13,6 @@ function chapter(id: string, sectionIds: string[]): Chapter {
       title: sectionId,
       summary: "",
       status: "unwritten",
-      body: "",
     })),
   };
 }
@@ -22,7 +21,6 @@ const manual: Manual = {
   id: "fixture",
   title: "Fixture",
   subtitle: "",
-  voice: "",
   chapters: [chapter("1", ["1.1", "1.2"]), chapter("2", ["2.1"])],
   appendices: [chapter("A", ["A.1", "A.2"])],
 };
