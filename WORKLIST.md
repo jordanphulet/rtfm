@@ -61,122 +61,172 @@ of any existing task that must now wait for it.
 ---
 
 
-## Library on the server
+## A real librarian
 
-The landing page's library comes from the server instead of seven hard-coded entries, and the
-reader opens any manual, not only the sample. When this phase is done:
+The librarian stops giving canned replies. It works through the library with real tools, and
+can create a new manual when you ask for one. It runs on an agent loop that sends every model
+call through the existing gateway. Alongside that, three small fixes, and research into hosting
+on AWS. When this phase is done:
 
-- the library lists the manuals in storage, with live "n of m written" counts;
-- all seven manuals are real: the six that were only library entries get a table of contents and
-  a voice on the server, with no sections written, so Claude writes them on demand;
-- deleting a manual removes it on the server, and it stays deleted after a reload or a restart;
-- the reader opens whichever manual you pick, at `/read/<manual>` and `/read/<manual>/<section>`;
-- "last opened" times are gone. The library is sorted by title.
+- the reader has a way back to the library;
+- the fake writer never saves placeholder text as a written section;
+- the librarian lists, finds, opens and deletes manuals by being asked. A delete still waits for
+  your confirmation in the existing dialog;
+- asking the librarian for a new manual has Claude plan its title, voice and table of contents,
+  and the manual appears in the library, ready to read;
+- `research/` has a recommendation on Claude Platform on AWS and the AgentCore harness.
 
-The canned librarian, the delete confirmation and the rest of the landing page's design stay as
-they are. Out of scope: creating manuals, renaming them, and the librarian using real tools.
+Out of scope: web access for any model, the passphrase, and deploying.
 
 ### Rules for this phase
 
 - **AWS credentials come only from `.env.local`.** There are profiles in `~/.aws/config`, and
   they **must never be used**. Never read, print, copy or edit `.env.local`.
-- **Real Bedrock calls happen only in LS.5**, only through the gateway, and under $0.10 in total.
-  Every other task and every test uses the fake writer.
+- **Every model call goes through the gateway**, including each turn of the agent loop. There
+  are no new spending limits: the gateway's caps cover agent runs too.
+- **Real Bedrock calls happen only in RL.6, RL.7 and RL.9**, each under $0.10. Every other task
+  and every test uses fake model clients. The model is Claude Haiku 4.5, as configuration.
 - **`.data/` holds the real usage ledger** and the user's manuals. Never delete or edit the
-  ledger, and deleting a manual never touches it. Live checks that delete manuals use a
-  temporary data folder, never `.data/`.
+  ledger.
+  - Live checks with Bedrock run on `.data/`, so the ledger records what they cost.
+  - On `.data/`, delete only manuals the check itself created. Deleting other manuals is
+    checked on a temporary data folder with a fake model.
 
-### LS.1 — Six more seed manuals
-- **Status:** done
+### RL.1 — A way back to the library
+- **Status:** todo
 - **Depends on:** —
-- **Files:** `server/seed/**` (new manual folders only; the Haunt's folder stays as it is)
-- **Do:**
-  - Write a `manual.json` for each of the other six library manuals, in the Haunt's format, with
-    the same ids, titles and subtitles as `src/library/seed.ts`: *The Birthday Party Field
-    Manual*, *Negotiating With Geese*, *Keeping a Sourdough Starter Alive*, *Running Your Own
-    Mail Server Without Losing Your Mind*, *Moving House Without Losing the Cat* and *Building a
-    Backyard Observatory*.
-  - Keep each one's chapter and section counts from `src/library/seed.ts`, appendices
-    included.
-  - Each gets a distinct voice brief and a table of contents with a one-line summary for every
-    section, the kind a reader would want to open.
-  - No section bodies: none of the six starts with anything written.
-- **Done when:** every `manual.json` parses with the server's seed types, ids are unique slugs,
-  `section:` ids are unique within a manual, the counts match, and `npm test` passes.
+- **Files:** `src/reader/**`, `DESIGN.md`, `scripts/**`
+- **Do:** add a "Library" link to the reader, leading to `/`: above the manual's title at the top
+  of the table of contents, and in the compact header bar below 1024px. Design it within the
+  reader's existing rules and tokens, and add it to `DESIGN.md`.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the reader shots differ
+  only by the new link, and the changes are reviewed; live at 1440 and 375, the link goes back to
+  the library from the start page and from a section.
 
-### LS.2 — The library API
-- **Status:** done
+### RL.2 — The fake writer saves no placeholders
+- **Status:** todo
 - **Depends on:** —
-- **Files:** `server/**` except `server/seed/**`, `ARCHITECTURE.md`
-- **Do:**
-  - `GET /api/manuals`: summaries of every manual in storage (id, title, subtitle, chapter
-    count, section count, written count), sorted by title, with the counts computed from storage.
-  - `DELETE /api/manuals/:manualId`: removes the manual and its sections from storage. It
-    refuses while a section of that manual is being written, or stops those runs first; choose
-    and document which. The ledger is never touched.
-  - Seeding: every manual in `server/seed/` is seeded once. A deleted seed manual stays deleted
-    after a restart (for example, with a record of what has been seeded), and a seed manual
-    added later is seeded on the next start, so the user's existing `.data/` gains the six new
-    manuals and keeps the Haunt's written sections.
-  - Add a `?library=empty` preview (or an equivalent) so the screenshots can show the empty
-    library without deleting anything.
-  - Tests for the routes, deleting during a write, and seeding after a delete and a restart.
-    Update ARCHITECTURE.md.
-- **Done when:** `npm run build` and `npm test` pass; with `npm run dev`, `curl` lists the
-  manuals, deletes one, and it is still gone after a server restart.
+- **Files:** `server/writer/**` except `server/writer/bedrock.ts` and its prompt files,
+  `README.md`, `ARCHITECTURE.md`
+- **Do:** a section that has no sample text still streams the fake writer's placeholder, so the
+  reader can be exercised, but nothing is stored: after a reload the section is unwritten again,
+  and the library's count doesn't change. Sections with sample text are stored as before.
+- **Done when:** `npm run build` and `npm test` pass, with tests for both cases; the README and
+  ARCHITECTURE.md describe it.
 
-### LS.3 — The reader takes a manual id
-- **Status:** done
-- **Depends on:** LS.2
-- **Files:** `src/manual/**`, `src/reader/**`, `src/App.tsx`, `scripts/**`, `DESIGN.md`,
-  `src/ui/README.md`, and `src/home/LedgerRow.tsx` (its link only)
-- **Do:**
-  - Routes become `/read/:manualId` (the start page) and `/read/:manualId/:sectionId`. Bare
-    `/read` and unknown paths go to `/`.
-  - The store keeps its state per manual, so moving between manuals never mixes their sections
-    or streams.
-  - An unknown manual shows the existing "Couldn’t open this manual" notice.
-  - The screenshot script opens the sample manual by its id.
-  - A library row links to `/read/<its id>`, so opening a manual keeps working.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the reader shots are
-  pixel-identical to before; live, two different manuals open, and moving between them keeps each
-  one's sections and streams separate.
+### RL.3 — The delete confirmation's hidden title
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `src/home/DeleteConfirmation.tsx` and its test
+- **Do:** before a manual is chosen, the closed confirmation carries the hidden text
+  `Delete "undefined"?`. Render no title until there is a manual.
+- **Done when:** `npm test` and `npm run shot` pass, a test covers it, and the home shots are
+  unchanged.
 
-### LS.4 — The landing page reads from the server
-- **Status:** done
-- **Depends on:** LS.1, LS.3
-- **Files:** `src/library/**`, `src/home/**`, `src/agent/**`, `DESIGN.md`, `scripts/**`
-- **Do:**
-  - `src/library` loads the library from the API and deletes through it. Delete the hard-coded
-    seed list and everything about "last opened" (`lastOpenedAt`, `formatLastOpened`, the
-    fixed "now" and the "Opened …" text). Sort by title.
-  - Rows open `/read/<id>`. The librarian's canned replies and named-manual links keep working
-    against the loaded library.
-  - Loading and failure: follow the reader's patterns (suspend on the first load; if the server
-    can't be reached, a notice in the landing page's style instead of a blank page). A failed
-    delete leaves the row and says so.
-  - Update DESIGN.md: the ledger row without "Opened …", the sort order, and the new loading
-    and failure behaviour.
-  - Screenshots: `?library=empty` still works; the changed counts and the removed "Opened …"
-    are reviewed, and every other pixel stays the same.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; live, the library lists
-  seven manuals with real counts, a delete survives a reload and a server restart, every manual
-  opens in the reader, and the conversation's named-manual links still work.
+### RL.4 — Harness prototypes
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `prototypes/harness/**` (new), `package.json` and `package-lock.json` (the Strands
+  dependency only)
+- **Do:** build two small prototypes of an agent loop, each with one tool (list the manuals in
+  a temporary data folder) and each calling the model through the gateway with a fake model
+  client, so nothing costs money:
+  - **our own loop** on the gateway;
+  - **Strands Agents** (TypeScript SDK) with a custom model provider that calls the gateway.
+  Write `prototypes/harness/COMPARISON.md`: code size, readability, how cleanly the gateway fits
+  (reservation per call, the worst-case bound with tools, aborts, the ledger), what Strands pulls
+  into `node_modules` (including any AWS SDK and its credential chain), streaming status to the
+  page, testing with a fake model, and how each would move to the AgentCore harness later. End
+  with a recommendation.
+- **Done when:** both prototypes run their one tool through the gateway in a test or a script,
+  `npm run build` and `npm test` still pass, and the comparison is written. Then mark this task
+  `needs-human`: the user chooses. It becomes `done` on the user's choice.
 
-### LS.5 — Final check
-- **Status:** done
-- **Depends on:** LS.4
+### RL.5 — The agent loop
+- **Status:** todo
+- **Depends on:** RL.4 and the user's choice
+- **Files:** `server/agent/**` (new), `server/gateway/**`, `server/config.ts`, `package.json`,
+  `package-lock.json`, `ARCHITECTURE.md`, `prototypes/**` (to delete it)
+- **Do:**
+  - Build the chosen harness on the gateway: tool definitions and tool results go through it,
+    and the worst-case input bound counts the tool definitions and the whole conversation.
+  - Tools are defined with a schema and their input is checked before they run.
+  - The loop reports status as it goes (for example "Looking through the library…"), for the
+    page to show.
+  - A fake model client scripts tool calls for tests.
+  - Delete `prototypes/` and anything only the losing prototype needed. Document the loop in
+    ARCHITECTURE.md.
+- **Done when:** `npm run build` and `npm test` pass; tests cover a multi-turn run with tool
+  calls, a tool given bad input, a refusal from the gateway's caps in the middle of a run, and
+  an abort.
+
+### RL.6 — The librarian with real tools
+- **Status:** todo
+- **Depends on:** RL.5
+- **Files:** `server/agent/**`, `server/api/**`, `server/app.ts`, `server/config.ts`,
+  `src/agent/**`, `src/home/**`, `DESIGN.md`, `scripts/**`, `ARCHITECTURE.md`
+- **Do:**
+  - Replace the canned replies with the librarian agent. Its tools: list the manuals, find
+    manuals by topic, open a manual (the page navigates to it), delete a manual, and create a
+    manual (built in RL.7; until then it says it can't yet).
+  - **Delete waits for the user:** the tool only proposes the delete; the page opens the
+    existing confirmation dialog, and only the user's confirmation deletes.
+  - The conversation stays in the browser and is sent to the server with each message. Replies
+    stream into the conversation as today, with the loop's status shown while it works, within
+    the existing design.
+  - Keep `?conversation=demo` and the screenshot states working with a scripted fake model, so
+    shots stay deterministic and free.
+  - Remove the canned-reply code and anything only it used.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the home shots differ only
+  where the design changed, and the changes are reviewed; live with Haiku 4.5, the librarian
+  lists, finds, opens and proposes a delete that the dialog then confirms or cancels; this task's
+  real spend is under $0.10.
+
+### RL.7 — Creating a manual through the librarian
+- **Status:** todo
+- **Depends on:** RL.6
+- **Files:** `server/agent/**`, `server/api/**`, `server/storage/**`, `server/app.ts`,
+  `server/config.ts`, `src/agent/**`, `src/home/**`, `src/library/**`, `DESIGN.md`, `scripts/**`,
+  `ARCHITECTURE.md`
+- **Do:**
+  - The librarian's create tool hands the user's request to a planner: Claude writes the
+    manual's title, subtitle, voice and table of contents (chapters, appendices, a summary for
+    each section) and saves them through a tool, in the seed manuals' format.
+  - Check the plan (unique slug ids, labels, counts, every section summarised) and allow one
+    retry; a plan that still fails is not saved and the librarian says so.
+  - The conversation shows progress while the manual is planned. When it's saved, the library
+    shows it, and the librarian offers to open it.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover a good plan, a
+  bad plan with a successful retry, and a plan that fails twice; live with Haiku 4.5, asking
+  for a new manual creates it, it appears in the library, and a
+  section of it can be written; this task's real spend is under $0.10.
+
+### RL.8 — Research: Claude Platform on AWS and the AgentCore harness
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `research/aws-hosting.md` (new)
+- **Do:** research from official documentation, with dates, and make no AWS changes or calls:
+  - **Claude Platform on AWS:** whether it offers web search and web fetch, access to the newer
+    Claude models (and whether it avoids this account's Bedrock block), pricing against Bedrock,
+    setup (Marketplace, API keys, IAM), how our gateway and `bedrock-client.ts` would change, and
+    any limits.
+  - **The AgentCore harness:** whether it can hand tool calls back to our own code or needs
+    tools hosted in AWS, how cost limits work, pricing, IAM, local development, and how it would
+    fit the move to Lambda.
+  - A recommendation for each, and exactly what the user would need to enable or change.
+- **Done when:** the write-up exists, cites its sources, and ends with the recommendations and
+  the user's steps.
+
+### RL.9 — Final check
+- **Status:** todo
+- **Depends on:** RL.1, RL.2, RL.3, RL.7, RL.8
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
 - **Do:**
   - Run `npm run build`, `npm test` and `npm run shot`, and look at the screenshots.
-  - Live at 1440 and 375:
-    - open each of the seven manuals;
-    - Claude writes one section of a manual other than the Haunt, and the library's count for
-      that manual goes up;
-    - delete a manual, reload, restart the server, and confirm it stays gone;
-    - the empty library;
-    - the server unreachable, on the landing page and in the reader.
-  - Update the docs so they match the code. Read the repo as a newcomer would.
+  - Live at 1440 and 375 with Haiku 4.5: talk to the librarian (list, find, open, and a delete
+    you cancel in the dialog), create a manual, read a section of it, delete that manual through
+    the librarian and the dialog, and go back to the library from the reader.
+  - Update the docs so they match the code; read the repo as a newcomer would.
 - **Done when:** all commands pass, every live check behaves as described, the docs match the
   code, and the report gives this phase's Bedrock spend from the ledger.
