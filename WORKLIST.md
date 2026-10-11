@@ -87,7 +87,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   temporary data folder, never `.data/`.
 
 ### LS.1 — Six more seed manuals
-- **Status:** todo
+- **Status:** doing (agent: a6596be493457218c)
 - **Depends on:** —
 - **Files:** `server/seed/**` (new manual folders only; the Haunt's folder stays as it is)
 - **Do:**
@@ -105,7 +105,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   `section:` ids are unique within a manual, the counts match, and `npm test` passes.
 
 ### LS.2 — The library API
-- **Status:** todo
+- **Status:** doing (agent: a7787dc03d333d164)
 - **Depends on:** —
 - **Files:** `server/**` except `server/seed/**`, `ARCHITECTURE.md`
 - **Do:**
