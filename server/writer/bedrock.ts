@@ -15,10 +15,11 @@ export class SectionRejected extends Error {
   }
 }
 
-export function createBedrockWriter({ gateway, store, targetCharacters }: {
+export function createBedrockWriter({ gateway, store, wordsRequested, expectedCharacters }: {
   gateway: Gateway;
   store: ManualStore;
-  targetCharacters: number;
+  wordsRequested: number;
+  expectedCharacters: number;
 }): SectionWriter {
   async function* writeSection(manual: StoredManual, sectionId: string, signal: AbortSignal): AsyncGenerator<WrittenChunk> {
     const sections = sectionsInReadingOrder(manual);
@@ -26,10 +27,10 @@ export function createBedrockWriter({ gateway, store, targetCharacters }: {
     const section = sections.find(({ id }) => id === sectionId);
     if (!section) throw new Error(`The manual has no section "${sectionId}"`);
     const example = await exampleSection(store, manual, sectionId);
-    const prompt = sectionPrompt(manual, { section, targetCharacters, example });
+    const prompt = sectionPrompt(manual, { section, wordsRequested, example });
 
     const text = createSectionText(section);
-    const progress = () => Math.min(MAX_ESTIMATED_PROGRESS, text.shownLength() / targetCharacters);
+    const progress = () => Math.min(MAX_ESTIMATED_PROGRESS, text.shownLength() / expectedCharacters);
     let stopReason: string | undefined;
     for await (const event of gateway.stream("write-section", prompt, signal)) {
       if (event.type === "stop") stopReason = event.reason;

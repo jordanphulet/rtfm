@@ -10,7 +10,8 @@ export interface ServerConfig extends GatewayConfig {
   dataDir: string;
   writer: WriterName;
   maxConcurrentRuns: number;
-  sectionTargetCharacters: number;
+  sectionWordsRequested: number;
+  sectionExpectedCharacters: number;
 }
 
 export const config: ServerConfig = {
@@ -18,7 +19,8 @@ export const config: ServerConfig = {
   dataDir: fileURLToPath(new URL("../.data", import.meta.url)),
   writer: writerFromEnv(process.env.RTFM_WRITER),
   maxConcurrentRuns: 3,
-  sectionTargetCharacters: 3800,
+  sectionWordsRequested: 650,
+  sectionExpectedCharacters: 4800,
   caps: { dailyUsd: 2, monthlyUsd: 20 },
   maxConcurrentCalls: 3,
   idleTimeoutMs: 30_000,

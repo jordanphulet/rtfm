@@ -1,3 +1,5 @@
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SectionEvent } from "../api/types.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
@@ -47,11 +49,13 @@ function signalIgnoringWriter() {
 }
 
 describe("runs", () => {
+  let dataDir: string;
   let store: ManualStore;
   let manual: StoredManual;
 
   beforeEach(async () => {
-    store = createFileManualStore(await tempDataDir());
+    dataDir = await tempDataDir();
+    store = createFileManualStore(dataDir);
     await seedStore(store);
     manual = (await store.getManual(SAMPLE_ID))!;
   });
@@ -69,6 +73,24 @@ describe("runs", () => {
     expect(reader.text()).toBe(body);
     expect(await store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe(body);
     expect(await runs.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("written");
+  });
+
+  it("writes a section again when its body file was deleted after it was written", async () => {
+    const writer = recordingWriter();
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const first = recorder();
+    await runs.join(manual, UNWRITTEN_ID, first.listener);
+    await waitUntil(() => first.last() === "written");
+
+    await rm(path.join(dataDir, "manuals", SAMPLE_ID, "sections", `${UNWRITTEN_ID}.md`));
+    expect(await runs.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("unwritten");
+
+    const second = recorder();
+    await runs.join(manual, UNWRITTEN_ID, second.listener);
+    await waitUntil(() => second.last() === "written");
+    expect(writer.signals).toHaveLength(2);
+    expect(second.text()).toBe(await fakeBody(SAMPLE_ID, UNWRITTEN_ID));
+    expect(await store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe(second.text());
   });
 
   it("sends a written section whole, without starting a writer", async () => {

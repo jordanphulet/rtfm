@@ -2,8 +2,9 @@
 
 A scripted stand-in for the librarian agent on the landing page (`src/home/`). You send a
 message; it thinks for 600ms, then streams a canned markdown reply at the same pace as the
-reader's fake streamer. Replies **change nothing**: the agent never touches the library. The
-conversation lives in memory for the life of the page (it survives route changes, not reloads).
+server's fake section writer (about 20 characters every 85ms). Replies **change nothing**: the
+agent never touches the library. The conversation lives in memory for the life of the page (it
+survives route changes, not reloads).
 
 Import everything from `src/agent`:
 

@@ -17,7 +17,8 @@ const PRICES: PriceTable = {
   checkedOn: "2026-10-11",
   models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 } },
 };
-const TARGET_CHARACTERS = 100;
+const WORDS_REQUESTED = 650;
+const EXPECTED_CHARACTERS = 100;
 
 const GOOD_BODY =
   "Every room has a small, dull brain.[^dull]\n\n## A room, in states\n\nSee [The Show Must Stop](section:the-show-must-stop).\n\n[^dull]: Dull is good.\n";
@@ -66,7 +67,12 @@ async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", co
     prices: PRICES,
     dataDir,
   });
-  const writer = createBedrockWriter({ gateway, store, targetCharacters: TARGET_CHARACTERS });
+  const writer = createBedrockWriter({
+    gateway,
+    store,
+    wordsRequested: WORDS_REQUESTED,
+    expectedCharacters: EXPECTED_CHARACTERS,
+  });
   return { dataDir, store, manual, writer, requests, ledgerEntries };
 }
 
@@ -81,14 +87,14 @@ function write(writer: ReturnType<typeof createBedrockWriter>, manual: StoredMan
 }
 
 describe("the Bedrock writer", () => {
-  it("streams the body in whole-word chunks with progress estimated against the target", async () => {
+  it("streams the body in whole-word chunks with progress estimated against the expected length", async () => {
     const { writer, manual, requests } = await setUp();
     const chunks = await write(writer, manual);
 
     expect(chunks.map((chunk) => chunk.text).join("")).toBe(GOOD_BODY);
     expect(chunks.slice(0, -1).every((chunk) => /\s$/.test(chunk.text))).toBe(true);
     expect(chunks.every((chunk) => chunk.progress <= 0.99)).toBe(true);
-    expect(chunks[0]!.progress).toBeCloseTo(chunks[0]!.text.length / TARGET_CHARACTERS);
+    expect(chunks[0]!.progress).toBeCloseTo(chunks[0]!.text.length / EXPECTED_CHARACTERS);
     expect(requests[0]!.model).toBe(MODEL);
     expect(requests[0]!.maxTokens).toBe(2048);
   });

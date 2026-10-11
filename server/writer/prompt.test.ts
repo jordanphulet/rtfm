@@ -7,7 +7,7 @@ import { sectionPrompt, sectionsInReadingOrder, sectionsNearestFirst } from "./p
 
 function request(manual: StoredManual, sectionId: string) {
   const section = sectionsInReadingOrder(manual).find(({ id }) => id === sectionId)!;
-  return { section, targetCharacters: 3800 };
+  return { section, wordsRequested: 650 };
 }
 
 function userMessage(manual: StoredManual, sectionId: string): string {

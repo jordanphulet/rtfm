@@ -61,7 +61,7 @@ open a section (TOC entries, hover previews).
 | `section`  | The `Section` (live status). Throws if the id doesn't exist.                       |
 | `status`   | `"unwritten"`, `"writing"` or `"written"`. Same as `section.status`.               |
 | `text`     | Markdown to render: `""` until the first words arrive, then the streamed text (already repaired, safe to render), then the full body. |
-| `progress` | 0–1: how much of the body has streamed in.                                         |
+| `progress` | 0–1: how much of the body has streamed in (exact for the fake writer; estimated for Claude, capped at 0.99). |
 | `failure`  | `"budget"` or `"error"` when the server couldn't write the section; otherwise absent. |
 
 A section moves through these states:

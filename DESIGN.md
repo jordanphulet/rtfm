@@ -7,17 +7,18 @@ disagree, one of them is a bug.
 
 ## What RTFM is
 
-- A web app for reading hypothetical manuals. An LLM will write a manual's table of contents
-  first, then each section when it is first opened.
+- A web app for reading hypothetical manuals. An LLM writes a manual's table of contents first,
+  then each section when it is first opened.
 - Two pages, both loaded lazily by `src/App.tsx`:
   - **The landing page** (`/`, `src/home/`): your library of manuals, beside a librarian agent
     you talk to.
   - **The reader** (`/read` is a manual's start page, `/read/:sectionId` a section;
     `src/reader/`): one manual whose table of contents already exists.
   - Every other path redirects to `/`.
-- There is no LLM yet:
+- So far an LLM writes only the reader's sections, and only with the Bedrock writer:
   - the reader always shows the sample manual, which a local API server (`server/`, described in
-    `ARCHITECTURE.md`) stores, writes with a fake writer and streams in;
+    `ARCHITECTURE.md`) stores, writes and streams in, with a fake writer by default or with Claude
+    Haiku 4.5 on Amazon Bedrock;
   - the library is seven seed manuals held in memory (`src/library/`);
   - the librarian gives canned replies (`src/agent/`).
 - **Failure states only where something can fail:** a section the server couldn't write has two

@@ -59,7 +59,8 @@ export async function createWriter(
       return createBedrockWriter({
         gateway: await createBedrockGateway(config, credentialsFile),
         store,
-        targetCharacters: config.sectionTargetCharacters,
+        wordsRequested: config.sectionWordsRequested,
+        expectedCharacters: config.sectionExpectedCharacters,
       });
   }
 }

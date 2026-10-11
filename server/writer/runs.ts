@@ -37,7 +37,7 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
     if (storedBody !== undefined) return sendWholeBody(listener, storedBody);
 
     const runAfter = runs.get(key);
-    if (runAfter === WRITTEN) return sendWholeBody(listener, (await store.getBody(manual.id, sectionId))!);
+    if (runAfter === WRITTEN) return sendWrittenBody(key, manual, sectionId, listener);
     if (runAfter !== undefined) return follow(key, runAfter, listener);
 
     if (activeRunCount() >= maxConcurrentRuns) {
@@ -45,6 +45,13 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
       return nothingToLeave;
     }
     return follow(key, startRun(key, manual, sectionId), listener);
+  }
+
+  async function sendWrittenBody(key: string, manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave> {
+    const body = await store.getBody(manual.id, sectionId);
+    if (body !== undefined) return sendWholeBody(listener, body);
+    if (runs.get(key) === WRITTEN) runs.delete(key);
+    return join(manual, sectionId, listener);
   }
 
   function follow(key: string, run: Run, listener: Listener): Leave {
@@ -99,8 +106,7 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
 
   async function statusOf(manualId: string, sectionId: string): Promise<SectionStatus> {
     const run = runs.get(runKey(manualId, sectionId));
-    if (run === WRITTEN) return "written";
-    if (run !== undefined) return "writing";
+    if (run !== undefined && run !== WRITTEN) return "writing";
     return (await store.getBody(manualId, sectionId)) === undefined ? "unwritten" : "written";
   }
 

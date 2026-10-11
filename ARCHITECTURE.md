@@ -1,10 +1,8 @@
-# RTFM — architecture (backend foundation)
+# RTFM — architecture
 
-The plan for the "Backend foundation" phase in `WORKLIST.md`. A local Node server stores the
-manual and its sections. It writes unwritten sections, with a fake writer or with Claude Haiku 4.5
-on Amazon Bedrock, and streams them to the reader. Every model call goes through one gateway that
-caps spending. BE.2 built the server, storage, the fake writer and the API; the gateway and the
-Bedrock writer come in BE.3 and BE.5.
+A local Node server stores the manual and its sections. It writes unwritten sections, with a fake
+writer or with Claude Haiku 4.5 on Amazon Bedrock, and streams them to the reader. Every model call
+goes through one gateway that caps spending.
 
 ```
 browser (Vite, :5173)                        server (node:http, :8787)
@@ -20,12 +18,12 @@ browser (Vite, :5173)                        server (node:http, :8787)
 2. **The last reader leaving mid-section stops the call at once.** Reloading mid-section starts
    the writing again from scratch; there is no grace period.
 3. **The kill switch is reported as `reason: "budget"`**, so the reader shows "budget reached".
-4. **Progress while Claude writes is approximate**: characters against a target length, capped at
-   99%, so "Being written · 46%" may jump at the end.
+4. **Progress while Claude writes is approximate**: characters against the expected length
+   (`sectionExpectedCharacters`), capped at 99%, so "Being written · 46%" may jump at the end.
 
 ## 1. The server
 
-A new top-level `server/` folder, next to `src/` and `scripts/`. It runs as TypeScript directly on
+The server lives in the top-level `server/` folder, next to `src/` and `scripts/`. It runs as TypeScript directly on
 Node 22.18+, as `scripts/` does, with its own `tsconfig.server.json` (`module: nodenext`,
 `allowImportingTsExtensions`, `noEmit`, the same strict flags), referenced from `tsconfig.json`.
 
@@ -58,11 +56,11 @@ server/
   writer/
     types.ts              SectionWriter, WriteFailed
     runs.ts               one run per section; later requests join it
-    fake.ts               plays the seed body at today's pace
-    bedrock.ts            writes through the gateway, choosing an example section (BE.5)
-    prompt.ts             builds the prompt (BE.5)
-    section-text.ts       holds back the opening and yields whole words (BE.5)
-    validate.ts           cheap output checks (BE.5)
+    fake.ts               plays the seed body at a steady pace
+    bedrock.ts            writes through the gateway, choosing an example section
+    prompt.ts             builds the prompt
+    section-text.ts       holds back the opening and yields whole words
+    validate.ts           cheap output checks
   gateway/
     types.ts              ModelClient, ModelEvent, GatewayConfig, refusal errors
     gateway.ts            caps, reservations, concurrency, idle timeout, kill switch, ledger
@@ -83,13 +81,16 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   - It forwards SIGINT and SIGTERM to both children and waits for both to exit before it exits
     itself.
   - If one child exits, it stops the other the same way, so nothing is left holding port 5173.
-  - It is a separate process rather than a Vite plugin because that is how the server will run
-    when deployed.
+  - It is a separate process rather than a Vite plugin, so the server runs the same way in
+    development as it would deployed.
 - `vite.config.ts` adds `server.proxy` and `preview.proxy`: `{ "/api": "http://localhost:8787" }`.
-  It imports `API_PORT` from `server/config.ts`, so the port is written down once.
+  It imports `API_PORT` from `server/config.ts`, so the port is written down once. When the API
+  server's response closes before it is complete (the server stopped or restarted mid-section),
+  the proxy destroys the browser's response too, so the reader's stream fails with "couldn't
+  write this section" instead of hanging.
 - `npm run server` runs the server alone, for `curl` and `npm run preview`.
-- `.claude/launch.json` is unchanged.
-- `npm run shot` (BE.4) starts the server in process with `startServer({ ...config, port: 0,
+- `.claude/launch.json` runs `npm run dev`.
+- `npm run shot` starts the server in process with `startServer({ ...config, port: 0,
   dataDir: <temp dir>, writer: "fake" })` and points its Vite proxy at it. Every run starts from
   the seed and never touches `.data/` or Bedrock.
 
@@ -120,12 +121,10 @@ The Node adapter:
 - turns `res.on("close")` into the `AbortSignal`;
 - writes the SSE headers (`content-type: text/event-stream`, `cache-control: no-cache`).
 
-A later `server/lambda.ts` maps the same routes onto `awslambda.streamifyResponse`.
-
 ## 2. The API
 
 The wire types live in `server/api/types.ts`. The browser imports them with `import type`, so
-nothing from `server/` reaches the bundle. They replace today's types in `src/manual/types.ts`.
+nothing from `server/` reaches the bundle: `src/manual/types.ts` re-exports them.
 
 ```ts
 interface Manual  { id; title; subtitle; chapters: Chapter[]; appendices: Chapter[] }   // no voice
@@ -145,6 +144,9 @@ type SectionEvent =
 | `GET /api/manuals/:manualId/sections/:sectionId` | `200 { status, body? }`, with the body only when written, or `404` |
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
 
+Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
+`500 { error: "Internal error" }` (or, once a stream has started, the stream just ends).
+
 The reader suspends on the JSON section route. If the section is written, it renders the body and
 never opens a stream. Otherwise it opens the stream with `EventSource`.
 
@@ -159,7 +161,7 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
   client never replaces text it has already shown.
 - **`progress`** (0–1) comes from the writer: exact for the fake, estimated for Claude.
 - **`failed`** is sent when the run ends without a body. The section goes back to `unwritten` on
-  the server, and the reader shows one of its two new states:
+  the server, and the reader shows one of its two failure states:
   - `"budget"`: **budget reached**. A cap would be crossed, or the kill switch is on.
   - `"error"`: **couldn't write this section**. Bedrock failed, the stream stalled, the output
     failed validation, `stop_reason` was `max_tokens` or `refusal`, or too many sections were
@@ -173,7 +175,7 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
 - **Preview options**, for screenshots: `?freeze=<0–1>` and `?fail=budget|error`.
   - `api/preview.ts` handles them before any run or writer is touched, so they cost nothing and
     change nothing, whichever writer is configured.
-  - As today, they only apply to sections that aren't written.
+  - They only apply to sections that aren't written.
   - **Freeze** cuts the seed body at the last chunk end at or before the fraction (the rule in
     `frozenLength`). It sends one `append` (none for 0) with `progress = cut / body.length`, then
     `frozen`, and ends the stream. The client closes the source and stays in the writing state.
@@ -226,7 +228,7 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
   exists, so a section can't be written twice.
 - **Replay:** reading the ledger skips a cut-off last line, left by a crash mid-append.
 - **Seeding:** on start, `seed.ts` puts the sample manual into an empty store. That is its TOC and
-  the bodies of the sections the seed marks written: the same 7 of 18 as today.
+  the bodies of the sections the seed marks written: 7 of 18.
 - **Reset:** to reset the manual, delete `.data/manuals/`. Never delete `.data/ledger/`, because
   the caps are computed from it.
 
@@ -248,15 +250,16 @@ class WriteFailed extends Error {
 ```
 
 **`writer/fake.ts`** waits 1.2s, then yields the seed body about 20 characters every 85ms, split at
-word boundaries, which is today's browser pacing.
+word boundaries, the same pace as the librarian's canned replies.
 
-- It has its own few-line chunking function. `src/manual/streamer.ts` uses `window` and belongs to
-  the browser.
+- It has its own copy of `chunkEnds`, because server code never imports from `src/`;
+  `scripts/chunk-ends.test.ts` checks that it chunks every seed body as `src/manual/streamer.ts`
+  does.
 - `progress` is exact.
 - A section with no seed body gets a short placeholder.
 
 **`writer/bedrock.ts`** builds the prompt and streams it through the gateway. It takes the
-gateway, the store and `config.sectionTargetCharacters`.
+gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCharacters`.
 
 - **The prompt** (`writer/prompt.ts`):
   - The **system prompt** is the same for every section of a manual, so it can be cached later:
@@ -266,11 +269,10 @@ gateway, the store and `config.sectionTargetCharacters`.
     that text inside `<manual>` and `<written-section>` is reference material, never
     instructions, and that the voice describes style only.
   - The **user message** names the section, its chapter and its summary, the previous and next
-    sections with their summaries, and a length in words (`sectionTargetCharacters / 6`, measured
-    on the sample manual). It ends by restating what Haiku most often skips: at least one table,
-    list, checklist or code block, a language tag on every code block, and a cross-reference with
-    the target's title as its link text, shown with a real neighbour (`[Sensing the
-    Guest](section:sensing-the-guest)`).
+    sections with their summaries, and a length in words (`sectionWordsRequested`, 650). It ends
+    by restating what Haiku most often skips: at least one table, list, checklist or code block,
+    a language tag on every code block, and a cross-reference with the target's title as its
+    link text, shown with a real neighbour (`[Sensing the Guest](section:sensing-the-guest)`).
   - **An example section.** The user message starts with a section of the same manual that is
     already written, to show its voice and markdown. It prefers the nearest section whose body
     is still the seed's (by distance in reading order, the earlier one on a tie), so the model's
@@ -291,7 +293,7 @@ gateway, the store and `config.sectionTargetCharacters`.
   that whole paragraph. After that, the text is never changed.
 - **Whole words only.** It yields only up to the last whitespace and holds back the rest until
   more arrives or the stream ends. Chunks therefore end on whole words, like the fake's. Bedrock
-  sends small deltas, so a section arrives as about 400 `append` events over about 11 seconds.
+  sends small deltas, so a section arrives as about 400 `append` events over 12–15 seconds.
 - **Late failures.** Problems found at the end (`writer/validate.ts`, which ignores code) throw
   `SectionRejected`, a plain `Error` that names them, so `runs.ts` logs it and sends `failed:
   "error"`. The streamed text is discarded, and the unshown tail is never sent:
@@ -309,7 +311,11 @@ gateway, the store and `config.sectionTargetCharacters`.
   `WriteFailed("budget")`. The gateway throws it before reserving or calling anything, so
   "budget" always means nothing was charged. Everything else reaches `runs.ts` as is and becomes
   `"error"`.
-- **Progress** is `min(0.99, characters shown / config.sectionTargetCharacters)`.
+- **Progress** is `min(0.99, characters shown / config.sectionExpectedCharacters)`. It is a
+  separate setting from the words requested because Haiku 4.5 writes past the length it is asked
+  for: asked for 650 words, it wrote 760–800 words, 4,200–5,000 characters. At 4,800 characters,
+  progress usually ends a little short of 100% and then jumps to written, rather than waiting at
+  99%.
 
 **Choosing a writer:** `config.writer`, which defaults to `"fake"` (used by tests and screenshots);
 `RTFM_WRITER=bedrock` selects Claude. With `"bedrock"`, `startServer` checks every job's model
@@ -325,6 +331,8 @@ reported without reading any secret.
 - **Finished runs stay in the map** as `written`, which closes the gap between a request reading
   storage and a run finishing. If `saveBody` returns `already-written`, the run sends `written`
   anyway: the stored body is the one that counts.
+- **Statuses come from storage** for any section not being written. If a written section's file
+  has been deleted by hand, opening it drops the stale `written` entry and writes it again.
 - **Listeners:** the first request starts the writer with its own `AbortController`. Later
   requests subscribe and get the backlog first.
 - **Ending:**
@@ -335,7 +343,7 @@ reported without reading any secret.
 - **At most 3 runs at once** (`config.maxConcurrentRuns`). A fourth request gets `failed:
   "error"`. Each writing section holds one browser connection, and HTTP/1.1 allows 6 per origin,
   so this keeps the page's other requests flowing. The reader keeps a section's stream open while
-  it navigates elsewhere, as it does today.
+  it navigates elsewhere.
 
 ## 5. The model gateway
 
@@ -433,8 +441,8 @@ Then, for each call:
        an `output_tokens`, but it is a placeholder (1), so the client doesn't map it.
      - **Any call that doesn't complete (aborted, stalled or failed) is charged its full reserved
        output (`max_tokens`)** and marked `estimated: true`. The stream doesn't tell us what
-       Bedrock billed after the cut. BE.6 compares this against Cost Explorer before anything
-       less conservative is used.
+       Bedrock billed after the cut. Compare this against Cost Explorer before anything less
+       conservative is used; that has not been done yet.
      - `estimated` is also set if a complete call never reported its input or output tokens.
 
 **The ledger is the durable record.** On start, the gateway replays this month's file into its
@@ -502,8 +510,8 @@ export function createBedrockClient(
   events, which the stream throws.
 - **The model ID** goes into the path unencoded: `/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke-with-response-stream`.
 
-Haiku 4.5 has thinking off unless asked, and no `cache_control` is sent this phase, because the
-shared prefix is too short to cache.
+Haiku 4.5 has thinking off unless asked, and no `cache_control` is sent, because the shared
+prefix is too short to cache.
 
 **`credentials.ts`** reads the file at the repo root:
 `util.parseEnv(readFileSync(new URL("../../.env.local", import.meta.url), "utf8"))`.
@@ -512,10 +520,10 @@ shared prefix is too short to cache.
 - It takes exactly `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`, and treats an
   empty or blank value, or a missing file, as missing.
 - If any is missing, it throws `CredentialsMissing`, which names the missing variables and never
-  prints a value, so the server refuses to start with the Bedrock writer. BE.5 calls it from
-  `app.ts` when `config.writer` is `"bedrock"`.
+  prints a value, so the server refuses to start with the Bedrock writer. `app.ts` calls it when
+  `config.writer` is `"bedrock"`.
 
-**Tests (BE.3), all offline**
+**Tests, all offline**
 
 - **SDK boundary.** `sdk-boundary.test.ts` scans the text of every source file (`.ts`, `.tsx`,
   `.js` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`, and of the root source
@@ -563,7 +571,7 @@ is on. `npm run usage -- <dataDir>` reads another data folder; the tests use thi
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Writer, port, data dir, caps, concurrency, jobs, section length (BE.5) | `server/config.ts` | no |
+| Writer, port, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
 ```ts
@@ -574,7 +582,8 @@ export const config: ServerConfig = {
   dataDir: fileURLToPath(new URL("../.data", import.meta.url)),   // <repo>/.data, whatever the cwd
   writer: writerFromEnv(process.env.RTFM_WRITER),   // "fake" (default) or "bedrock"; anything else throws
   maxConcurrentRuns: 3,
-  sectionTargetCharacters: 3800,
+  sectionWordsRequested: 650,
+  sectionExpectedCharacters: 4800,
   caps: { dailyUsd: 2, monthlyUsd: 20 },
   maxConcurrentCalls: 3,
   idleTimeoutMs: 30_000,
@@ -586,15 +595,19 @@ export const config: ServerConfig = {
 
 - **Types.** `config` is a `ServerConfig`, which extends `GatewayConfig` (`caps`,
   `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) with the port, data dir,
-  writer, `maxConcurrentRuns` and `sectionTargetCharacters`. `startServer` and the gateway take it
-  as it is, so tests and the shot script spread `config` and override what they need.
+  writer, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
+  `startServer` and the gateway take it as it is, so tests and the shot script spread `config`
+  and override what they need.
 - **`maxTokens: 2048`.** The sample sections are 460–660 words (about 650–950 tokens), so this
   leaves room. Its output costs at most about $0.01 (2,048 × $5 per million), and with the input
-  bound a call's worst-case reservation is about $0.02.
-- **The tiny-cap check (BE.6)** edits `caps` here and then reverts the edit.
+  bound a call's worst-case reservation is about $0.025.
+- **`sectionWordsRequested: 650`** is the length the prompt asks for, about the sample's own
+  sections (460–660 words). **`sectionExpectedCharacters: 4800`** is the length the Bedrock
+  writer's progress counts to, set from what Haiku actually writes (see section 4).
+- **Trying another setting** (a tiny cap, say) needs no edit here: a scratch script calls
+  `startServer({ ...config, caps: { dailyUsd: 0.001, monthlyUsd: 20 } })`.
 - **`BEDROCK_MODEL_ID` in `.env.local`** is ignored: `credentials.ts` takes only the three names
-  above, and `.env.local` never reaches `process.env`. The user should delete the line, so that
-  `config.ts` is the only place that names the model.
+  above, and `.env.local` never reaches `process.env`.
 
 ```ts
 // server/gateway/prices.ts — USD per million tokens
@@ -612,57 +625,46 @@ export const prices = {
   - Anthropic's Bedrock guide, checked 2026-10-11: regional endpoints cost 10% more for Sonnet 4.5
     and later models.
   - Cache prices use the standard 1.25× and 0.1× multipliers.
-  - **Unconfirmed on AWS's pricing page.** Check the first real calls against Cost Explorer (BE.5).
-- **Measured cost (BE.5):** $0.008–0.010 per section with the final prompt (about 2,900–3,100
-  input and 1,000–1,400 output tokens), with a worst-case reservation of about $0.02. Not yet
-  checked against Cost Explorer.
+  - **Unconfirmed on AWS's pricing page.** Check real calls against Cost Explorer.
+- **Measured cost:** $0.007–0.010 per section (about 2,900–3,200 input and 970–1,410 output
+  tokens), with a worst-case reservation of about $0.025. A call aborted mid-section is charged
+  its full `max_tokens`, about $0.013. Not yet checked against Cost Explorer.
 
-## 7. The reader's store (`src/manual/`, BE.4)
+## 7. The reader's store (`src/manual/`)
 
-**What changes**
+**How it reads the API**
 
 - **`useManual()`** fetches `GET /api/manuals/the-haunt-that-listens` once, from a module-level
   promise, and suspends on it with `use()`. The lazy route's `Suspense` covers the wait. After
   that it is the same `useSyncExternalStore` store. The id is a constant until routes carry one.
 - **`useSection(id)`** suspends with `use()` on a cached promise for the JSON section route.
-  - **Written sections** render straight away, as today, so the `written` and `toc` shots stay
-    the same.
+  - **Written sections** render straight away, with no stream.
   - **Unwritten sections** open an `EventSource`, once per section per page load and held at
     module level, so a section keeps writing while the reader is elsewhere.
   - **Events:** `append` sets the text at `at`. `written` marks the section written, keeping its
     text. `frozen` keeps it writing. `failed` and `error` record a failure.
   - **Closing:** the source is closed on `written`, `frozen`, `failed` and `error`.
   - **Repair stays in the browser:** `text` is still `repairPartialMarkdown(raw)`.
-  - **Failures:** `UseSectionResult` gains `failure?: "budget" | "error"`. The TOC shows the
+  - **Failures:** `UseSectionResult` has `failure?: "budget" | "error"`. The TOC shows the
     section as `unwritten`.
+- **At most 3 streams are open at once** (`MAX_OPEN_STREAMS`, matching `maxConcurrentRuns`).
+  Sections opened beyond that wait in the writing state and open in order as others end.
 - **`?freeze=` and `?fail=`** pass from the page URL to the stream URL.
 
-**What moves out of the browser**
+**What the browser doesn't have**
 
-- The sample manual (`src/manual/sample/`) moves to `server/seed/`. BE.2 copies it, and BE.4
-  deletes the browser copy.
-- `streamBody` and `freezeFromUrl` are removed.
-- The browser's types lose `body` and `voice`.
-- `chunkEnds`, `streamChunks` and `frozenLength` stay in `streamer.ts`, because the canned
-  librarian uses them.
+- The sample manual lives only in `server/seed/`.
+- The browser's types have no `body` or `voice`.
+- `streamer.ts` holds only `chunkEnds`, `streamChunks` and `frozenLength`, for the canned
+  librarian.
 
-**Tests and scripts that used the sample**
+**Tests and scripts that read the sample**
 
-- Tests that need sample bodies, such as `repair.test.tsx`, read
-  `server/seed/the-haunt-that-listens/` with `node:fs`.
-- `SHOT_SECTIONS` moves to `scripts/shot-sections.ts`. `Markdown.test.tsx` uses its own literal
-  section ids.
-- The library's seed (`src/library/seed.ts`) and its test get a literal entry for the Haunt (18
+- Tests that need sample bodies read `server/seed/the-haunt-that-listens/`: `repair.test.tsx`
+  with Vite's `import.meta.glob`, `scripts/chunk-ends.test.ts` with `node:fs`.
+- `SHOT_SECTIONS` is in `scripts/shot.ts`. `Markdown.test.tsx` uses its own literal section ids.
+- The library's seed (`src/library/seed.ts`) and its test have a literal entry for the Haunt (18
   sections, 7 written), like the other six manuals.
-
-## 8. What stays the same
-
-- **The reader:** every rule in `DESIGN.md` › Reader behavior and › Streaming holds unchanged. The
-  text still arrives in whole-word chunks in the final layout, and the fake writer keeps today's
-  pacing, so the existing reader shots stay the same.
-- **`DESIGN.md` updates in BE.4:** the two failure states, the data model, and the end of "no
-  back-end yet".
-- **The landing page** keeps its seed library and canned librarian.
 
 ## Later: Lambda and DynamoDB
 
