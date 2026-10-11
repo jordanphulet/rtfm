@@ -117,7 +117,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   the library from the start page and from a section.
 
 ### RL.2 — The fake writer saves no placeholders
-- **Status:** doing (agent: aef85a766b900cf5d)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `server/writer/**` except `server/writer/bedrock.ts` and its prompt files,
   `README.md`, `ARCHITECTURE.md`
@@ -130,11 +130,15 @@ Out of scope: web access for any model, the passphrase, and deploying.
 ### RL.3 — The delete confirmation's hidden title
 - **Status:** todo
 - **Depends on:** —
-- **Files:** `src/home/DeleteConfirmation.tsx` and its test
-- **Do:** before a manual is chosen, the closed confirmation carries the hidden text
-  `Delete "undefined"?`. Render no title until there is a manual.
-- **Done when:** `npm test` and `npm run shot` pass, a test covers it, and the home shots are
-  unchanged.
+- **Files:** `src/home/DeleteConfirmation.tsx` and its test, `vite.config.ts` (test settings
+  only)
+- **Do:**
+  - Before a manual is chosen, the closed confirmation carries the hidden text
+    `Delete "undefined"?`. Render no title until there is a manual.
+  - Vitest also runs the tests in `.claude/worktrees/` (git worktrees other sessions create),
+    doubling the test count. Exclude `.claude/**` from test discovery.
+- **Done when:** `npm test` and `npm run shot` pass, a test covers the title, the home shots are
+  unchanged, and `npm test` runs only this checkout's tests.
 
 ### RL.4 — Harness prototypes
 - **Status:** doing (agent: adf46c7799a2aec81)
@@ -216,7 +220,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   section of it can be written; this task's real spend is under $0.10.
 
 ### RL.8 — Research: Claude Platform on AWS and the AgentCore harness
-- **Status:** todo
+- **Status:** doing (agent: a247f5c2833f56330)
 - **Depends on:** —
 - **Files:** `research/aws-hosting.md` (new)
 - **Do:** research from official documentation, with dates, and make no AWS changes or calls:
