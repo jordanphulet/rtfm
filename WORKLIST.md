@@ -1,68 +1,7 @@
 # RTFM — Work List
 
-The orchestrator works through this file under `/loop`, starting subagents for tasks until
-everything is done or a task needs a human. **This file is the source of truth for status.**
-
-## Orchestrator protocol
-
-The orchestrator **coordinates, reviews and commits**. It does not do the task work itself.
-
-### Every loop pass
-
-1. **Read this file.** If every task is `done`, or nothing can run because the remaining tasks
-   are `needs-human` or `blocked`, report to the user and **stop the loop**.
-2. **Review finished work.** Run the review loop below for every `doing` task whose agent has
-   reported back.
-3. **Start ready tasks.** Start every `todo` task whose dependencies are all `done` as a
-   **background subagent**, with **at most 3 running at once**. Mark it `doing` and record the
-   agent's name.
-4. **Save this file**, then schedule a fallback wake-up in 20–30 minutes. Agents announce when
-   they finish, so there's no need to poll.
-
-### Review loop (required before any commit)
-
-1. **Check the basics:** every item in the task's **Done when** list, and `git status` shows
-   changes only inside the task's **Files**.
-2. **Read the full diff** against `CLAUDE.md` › Code standards and, for UI work, the design doc.
-   For anything beyond a trivial change, also start a **review subagent** for an independent code
-   review, then weigh its findings.
-3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
-   keeps its context), then wait for it to report back and repeat from step 1.
-4. **Approved:** mark the task `done` and commit **only that task's files**, with the message
-   `<task id>: <summary>`.
-5. **Three rounds without approval:** mark it `needs-human`, write down what's unresolved, and
-   tell the user.
-
-### When the orchestrator does work itself
-
-Avoid it. If it does happen (for example, a small fix while reconciling two tasks), start a
-review subagent on that change and only commit once the review passes. Keeping this file's
-statuses up to date, and git operations such as tags, don't count as work.
-
-### Adding work
-
-When the orchestrator discovers work that should be done, it **adds a task** to the right phase:
-a new ID, **Depends on**, **Files**, **Do** and **Done when**. It also updates the dependencies
-of any existing task that must now wait for it.
-
-### Rules
-
-- **Every agent runs on Opus 5.5** (`model: "opus"`), in the background.
-- **Only the orchestrator commits.** Agents never run git commands that change anything.
-- **Agents never edit this file.** They report back, and the orchestrator updates statuses.
-- Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
-  `src/manual/README.md`. It asks the agent to report back with the files it changed, how it
-  checked its work, and anything left unresolved.
-- Every agent prompt carries the rule that docs describe what exists (`CLAUDE.md` › Code
-  standards): no decision lists, plans or status in docs; a decision changes the doc, code or task
-  it governs, and planned work goes into `WORKLIST.md`.
-- Agents work in the same checkout at the same time, so they **must stay inside their task's
-  Files**. Two tasks that touch the same file never run at the same time.
-
-**Statuses:** `todo` · `doing` · `done` · `blocked` · `needs-human`
-
----
-
+The phases and tasks, with each task's status. **This file is the source of truth for status.**
+`PROCESS.md` says how the orchestrator works through it.
 
 ## A real librarian
 
@@ -295,7 +234,7 @@ are enforced by the harness instead of resting on instructions. When this phase 
 - every running session learns of a change to `CLAUDE.md` or `PROCESS.md` at its next tool call.
 
 ### PR.1 — The process gets its own file
-- **Status:** needs-human (the user approves the CLAUDE.md and PROCESS.md text)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `PROCESS.md` (new), `CLAUDE.md`
 - **Do:**
@@ -327,6 +266,8 @@ are enforced by the harness instead of resting on instructions. When this phase 
 - **Depends on:** PR.1, RL.7 (RL.6 and RL.7 also change `scripts/**`)
 - **Files:** `.claude/settings.json` (new), `scripts/hooks/**` (new), `PROCESS.md`, `README.md`
 - **Do:**
+  - `README.md`'s "Where things live" describes `PROCESS.md`, `WORKLIST.md` and `CLAUDE.md` as
+    they are now.
   - **Permission rules** in `.claude/settings.json`: deny reading or editing `.env*.local` and
     anything under `~/.aws/`.
   - **A Bash guard** (`scripts/hooks/guard-bash.ts`, a PreToolUse hook on Bash) that blocks, with
