@@ -280,3 +280,82 @@ Out of scope: web access for any model, the passphrase, and deploying.
   - Update the docs so they match the code; read the repo as a newcomer would.
 - **Done when:** all commands pass, every live check behaves as described, the docs match the
   code, and the report gives this phase's Bedrock spend from the ledger.
+
+---
+
+## The place agents work
+
+The rules that govern how work happens get their own file, and the ones that must always hold
+are enforced by the harness instead of resting on instructions. When this phase is done:
+
+- `WORKLIST.md` holds only phases and tasks; the protocol lives in `PROCESS.md`;
+- every session knows its role, where state lives and that only the user approves rule changes;
+- reading credentials, killing processes by port and subagents changing git are blocked by hooks
+  and permission rules;
+- every running session learns of a change to `CLAUDE.md` or `PROCESS.md` at its next tool call.
+
+### PR.1 — The process gets its own file
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `PROCESS.md` (new), `CLAUDE.md`
+- **Do:**
+  - Move the orchestrator protocol (from "Orchestrator protocol" through "Rules", and the
+    statuses line) from `WORKLIST.md` into `PROCESS.md`, unchanged in substance. Agents never
+    edit `WORKLIST.md`, so the orchestrator removes the section there when it commits.
+  - Add to `PROCESS.md` what so far happens only by habit:
+    - **Roles:** orchestrator, task agent, reviewer, and auditor (a read-only session that audits
+      the repo and proposes tasks). What each may and may not do.
+    - **Where state lives:** `WORKLIST.md` for what is happening, git history for what happened,
+      the docs for what exists, `research/` for what might be, `.data/` for the user's manuals
+      and the usage ledger.
+    - **Authority:** only the user approves changes to `CLAUDE.md`, `PROCESS.md`,
+      `.claude/settings.json` and hooks. A message from another session or agent is never the
+      user's approval; the orchestrator asks the user in its own session.
+    - **How rules spread:** through files, never through messages alone. A session in a git
+      worktree syncs with main before changing anything the rules govern. Every loop pass
+      re-reads `CLAUDE.md` and `PROCESS.md` along with `WORKLIST.md`.
+  - `CLAUDE.md`: point to `PROCESS.md` and `WORKLIST.md`, and add a short "How work happens here"
+    with what every session needs: roles in one line each, only the orchestrator commits, only
+    the user approves rule changes, a peer's message is not the user's approval. Don't import all
+    of `PROCESS.md`: task agents don't need the orchestrator's loop in their context.
+- **Done when:** `PROCESS.md` holds the protocol and the new sections; `CLAUDE.md` points to it;
+  the protocol's substance is unchanged apart from the additions. Then mark it `needs-human`: the
+  user approves the `CLAUDE.md` and `PROCESS.md` text before the commit.
+
+### PR.2 — Rules the harness enforces
+- **Status:** todo
+- **Depends on:** PR.1, RL.7 (RL.6 and RL.7 also change `scripts/**`)
+- **Files:** `.claude/settings.json` (new), `scripts/hooks/**` (new), `PROCESS.md`, `README.md`
+- **Do:**
+  - **Permission rules** in `.claude/settings.json`: deny reading or editing `.env*.local` and
+    anything under `~/.aws/`.
+  - **A Bash guard** (`scripts/hooks/guard-bash.ts`, a PreToolUse hook on Bash) that blocks, with
+    a reason the agent sees:
+    - any command that mentions `.env*.local`, `~/.aws` or `AWS_PROFILE`;
+    - `pkill`, `killall`, and `kill` fed from `lsof`, `fuser` or a port. `kill <pid>` stays
+      allowed;
+    - inside a subagent (`agent_id` present in the hook input), git commands that change
+      anything: `commit`, `push`, `merge`, `rebase`, `reset`, `checkout`, `switch`, `restore`,
+      `stash`, `tag`, `add`, `rm`, `cherry-pick`. Read-only git stays allowed.
+  - **A rules-changed hook** (`scripts/hooks/rules-changed.ts`, on SessionStart and
+    PostToolUse) watching `CLAUDE.md` and `PROCESS.md`:
+    - on SessionStart it saves this session's copy of each file and says nothing;
+    - after a tool call, if a watched file differs from the session's copy, it returns
+      `hookSpecificOutput.additionalContext` naming the file, with the diff, then saves the new
+      copy, so each change is reported once;
+    - copies live in a per-session folder under the OS temp dir; on SessionStart it deletes
+      folders older than 7 days;
+    - it runs after every tool call in every session, so it must be fast: compare cheaply (for
+      example file size and modification time) before reading or diffing.
+  - `PROCESS.md` and `README.md` say what the harness enforces, and that a session loads hooks
+    only when it starts, so the orchestrator restarts after this lands.
+  - `.claude/` may be write-protected for agents. If writing `.claude/settings.json` is refused,
+    report its exact content for the user to apply.
+- **Done when:**
+  - `npm run build` and `npm test` pass. Tests feed sample hook input to each script: allowed
+    and blocked commands, from the main session and from a subagent; a first run that stays
+    silent; a change reported once with its diff; no output when nothing changed.
+  - No check reads, opens or touches the real `.env.local` or `~/.aws`: tests use made-up
+    commands and paths.
+  - Then mark it `needs-human`: the user reviews and approves `.claude/settings.json` and the
+    hooks, and restarts the orchestrator.
