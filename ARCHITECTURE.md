@@ -6,7 +6,8 @@ goes through one gateway that caps spending.
 
 ```
 browser (Vite, :5173)                        server (node:http, :8787)
-  src/manual store ── /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake writer
+  src/library store ┐
+  src/manual store ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake writer
                                                   │                    └──▶ Bedrock writer ──▶ gateway ──▶ Bedrock
                                                   └──▶ storage/ (manuals, sections, ledger: files in .data/)
 ```
@@ -129,7 +130,8 @@ The Node adapter:
 ## 2. The API
 
 The wire types live in `server/api/types.ts`. The browser imports them with `import type`, so
-nothing from `server/` reaches the bundle: `src/manual/types.ts` re-exports them.
+nothing from `server/` reaches the bundle: `src/manual/types.ts` re-exports the manual's types,
+and `src/library/types.ts` re-exports `ManualSummary`.
 
 ```ts
 interface ManualSummary { id; title; subtitle; chapterCount; sectionCount; writtenCount }
@@ -699,10 +701,15 @@ export const prices = {
 
 **How it reads the API**
 
-- **`useManual()`** fetches `GET /api/manuals/the-haunt-that-listens` once, from a module-level
-  promise, and suspends on it with `use()`. The lazy route's `Suspense` covers the wait. After
-  that it is the same `useSyncExternalStore` store. The id is a constant until routes carry one.
-- **`useSection(id)`** suspends with `use()` on a cached promise for the JSON section route.
+- **State per manual.** The store keeps one state per manual id (`stateOf(manualId)`): the manual,
+  its cached requests, section texts, opened sections and open streams. Moving between manuals
+  never mixes their sections or streams.
+- **`useManual(manualId)`** fetches `GET /api/manuals/<manualId>` once per manual per page load,
+  from a promise cached in that manual's state, and suspends on it with `use()`. The lazy route's
+  `Suspense` covers the wait. After that it is a `useSyncExternalStore` store. A failed fetch (no
+  server, or an unknown manual) throws to the reader's `ManualErrorBoundary`.
+- **`useSection(manualId, id)`** suspends with `use()` on a cached promise for the JSON section
+  route.
   - **Written sections** render straight away, with no stream.
   - **Unwritten sections** open an `EventSource`, once per section per page load and held at
     module level, so a section keeps writing while the reader is elsewhere.
@@ -712,13 +719,15 @@ export const prices = {
   - **Repair stays in the browser:** `text` is still `repairPartialMarkdown(raw)`.
   - **Failures:** `UseSectionResult` has `failure?: "budget" | "error"`. The TOC shows the
     section as `unwritten`.
-- **At most 3 streams are open at once** (`MAX_OPEN_STREAMS`, matching `maxConcurrentRuns`).
-  Sections opened beyond that wait in the writing state and open in order as others end.
+- **At most 3 streams are open at once on the page**, across all manuals (`MAX_OPEN_STREAMS`,
+  matching `maxConcurrentRuns`, which also counts every manual). The queue of streams waiting for
+  a slot is the only state the manuals share. Sections opened beyond the limit wait in the writing
+  state and open in order as others end.
 - **`?freeze=` and `?fail=`** pass from the page URL to the stream URL.
 
 **What the browser doesn't have**
 
-- The sample manual lives only in `server/seed/`.
+- The manuals live only on the server; the seed manuals are in `server/seed/`.
 - The browser's types have no `body` or `voice`.
 - `streamer.ts` holds only `chunkEnds`, `streamChunks` and `frozenLength`, for the canned
   librarian.
@@ -727,9 +736,8 @@ export const prices = {
 
 - Tests that need sample bodies read `server/seed/the-haunt-that-listens/`: `repair.test.tsx`
   with Vite's `import.meta.glob`, `scripts/chunk-ends.test.ts` with `node:fs`.
-- `SHOT_SECTIONS` is in `scripts/shot.ts`. `Markdown.test.tsx` uses its own literal section ids.
-- The library's seed (`src/library/seed.ts`) and its test have a literal entry for the Haunt (18
-  sections, 7 written), like the other six manuals.
+- `SHOT_MANUAL` and `SHOT_SECTIONS` are in `scripts/shot.ts`. `Markdown.test.tsx` uses its own
+  literal section ids.
 
 ## Later: Lambda and DynamoDB
 

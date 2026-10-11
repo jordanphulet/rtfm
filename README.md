@@ -4,11 +4,11 @@ A web app for reading hypothetical manuals. An LLM writes a manual's table of co
 writes each section only when a reader opens it. Today the app has two pages:
 
 - **The landing page** (`/`): your library of manuals, beside a librarian agent you talk to. The
-  library is seed data held in the browser, and the librarian gives canned replies and changes
-  nothing.
-- **The reader** (`/read`): one sample manual, served by a local API server. Opening a section
-  that isn't written yet has the server write it and stream it in, with a fake writer by default
-  or with Claude Haiku 4.5 on Amazon Bedrock.
+  library lists the manuals a local API server stores, with how many sections of each are
+  written, and deletes them through it. The librarian gives canned replies and changes nothing.
+- **The reader** (`/read/<manual>`): any manual in the library. Opening a section that isn't
+  written yet has the server write it and stream it in, with a fake writer by default or with
+  Claude Haiku 4.5 on Amazon Bedrock.
 
 `ARCHITECTURE.md` describes the server, its API and the model gateway in full.
 
@@ -44,8 +44,10 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/config.ts`):
 
 `RTFM_WRITER` chooses who writes unwritten sections:
 
-- **`fake`** (the default): replays the sample's own text for the section after 1.2s, about 20
-  characters every 85ms. It costs nothing. Tests and screenshots always use it.
+- **`fake`** (the default): replays the sample manual's own text for the section after 1.2s, about
+  20 characters every 85ms. A section that has no sample text (every section of the other six
+  manuals) gets a one-line placeholder instead, which is saved like any written section: delete
+  its file to have it written again. It costs nothing. Tests and screenshots always use it.
 - **`bedrock`**: Claude Haiku 4.5 writes the section live through the model gateway: about
   4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a section.
 
@@ -97,13 +99,16 @@ as `scripts/shot.ts` does for its own settings.
 
 ## The data folder and spending
 
-The server keeps everything in `.data/` (gitignored), and seeds it with the sample manual when
-it starts and finds the manual missing:
+The server keeps everything in `.data/` (gitignored). When it starts, it seeds each manual in
+`server/seed/` that it hasn't seeded before: the sample, *The Haunt That Listens*, with 7 of its 18
+sections written, and six more with a table of contents and nothing written. A manual you delete
+stays deleted, and a manual already in `.data/` is left as it is.
 
-- `.data/manuals/<manualId>/`: the manual (`manual.json`) and one `sections/<id>.md` per written
+- `.data/manuals/<manualId>/`: a manual (`manual.json`) and one `sections/<id>.md` per written
   section. A section is written when its file exists. To have one written again, stop the
-  server, delete its file, and start the server again. To reset the whole manual, do the same
-  with `.data/manuals/`.
+  server, delete its file, and start the server again.
+- `.data/seeded.json`: the ids of the seed manuals already seeded. To reset every manual to the
+  seed, stop the server, delete `.data/manuals/` and `.data/seeded.json`, and start it again.
 - `.data/ledger/<yyyy-mm>.jsonl`: the usage ledger, one line per model call reserved and settled.
   The caps are computed from it, so **never delete or edit it**.
 - `.data/STOP`: **the kill switch.** While this file exists, the gateway refuses every new model
@@ -139,18 +144,20 @@ never touches `.data/` or Bedrock. It clears `shots/`, then writes:
 
 ## Where things live
 
-- `src/App.tsx`: the routes. `/` is the landing page, `/read` and `/read/:sectionId` the reader;
-  anything else redirects to `/`. Both pages are loaded lazily.
+- `src/App.tsx`: the routes. `/` is the landing page, `/read/:manualId` (a manual's contents) and
+  `/read/:manualId/:sectionId` the reader; anything else, bare `/read` included, redirects to `/`.
+  Both pages are loaded lazily.
 - `src/home/`: the landing page.
 - `src/reader/`: the reader.
 - `src/ui/`: the shared design system (tokens, fonts, base styles, the write head, components),
   used by both pages. Its README documents it.
-- `src/manual/`: the reader's store, which reads the manual from the API and streams sections from
+- `src/manual/`: the reader's store, which reads a manual from the API and streams sections from
   it, and the markdown renderer. Its README documents the API.
-- `src/library/`: the library's seed manuals and in-memory store. Its README documents the API.
+- `src/library/`: the landing page's store, which loads the library from the API and deletes
+  through it. Its README documents the API.
 - `src/agent/`: the scripted librarian. Its README documents the API and the canned replies.
-- `server/`: the API server, storage, the section writers and the model gateway. The sample
-  manual is in `server/seed/`. `ARCHITECTURE.md` documents it.
+- `server/`: the API server, storage, the section writers and the model gateway. The seven seed
+  manuals are in `server/seed/`. `ARCHITECTURE.md` documents it.
 - `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`), and
   `chunk-ends.test.ts`, which checks that the browser and the fake writer chunk text alike.
 - `research/`: research for the back-end (`bedrock-models.md`: which Bedrock models to use).

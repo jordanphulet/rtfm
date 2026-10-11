@@ -3,13 +3,15 @@
 A web app for reading hypothetical manuals. An LLM writes the table of contents first, then
 writes each section only when the reader opens it. Two pages are built: the landing page at `/`
 (`src/home/`), a library of manuals beside a librarian agent that gives canned replies, and the
-reader at `/read` (`src/reader/`), which reads one sample manual. A local Node server (`server/`)
-stores the manual and writes its unwritten sections, with a fake writer by default or with Claude
-Haiku 4.5 on Amazon Bedrock, whose calls go through one gateway that caps spending.
+reader at `/read/<manual>` (`src/reader/`), which reads any manual in the library. A local Node
+server (`server/`) stores the manuals, seeded from `server/seed/`, and writes their unwritten
+sections, with a fake writer by default or with Claude Haiku 4.5 on Amazon Bedrock, whose calls go
+through one gateway that caps spending.
 
 - `README.md`: running it, the scripts, configuration and where things live.
 - `ARCHITECTURE.md`: the server, its API, storage, the section writers and the model gateway.
 - `DESIGN.md`: the design of both pages and the rules any change to them must keep.
+- `src/*/README.md`: the API of each shared folder (`agent`, `library`, `manual`, `ui`).
 - `WORKLIST.md`: the task list and the orchestrator's protocol.
 - `research/bedrock-models.md`: research on which Bedrock models to use.
 

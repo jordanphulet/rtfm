@@ -424,7 +424,7 @@ The head is identical in every state, so nothing in it ever reflows.
   view.
 - **Appendices** come after the chapters: 16px gap, a 1px `--rule-strong` line, 12px, the group
   label `Appendices` (12/16 Sans 600 ink-muted, sentence case), then the appendix groups with
-  lettered labels.
+  lettered labels. A manual with no appendices has no group, label or line.
 
 ### Outline column (1200px and up)
 
@@ -449,7 +449,8 @@ The annotated contents, in the same shell. A reference is entered through its in
 - **Head** (capped at the measure), 64px from the top:
   - title `The Haunt That Listens`, 35/40 [29/36] ink-strong, 12px below;
   - subtitle, 20/28 [17/28] ink-muted, `text-wrap: balance`, 16px below;
-  - meta, micro mono ink-faint: `5 chapters · 2 appendices · 18 sections · 7 written`, 24px below;
+  - meta, micro mono ink-faint: `5 chapters · 2 appendices · 18 sections · 7 written`, 24px below
+    (singular for one: `1 appendix`);
   - **Begin at 1.1 Why a Haunt Should Listen ›**, 17/28 600 ink-strong with a 2px cue underline
     (cue text on hover).
 - **Contents** (width 720), 48px below the head. Each chapter starts with a 1px `--rule` line and
@@ -459,7 +460,8 @@ The annotated contents, in the same shell. A reference is entered through its in
   while writing). The whole row is the link: padding 8/12, hover `--ground-tint` and title to cue.
   On phone the status moves under the summary.
 - **Appendices:** 48px, a 1px `--rule-strong` line, 48px, an H2-sized `Appendices` heading, then
-  the same chapter blocks with lettered labels.
+  the same chapter blocks with lettered labels. A manual with no appendices ends after its last
+  chapter.
 - **Outline column:** "In this manual", with chapter and appendix jump links styled like "On this
   page".
 - No hero, no illustration: the 35px title sits directly on dense content.

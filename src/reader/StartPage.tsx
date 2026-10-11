@@ -23,21 +23,28 @@ export function StartPage() {
           <h1>{manual.title}</h1>
           <p className="start-subtitle">{manual.subtitle}</p>
           <p className="start-meta">
-            <span>{manual.chapters.length} chapters</span> · <span>{manual.appendices.length} appendices</span> ·{" "}
-            <span>{sections.length} sections</span> · <span>{writtenCount} written</span>
+            <span>{counted(manual.chapters.length, "chapter", "chapters")}</span> ·{" "}
+            <span>{counted(manual.appendices.length, "appendix", "appendices")}</span> ·{" "}
+            <span>{counted(sections.length, "section", "sections")}</span> · <span>{writtenCount} written</span>
           </p>
           <Link to={sectionPath(manual.id, first.id)} className="start-begin">
             Begin at {first.label} {first.title} ›
           </Link>
         </header>
         <ChapterBlocks chapters={manual.chapters} />
-        <section className="start-appendices" aria-labelledby="appendices-heading">
-          <h2 id="appendices-heading">Appendices</h2>
-          <ChapterBlocks chapters={manual.appendices} />
-        </section>
+        {manual.appendices.length > 0 && (
+          <section className="start-appendices" aria-labelledby="appendices-heading">
+            <h2 id="appendices-heading">Appendices</h2>
+            <ChapterBlocks chapters={manual.appendices} />
+          </section>
+        )}
       </div>
     </Shell>
   );
+}
+
+function counted(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function ChapterBlocks({ chapters }: { chapters: Chapter[] }) {

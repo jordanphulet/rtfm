@@ -30,14 +30,12 @@ export function Toc({ currentId, currentOutline }: TocProps) {
         <StatusLegend />
       </div>
       <ChapterList chapters={manual.chapters} currentId={currentId} currentOutline={currentOutline} />
-      <div className="toc-appendices">
-        <p className="toc-group-label">Appendices</p>
-        <ChapterList
-          chapters={manual.appendices}
-          currentId={currentId}
-          currentOutline={currentOutline}
-        />
-      </div>
+      {manual.appendices.length > 0 && (
+        <div className="toc-appendices">
+          <p className="toc-group-label">Appendices</p>
+          <ChapterList chapters={manual.appendices} currentId={currentId} currentOutline={currentOutline} />
+        </div>
+      )}
     </nav>
   );
 }
