@@ -3,6 +3,10 @@ import { createLogger, createServer, type Logger, type ViteDevServer } from "vit
 
 const SETTLE_MS = 300;
 
+// Re-rastering only the changed part of a tile leaves anti-aliased edges, such as a status
+// ring's, one color step off from run to run. Re-rastering whole tiles makes shots repeatable.
+const REPEATABLE_RASTER_ARGS = ["--disable-partial-raster"];
+
 type Capture = {
   path: string;
   file: string;
@@ -25,7 +29,7 @@ export async function startServer(port: number): Promise<ViteDevServer> {
 }
 
 export async function captureAll(baseURL: string, groups: CaptureGroup[]): Promise<ShotResult[]> {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: REPEATABLE_RASTER_ARGS });
   try {
     const results = await Promise.all(
       groups.map(async ({ options, captures }) => {

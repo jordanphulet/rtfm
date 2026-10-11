@@ -575,9 +575,9 @@ resets infinite animations to their first keyframe, so the breathe keyframes sta
 `text-wrap: pretty` can re-flow a whole paragraph when its content changes, so it never applies
 to text that streams:
 
-- The prose (`.prose`, around the prose root) carries `data-wrap="pretty"` **only if the section was already written when this
-  page load first saw it**. Otherwise it gets `data-wrap="plain"` (ordinary wrapping) and keeps it
-  after completion. There is no switch at the end, so finishing never re-flows anything.
+- The prose (`.prose`, around the prose root) carries `data-wrap="pretty"` **only if the section
+  was already written when this page load first saw it**. Otherwise it gets `data-wrap="plain"`
+  (ordinary wrapping) and keeps it after completion. There is no switch at the end, so finishing never re-flows anything.
 - "Streamed this load" is a module-level `Set` of section ids (`streamedThisLoad.ts`), filled by
   the shell from `useManual()` whenever a section is seen `writing`. This also catches a section
   that kept streaming while the reader was elsewhere. It resets on reload, like the store.

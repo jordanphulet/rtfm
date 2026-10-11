@@ -305,7 +305,7 @@ plain CSS in `write-head.css`; the reader's prose and tail line, and the landing
   bar; `data-live` adds the lamp. On a line, `data-live` means the text will be written here next
   (the reader's tail line has it until the first words arrive). It becomes `position: relative`.
 - **`.write-head-lamp`** is the lamp on its own, for an element in a line of text: an inline-block
-  with its size, colour and breathing. Place it yourself.
+  with its size, color and breathing. Place it yourself.
 
 Under reduced motion the lamp is steady, and the bar appears and goes at once.
 
