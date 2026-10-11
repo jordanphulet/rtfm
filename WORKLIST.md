@@ -295,7 +295,7 @@ are enforced by the harness instead of resting on instructions. When this phase 
 - every running session learns of a change to `CLAUDE.md` or `PROCESS.md` at its next tool call.
 
 ### PR.1 — The process gets its own file
-- **Status:** doing (agent: ab212c84d6ca929f8)
+- **Status:** needs-human (the user approves the CLAUDE.md and PROCESS.md text)
 - **Depends on:** —
 - **Files:** `PROCESS.md` (new), `CLAUDE.md`
 - **Do:**
