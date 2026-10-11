@@ -131,7 +131,7 @@ make each of those a straightforward later step.
   review, mark it `needs-human` and ask the user. It becomes `done` only on the user's approval.
 
 ### BE.2 — Server, storage and the fake writer
-- **Status:** doing (agent: ae64dcbf13dc89c20)
+- **Status:** done
 - **Depends on:** BE.1
 - **Files:** the server folder named in `ARCHITECTURE.md`, `package.json`, `package-lock.json`,
   `vite.config.ts`, `tsconfig*.json`, `.gitignore`, `.claude/launch.json`
@@ -147,7 +147,7 @@ make each of those a straightforward later step.
     there after a server restart.
 
 ### BE.3 — The model gateway
-- **Status:** todo
+- **Status:** doing (agent: a5459e35a19d1c4e9)
 - **Depends on:** BE.2
 - **Files:** the gateway folder named in `ARCHITECTURE.md`, its tests, the `usage` script,
   `server/config.ts` (caps and per-job limits), `package.json`, `package-lock.json`
@@ -165,7 +165,7 @@ make each of those a straightforward later step.
   - `npm run usage` works on an empty ledger and on a test one.
 
 ### BE.4 — The reader reads from the server
-- **Status:** todo
+- **Status:** doing (agent: a1398fd4693fd8c57)
 - **Depends on:** BE.2
 - **Files:** `src/manual/**`, `src/reader/**`, `DESIGN.md`, `scripts/**`, `src/library/seed.ts`,
   `src/library/store.test.tsx`, `src/library/README.md`
