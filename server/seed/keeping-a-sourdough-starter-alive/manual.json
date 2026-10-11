@@ -1,0 +1,88 @@
+{
+  "manual": {
+    "id": "keeping-a-sourdough-starter-alive",
+    "title": "Keeping a Sourdough Starter Alive",
+    "subtitle": "Feeding schedules, rescue protocols, and who looks after it while you’re on holiday",
+    "voice": "A retired intensive-care nurse who has kept the same rye starter going for fourteen years and treats every jar as a patient in her care. She speaks in the gentle, unhurried bedside manner of someone who has calmed a great many frightened relatives: feeds are “rounds”, rise and smell are “vitals”, a neglected jar is “admitted” and a recovered one is “discharged”. The clinical framing is affectionate, never cold. Everything is measured — grams, never cups; degrees Celsius; hours between feeds — and every symptom is matched with a clear action. Her refrain is reassurance: a starter is far harder to kill than people fear. She is firm about one thing only: fuzzy mould or pink and orange streaks mean the patient is lost, and you start again.",
+    "chapters": [
+      {
+        "id": "daily-care",
+        "label": "1",
+        "title": "Daily Care",
+        "sections": [
+          {
+            "id": "what-lives-in-the-jar",
+            "label": "1.1",
+            "title": "What Lives in the Jar",
+            "summary": "The wild yeasts and lactic acid bacteria in a starter, and what each of them needs from you."
+          },
+          {
+            "id": "the-feeding-routine",
+            "label": "1.2",
+            "title": "The Feeding Routine",
+            "summary": "Ratios from 1:1:1 to 1:5:5, which flour and water to use, and timing feeds to your kitchen’s warmth."
+          },
+          {
+            "id": "taking-its-vitals",
+            "label": "1.3",
+            "title": "Taking Its Vitals",
+            "summary": "Reading rise, smell, bubbles and texture, and the rubber-band chart that tracks them feed by feed."
+          },
+          {
+            "id": "the-fridge-and-the-slow-life",
+            "label": "1.4",
+            "title": "The Fridge and the Slow Life",
+            "summary": "Keeping a starter in the fridge between weekly bakes, and waking it up the day before you bake."
+          }
+        ]
+      },
+      {
+        "id": "emergencies-and-absences",
+        "label": "2",
+        "title": "Emergencies and Absences",
+        "sections": [
+          {
+            "id": "triage",
+            "label": "2.1",
+            "title": "Triage: Hooch, Mould and Pink Streaks",
+            "summary": "Which symptoms are harmless, which call for a rescue feed, and which mean the jar goes in the bin."
+          },
+          {
+            "id": "the-rescue-protocol",
+            "label": "2.2",
+            "title": "The Rescue Protocol",
+            "summary": "A three-day recovery plan for a sluggish or neglected starter, with feeds, temperatures and checkpoints."
+          },
+          {
+            "id": "while-you-are-away",
+            "label": "2.3",
+            "title": "While You’re on Holiday",
+            "summary": "A stiff fridge feed, freezing, drying or a sitter: the right care for a weekend, a fortnight or a month."
+          }
+        ]
+      }
+    ],
+    "appendices": [
+      {
+        "id": "charts-and-handover-notes",
+        "label": "A",
+        "title": "Charts and Handover Notes",
+        "sections": [
+          {
+            "id": "feeding-schedules-at-a-glance",
+            "label": "A.1",
+            "title": "Feeding Schedules at a Glance",
+            "summary": "Ratios, intervals and temperatures for daily, weekly and fortnightly care, in one table."
+          },
+          {
+            "id": "the-sitters-handover-sheet",
+            "label": "A.2",
+            "title": "The Sitter’s Handover Sheet",
+            "summary": "A printable page of instructions for whoever feeds your starter while you are away."
+          }
+        ]
+      }
+    ]
+  },
+  "writtenAtStart": []
+}

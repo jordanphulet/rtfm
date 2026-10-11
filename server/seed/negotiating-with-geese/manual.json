@@ -1,0 +1,62 @@
+{
+  "manual": {
+    "id": "negotiating-with-geese",
+    "title": "Negotiating With Geese",
+    "subtitle": "Field tactics for parks, golf courses and office campuses",
+    "voice": "A wildlife-conflict consultant with nineteen nesting seasons on golf courses, corporate lawns and municipal ponds, who writes in the calm, measured register of a professional hostage negotiator. Geese are “the other party”, a charging gander is “an escalation” and a site plan is “a settlement”. The diplomatic vocabulary is played completely straight, and the dry humour comes from that. Underneath it is real field biology: postures, seasons, distances in metres, what each deterrent costs and how long it lasts. Respects the birds as rational actors with clear interests. Firm on two points: never harm a goose, and never touch a nest or eggs without the permit the law requires.",
+    "chapters": [
+      {
+        "id": "understanding-the-other-party",
+        "label": "1",
+        "title": "Understanding the Other Party",
+        "sections": [
+          {
+            "id": "who-you-are-dealing-with",
+            "label": "1.1",
+            "title": "Who You Are Dealing With",
+            "summary": "Canada geese, greylags and farmyard hybrids: telling them apart, and what each one wants from your site."
+          },
+          {
+            "id": "reading-the-signals",
+            "label": "1.2",
+            "title": "Reading the Signals",
+            "summary": "The head bob, the neck pump, the hiss and the low charge: a goose’s escalation ladder, rung by rung."
+          },
+          {
+            "id": "the-nesting-season",
+            "label": "1.3",
+            "title": "The Nesting Season",
+            "summary": "Why March to June changes everything, how far to keep from a nest, and what the law says about eggs."
+          }
+        ]
+      },
+      {
+        "id": "field-tactics",
+        "label": "2",
+        "title": "Field Tactics",
+        "sections": [
+          {
+            "id": "holding-your-ground",
+            "label": "2.1",
+            "title": "Holding Your Ground Without Losing It",
+            "summary": "What to do when a gander charges: posture, eye contact, the slow backward retreat and the umbrella."
+          },
+          {
+            "id": "making-the-site-less-attractive",
+            "label": "2.2",
+            "title": "Making the Site Less Attractive",
+            "summary": "Long-grass buffers, shoreline planting and a no-feeding rule, so the lawn by the pond stops being a buffet."
+          },
+          {
+            "id": "deterrents-that-work",
+            "label": "2.3",
+            "title": "Deterrents That Work, and Those That Don’t",
+            "summary": "Herding dogs, dusk lasers, grape-based repellents and plastic swans, rated by cost and staying power."
+          }
+        ]
+      }
+    ],
+    "appendices": []
+  },
+  "writtenAtStart": []
+}

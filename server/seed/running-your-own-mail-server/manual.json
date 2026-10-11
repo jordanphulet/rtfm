@@ -1,0 +1,255 @@
+{
+  "manual": {
+    "id": "running-your-own-mail-server",
+    "title": "Running Your Own Mail Server Without Losing Your Mind",
+    "subtitle": "DNS records, deliverability, and the long war with spam filters",
+    "voice": "A sardonic systems administrator who has run their own mail server since 2003 and writes like a war correspondent filing from the deliverability front: weary, wry and loyal to the reader as a fellow survivor. Large providers are “the Big Mailboxes”, a blocklist entry is “a casualty” and a clean month is “a ceasefire”. The grumbling is real but never stops the work: every complaint is followed by the exact record, config line, command or RFC number that fixes it. Fond of footnoted grudges and asides. Short paragraphs, plenty of code blocks. Honest that self-hosting is not for everyone, and strict on three rules: never run an open relay, always keep tested backups, and monitor before you need to.",
+    "chapters": [
+      {
+        "id": "should-you-though",
+        "label": "1",
+        "title": "Should You, Though?",
+        "sections": [
+          {
+            "id": "the-honest-case-for-self-hosting",
+            "label": "1.1",
+            "title": "The Honest Case for Self-Hosting",
+            "summary": "What you gain, what you take on, and how many hours a month it really costs."
+          },
+          {
+            "id": "choosing-a-home-for-the-server",
+            "label": "1.2",
+            "title": "Choosing a Home for the Server",
+            "summary": "VPS or home line: clean IP ranges, port 25 blocks, reverse DNS control and hosts that allow mail."
+          },
+          {
+            "id": "the-software-stack",
+            "label": "1.3",
+            "title": "The Software Stack",
+            "summary": "Postfix, Dovecot, Rspamd and friends: what each piece does and how a message flows between them."
+          },
+          {
+            "id": "all-in-one-or-hand-built",
+            "label": "1.4",
+            "title": "All-in-One or Hand-Built",
+            "summary": "Mailcow, Mail-in-a-Box and Mailu against a stack built by hand, judged on control and upkeep."
+          }
+        ]
+      },
+      {
+        "id": "dns-the-foundation",
+        "label": "2",
+        "title": "DNS, the Foundation",
+        "sections": [
+          {
+            "id": "mx-a-and-reverse-dns",
+            "label": "2.1",
+            "title": "MX, A and Reverse DNS",
+            "summary": "The records that say where your mail lives, and why the PTR record must match your HELO name."
+          },
+          {
+            "id": "spf-without-tears",
+            "label": "2.2",
+            "title": "SPF Without Tears",
+            "summary": "Writing an SPF record, staying under the ten-lookup limit, and choosing between ~all and -all."
+          },
+          {
+            "id": "dkim-signing",
+            "label": "2.3",
+            "title": "DKIM Signing",
+            "summary": "Generating 2048-bit keys, publishing selectors, and rotating keys without breaking mail in flight."
+          },
+          {
+            "id": "dmarc-and-its-reports",
+            "label": "2.4",
+            "title": "DMARC and Its Reports",
+            "summary": "Moving from p=none to p=reject, and reading the aggregate XML reports that arrive every day."
+          }
+        ]
+      },
+      {
+        "id": "building-the-server",
+        "label": "3",
+        "title": "Building the Server",
+        "sections": [
+          {
+            "id": "installing-postfix",
+            "label": "3.1",
+            "title": "Installing Postfix",
+            "summary": "A minimal, secure main.cf and master.cf for sending and receiving, explained line by line."
+          },
+          {
+            "id": "dovecot-and-mailboxes",
+            "label": "3.2",
+            "title": "Dovecot and Mailboxes",
+            "summary": "IMAP, Maildir storage, virtual users, and Postfix handing mail to Dovecot over LMTP."
+          },
+          {
+            "id": "tls-everywhere",
+            "label": "3.3",
+            "title": "TLS Everywhere",
+            "summary": "Let’s Encrypt certificates, STARTTLS, implicit TLS on 465 and 993, and MTA-STS for inbound mail."
+          },
+          {
+            "id": "submission-and-authentication",
+            "label": "3.4",
+            "title": "Submission and Authentication",
+            "summary": "Ports 587 and 465, SASL through Dovecot, and the restrictions that keep you from becoming an open relay."
+          },
+          {
+            "id": "webmail-and-clients",
+            "label": "3.5",
+            "title": "Webmail and Clients",
+            "summary": "Roundcube or SnappyMail, autoconfig for Thunderbird and phones, and the settings sheet for your users."
+          }
+        ]
+      },
+      {
+        "id": "the-long-war",
+        "label": "4",
+        "title": "The Long War: Deliverability",
+        "sections": [
+          {
+            "id": "warming-up-a-new-ip",
+            "label": "4.1",
+            "title": "Warming Up a New IP",
+            "summary": "Why the first month’s mail lands in spam, and a sending plan that builds reputation week by week."
+          },
+          {
+            "id": "getting-into-gmail-and-outlook",
+            "label": "4.2",
+            "title": "Getting Into Gmail and Outlook",
+            "summary": "Google Postmaster Tools, Microsoft SNDS and JMRP, and the sender rules the big providers now enforce."
+          },
+          {
+            "id": "blocklists-and-delisting",
+            "label": "4.3",
+            "title": "Blocklists and Delisting",
+            "summary": "Spamhaus, Barracuda and the rest: checking them, finding out why you are listed, and asking to come off."
+          },
+          {
+            "id": "diagnosing-a-bounce",
+            "label": "4.4",
+            "title": "Diagnosing a Bounce",
+            "summary": "Reading a bounce message, its SMTP codes and its headers to learn who rejected your mail, and why."
+          }
+        ]
+      },
+      {
+        "id": "keeping-spam-out",
+        "label": "5",
+        "title": "Keeping Spam Out",
+        "sections": [
+          {
+            "id": "rspamd-from-first-principles",
+            "label": "5.1",
+            "title": "Rspamd From First Principles",
+            "summary": "How Rspamd scores a message, the modules worth enabling, and tuning its thresholds for your mail."
+          },
+          {
+            "id": "greylisting-and-postscreen",
+            "label": "5.2",
+            "title": "Greylisting and Postscreen",
+            "summary": "Cheap early checks that turn away most bot traffic before a message is ever accepted."
+          },
+          {
+            "id": "training-the-filter",
+            "label": "5.3",
+            "title": "Training the Filter",
+            "summary": "Learning from what users move to Junk, and Sieve rules that file mail where it belongs."
+          },
+          {
+            "id": "viruses-and-dangerous-attachments",
+            "label": "5.4",
+            "title": "Viruses and Dangerous Attachments",
+            "summary": "ClamAV, blocking risky file types, and rejecting a message rather than accepting and dropping it."
+          }
+        ]
+      },
+      {
+        "id": "running-it-for-years",
+        "label": "6",
+        "title": "Running It for Years",
+        "sections": [
+          {
+            "id": "monitoring-and-alerts",
+            "label": "6.1",
+            "title": "Monitoring and Alerts",
+            "summary": "Queue length, disk, certificate expiry and blocklist checks, wired to alerts you will actually read."
+          },
+          {
+            "id": "backups-and-restores",
+            "label": "6.2",
+            "title": "Backups and Restores",
+            "summary": "Backing up mailboxes, DKIM keys and config, and rehearsing a full restore onto a fresh server."
+          },
+          {
+            "id": "upgrades-and-outages",
+            "label": "6.3",
+            "title": "Upgrades and Outages",
+            "summary": "Patching the stack safely, surviving a day offline while senders retry, and the backup MX question."
+          },
+          {
+            "id": "knowing-when-to-give-up",
+            "label": "6.4",
+            "title": "Knowing When to Give Up",
+            "summary": "The signs it is time to hand mail to a provider, and moving out without losing a single message."
+          }
+        ]
+      }
+    ],
+    "appendices": [
+      {
+        "id": "record-and-config-reference",
+        "label": "A",
+        "title": "Record and Config Reference",
+        "sections": [
+          {
+            "id": "dns-records-at-a-glance",
+            "label": "A.1",
+            "title": "DNS Records at a Glance",
+            "summary": "Every record a mail domain needs — MX, SPF, DKIM, DMARC, MTA-STS and TLS-RPT — with worked examples."
+          },
+          {
+            "id": "postfix-parameters-worth-knowing",
+            "label": "A.2",
+            "title": "Postfix Parameters Worth Knowing",
+            "summary": "The main.cf settings you will actually touch, with their defaults, safe values and what each controls."
+          },
+          {
+            "id": "ports-and-protocols",
+            "label": "A.3",
+            "title": "Ports and Protocols",
+            "summary": "Ports 25, 465, 587, 143, 993 and 4190: who connects, in which direction, and with what encryption."
+          }
+        ]
+      },
+      {
+        "id": "field-guides",
+        "label": "B",
+        "title": "Field Guides",
+        "sections": [
+          {
+            "id": "smtp-reply-codes",
+            "label": "B.1",
+            "title": "SMTP Reply Codes",
+            "summary": "The 2xx, 4xx and 5xx replies and enhanced status codes you will meet, and what each means for you."
+          },
+          {
+            "id": "troubleshooting-by-symptom",
+            "label": "B.2",
+            "title": "Troubleshooting by Symptom",
+            "summary": "Mail not arriving, mail landing in spam, mail rejected: the checks to run for each, in order."
+          },
+          {
+            "id": "testing-tools",
+            "label": "B.3",
+            "title": "Testing Tools",
+            "summary": "swaks, openssl s_client, dig and online checkers, with the commands that prove each part works."
+          }
+        ]
+      }
+    ]
+  },
+  "writtenAtStart": []
+}

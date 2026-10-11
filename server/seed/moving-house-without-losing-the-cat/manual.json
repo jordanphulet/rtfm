@@ -1,0 +1,150 @@
+{
+  "manual": {
+    "id": "moving-house-without-losing-the-cat",
+    "title": "Moving House Without Losing the Cat",
+    "subtitle": "Boxes, timelines and feline diplomacy",
+    "voice": "A soft-spoken feline behaviourist who has moved house nine times with three cats, and once spent two days coaxing one out from behind a washing machine. Writes quietly and patiently, with a dry, gentle wit, as though there might be a nervous animal in the room. Keeps returning to how the move looks, smells and sounds from thirty centimetres off the floor: to a cat, the house has simply started lying. Equally practical about the human side — week-by-week timelines, box counts, removal quotes, meter readings — and fond of a good checklist. Never scolds the reader or the cat. Firm about a few things: the cat is shut safely in one room on moving day, travels in a secure carrier, and has an up-to-date microchip.",
+    "chapters": [
+      {
+        "id": "six-weeks-out",
+        "label": "1",
+        "title": "Six Weeks Out",
+        "sections": [
+          {
+            "id": "the-moving-timeline",
+            "label": "1.1",
+            "title": "The Moving Timeline",
+            "summary": "A week-by-week plan from six weeks out, with the jobs that can’t wait and the ones that can."
+          },
+          {
+            "id": "choosing-a-removals-firm",
+            "label": "1.2",
+            "title": "Choosing a Removals Firm",
+            "summary": "Getting three quotes, what a survey should cover, insurance, and the warning signs in a cheap quote."
+          },
+          {
+            "id": "decluttering-before-you-pack",
+            "label": "1.3",
+            "title": "Decluttering Before You Pack",
+            "summary": "Deciding what goes, room by room, so you pay to move only what you will use."
+          },
+          {
+            "id": "the-cats-point-of-view",
+            "label": "1.4",
+            "title": "The Cat’s Point of View",
+            "summary": "Why a move is so hard on a territorial animal, and the early signs of stress to watch for."
+          }
+        ]
+      },
+      {
+        "id": "boxes",
+        "label": "2",
+        "title": "Boxes",
+        "sections": [
+          {
+            "id": "boxes-tape-and-materials",
+            "label": "2.1",
+            "title": "Boxes, Tape and Materials",
+            "summary": "How many boxes for each size of home, which sizes to buy, and the materials worth paying for."
+          },
+          {
+            "id": "packing-room-by-room",
+            "label": "2.2",
+            "title": "Packing Room by Room",
+            "summary": "An order that keeps the house livable, with techniques for plates, glasses, books and pictures."
+          },
+          {
+            "id": "labelling-and-inventory",
+            "label": "2.3",
+            "title": "Labelling and Inventory",
+            "summary": "A colour-and-number system that tells the movers where each box goes and tells you what is inside."
+          },
+          {
+            "id": "the-first-night-box",
+            "label": "2.4",
+            "title": "The First-Night Box",
+            "summary": "The one box you open first: kettle, bedding, chargers, medicines, basic tools and toilet roll."
+          }
+        ]
+      },
+      {
+        "id": "moving-day",
+        "label": "3",
+        "title": "Moving Day",
+        "sections": [
+          {
+            "id": "the-safe-room",
+            "label": "3.1",
+            "title": "The Safe Room",
+            "summary": "Shutting the cat in one quiet, emptied room on moving day, with a sign on the door that movers will obey."
+          },
+          {
+            "id": "travelling-with-a-cat",
+            "label": "3.2",
+            "title": "Travelling With a Cat",
+            "summary": "Carriers, journeys of one hour or eight, calming aids to ask the vet about, and never opening the door en route."
+          },
+          {
+            "id": "handing-over-the-keys",
+            "label": "3.3",
+            "title": "Handing Over the Keys",
+            "summary": "Meter readings, the final sweep of every cupboard, and the checks before you lock the old door for good."
+          }
+        ]
+      },
+      {
+        "id": "settling-in",
+        "label": "4",
+        "title": "Settling In",
+        "sections": [
+          {
+            "id": "the-base-camp-room",
+            "label": "4.1",
+            "title": "The Base Camp Room",
+            "summary": "Setting up one room in the new home with familiar smells, and when to open up the rest of the house."
+          },
+          {
+            "id": "the-first-two-weeks",
+            "label": "4.2",
+            "title": "The First Two Weeks",
+            "summary": "Unpacking in an order that keeps the house calm, and reading whether the cat is settling or struggling."
+          },
+          {
+            "id": "letting-the-cat-outside",
+            "label": "4.3",
+            "title": "Letting the Cat Outside",
+            "summary": "How long to wait, the first supervised trips, and stopping the cat walking back to the old house."
+          }
+        ]
+      }
+    ],
+    "appendices": [
+      {
+        "id": "checklists-and-contacts",
+        "label": "A",
+        "title": "Checklists and Contacts",
+        "sections": [
+          {
+            "id": "who-to-tell-youve-moved",
+            "label": "A.1",
+            "title": "Who to Tell You’ve Moved",
+            "summary": "Banks, utilities, doctors, the vet, the microchip database and the rest, in the order to tell them."
+          },
+          {
+            "id": "the-moving-day-checklist",
+            "label": "A.2",
+            "title": "The Moving-Day Checklist",
+            "summary": "Hour by hour from the movers’ arrival to the first night, with the cat’s checks marked."
+          },
+          {
+            "id": "the-cats-moving-kit",
+            "label": "A.3",
+            "title": "The Cat’s Moving Kit",
+            "summary": "Carrier, litter tray, food, pheromone diffuser and vet records, packed apart from everything else."
+          }
+        ]
+      }
+    ]
+  },
+  "writtenAtStart": []
+}

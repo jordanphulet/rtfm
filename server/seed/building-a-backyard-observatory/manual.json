@@ -1,0 +1,187 @@
+{
+  "manual": {
+    "id": "building-a-backyard-observatory",
+    "title": "Building a Backyard Observatory",
+    "subtitle": "From a concrete pier to your first photograph of Saturn",
+    "voice": "A retired civil engineer and lifelong amateur astronomer who built two observatories in his own garden, the first one wrong. Writes with the quiet wonder of someone who still goes outside at 2 a.m. to look up, and the exactness of someone who has signed off foundations: concrete in cubic metres, pier tolerances in millimetres, polar alignment in arcminutes. Addresses the reader as “fellow observer”. Unhurried, warm sentences that settle on a number; gentle humour about clouds, which always arrive with new equipment. Admits his own mistakes freely so the reader can skip them. Never casual about safety: no unfiltered telescope ever points near the Sun, outdoor mains goes through RCD protection and a qualified electrician, and nobody works on the roof alone in the dark.",
+    "chapters": [
+      {
+        "id": "planning-under-the-sky",
+        "label": "1",
+        "title": "Planning Under the Sky",
+        "sections": [
+          {
+            "id": "do-you-need-an-observatory",
+            "label": "1.1",
+            "title": "Do You Need an Observatory?",
+            "summary": "What a permanent setup gives you over carrying a telescope outside, and what it will cost."
+          },
+          {
+            "id": "choosing-the-site",
+            "label": "1.2",
+            "title": "Choosing the Site",
+            "summary": "Horizons, light pollution, firm ground, power, and the walk from the back door at 2 a.m."
+          },
+          {
+            "id": "roll-off-roof-or-dome",
+            "label": "1.3",
+            "title": "Roll-Off Roof or Dome",
+            "summary": "Roll-off roofs, domes and clamshells compared on cost, wind, sky access and how hard they are to build."
+          },
+          {
+            "id": "permits-and-neighbours",
+            "label": "1.4",
+            "title": "Permits and Neighbours",
+            "summary": "Planning rules for garden buildings, height limits, and winning the neighbours over about their lights."
+          }
+        ]
+      },
+      {
+        "id": "the-pier",
+        "label": "2",
+        "title": "The Pier",
+        "sections": [
+          {
+            "id": "why-the-pier-stands-alone",
+            "label": "2.1",
+            "title": "Why the Pier Stands Alone",
+            "summary": "Isolating the pier from the floor so footsteps never shake the image, and the gap that does it."
+          },
+          {
+            "id": "digging-and-pouring-the-footing",
+            "label": "2.2",
+            "title": "Digging and Pouring the Footing",
+            "summary": "Footing depth, concrete volume, rebar, and a cardboard tube form for a 300 mm column."
+          },
+          {
+            "id": "steel-or-concrete-piers",
+            "label": "2.3",
+            "title": "Steel or Concrete Piers",
+            "summary": "Poured concrete against steel tube on stiffness, cost, and how easily each can be adjusted later."
+          },
+          {
+            "id": "the-pier-plate",
+            "label": "2.4",
+            "title": "The Pier Plate",
+            "summary": "Setting the anchor bolts, levelling the adapter plate, and lining it up with true north, not magnetic."
+          }
+        ]
+      },
+      {
+        "id": "the-building",
+        "label": "3",
+        "title": "The Building",
+        "sections": [
+          {
+            "id": "the-floor-and-frame",
+            "label": "3.1",
+            "title": "The Floor and Frame",
+            "summary": "A timber deck on its own footings, and walls low enough for the telescope to reach the horizon."
+          },
+          {
+            "id": "the-roll-off-roof",
+            "label": "3.2",
+            "title": "The Roll-Off Roof",
+            "summary": "Rails, wheels, weather seals and locks for a roof one person can roll open in under a minute."
+          },
+          {
+            "id": "weatherproofing-and-ventilation",
+            "label": "3.3",
+            "title": "Weatherproofing and Ventilation",
+            "summary": "Keeping out rain and damp, and letting the inside cool to night temperature before you observe."
+          },
+          {
+            "id": "power-and-data",
+            "label": "3.4",
+            "title": "Power and Data",
+            "summary": "Bringing mains safely to an outdoor building, RCD protection, 12-volt supplies and a network cable."
+          }
+        ]
+      },
+      {
+        "id": "mount-telescope-and-alignment",
+        "label": "4",
+        "title": "Mount, Telescope and Alignment",
+        "sections": [
+          {
+            "id": "choosing-a-mount",
+            "label": "4.1",
+            "title": "Choosing a Mount",
+            "summary": "Equatorial or alt-azimuth, payload ratings, and why the mount matters more than the telescope."
+          },
+          {
+            "id": "choosing-a-telescope",
+            "label": "4.2",
+            "title": "Choosing a Telescope",
+            "summary": "Refractors, Newtonians and Schmidt–Cassegrains for planets and deep sky, by aperture and budget."
+          },
+          {
+            "id": "polar-alignment",
+            "label": "4.3",
+            "title": "Polar Alignment",
+            "summary": "Getting within a few arcminutes of the pole with a polar scope, the drift method or plate solving."
+          },
+          {
+            "id": "automation-and-remote-control",
+            "label": "4.4",
+            "title": "Automation and Remote Control",
+            "summary": "Computer control, roof motors, rain sensors, and the interlock that stops the roof hitting the telescope."
+          }
+        ]
+      },
+      {
+        "id": "first-light",
+        "label": "5",
+        "title": "First Light",
+        "sections": [
+          {
+            "id": "the-first-night",
+            "label": "5.1",
+            "title": "The First Night",
+            "summary": "Cooling, collimation and focus, then the first targets to point at once the roof rolls back."
+          },
+          {
+            "id": "photographing-saturn",
+            "label": "5.2",
+            "title": "Photographing Saturn",
+            "summary": "A planetary camera and a Barlow, thousands of video frames, and stacking them into one sharp image."
+          },
+          {
+            "id": "the-observing-log",
+            "label": "5.3",
+            "title": "The Observing Log",
+            "summary": "Recording seeing, transparency and what you saw, and how a log makes you a better observer."
+          }
+        ]
+      }
+    ],
+    "appendices": [
+      {
+        "id": "observatory-reference",
+        "label": "A",
+        "title": "Reference",
+        "sections": [
+          {
+            "id": "materials-and-costs",
+            "label": "A.1",
+            "title": "Materials and Costs",
+            "summary": "Bills of materials for the pier, building and roof, with quantities and typical cost ranges."
+          },
+          {
+            "id": "targets-by-season",
+            "label": "A.2",
+            "title": "Targets by Season",
+            "summary": "Planets, clusters, nebulae and galaxies worth finding each season, with the gear each one needs."
+          },
+          {
+            "id": "the-maintenance-calendar",
+            "label": "A.3",
+            "title": "The Maintenance Calendar",
+            "summary": "Monthly, seasonal and yearly jobs, from greasing the roof rails to checking the pier bolts."
+          }
+        ]
+      }
+    ]
+  },
+  "writtenAtStart": []
+}
