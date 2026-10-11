@@ -149,7 +149,7 @@ the comparison live at the `library-comparison` tag.
   script remains.
 
 ### AL.5 — One design doc, updated docs
-- **Status:** doing (agent: a78c4b2b4e5150035)
+- **Status:** done
 - **Depends on:** AL.3b, AL.4
 - **Files:** `DESIGN.md`, `README.md`, `CLAUDE.md`, `src/ui/README.md`, `src/manual/README.md`,
   `src/library/README.md`, `src/agent/README.md`
@@ -166,7 +166,7 @@ the comparison live at the `library-comparison` tag.
   the comparison or deleted files.
 
 ### AL.6 — Final check
-- **Status:** todo
+- **Status:** doing (agent: a05965fb91f680793)
 - **Depends on:** AL.5
 - **Files:** anything, for small fixes only
 - **Do:**
