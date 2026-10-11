@@ -16,11 +16,12 @@ export function createFakeWriter(pace: FakePace = READER_PACE): SectionWriter {
   return {
     async *write(manual, sectionId, signal) {
       const body = await fakeBody(manual.id, sectionId);
+      const placeholder = body === PLACEHOLDER_BODY;
       await sleep(pace.firstChunkDelayMs, undefined, { signal });
       let start = 0;
       for (const end of chunkEnds(body)) {
         if (start > 0) await sleep(pace.chunkIntervalMs, undefined, { signal });
-        yield { text: body.slice(start, end), progress: end / body.length };
+        yield { text: body.slice(start, end), progress: end / body.length, placeholder };
         start = end;
       }
     },

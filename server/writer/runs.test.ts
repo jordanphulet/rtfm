@@ -12,6 +12,8 @@ import { fakeBody } from "./fake.ts";
 import { createRuns } from "./runs.ts";
 import { WriteFailed, type SectionWriter } from "./types.ts";
 
+const GEESE_ID = "negotiating-with-geese";
+
 function recorder() {
   const events: SectionEvent[] = [];
   return {
@@ -73,6 +75,35 @@ describe("runs", () => {
     expect(reader.text()).toBe(body);
     expect(await store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe(body);
     expect(await runs.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("written");
+  });
+
+  it("streams a placeholder to the end but stores nothing, so the section stays unwritten", async () => {
+    const writer = recordingWriter();
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const geese = (await store.getManual(GEESE_ID))!;
+    const sectionId = geese.chapters[0].sections[0].id;
+    const first = recorder();
+    const second = recorder();
+
+    await Promise.all([
+      runs.join(geese, sectionId, first.listener),
+      runs.join(geese, sectionId, second.listener),
+    ]);
+    await waitUntil(() => first.last() === "written" && second.last() === "written");
+
+    expect(writer.signals).toHaveLength(1);
+    expect(first.text()).toBe(await fakeBody(GEESE_ID, sectionId));
+    expect(second.text()).toBe(first.text());
+    expect(await store.getBody(GEESE_ID, sectionId)).toBeUndefined();
+    expect(await store.writtenSectionIds(GEESE_ID)).toEqual([]);
+    expect(await runs.statusOf(GEESE_ID, sectionId)).toBe("unwritten");
+    expect(runs.isWriting(GEESE_ID)).toBe(false);
+
+    const returning = recorder();
+    await runs.join(geese, sectionId, returning.listener);
+    await waitUntil(() => returning.last() === "written");
+    expect(writer.signals).toHaveLength(2);
+    expect(returning.text()).toBe(first.text());
   });
 
   it("knows whether a section of a manual is being written", async () => {

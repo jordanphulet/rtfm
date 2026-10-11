@@ -46,8 +46,9 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/config.ts`):
 
 - **`fake`** (the default): replays the sample manual's own text for the section after 1.2s, about
   20 characters every 85ms. A section that has no sample text (every section of the other six
-  manuals) gets a one-line placeholder instead, which is saved like any written section: delete
-  its file to have it written again. It costs nothing. Tests and screenshots always use it.
+  manuals) gets a one-line placeholder instead, which streams like any section but is never
+  saved: after a reload the section is unwritten again, and the library's count doesn't change.
+  It costs nothing. Tests and screenshots always use it.
 - **`bedrock`**: Claude Haiku 4.5 writes the section live through the model gateway: about
   4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a section.
 

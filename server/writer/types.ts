@@ -4,6 +4,7 @@ import type { StoredManual } from "../storage/types.ts";
 export interface WrittenChunk {
   text: string;
   progress: number;
+  placeholder?: boolean;
 }
 
 export interface SectionWriter {

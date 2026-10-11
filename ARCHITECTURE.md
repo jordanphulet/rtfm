@@ -292,8 +292,9 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 ```ts
 // server/writer/types.ts
 interface SectionWriter {
+  // The body is exactly all text joined.
   write(manual: StoredManual, sectionId: string, signal: AbortSignal):
-    AsyncIterable<{ text: string; progress: number }>;   // the body is exactly all text joined
+    AsyncIterable<{ text: string; progress: number; placeholder?: boolean }>;
 }
 class WriteFailed extends Error {
   reason: "budget" | "error";
@@ -311,7 +312,8 @@ word boundaries, the same pace as the librarian's canned replies.
   `scripts/chunk-ends.test.ts` checks that it chunks every seed body as `src/manual/streamer.ts`
   does.
 - `progress` is exact.
-- A section with no seed body gets a short placeholder.
+- A section with no seed body gets a short placeholder, with every chunk marked `placeholder`,
+  so the reader can be tried on any manual without storing anything.
 
 **`writer/bedrock.ts`** builds the prompt and streams it through the gateway. It takes the
 gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCharacters`.
@@ -393,7 +395,10 @@ reported without reading any secret.
 - **Listeners:** the first request starts the writer with its own `AbortController`. Later
   requests subscribe and get the backlog first.
 - **Ending:**
-  - When the writer finishes, `saveBody`, then `written`.
+  - When the writer finishes, `saveBody`, then `written`. If any chunk was marked
+    `placeholder`, nothing is stored and the entry is removed instead: the readers still get
+    `written`, but the section is unwritten again for the next request, and the library's count
+    doesn't change.
   - When the writer throws, `failed`, and the entry is removed. Nothing is stored.
   - **When the last listener disconnects, the run is aborted** at once, with no grace period,
     which aborts the Bedrock call (section 5), and the partial text is discarded. Reloading

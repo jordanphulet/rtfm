@@ -17,6 +17,7 @@ interface Run {
   listeners: Set<Listener>;
   controller: AbortController;
   writerFinished: boolean;
+  isPlaceholder: boolean;
 }
 
 const WRITTEN = "written";
@@ -76,6 +77,7 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
       listeners: new Set(),
       controller: new AbortController(),
       writerFinished: false,
+      isPlaceholder: false,
     };
     runs.set(key, run);
     void writeSection(key, run, manual, sectionId);
@@ -89,12 +91,17 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
         const at = run.text.length;
         run.text += chunk.text;
         run.progress = chunk.progress;
+        if (chunk.placeholder) run.isPlaceholder = true;
         broadcast(run, { event: "append", data: { at, text: chunk.text, progress: chunk.progress } });
       }
       signal.throwIfAborted();
       run.writerFinished = true;
-      await store.saveBody(manual.id, sectionId, run.text);
-      runs.set(key, WRITTEN);
+      if (run.isPlaceholder) {
+        runs.delete(key);
+      } else {
+        await store.saveBody(manual.id, sectionId, run.text);
+        runs.set(key, WRITTEN);
+      }
       broadcast(run, { event: "written", data: {} });
     } catch (error) {
       if (runs.get(key) === run) runs.delete(key);

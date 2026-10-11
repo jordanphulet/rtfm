@@ -27,6 +27,7 @@ describe("the fake writer", () => {
     expect(chunks.map((chunk) => chunk.text).join("")).toBe(body);
     expect(chunks.slice(0, -1).every((chunk) => chunk.text.length >= 20 && /\s$/.test(chunk.text))).toBe(true);
     expect(chunks.at(-1)!.progress).toBe(1);
+    expect(chunks.some((chunk) => chunk.placeholder)).toBe(false);
     let written = 0;
     for (const chunk of chunks) {
       written += chunk.text.length;
@@ -51,8 +52,9 @@ describe("the fake writer", () => {
     await expect(next).rejects.toThrow(/abort/i);
   });
 
-  it("writes a placeholder for a section with no seed body", async () => {
+  it("writes a placeholder, marked as one, for a section with no seed body", async () => {
     const chunks = await collect(fastFakeWriter().write(manual, "no-such-section", new AbortController().signal));
     expect(chunks.map((chunk) => chunk.text).join("")).toBe(await fakeBody(SAMPLE_ID, "no-such-section"));
+    expect(chunks.every((chunk) => chunk.placeholder)).toBe(true);
   });
 });
