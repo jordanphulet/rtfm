@@ -105,7 +105,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   `section:` ids are unique within a manual, the counts match, and `npm test` passes.
 
 ### LS.2 — The library API
-- **Status:** doing (agent: a7787dc03d333d164)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `server/**` except `server/seed/**`, `ARCHITECTURE.md`
 - **Do:**
@@ -126,9 +126,10 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
   manuals, deletes one, and it is still gone after a server restart.
 
 ### LS.3 — The reader takes a manual id
-- **Status:** todo
+- **Status:** doing (agent: a063064ecef217f10)
 - **Depends on:** LS.2
-- **Files:** `src/manual/**`, `src/reader/**`, `src/App.tsx`, `scripts/**`, `DESIGN.md`
+- **Files:** `src/manual/**`, `src/reader/**`, `src/App.tsx`, `scripts/**`, `DESIGN.md`,
+  `src/ui/README.md`, and `src/home/LedgerRow.tsx` (its link only)
 - **Do:**
   - Routes become `/read/:manualId` (the start page) and `/read/:manualId/:sectionId`. Bare
     `/read` and unknown paths go to `/`.
@@ -136,6 +137,7 @@ they are. Out of scope: creating manuals, renaming them, and the librarian using
     or streams.
   - An unknown manual shows the existing "Couldn’t open this manual" notice.
   - The screenshot script opens the sample manual by its id.
+  - A library row links to `/read/<its id>`, so opening a manual keeps working.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the reader shots are
   pixel-identical to before; live, two different manuals open, and moving between them keeps each
   one's sections and streams separate.
