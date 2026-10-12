@@ -225,7 +225,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   code, and the report gives this phase's Bedrock spend from the ledger.
 
 ### RL.10 — Librarian follow-ups from the final check
-- **Status:** todo
+- **Status:** doing (agent: a4e794f5243cae936)
 - **Depends on:** RL.9
 - **Files:** `server/agent/librarian/**`, `server/api/**`, `src/agent/**`, `src/home/**`,
   `DESIGN.md`, `ARCHITECTURE.md`, the READMEs for `src/agent` and `src/home`
@@ -287,7 +287,7 @@ are enforced by the harness instead of resting on instructions. When this phase 
   user approves the `CLAUDE.md` and `PROCESS.md` text before the commit.
 
 ### PR.2 — Rules the harness enforces
-- **Status:** todo
+- **Status:** doing (agent: a50d79c01a4a00dd7)
 - **Depends on:** PR.1, RL.9 (RL.8b and RL.9 also change `README.md` and may touch anything)
 - **Files:** `.claude/settings.json` (new), `scripts/hooks/**` (new), `PROCESS.md`, `README.md`
 - **Do:**
