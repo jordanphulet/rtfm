@@ -414,7 +414,7 @@ When this phase is done:
   across chunks, and every markdown context left alone.
 
 ### OH.3 — Full audit
-- **Status:** doing (auditors: a9116061f6bc38e38 server, a0f993b8e9edb7efe browser, a077e5cbd7fe94e0d docs and tests)
+- **Status:** done
 - **Depends on:** OH.1, OH.2
 - **Files:** none (read-only)
 - **Do:** auditors (the read-only role in `PROCESS.md`) review the whole repo, split by area so
@@ -444,3 +444,137 @@ When this phase is done:
     describe it.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass, and a cross-origin or
   non-JSON request is refused before any route runs.
+
+### OH.5 — Ledger, concurrency and shutdown (server audit)
+- **Status:** todo
+- **Depends on:** OH.4
+- **Files:** `server/storage/file-ledger.ts` and its test, `server/config.ts`, `server/gateway/**`,
+  `server/app.ts`, `server/main.ts`, `ARCHITECTURE.md`
+- **Do:**
+  - **A cut-off ledger line can stop the server starting.** Replay skips only an unterminated
+    last line; the next append glues onto it and makes a corrupt line that throws on every later
+    read (`createGateway`, `npm run usage`). Skip any line that doesn't parse, with a warning
+    (safe: a cut-off reserve means no call was made; a cut-off settle leaves its reserve at
+    worst case), and write a newline first when the file doesn't end in one. Test: cut off a
+    line, append, read.
+  - **Sections and the librarian starve each other.** `maxConcurrentCalls` equals
+    `maxConcurrentRuns` (3), so three writing sections leave no room for a librarian reply.
+    Set `maxConcurrentCalls` to `maxConcurrentRuns + 2`.
+  - **Shutdown doesn't wait for calls to settle.** Give the gateway a way to wait until running
+    calls have settled, and have `close()` await it before the process exits.
+  - The `CredentialsMissing` message names only the Bedrock writer; the librarian and planner
+    need the credentials too.
+  - Tests that race real timers with thin margins (`bedrock-client.test.ts` around line 436:
+    200ms timeout against 100ms gaps; `gateway.test.ts` around line 329) fail under load: widen
+    the margins or drive time with injected timers.
+- **Done when:** `npm run build` and `npm test` pass, with tests for each change; ARCHITECTURE.md
+  matches.
+
+### OH.6 — Server cleanups and test gaps (server and tests audits)
+- **Status:** todo
+- **Depends on:** OH.5
+- **Files:** `server/**`, `ARCHITECTURE.md`
+- **Do:**
+  - **Duplication:** one exclusive-create helper in `storage/files.ts` for `lock.ts` and
+    `saveBody`; one `?freeze` parser (`previewFraction`, so `?freeze=abc` on a section stream
+    is a 400); one `<`-escaping helper for both prompts; one price-table check (for example
+    `createGateway` taking a client factory); the manual route reads written ids once with
+    `writtenSectionIds` instead of every body.
+  - **Shared test helpers** in `server/testing.ts`: one generic `collect`, one
+    `testGatewayConfig(overrides)`, one SSE event reader, replacing the copies.
+  - **Test gaps:** a body over the size limit (400) and a handler that throws, in the adapter;
+    the written-run marker in `runs.ts` (a test that fails if it's removed); `createManual`'s
+    cleanup after a failed write; seeds whose `manual.id` matches the folder and whose
+    `writtenAtStart` ids exist; `main.ts` releasing the lock on SIGTERM and exiting 1 when the
+    folder is in use.
+- **Done when:** `npm run build` and `npm test` pass and no behaviour changes apart from the
+  stricter `?freeze`.
+
+### OH.7 — The reader: following, navigation, focus and accessibility (browser audit)
+- **Status:** todo
+- **Depends on:** OH.3
+- **Files:** `src/reader/**`, `src/ui/Sheet.tsx`, `src/ui/README.md`, `src/manual/**`,
+  `DESIGN.md`, `package.json` and `package-lock.json` (a DOM test environment only)
+- **Do:**
+  - **Follow stops following past 99%.** It only scrolls when `progress` changes, and Claude's
+    progress is capped at 0.99 while text keeps arriving. Depend on the text length too.
+  - **Deep links to a heading or footnote land at the top.** On mount, scroll to the hash's
+    element if it exists.
+  - **Start-page focus:** after a link navigation to the start page, focus its H1 (or the hash's
+    chapter heading), as sections do.
+  - **Contents sheet focus on the start page (phone):** focus goes nowhere because the fallback
+    picks the hidden Library link. Focus the `[aria-current='page']` row, and skip invisible
+    elements in the sheet's fallback and focus trap.
+  - **Arrow keys with the sheet open** navigate behind it; ignore them while the sheet is open.
+  - **Status in words:** the pager, "Referenced here" and the compact bar show a status ring
+    with no words; add the visually hidden status word, as the TOC does.
+  - **Cross-reference preview (WCAG 1.4.13):** Escape dismisses it, and it can be hovered.
+  - Small: give the pager's `nav` its own label; stop outline focus rings being clipped; one
+    shared "all sections in reading order" helper from `src/manual`; one external-link helper
+    for `Prose` and `ReplyMarkdown`.
+  - **Tests:** add a DOM test environment if needed (for example happy-dom) and cover follow,
+    scroll and focus on navigation (push, back, hash), the wrap rule, `markdownScan`, the sheet's
+    trap, Escape and fallback, and the arrow-key exclusions.
+  - DESIGN.md describes what changed.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; reader shots change only
+  where a fix is visible, and each change is explained.
+
+### OH.8 — The landing page: coming back, the phone delete, and the delete flow (browser audit)
+- **Status:** todo
+- **Depends on:** OH.7 (both change `DESIGN.md`)
+- **Files:** `src/home/**`, `src/library/**`, `src/agent/**`, `src/ui/README.md`, `DESIGN.md`
+- **Do:**
+  - **Coming back from the reader on phone reopens the conversation sheet** over the library,
+    because the "open on load" flags are per mount. Make them once per page load, as DESIGN.md
+    says.
+  - **The library opens at the reader's scroll position;** scroll to the top on a push
+    navigation to `/`.
+  - **On phone the delete confirmation can cover its own row.** Below 768px, scroll the row so it
+    sits above the confirmation.
+  - **`HomePage` is about 200 lines;** extract the delete flow into a `useDeleteFlow` hook, and
+    read the current manuals (not a stale list) after the delete's `await`.
+  - Small: one "n manuals" wording for `LibraryHead` and `PhoneAgent`; the `src/ui/README.md`
+    dialog example matches the real dialog (Delete manual, then Keep it; curly quotes).
+  - **Tests** for `act` (actions ignored while the confirmation is open, one refresh for an
+    unknown manual, a created manual refreshing the library, focus return), `useStickToBottom`
+    and `PhoneAgent`'s open-on-load.
+  - DESIGN.md describes what changed.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; home shots change only
+  where a fix is visible, and each change is explained.
+
+### OH.9 — A faster, steadier test suite and shot script (tests audit)
+- **Status:** todo
+- **Depends on:** OH.4 (both change `scripts/screenshots.ts`)
+- **Files:** `src/manual/repair.test.tsx`, `scripts/**` except `scripts/hooks/**`
+- **Do:**
+  - **`repair.test.tsx` times out when three suites run at once** (it renders once per
+    character). Split the seed test with `it.each`, render only when the repaired output
+    changes or sample the cut points, and set an explicit timeout on the character sweep.
+  - **`npm run shot` can't run twice at once:** it uses a fixed port and deletes all of
+    `shots/`. Listen on any free port and read it back; let the output folder be overridden.
+    Create the temporary data folder inside the `try`. Reuse the config's proxy settings (so
+    its `configure` hook applies). Use one name for the phone size in both shot sets.
+- **Done when:** three `npm test` runs at once all pass; two `npm run shot` runs at once both
+  pass with separate output folders; the shots are unchanged apart from the size name.
+
+### OH.10 — Docs: one owner per fact, shorter design and architecture docs (all audits)
+- **Status:** todo
+- **Depends on:** OH.5, OH.6, OH.7, OH.8, OH.9
+- **Files:** `ARCHITECTURE.md`, `DESIGN.md`, `src/*/README.md`, `research/**`, comments in
+  `server/**` and `src/**` (not `README.md`, `CLAUDE.md` or `PROCESS.md`)
+- **Do:**
+  - **Each fact in one place:** token values live in `tokens.css` and `src/ui/README.md`
+    (DESIGN keeps the reasons); the data model lives in `server/api/types.ts`; library and agent
+    behaviour live in their READMEs; the reference matcher's rule is three or four lines, its
+    cases in the test; ARCHITECTURE §9 becomes a pointer to `src/manual/README.md`.
+  - **Cut what drifts:** the test inventories, the file-by-file "Build structure" lists, code
+    snippets that copy source files, and the paraphrase of the librarian's prompt. Keep every
+    rule and every reason a reader needs. Aim for about 15–20% shorter.
+  - **Fix the drift the audits found:** planning time (one figure, one place); token use lists;
+    Mono weights; outline rows slide as well as fade; `Turn.tsx` styling; the "no column header"
+    reason; `append` at a mismatched `at` fails the section; `?agentFreeze=thinking` makes no
+    request; inconsistent token and timing numbers; wording that describes history or a
+    counterfactual; `research/aws-hosting.md`'s references to deleted prototypes and task ids;
+    a date on `research/lambda-and-dynamodb.md`'s status line.
+- **Done when:** the docs match the code, nothing is stated in two places, `npm run build` and
+  `npm test` pass, and the report gives each doc's length before and after.
