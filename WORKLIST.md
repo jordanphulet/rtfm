@@ -360,3 +360,69 @@ user says its step is done.
   under $0.50, and pick each job's model.
 - **Done when:** the research doc records the results and status, and `server/config.ts` uses
   the chosen models.
+
+---
+
+## Hardening
+
+Two fixes found while running the app, then a full read-only audit that turns into fix tasks.
+When this phase is done:
+
+- only one server at a time can use a data folder, so the spending caps can't be doubled;
+- sections written by Claude use typographic quotes and apostrophes, like the seed manuals;
+- the whole repo has been audited, and the findings worth fixing are fixed.
+
+### Rules for this phase
+
+- **AWS credentials come only from `.env.local`.** There are profiles in `~/.aws/config`, and
+  they **must never be used**. Never read, print, copy or edit `.env.local`.
+- **No real Bedrock calls** except where a task says so. Tests use fake models.
+- **`.data/` is the user's data.** Never start a server on it in this phase (the user's dev
+  server may be running there), and never delete or edit the ledger.
+
+### OH.1 — One server per data folder
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/storage/**`, `server/app.ts`, `server/main.ts`, `server/dev.ts`, their
+  tests, `README.md`, `ARCHITECTURE.md`
+- **Do:**
+  - When the server starts it takes a lock on its data folder (for example a `server.lock`
+    file holding its PID, created so that two starts can't both win). If another live process
+    holds it, the server refuses to start with a clear message naming the folder and the PID.
+    A lock left by a process that no longer exists is taken over.
+  - The lock is released when the server stops, including on SIGINT and SIGTERM through
+    `dev.ts`.
+  - Tests and the screenshot script, which use their own temporary folders, keep working.
+  - README.md and ARCHITECTURE.md say one server per data folder, enforced.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover a second start
+  refused, a stale lock taken over, and the lock released on stop.
+
+### OH.2 — Typographic quotes while Claude writes
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/writer/**`, `ARCHITECTURE.md`, `DESIGN.md`
+- **Do:**
+  - The Bedrock writer turns straight quotes and apostrophes into typographic ones (“ ” ‘ ’)
+    as the text streams, the way the seed manuals are written.
+  - Never inside code blocks, inline code, link targets, HTML-like syntax or anywhere markdown
+    needs a straight character. Hold back only the few characters at a chunk's edge needed to
+    decide, so text already shown never changes and the stored body stays exactly the streamed
+    text.
+  - The fake writer is unchanged (the seed text is already typographic).
+- **Done when:** `npm run build` and `npm test` pass; tests cover opening and closing quotes,
+  apostrophes in contractions and possessives (including after a closing quote), quotes split
+  across chunks, and every markdown context left alone.
+
+### OH.3 — Full audit
+- **Status:** todo
+- **Depends on:** OH.1, OH.2
+- **Files:** none (read-only)
+- **Do:** auditors (the read-only role in `PROCESS.md`) review the whole repo, split by area so
+  they can run side by side: the server (`server/`), the browser (`src/`) and the rest (docs,
+  tests, `scripts/`, `CLAUDE.md`, `PROCESS.md`). Each looks for bugs, security and spending
+  risks, dead code, duplicated logic, doc drift against the code and against
+  `CLAUDE.md`'s rules, missing or weak tests, and accessibility problems, and reports findings
+  ranked by severity with file and line. Each finding worth fixing becomes a task in this phase,
+  added by the orchestrator.
+- **Done when:** every area is audited and its findings are either added as tasks or listed as
+  not worth fixing, with a reason, in the orchestrator's summary to the user.
