@@ -384,7 +384,7 @@ When this phase is done:
 - **Status:** todo
 - **Depends on:** —
 - **Files:** `server/storage/**`, `server/app.ts`, `server/main.ts`, `server/dev.ts`, their
-  tests, `README.md`, `ARCHITECTURE.md`
+  tests, `ARCHITECTURE.md` (not `README.md`, which holds PR.2's uncommitted edits)
 - **Do:**
   - When the server starts it takes a lock on its data folder (for example a `server.lock`
     file holding its PID, created so that two starts can't both win). If another live process
@@ -393,13 +393,13 @@ When this phase is done:
   - The lock is released when the server stops, including on SIGINT and SIGTERM through
     `dev.ts`.
   - Tests and the screenshot script, which use their own temporary folders, keep working.
-  - README.md and ARCHITECTURE.md say one server per data folder, enforced.
+  - ARCHITECTURE.md says one server per data folder, enforced.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover a second start
   refused, a stale lock taken over, and the lock released on stop.
 
 ### OH.2 — Typographic quotes while Claude writes
 - **Status:** todo
-- **Depends on:** —
+- **Depends on:** OH.1 (both change `ARCHITECTURE.md`)
 - **Files:** `server/writer/**`, `ARCHITECTURE.md`, `DESIGN.md`
 - **Do:**
   - The Bedrock writer turns straight quotes and apostrophes into typographic ones (“ ” ‘ ’)
