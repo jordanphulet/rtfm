@@ -471,7 +471,7 @@ When this phase is done:
   matches.
 
 ### OH.6 — Server cleanups and test gaps (server and tests audits)
-- **Status:** todo
+- **Status:** doing (agent: a6bd058edb8899903)
 - **Depends on:** OH.5
 - **Files:** `server/**`, `ARCHITECTURE.md`
 - **Do:**
