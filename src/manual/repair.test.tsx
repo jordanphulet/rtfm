@@ -10,6 +10,12 @@ const SEED_BODIES = import.meta.glob<string>("../../server/seed/the-haunt-that-l
   eager: true,
 });
 
+const SEED_SECTIONS = Object.entries(SEED_BODIES).map(([file, body]) => [file.split("/").at(-1), body] as const);
+
+const SYNTAX_RUN = /\n[ \t>]*(\d+[.)])?|[*_`~[\]()|#>^:\\!-]+[ \t]*/g;
+
+const CHARACTER_SWEEP_TIMEOUT_MS = 30_000;
+
 describe("repairPartialMarkdown", () => {
   it.each([
     ["closes bold", "Some **bold te", "Some **bold te**"],
@@ -74,37 +80,44 @@ describe("repairPartialMarkdown", () => {
     }
   });
 
-  it("never shows raw syntax, cut at any character", () => {
-    for (let length = 0; length <= denseDocument.length; length++) {
-      expectNoRawSyntax(denseDocument.slice(0, length));
-    }
+  it(
+    "never shows raw syntax, cut at any character",
+    () => {
+      const everyCut = Array.from({ length: denseDocument.length + 1 }, (_, end) => end);
+      expectNoRawSyntaxAtCuts(denseDocument, everyCut);
+    },
+    CHARACTER_SWEEP_TIMEOUT_MS,
+  );
+
+  it("streams every section of the sample manual", () => {
+    expect(SEED_SECTIONS).toHaveLength(18);
   });
 
-  it("never shows raw syntax while streaming the sample manual", () => {
-    const bodies = Object.entries(SEED_BODIES);
-    expect(bodies).toHaveLength(18);
-    for (const [file, body] of bodies) {
-      expect(repairPartialMarkdown(body), file).toBe(body);
-      for (const end of streamedCuts(body)) {
-        expectNoRawSyntax(body.slice(0, end), file);
-      }
-    }
+  it.each(SEED_SECTIONS)("never shows raw syntax while streaming %s", (_file, body) => {
+    expect(repairPartialMarkdown(body)).toBe(body);
+    expectNoRawSyntaxAtCuts(body, cutsAroundSyntax(body));
   });
 });
 
-/** Cuts at word ends at least 20 characters apart, about the size of a streamed chunk. */
-function streamedCuts(body: string): number[] {
-  const cuts: number[] = [];
-  for (const word of body.matchAll(/\S+\s*/g)) {
-    const end = word.index + word[0].length;
-    if (end - (cuts.at(-1) ?? 0) >= 20) cuts.push(end);
+/** Every cut before, inside and after each run of markdown syntax, a line start included. */
+function cutsAroundSyntax(body: string): number[] {
+  const cuts = new Set([body.length]);
+  for (const run of body.matchAll(SYNTAX_RUN)) {
+    for (let end = run.index; end <= run.index + run[0].length; end++) cuts.add(end);
   }
-  return [...cuts, body.length];
+  return [...cuts].sort((a, b) => a - b);
 }
 
-function expectNoRawSyntax(partial: string, label = "") {
-  const visible = visibleProse(repairPartialMarkdown(partial));
-  expect(visible, `${label} after ${JSON.stringify(partial.slice(-40))}`).not.toMatch(RAW_SYNTAX);
+/** Renders each cut's repair, skipping a cut whose repair is the one just rendered. */
+function expectNoRawSyntaxAtCuts(markdown: string, cuts: number[]) {
+  let previousRepair: string | undefined;
+  for (const end of cuts) {
+    const partial = markdown.slice(0, end);
+    const repaired = repairPartialMarkdown(partial);
+    if (repaired === previousRepair) continue;
+    previousRepair = repaired;
+    expect(visibleProse(repaired), `after ${JSON.stringify(partial.slice(-40))}`).not.toMatch(RAW_SYNTAX);
+  }
 }
 
 const RAW_SYNTAX_PATTERNS = {

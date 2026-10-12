@@ -20,19 +20,28 @@ export type CaptureGroup = { options: BrowserContextOptions; captures: Capture[]
 
 type ShotResult = { file: string; saved: boolean; errors: string[] };
 
-export async function startViteServer(port: number, apiPort: number): Promise<ViteDevServer> {
+/**
+ * Starts Vite on a free port, with `vite.config.ts` merged under these options: its `/api` proxy
+ * keeps every setting but the target, which becomes this run's API server.
+ */
+export async function startViteServer(apiPort: number): Promise<ViteDevServer> {
   const server = await createServer({
     server: {
-      port,
-      strictPort: true,
+      port: 0,
       forwardConsole: false,
-      proxy: { "/api": { target: `http://127.0.0.1:${apiPort}`, changeOrigin: false } },
+      proxy: { "/api": { target: `http://127.0.0.1:${apiPort}` } },
     },
     clearScreen: false,
     customLogger: createLoggerWithoutRepeatedErrors(),
   });
   await server.listen();
   return server;
+}
+
+export function localUrl(server: ViteDevServer): string {
+  const url = server.resolvedUrls?.local[0];
+  if (!url) throw new Error("Vite isn't listening on a local address");
+  return url;
 }
 
 export async function captureAll(baseURL: string, groups: CaptureGroup[]): Promise<ShotResult[]> {

@@ -8,10 +8,9 @@ import type { FailureReason, ManualSummary } from "../server/api/types.ts";
 import { sectionsInReadingOrder } from "../server/storage/manual.ts";
 import { startServer } from "../server/app.ts";
 import { config } from "../server/config.ts";
-import { captureAll, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
+import { captureAll, localUrl, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
 
-const PORT = 5174;
-const SHOTS_DIR = "shots";
+const SHOTS_DIR = process.argv[2] ?? "shots";
 const READER_DIR = `${SHOTS_DIR}/reader`;
 const HOME_DIR = `${SHOTS_DIR}/home`;
 const TYPED_MESSAGE = "Delete the manual about birthday parties";
@@ -54,7 +53,7 @@ type Size = {
 
 const READER_SIZES: Size[] = [
   { name: "desktop", options: DESKTOP },
-  { name: "mobile", options: PHONE, tocCollapsed: true },
+  { name: "phone", options: PHONE, tocCollapsed: true },
   {
     name: "desktop-reduced",
     options: { ...DESKTOP, reducedMotion: "reduce" },
@@ -67,23 +66,31 @@ const HOME_SIZES: Size[] = [
   { name: "phone", options: PHONE },
 ];
 
-const dataDir = await mkdtemp(path.join(tmpdir(), "rtfm-shots-"));
-const apiServer = await startServer({ ...config, port: 0, dataDir, models: "fake" });
+let dataDir: string | undefined;
 try {
-  const viteServer = await startViteServer(PORT, apiServer.port);
-  try {
-    process.exitCode = (await captureShots()) ? 0 : 1;
-  } finally {
-    await viteServer.close();
-  }
+  dataDir = await mkdtemp(path.join(tmpdir(), "rtfm-shots-"));
+  process.exitCode = (await captureWithServers(dataDir)) ? 0 : 1;
 } finally {
-  await apiServer.close();
-  await rm(dataDir, { recursive: true, force: true });
+  if (dataDir) await rm(dataDir, { recursive: true, force: true });
 }
 
-async function captureShots(): Promise<boolean> {
+async function captureWithServers(dataDir: string): Promise<boolean> {
+  const apiServer = await startServer({ ...config, port: 0, dataDir, models: "fake" });
+  try {
+    const viteServer = await startViteServer(apiServer.port);
+    try {
+      return await captureShots(localUrl(viteServer));
+    } finally {
+      await viteServer.close();
+    }
+  } finally {
+    await apiServer.close();
+  }
+}
+
+async function captureShots(baseUrl: string): Promise<boolean> {
   await clearShots();
-  const results = await captureAll(`http://localhost:${PORT}`, [
+  const results = await captureAll(baseUrl, [
     ...captureGroups(READER_DIR, READER_SIZES, readerShots()),
     ...captureGroups(HOME_DIR, HOME_SIZES, homeShots()),
   ]);
