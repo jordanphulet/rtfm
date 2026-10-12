@@ -154,7 +154,8 @@ Out of scope: web access for any model, the passphrase, and deploying.
 - **Files:** `server/agent/**`, `server/api/**`, `server/storage/**`, `server/app.ts`,
   `server/config.ts`, `server/gateway/**` (a new job), `src/agent/**`, `src/home/**`,
   `src/library/**`, `DESIGN.md`, `scripts/**`, `ARCHITECTURE.md`, the READMEs for `src/agent` and
-  `src/library`, and `README.md`'s lines about the librarian
+  `src/library`, and `README.md`'s lines about the librarian; `server/writer/prompt.ts` and the
+  writer tests' configs; `vite.config.ts` and a new constants module for `API_PORT`
 - **Do:**
   - The librarian's create tool hands the user's request to a planner: Claude writes the
     manual's title, subtitle, voice and table of contents (chapters, appendices, a summary for
