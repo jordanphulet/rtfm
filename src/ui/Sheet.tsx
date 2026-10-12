@@ -28,7 +28,7 @@ export function Sheet({ open, onClose, focusScope, focusOnOpen, className, child
   useEffect(() => {
     const sheet = sheetRef.current;
     if (!open || !sheet) return;
-    (focusOnOpen?.(sheet) ?? sheet.querySelector<HTMLElement>(FOCUSABLE))?.focus({ preventScroll: true });
+    (focusOnOpen?.(sheet) ?? focusableIn(sheet)[0])?.focus({ preventScroll: true });
   }, [open]);
 
   useEffect(() => {
@@ -55,8 +55,16 @@ export function Sheet({ open, onClose, focusScope, focusOnOpen, className, child
   );
 }
 
+function focusableIn(container: HTMLElement): HTMLElement[] {
+  return [...container.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(isVisible);
+}
+
+function isVisible(element: HTMLElement): boolean {
+  return element.checkVisibility?.({ visibilityProperty: true }) ?? element.getClientRects().length > 0;
+}
+
 function keepFocusInside(event: KeyboardEvent, container: HTMLElement) {
-  const focusable = [...container.querySelectorAll<HTMLElement>(FOCUSABLE)];
+  const focusable = focusableIn(container);
   const first = focusable[0];
   const last = focusable.at(-1);
   const active = document.activeElement;

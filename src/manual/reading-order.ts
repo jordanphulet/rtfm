@@ -1,10 +1,10 @@
 import type { Chapter, Manual, Section } from "./types";
 
-function chaptersInReadingOrder(manual: Manual): Chapter[] {
+export function chaptersInReadingOrder(manual: Manual): Chapter[] {
   return [...manual.chapters, ...manual.appendices];
 }
 
-function sectionsInReadingOrder(manual: Manual): Section[] {
+export function sectionsInReadingOrder(manual: Manual): Section[] {
   return chaptersInReadingOrder(manual).flatMap((chapter) => chapter.sections);
 }
 

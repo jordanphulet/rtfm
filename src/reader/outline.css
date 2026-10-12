@@ -49,6 +49,11 @@
   padding-left: calc(var(--space-3) + var(--outline-number-col) + var(--space-2));
 }
 
+.reader .outline-list a:focus-visible,
+.reader .outline-refs a:focus-visible {
+  outline-offset: calc(-1 * var(--focus-offset));
+}
+
 .reader .outline-list a:hover {
   color: var(--ink-strong);
 }

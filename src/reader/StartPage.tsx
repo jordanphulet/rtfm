@@ -1,26 +1,32 @@
-import { useLayoutEffect } from "react";
-import { Link, useLocation } from "react-router";
-import { useManual, type Chapter } from "../manual";
+import { Link } from "react-router";
+import { chaptersInReadingOrder, sectionsInReadingOrder, useManual, type Chapter } from "../manual";
 import { StatusRing } from "../ui";
-import { allSections, chapterAnchor, sectionPath } from "./manualParts";
+import { chapterAnchor, sectionPath } from "./manualParts";
 import { ManualOutline } from "./Outline";
 import { Shell } from "./Shell";
 import { STATUS_WORDS } from "./statusWords";
+import { useArrival } from "./useArrival";
 import { useManualId } from "./useManualId";
 import "./start-page.css";
 
+const START_TITLE_ID = "start-title";
+
 export function StartPage() {
   const manual = useManual(useManualId());
-  const sections = allSections(manual);
+  const sections = sectionsInReadingOrder(manual);
   const writtenCount = sections.filter((section) => section.status === "written").length;
   const first = manual.chapters[0].sections[0];
-  useScrollToHash();
+  useArrival(
+    (hashTarget) => hashTarget?.querySelector<HTMLElement>(".start-chapter-title") ?? document.getElementById(START_TITLE_ID),
+  );
 
   return (
-    <Shell next={first} asideLabel="In this manual" aside={<ManualOutline chapters={[...manual.chapters, ...manual.appendices]} />}>
+    <Shell next={first} asideLabel="In this manual" aside={<ManualOutline chapters={chaptersInReadingOrder(manual)} />}>
       <div className="start">
         <header className="start-head">
-          <h1>{manual.title}</h1>
+          <h1 id={START_TITLE_ID} tabIndex={-1}>
+            {manual.title}
+          </h1>
           <p className="start-subtitle">{manual.subtitle}</p>
           <p className="start-meta">
             <span>{counted(manual.chapters.length, "chapter", "chapters")}</span> ·{" "}
@@ -51,7 +57,7 @@ function ChapterBlocks({ chapters }: { chapters: Chapter[] }) {
   const manualId = useManualId();
   return chapters.map((chapter) => (
     <section key={chapter.id} id={chapterAnchor(chapter)} className="start-chapter">
-      <h2 className="start-chapter-title">
+      <h2 className="start-chapter-title" tabIndex={-1}>
         <span className="start-label">{chapter.label}</span> {chapter.title}
       </h2>
       <ol className="start-sections">
@@ -73,12 +79,4 @@ function ChapterBlocks({ chapters }: { chapters: Chapter[] }) {
       </ol>
     </section>
   ));
-}
-
-function useScrollToHash() {
-  const { hash } = useLocation();
-  useLayoutEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
-    else window.scrollTo(0, 0);
-  }, [hash]);
 }

@@ -8,7 +8,7 @@ the reasoning behind every value are in `DESIGN.md`.
 ## Using it
 
 ```tsx
-import { ExternalLink, ReplyMarkdown, Sheet, StatusRing } from "../ui";
+import { ExternalLink, MarkdownLink, ReplyMarkdown, Sheet, StatusRing } from "../ui";
 
 export default function Home() {
   return <div className="ui home">…</div>;
@@ -43,6 +43,7 @@ export default function Home() {
 | `StatusRing.tsx`, `status-ring.css` | The state ring |
 | `Sheet.tsx`, `sheet.css` | A panel with a focus trap |
 | `ExternalLink.tsx` | A link that leaves the app |
+| `MarkdownLink.tsx` | The link for rendered markdown: an `ExternalLink` for a web URL, else a plain `<a>` |
 | `ReplyMarkdown.tsx` | Short markdown for the agent's replies |
 
 ## Tokens
@@ -205,8 +206,11 @@ interface SheetProps extends Omit<ComponentProps<"div">, "ref"> {
 ```
 
 "Focusable" means links with an `href`, and buttons, inputs, textareas and selects that aren't
-disabled, plus any element with a `tabindex` other than `-1`. Other props (`id`, `className`,
-`role`, `aria-*`, `onClick`, …) go to the panel's `div` (class `sheet`).
+disabled, plus any element with a `tabindex` other than `-1`, as long as it is visible
+(`checkVisibility()`, counting `visibility: hidden`): an element hidden with CSS, such as a link
+the sheet leaves out at one width, is never focused on open and never an end of the Tab loop.
+Other props (`id`, `className`, `role`, `aria-*`, `onClick`, …) go to the panel's `div` (class
+`sheet`).
 
 ```tsx
 <Sheet
@@ -253,6 +257,17 @@ and a visually hidden "(opens in a new tab)". Takes every `<a>` prop; a `classNa
 
 ```tsx
 <ExternalLink href="https://example.com">IBM Plex</ExternalLink>
+```
+
+### `MarkdownLink`
+
+The `a` for rendered markdown. An `http(s)` URL renders as an `ExternalLink` (which brings its own
+`.link` look); any other `href` as a plain `<a>` in the same tab, whose class is `inAppClassName`
+when given, else the link's own `className`. Takes every `<a>` prop. The reader's prose and
+`ReplyMarkdown` both use it.
+
+```tsx
+<MarkdownLink href={href} inAppClassName="link">{children}</MarkdownLink>
 ```
 
 ### `ReplyMarkdown`

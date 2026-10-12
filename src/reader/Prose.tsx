@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type ComponentProps, type CSSProperties } from "react";
 import type { Components, ExtraProps } from "react-markdown";
 import { Markdown } from "../manual";
-import { ExternalLink } from "../ui";
+import { MarkdownLink } from "../ui";
 import { CodeBlock } from "./CodeBlock";
 import type { Heading } from "./markdownScan";
 import { SectionLink } from "./SectionLink";
@@ -12,7 +12,6 @@ type HastElement = NonNullable<ExtraProps["node"]>;
 type HastNode = HastElement | HastElement["children"][number];
 
 const FOOTNOTES_LABEL_ID = "footnote-label";
-const WEB_URL = /^https?:\/\//;
 
 const HeadingIdsByLine = createContext(new Map<number, string>());
 
@@ -52,26 +51,15 @@ function headingWithId(Tag: "h3" | "h4") {
   };
 }
 
-function ProseLink({ href = "", children, ...props }: ComponentProps<"a">) {
+function ProseLink({ children, ...props }: ComponentProps<"a">) {
   if ("data-footnote-backref" in props) {
     return (
-      <a href={href} {...props} className="footnote-backref">
+      <a {...props} className="footnote-backref">
         ↑
       </a>
     );
   }
-  if (!WEB_URL.test(href)) {
-    return (
-      <a href={href} {...props}>
-        {children}
-      </a>
-    );
-  }
-  return (
-    <ExternalLink href={href} {...props}>
-      {children}
-    </ExternalLink>
-  );
+  return <MarkdownLink {...props}>{children}</MarkdownLink>;
 }
 
 function ProseTable({ node: _node, ...props }: ComponentProps<"table"> & ExtraProps) {

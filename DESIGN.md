@@ -436,7 +436,8 @@ The head is identical in every state, so nothing in it ever reflows.
   the title, and rings form a status column at the right edge. 14/20 wdth 85; label ink-faint,
   tabular.
 - **Hover:** `--ground-hover`, title to ink-strong, `--dur-quick`. **Focus:** the cue ring with a
-  −2px offset, inside the scroll container so it isn't clipped.
+  −2px offset, inside the scroll container so it isn't clipped. After its ring, each row states its
+  status in words for screen readers (`, being written`).
 - **You are here:** the current row gets `--ground-tint`, a 2px ink-strong bar at its left edge,
   title ink-strong 600, label ink-muted, `aria-current="page"`. The TOC scrolls (its own
   `scrollTop`, never the page) to bring the current row into view when it is out of comfortable
@@ -457,8 +458,11 @@ The head is identical in every state, so nothing in it ever reflows.
   While writing, new rows fade in over `--dur-base`. Rows only ever append. Before the first
   heading, a hint reads `Headings appear as they’re written.`
 - **Referenced here** (32px below): every `section:` link in the text, de-duplicated, in order of
-  appearance: label (tabular, ink-faint) · title · ring. It tells the reader where this section
-  points and what is still unwritten, and also grows during streaming.
+  appearance: label (tabular, ink-faint) · title · ring, with the status in words for screen
+  readers. It tells the reader where this section points and what is still unwritten, and also
+  grows during streaming.
+- Its links take the focus ring inside (−2px), as the TOC's do, so the column's scroll doesn't clip
+  it.
 
 ### Start page (`/read/<manual>`)
 
@@ -473,7 +477,8 @@ The annotated contents, in the same shell. A reference is entered through its in
   - **Begin at 1.1 Why a Haunt Should Listen ›**, 17/28 600 ink-strong with a 2px cue underline
     (cue text on hover).
 - **Contents** (width 720), 48px below the head. Each chapter starts with a 1px `--rule` line and
-  24px of space, then a heading row (20/28 600, label in the 48px label column). Section rows sit
+  24px of space (a link to it stops 24px below the top, or 16px below the compact header), then a
+  heading row (20/28 600, label in the 48px label column). Section rows sit
   on a grid `48px label | title + summary | 136px status`: title 17/28 500 (ink-strong, or
   ink-muted while unwritten), summary 14/20 ink-muted, status as ring + word in micro mono (cue
   while writing). The whole row is the link: padding 8/12, hover `--ground-tint` and title to cue.
@@ -503,9 +508,12 @@ tables and deserve the same craft.
 - The ends of the manual are never empty: before 1.1 the cell reads `Start of the manual` /
   `Back to contents`, after B.2 `End of the manual` / `Back to contents`.
 - Phone: stacked, full width, 24px apart, 44px+ targets.
+- It is a `nav` labelled `Continue reading`, apart from the eyebrow's `Previous and next section`.
+  Each title's ring is followed by its status in words for screen readers (`, being written`).
 - Also: the eyebrow's `‹ 2.3  3.1 ›` (1024px and up), the header links (below 1024px), and the
   **← / →** keys. The keys ignore auto-repeat and modifier keys, and do nothing while focus is in a
-  text field, a code block or a table, where arrows already scroll.
+  text field, a code block or a table, where arrows already scroll, or while the contents sheet is
+  open, so they never move the page behind it.
 
 ### Keyboard and focus
 
@@ -514,12 +522,21 @@ tables and deserve the same craft.
   title, rows) → main (eyebrow links, body links, Copy, Follow or Try again, pager) → outline.
 - Focus ring everywhere: `outline: var(--focus-ring); outline-offset: var(--focus-offset)` (2px
   cue, 2px out), radius 2, or the control's own radius where it has one (offset −2px inside the
-  TOC). `:focus-visible` only.
-- Route change to a section: scroll to the top. After link navigation (a router PUSH, not a fresh
-  load) focus moves to the H1 (`tabindex=-1`, `preventScroll`), so a fresh load still starts at
-  the skip link. The start page scrolls to the chapter in the URL hash, or to the top.
-- Contents sheet: focus moves to the current row on open, Tab is contained in the header and
-  sheet, Esc closes it and returns focus to the location button, and choosing a link closes it.
+  TOC and the outline, whose scroll containers would clip it). `:focus-visible` only.
+- Arriving at a page (`useArrival.ts`, once per section or start page): it scrolls to the element
+  named in the URL hash (a heading or footnote of the section, a chapter of the start page), or to
+  the top when there is none. After link navigation (a router PUSH, not a fresh load or Back),
+  focus moves without scrolling (`preventScroll`) to the H1 of a section, and on the start page to
+  the hash's chapter heading or else the H1 (all `tabindex=-1`, with no focus ring). A fresh load
+  still starts at the skip link. Links within a page (the outline, footnotes) are left to the
+  browser, so Back returns to where the reader was, and so is a link to the page already shown
+  (the manual title on the start page, the current section's row): it neither scrolls nor moves
+  focus.
+- Contents sheet: focus moves on open to the current entry (`aria-current="page"`: the current
+  section's row, or the manual title on the start page). Tab is contained in the visible controls
+  of the header and sheet (the sheet's hidden `Library` link is skipped), Esc closes it and returns
+  focus to the location button, and choosing a link closes it. The location button names the
+  current section's status in words, after its title.
 - Code blocks and table wrappers are focusable, labelled scroll regions.
 
 ## Section states
@@ -598,9 +615,10 @@ manager says plainly what happened. It is the settle without the finish.
 - **It never scrolls on its own.** The **tail line** sits just below the live block: micro mono,
   the readout `Being written · 46%` in cue, and a **Follow ↓** text button (`aria-pressed`). When
   pressed it reads `Following ↓` in cue and keeps the tail line 24px above the viewport bottom after
-  each chunk (an instant scroll, never smooth). An upward wheel scroll, any touch scroll, PageUp, ↑,
-  Home or a second press stops it. The tail line is removed when writing ends or fails; it is the lowest
-  thing on the page, so nothing above moves.
+  each chunk (an instant scroll, never smooth). It follows the text as it grows, not the
+  percentage, which Claude's estimate holds at 99% until the section is written. An upward wheel
+  scroll, any touch scroll, PageUp, ↑, Home or a second press stops it. The tail line is removed
+  when writing ends or fails; it is the lowest thing on the page, so nothing above moves.
 - Screen readers: a visually hidden `aria-live="polite"` region announces only state changes
   ("Being written", "Written", or a failure), never percentages.
 
@@ -732,17 +750,22 @@ reader's own, in `prose.css`.
   `data-footnote-backref`, keeping the `aria-label`; the loaded font subset has U+2191 but not
   `↩`, `→` or `↗`), ink-faint, cue on hover. A targeted note or reference flashes `--cue-tint`
   (the shared `target-flash`), fading over 1.6s.
-- **External links** (`ExternalLink` from `src/ui`, styled by `.link`): ink text, a 1px cue-deep
-  underline at a 0.18em offset; cue text and underline on hover (`--dur-quick`). A trailing CSS
-  corner mark (5px, top and right 1.5px borders, ink-faint) says "leaves the manual". They open in
-  a new tab, with a visually hidden "(opens in a new tab)".
+- **External links** (`http(s)` links, which the shared `MarkdownLink` from `src/ui` renders as an
+  `ExternalLink`, styled by `.link`; the librarian's replies use the same rule): ink text, a 1px
+  cue-deep underline at a 0.18em offset; cue text and underline on hover (`--dur-quick`). A
+  trailing CSS corner mark (5px, top and right 1.5px borders, ink-faint) says "leaves the manual".
+  They open in a new tab, with a visually hidden "(opens in a new tab)".
 - **Cross-references** (`SectionLink`, styled by `.link`): to a written section, the external-link
   underline without the corner mark; to an unwritten or writing one, see Section states. On hover
   (after 300ms) or keyboard focus (at once), a **preview** opens below the link (1024px and up,
   hover devices only): `4.2 · Chapter 4` in micro mono, the title 14/20 600 ink-strong, the summary 14/20
   ink-muted, and a status line with its ring (`Not yet written — opening it starts the writing.`
-  for an unwritten target). 320px wide, `--ground-raised`, a 1px `--rule-strong` border, radius 4,
-  padding 12/16, no shadow, fading in over `--dur-base`.
+  for an unwritten target). A 320px card, `--ground-raised`, a 1px `--rule-strong` border, radius
+  4, padding 12/16, no shadow, fading in over `--dur-base`.
+  - **It follows WCAG 1.4.13.** It stays open while the pointer is over it: the card sits inside
+    8px of transparent padding that bridges the gap to the link, so the pointer can cross to it.
+    **Escape** dismisses it while the link or its card is hovered or the link is focused
+    (`data-dismissed` on the `.xref`), until the pointer leaves or the link loses focus.
   - Positioned with **CSS anchor positioning** (`position-area: bottom span-right`, with
     `position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline`), so it never causes
     horizontal scroll. Hidden entirely under `@supports not (anchor-name: --x)`.
@@ -782,11 +805,13 @@ forking it.
     reader-only markdown treatment and its write-head adjustments) · `CodeBlock` · `SectionLink`
     (and its preview) · `TailLine` (and Follow) · `FailureNotice` · `ManualErrorBoundary` (the
     reader when the manual can't be loaded) · `Pager` · `Outline` (the outline, "Referenced
-    here" and "In this manual") · `StartPage`.
+    here" and "In this manual") · `StartPage` · `HiddenStatusWord` (a ring's status in words, for
+    screen readers).
   - Helpers: `markdownScan.ts` (headings with unique ids, source lines and clause numbers; linked
-    sections; word count), `manualParts.ts` (every section in reading order, chapter names, paths
-    and chapter anchors), `statusWords.ts` (the status and failure words), `streamedThisLoad.ts`,
-    `useActiveHeading.ts`, `useManualId.ts`, `usePrevNextKeys.ts`.
+    sections; word count), `manualParts.ts` (chapter names, paths and chapter anchors; reading
+    order comes from `src/manual`), `statusWords.ts` (the status and failure words),
+    `streamedThisLoad.ts`, `useActiveHeading.ts`, `useArrival.ts`, `useManualId.ts`,
+    `usePrevNextKeys.ts`.
 - `Shell` stays mounted while moving between sections (only the article is keyed by section id),
   so the TOC keeps its scroll position. Moving to another manual remounts the whole reader (it is
   keyed by manual id), so nothing on the page carries over between manuals.

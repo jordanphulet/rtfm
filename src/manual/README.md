@@ -9,6 +9,7 @@ the API server and streams unwritten sections from it, and the markdown renderer
 import {
   useManual, useSection, retrySection, Markdown,
   findSection, chapterOf, previousSection, nextSection,
+  sectionsInReadingOrder, chaptersInReadingOrder,
   type Manual, type Chapter, type Section, type FailureReason,
   type UseSectionResult, type SectionLinkProps, type MarkdownProps,
 } from "../manual";
@@ -106,6 +107,8 @@ All take the manual from `useManual(manualId)`. Reading order is every chapter, 
 | `chapterOf(manual, sectionId)`        | The `Chapter` (or appendix) containing it, or `undefined`. |
 | `previousSection(manual, id)`         | The section before it, or `undefined` at the start. |
 | `nextSection(manual, id)`             | The section after it, or `undefined` at the end. |
+| `sectionsInReadingOrder(manual)`      | Every section, in reading order.                 |
+| `chaptersInReadingOrder(manual)`      | Every chapter, then every appendix.              |
 
 ## `<Markdown>`
 
@@ -144,7 +147,8 @@ A minimal reader, using the same patterns as `src/reader/`.
 ```tsx
 import { Link, useParams } from "react-router";
 import {
-  Markdown, nextSection, previousSection, useManual, useSection, type SectionLinkProps,
+  chaptersInReadingOrder, Markdown, nextSection, previousSection, useManual, useSection,
+  type SectionLinkProps,
 } from "../manual";
 
 const useManualId = () => useParams().manualId!;
@@ -162,7 +166,7 @@ function Toc({ currentId }: { currentId?: string }) {
   const manual = useManual(useManualId());
   return (
     <nav>
-      {[...manual.chapters, ...manual.appendices].map((chapter) => (
+      {chaptersInReadingOrder(manual).map((chapter) => (
         <section key={chapter.id}>
           <h2>{chapter.label}. {chapter.title}</h2>
           {chapter.sections.map((section) => (

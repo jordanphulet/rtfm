@@ -7,10 +7,10 @@ const KEYS_THAT_SCROLL_UP = ["ArrowUp", "PageUp", "Home"];
 
 interface TailLineProps {
   progress: number;
-  isWaiting: boolean;
+  textLength: number;
 }
 
-export function TailLine({ progress, isWaiting }: TailLineProps) {
+export function TailLine({ progress, textLength }: TailLineProps) {
   const [following, setFollowing] = useState(false);
   const lineRef = useRef<HTMLDivElement>(null);
 
@@ -18,7 +18,7 @@ export function TailLine({ progress, isWaiting }: TailLineProps) {
     if (!following || !lineRef.current) return;
     const overshoot = lineRef.current.getBoundingClientRect().bottom - (window.innerHeight - FOLLOW_MARGIN);
     if (overshoot > 0) window.scrollBy({ top: overshoot, behavior: "instant" });
-  }, [following, progress]);
+  }, [following, progress, textLength]);
 
   useEffect(() => {
     if (!following) return;
@@ -40,7 +40,7 @@ export function TailLine({ progress, isWaiting }: TailLineProps) {
   }, [following]);
 
   return (
-    <div ref={lineRef} className="tail-line write-head-line" data-live={isWaiting || undefined}>
+    <div ref={lineRef} className="tail-line write-head-line" data-live={textLength === 0 || undefined}>
       <span className="tail-progress">Being written · {Math.round(progress * 100)}%</span>
       <button
         type="button"

@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { Chapter, Section } from "../manual";
 import { StatusRing } from "../ui";
 import { TITLE_ID } from "./ArticleHead";
+import { HiddenStatusWord } from "./HiddenStatusWord";
 import type { Heading } from "./markdownScan";
 import { chapterAnchor, sectionPath } from "./manualParts";
 import { useManualId } from "./useManualId";
@@ -75,6 +76,7 @@ export function ReferencedSections({ sections }: { sections: Section[] }) {
               <span className="outline-ref-label">{section.label}</span>
               <span className="outline-ref-title">{section.title}</span>
               <StatusRing status={section.status} />
+              <HiddenStatusWord status={section.status} />
             </Link>
           </li>
         ))}

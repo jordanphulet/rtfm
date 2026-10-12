@@ -27,44 +27,47 @@
       position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
       z-index: 10;
       width: var(--preview-width);
-      margin: var(--space-2) 0;
-      padding: var(--space-3) var(--space-4);
-      background: var(--ground-raised);
-      border: 1px solid var(--rule-strong);
-      border-radius: var(--radius-m);
+      padding: var(--space-2) 0;
       font: 400 var(--text-ui) / var(--leading-ui) var(--font-sans);
       font-stretch: calc(var(--wdth-tight) * 1%);
       color: var(--ink-muted);
       text-wrap: pretty;
       opacity: 0;
-      pointer-events: none;
       transition:
         opacity var(--dur-base) var(--ease-out),
         display var(--dur-base) allow-discrete;
     }
 
-    .reader .xref:hover .xref-preview {
+    .reader .xref:not([data-dismissed]):hover .xref-preview {
       display: block;
       opacity: 1;
       transition-delay: var(--delay-preview);
     }
 
-    .reader .xref:has(.xref-link:focus-visible) .xref-preview {
+    .reader .xref:not([data-dismissed]):has(.xref-link:focus-visible) .xref-preview {
       display: block;
       opacity: 1;
       transition-delay: 0s;
     }
 
     @starting-style {
-      .reader .xref:hover .xref-preview,
-      .reader .xref:has(.xref-link:focus-visible) .xref-preview {
+      .reader .xref:not([data-dismissed]):hover .xref-preview,
+      .reader .xref:not([data-dismissed]):has(.xref-link:focus-visible) .xref-preview {
         opacity: 0;
       }
     }
   }
 }
 
-.reader .xref-preview > span {
+.reader .xref-preview-card {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  background: var(--ground-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-m);
+}
+
+.reader .xref-preview-card > span {
   display: block;
 }
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chapterOf, findSection, nextSection, previousSection } from "./reading-order";
+import {
+  chapterOf,
+  chaptersInReadingOrder,
+  findSection,
+  nextSection,
+  previousSection,
+  sectionsInReadingOrder,
+} from "./reading-order";
 import type { Chapter, Manual } from "./types";
 
 function chapter(id: string, sectionIds: string[]): Chapter {
@@ -47,6 +54,14 @@ describe("reading order", () => {
   it("has no neighbours for an unknown id", () => {
     expect(previousSection(manual, "nope")).toBeUndefined();
     expect(nextSection(manual, "nope")).toBeUndefined();
+  });
+
+  it("lists every chapter, then every appendix", () => {
+    expect(chaptersInReadingOrder(manual).map((chapter) => chapter.id)).toEqual(["1", "2", "A"]);
+  });
+
+  it("lists every section, chapters first, then appendices", () => {
+    expect(sectionsInReadingOrder(manual).map((section) => section.id)).toEqual(["1.1", "1.2", "2.1", "A.1", "A.2"]);
   });
 
   it("finds sections and their chapters by id, including appendices", () => {

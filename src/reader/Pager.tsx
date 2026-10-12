@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { chapterOf, useManual, type Chapter, type Section } from "../manual";
 import { StatusRing } from "../ui";
+import { HiddenStatusWord } from "./HiddenStatusWord";
 import { chapterName, contentsPath, sectionPath } from "./manualParts";
 import { useManualId } from "./useManualId";
 import "./pager.css";
@@ -13,7 +14,7 @@ interface PagerProps {
 
 export function Pager({ chapter, previous, next }: PagerProps) {
   return (
-    <nav className="pager" aria-label="Previous and next section">
+    <nav className="pager" aria-label="Continue reading">
       {previous ? (
         <PagerLink direction="previous" section={previous} from={chapter} />
       ) : (
@@ -49,6 +50,7 @@ function PagerLink({ direction, section, from }: PagerLinkProps) {
       <span className="pager-title">
         {section.title}
         <StatusRing status={section.status} />
+        <HiddenStatusWord status={section.status} />
       </span>
     </Link>
   );

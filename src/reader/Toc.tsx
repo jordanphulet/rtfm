@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { useManual, type Chapter, type Section } from "../manual";
+import { sectionsInReadingOrder, useManual, type Chapter, type Section } from "../manual";
 import { StatusRing } from "../ui";
-import { allSections, contentsPath, sectionPath } from "./manualParts";
+import { HiddenStatusWord } from "./HiddenStatusWord";
+import { contentsPath, sectionPath } from "./manualParts";
 import { StatusLegend } from "./StatusLegend";
-import { STATUS_WORDS } from "./statusWords";
 import { useManualId } from "./useManualId";
 import "./toc.css";
 
@@ -15,7 +15,7 @@ interface TocProps {
 
 export function Toc({ currentId, currentOutline }: TocProps) {
   const manual = useManual(useManualId());
-  const sections = allSections(manual);
+  const sections = sectionsInReadingOrder(manual);
   const writtenCount = sections.filter((section) => section.status === "written").length;
 
   return (
@@ -74,11 +74,11 @@ function TocRow({ section, isCurrent }: { section: Section; isCurrent: boolean }
       className="toc-row"
       data-status={section.status}
       aria-current={isCurrent ? "page" : undefined}
-      aria-label={`${section.label} ${section.title}, ${STATUS_WORDS[section.status].toLowerCase()}`}
     >
       <span className="toc-label">{section.label}</span>
       <span className="toc-row-title">{section.title}</span>
       <StatusRing status={section.status} />
+      <HiddenStatusWord status={section.status} />
     </Link>
   );
 }

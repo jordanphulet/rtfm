@@ -1,12 +1,11 @@
-import type { Manual, Section } from "../manual";
-import { allSections } from "./manualParts";
+import { sectionsInReadingOrder, type Manual, type Section } from "../manual";
 
 const streamedThisLoad = new Set<string>();
 
 const keyOf = (manualId: string, sectionId: string) => `${manualId}/${sectionId}`;
 
 export function rememberStreamingSections(manual: Manual) {
-  for (const section of allSections(manual)) {
+  for (const section of sectionsInReadingOrder(manual)) {
     if (section.status === "writing") streamedThisLoad.add(keyOf(manual.id, section.id));
   }
 }

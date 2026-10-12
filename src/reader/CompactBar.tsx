@@ -2,6 +2,7 @@ import { useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { Section } from "../manual";
 import { Sheet, StatusRing } from "../ui";
+import { HiddenStatusWord } from "./HiddenStatusWord";
 import { sectionPath } from "./manualParts";
 import { Toc } from "./Toc";
 import { useManualId } from "./useManualId";
@@ -48,6 +49,7 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
               <StatusRing status={current.status} />
               <span className="location-label">{current.label}</span>
               <span className="location-title">{current.title}</span>
+              <HiddenStatusWord status={current.status} />
             </>
           ) : (
             <span className="location-title">Contents</span>
@@ -63,7 +65,7 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
         open={open}
         onClose={close}
         focusScope={barRef}
-        focusOnOpen={scrollToCurrentRow}
+        focusOnOpen={scrollToCurrentEntry}
         onClick={closeAfterChoosingALink}
       >
         <Toc currentId={current?.id} currentOutline={currentOutline} />
@@ -87,8 +89,8 @@ function StepLink({ section, direction }: { section?: Section; direction: "Previ
   );
 }
 
-function scrollToCurrentRow(sheet: HTMLElement): HTMLElement | null {
-  const currentRow = sheet.querySelector<HTMLElement>(".toc-row[aria-current='page']");
-  if (currentRow) sheet.scrollTop = currentRow.offsetTop - sheet.clientHeight / 3;
-  return currentRow;
+function scrollToCurrentEntry(sheet: HTMLElement): HTMLElement | null {
+  const currentEntry = sheet.querySelector<HTMLElement>("[aria-current='page']");
+  if (currentEntry) sheet.scrollTop = currentEntry.offsetTop - sheet.clientHeight / 3;
+  return currentEntry;
 }

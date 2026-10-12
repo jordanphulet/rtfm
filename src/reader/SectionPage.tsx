@@ -1,5 +1,4 @@
-import { useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
-import { useNavigationType } from "react-router";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   chapterOf,
   findSection,
@@ -25,6 +24,7 @@ import { FAILURE_NOTICES, FAILURE_WORDS, STATUS_WORDS } from "./statusWords";
 import { loadedAlreadyWritten } from "./streamedThisLoad";
 import { TailLine } from "./TailLine";
 import { useActiveHeading } from "./useActiveHeading";
+import { useArrival } from "./useArrival";
 import { useManualId } from "./useManualId";
 import { usePrevNextKeys } from "./usePrevNextKeys";
 
@@ -100,11 +100,7 @@ function Article({ sectionState, headings, chapter, chapterName, previous, next 
   const phase = phaseOf(sectionState);
   const hasText = text !== "";
 
-  const navigationType = useNavigationType();
-  useLayoutEffect(() => {
-    window.scrollTo(0, 0);
-    if (navigationType === "PUSH") document.getElementById(TITLE_ID)?.focus({ preventScroll: true });
-  }, [navigationType]);
+  useArrival(() => document.getElementById(TITLE_ID));
 
   return (
     <article className="column article" data-status={phase} style={{ "--progress": progress } as CSSProperties}>
@@ -120,7 +116,7 @@ function Article({ sectionState, headings, chapter, chapterName, previous, next 
       {hasText && (
         <Prose source={text} headings={headings} sectionLabel={section.label} wrap={wrap} live={phase === "writing"} />
       )}
-      {phase === "writing" && <TailLine progress={progress} isWaiting={!hasText} />}
+      {phase === "writing" && <TailLine progress={progress} textLength={text.length} />}
       {failure && <FailureNotice {...FAILURE_NOTICES[failure]} onRetry={() => retryInPlace(manualId, section.id)} />}
       <p className="visually-hidden" aria-live="polite">
         {announcement(sectionState, phase)}
