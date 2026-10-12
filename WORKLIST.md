@@ -491,7 +491,7 @@ When this phase is done:
   stricter `?freeze`.
 
 ### OH.7 — The reader: following, navigation, focus and accessibility (browser audit)
-- **Status:** doing (agent: ad66b6cc8f60e147f)
+- **Status:** done
 - **Depends on:** OH.3
 - **Files:** `src/reader/**`, `src/ui/Sheet.tsx`, `src/ui/README.md`, `src/manual/**`,
   `DESIGN.md`, `package.json` and `package-lock.json` (a DOM test environment only)
