@@ -381,7 +381,7 @@ When this phase is done:
   server may be running there), and never delete or edit the ledger.
 
 ### OH.1 — One server per data folder
-- **Status:** doing (agent: a006c2feafe119135)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `server/storage/**`, `server/app.ts`, `server/main.ts`, `server/dev.ts`, their
   tests, `ARCHITECTURE.md` (not `README.md`, which holds PR.2's uncommitted edits)
