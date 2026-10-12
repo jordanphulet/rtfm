@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fakeLibrarianModel } from "./agent/librarian/fake-model.ts";
 import { deleteManualRoute } from "./api/delete-manual.ts";
@@ -16,6 +16,7 @@ import { prices } from "./gateway/prices.ts";
 import { ModelNotPriced } from "./gateway/types.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
+import { lockDataFolder } from "./storage/lock.ts";
 import { seedStore } from "./storage/seed.ts";
 import type { ManualStore } from "./storage/types.ts";
 import { createBedrockWriter } from "./writer/bedrock.ts";
@@ -35,6 +36,27 @@ export interface Models {
 }
 
 export async function startServer(config: ServerConfig, replaced: Partial<Models> = {}): Promise<RunningServer> {
+  const lock = await lockDataFolder(config.dataDir);
+  let server: Server;
+  try {
+    server = await serve(config, replaced);
+  } catch (error) {
+    await lock.release();
+    throw error;
+  }
+
+  return {
+    port: (server.address() as AddressInfo).port,
+    async close() {
+      const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+      server.closeAllConnections();
+      await closed;
+      await lock.release();
+    },
+  };
+}
+
+async function serve(config: ServerConfig, replaced: Partial<Models>): Promise<Server> {
   const store = createFileManualStore(config.dataDir);
   const { writer, librarian } = await modelsFor(config, store, replaced);
   await seedStore(store);
@@ -53,15 +75,7 @@ export async function startServer(config: ServerConfig, replaced: Partial<Models
     server.once("error", reject);
     server.listen(config.port, resolve);
   });
-
-  return {
-    port: (server.address() as AddressInfo).port,
-    close() {
-      const closed = new Promise<void>((resolve) => server.close(() => resolve()));
-      server.closeAllConnections();
-      return closed;
-    },
-  };
+  return server;
 }
 
 /** The models passed in, and the configured ones for any that weren't. */

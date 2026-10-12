@@ -30,7 +30,7 @@ server/
   dev.ts                  npm run dev: Vite plus `node --watch server/main.ts`
   config.ts               committed settings (section 8)
   ports.ts                API_PORT, alone, so Vite's config can import it
-  app.ts                  startServer(config, replaced?): builds storage, the models and the gateway; routes
+  app.ts                  startServer(config, replaced?): locks the data folder; storage, models, gateway, routes
   testing.ts              helpers shared by the tests
   usage.ts                npm run usage
   api/
@@ -50,6 +50,7 @@ server/
     file-manual-store.ts  manuals and sections as files
     file-ledger.ts        the usage ledger as JSON lines
     files.ts              reads a file or folder that may not exist
+    lock.ts               the data folder's lock: one server per folder
     manual.ts             a manual's chapters and sections in reading order; the id pattern
     seed.ts               seeds each manual in server/seed/ once
   seed/<manualId>/
@@ -113,6 +114,11 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   the proxy's `configure` hook destroys the browser's response too, so the reader's stream fails with "couldn't
   write this section" instead of hanging.
 - `npm run server` runs the server alone, for `curl` and `npm run preview`.
+- `main.ts` closes the server on SIGINT and SIGTERM, which releases the data folder's lock
+  (section 3), then exits. Under `npm run dev` that covers Ctrl-C, `dev.ts` forwarding a signal,
+  and `node --watch` restarting the server after an edit. If the folder is in use, `main.ts`
+  prints the refusal and exits with code 1; under `npm run dev`, `node --watch` then waits for a
+  file change and Vite keeps running without an API server.
 - `.claude/launch.json` runs `npm run dev`.
 - `npm run shot` starts the server in process with `startServer({ ...config, port: 0,
   dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it. Every run starts from
@@ -311,7 +317,24 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 .data/seeded.json                            the ids of the seed manuals already seeded
 .data/ledger/2026-10.jsonl                   one JSON line per ledger entry, append-only
 .data/STOP                                   the kill switch (section 5)
+.data/server.lock                            the PID of the server using the folder
 ```
+
+- **One server per data folder, enforced.** `startServer` first calls `lockDataFolder`
+  (`storage/lock.ts`), which creates `server.lock` holding the process's PID. It writes the PID to
+  a temp file and `link`s it into place; `link` fails if the lock exists, so of two starts only
+  one wins, and the lock is never seen empty.
+  - **Held by a running process** (checked with `process.kill(pid, 0)`, where `EPERM` also means
+    running): `startServer` throws `DataFolderInUse`, whose message names the folder and the PID.
+    This includes a second start in the same process, as in the tests.
+  - **Left by a process that has ended, or holding no PID:** it is removed and the create is
+    tried again, so the lock is taken over. Two starts that find the same stale lock at the same
+    moment can both take it over: one removes the lock the other has just created.
+  - **A PID reused** by an unrelated process makes a stale lock look held; the message names the
+    PID, and the lock file can be deleted once no server is using the folder.
+  - **Released** when `close()` has closed the server, and when `startServer` fails after taking
+    it (a model not in the price table, a port in use). A process killed without a chance to
+    close (SIGKILL, a crash) leaves its lock, which the next start takes over.
 
 - **Written sections:** a section is written when its `.md` file exists, so there is no status
   to keep in sync.
@@ -604,8 +627,9 @@ totals. A `reserve` with no `settle` (the server died mid-call) counts at its wo
 - **Totals in memory** are one map from period (`2026-10-11` or `2026-10`) to committed dollars.
   Reserving adds the worst case to the reservation's day and month; settling adds `usd − worst
   case` to the same two periods.
-- **One server process per data folder.** The totals live in one process's memory, so two
-  servers on the same `.data/` would each allow the full caps.
+- **One server process per data folder, enforced** by the data folder's lock (section 3). The
+  totals live in one process's memory, so two servers on the same `.data/` would each allow the
+  full caps.
 - **`gateway/ledger-calls.ts`** pairs `reserve` and `settle` entries into calls. The replay and
   `npm run usage` both use it, so they count spend the same way. `monthOf` comes from
   `storage/file-ledger.ts`, which files entries by it.
