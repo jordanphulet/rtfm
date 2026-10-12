@@ -543,7 +543,7 @@ When this phase is done:
   where a fix is visible, and each change is explained.
 
 ### OH.9 — A faster, steadier test suite and shot script (tests audit)
-- **Status:** doing (agent: a1c6d3d59c5a95a8e)
+- **Status:** done
 - **Depends on:** OH.4 (both change `scripts/screenshots.ts`)
 - **Files:** `src/manual/repair.test.tsx`, `scripts/**` except `scripts/hooks/**`
 - **Do:**
@@ -578,3 +578,15 @@ When this phase is done:
     a date on `research/lambda-and-dynamodb.md`'s status line.
 - **Done when:** the docs match the code, nothing is stated in two places, `npm run build` and
   `npm test` pass, and the report gives each doc's length before and after.
+
+### OH.11 — README catch-up
+- **Status:** todo
+- **Depends on:** PR.2 (its uncommitted edits are in `README.md`)
+- **Files:** `README.md`
+- **Do:** bring README.md up to date with the hardening phase:
+  - one server per data folder is enforced (it says "should"); add `server.lock` to the `.data/`
+    list and what a second `npm run dev` on the same folder prints;
+  - `npm run shot` runs its own dev server on a free port, clears only its own output folder,
+    takes `npm run shot -- <folder>`, and names the phone size `phone` in both shot sets;
+  - anything else OH.5–OH.10 changed that README describes.
+- **Done when:** README.md matches the code.
