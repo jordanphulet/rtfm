@@ -11,7 +11,7 @@ import { sectionRoute } from "./api/section.ts";
 import type { ServerConfig } from "./config.ts";
 import { createBedrockClient } from "./gateway/bedrock-client.ts";
 import { ENV_LOCAL_FILE, readAwsCredentials } from "./gateway/credentials.ts";
-import { createGateway, type Gateway } from "./gateway/gateway.ts";
+import { createGateway, type Gateway, type RunningGateway } from "./gateway/gateway.ts";
 import { prices } from "./gateway/prices.ts";
 import { ModelNotPriced } from "./gateway/types.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
@@ -29,21 +29,26 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
-/** Who writes sections and who answers as the librarian. */
+/** Who writes sections, who answers as the librarian, and when their model calls have all been recorded. */
 export interface Models {
   writer: SectionWriter;
   librarian: Gateway;
+  /** Resolves once no model call is running and every one is settled in the ledger. */
+  idle(): Promise<void>;
 }
+
+const nothingToSettle = async () => {};
 
 export async function startServer(config: ServerConfig, replaced: Partial<Models> = {}): Promise<RunningServer> {
   const lock = await lockDataFolder(config.dataDir);
-  let server: Server;
+  let served: { server: Server; models: Models };
   try {
-    server = await serve(config, replaced);
+    served = await serve(config, replaced);
   } catch (error) {
     await lock.release();
     throw error;
   }
+  const { server, models } = served;
 
   return {
     port: (server.address() as AddressInfo).port,
@@ -51,14 +56,16 @@ export async function startServer(config: ServerConfig, replaced: Partial<Models
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeAllConnections();
       await closed;
+      await models.idle();
       await lock.release();
     },
   };
 }
 
-async function serve(config: ServerConfig, replaced: Partial<Models>): Promise<Server> {
+async function serve(config: ServerConfig, replaced: Partial<Models>): Promise<{ server: Server; models: Models }> {
   const store = createFileManualStore(config.dataDir);
-  const { writer, librarian } = await modelsFor(config, store, replaced);
+  const models = await modelsFor(config, store, replaced);
+  const { writer, librarian } = models;
   await seedStore(store);
   const runs = createRuns({ store, writer, maxConcurrentRuns: config.maxConcurrentRuns });
   const routes = [
@@ -75,13 +82,13 @@ async function serve(config: ServerConfig, replaced: Partial<Models>): Promise<S
     server.once("error", reject);
     server.listen(config.port, "127.0.0.1", resolve);
   });
-  return server;
+  return { server, models };
 }
 
 /** The models passed in, and the configured ones for any that weren't. */
 async function modelsFor(config: ServerConfig, store: ManualStore, replaced: Partial<Models>): Promise<Models> {
-  const { writer, librarian } = replaced;
-  if (writer && librarian) return { writer, librarian };
+  const { writer, librarian, idle = nothingToSettle } = replaced;
+  if (writer && librarian) return { writer, librarian, idle };
   return { ...(await createModels(config, store)), ...replaced };
 }
 
@@ -93,7 +100,7 @@ export async function createModels(
 ): Promise<Models> {
   switch (config.models) {
     case "fake":
-      return { writer: createFakeWriter(), librarian: fakeLibrarianModel() };
+      return { writer: createFakeWriter(), librarian: fakeLibrarianModel(), idle: nothingToSettle };
     case "bedrock": {
       const gateway = await createBedrockGateway(config, credentialsFile);
       const writer = createBedrockWriter({
@@ -102,12 +109,12 @@ export async function createModels(
         wordsRequested: config.sectionWordsRequested,
         expectedCharacters: config.sectionExpectedCharacters,
       });
-      return { writer, librarian: gateway };
+      return { writer, librarian: gateway, idle: gateway.idle };
     }
   }
 }
 
-function createBedrockGateway(config: ServerConfig, credentialsFile: URL): Promise<Gateway> {
+function createBedrockGateway(config: ServerConfig, credentialsFile: URL): Promise<RunningGateway> {
   for (const { model } of Object.values(config.jobs)) {
     if (!(model in prices.models)) throw new ModelNotPriced(model);
   }

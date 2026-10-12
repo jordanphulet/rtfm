@@ -14,7 +14,10 @@ export const ENV_LOCAL_FILE = new URL("../../.env.local", import.meta.url);
 
 export class CredentialsMissing extends Error {
   constructor(file: URL, missingNames: readonly string[]) {
-    super(`${file.pathname} must set ${missingNames.join(", ")}; the Bedrock writer can't start without them`);
+    super(
+      `${file.pathname} must set ${missingNames.join(", ")}; ` +
+        "the Bedrock models (the section writer, the librarian and the planner) can't run without them",
+    );
   }
 }
 

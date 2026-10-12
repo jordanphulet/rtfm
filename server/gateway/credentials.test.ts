@@ -46,7 +46,7 @@ describe("AWS credentials", () => {
     expect(process.env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
   });
 
-  it("refuses when a key is missing or empty, naming the variables but never the values", async () => {
+  it("refuses when a key is missing or empty, naming the variables and every model that needs them, but never the values", async () => {
     await writeEnv(`AWS_ACCESS_KEY_ID=${FAKE_KEY_ID}\nAWS_SECRET_ACCESS_KEY=\nAWS_REGION="  "\n`);
 
     let error: unknown;
@@ -58,6 +58,7 @@ describe("AWS credentials", () => {
     expect(error).toBeInstanceOf(CredentialsMissing);
     const message = (error as Error).message;
     expect(message).toContain("AWS_SECRET_ACCESS_KEY, AWS_REGION");
+    expect(message).toContain("the section writer, the librarian and the planner");
     expect(message).not.toContain("AWS_ACCESS_KEY_ID");
     expect(message).not.toContain(FAKE_KEY_ID);
   });

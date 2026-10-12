@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { appendFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { createFileLedger } from "../storage/file-ledger.ts";
+import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry } from "../storage/types.ts";
 import { tempDataDir } from "../testing.ts";
 import { killSwitchPath } from "./gateway.ts";
@@ -90,13 +91,12 @@ describe("usage report", () => {
 });
 
 describe("npm run usage", () => {
-  async function runUsage(dataDir: string): Promise<string> {
-    const { stdout } = await promisify(execFile)(process.execPath, [USAGE_SCRIPT, dataDir]);
-    return stdout;
+  function runUsage(dataDir: string): Promise<{ stdout: string; stderr: string }> {
+    return promisify(execFile)(process.execPath, [USAGE_SCRIPT, dataDir]);
   }
 
   it("works on an empty ledger", async () => {
-    const output = await runUsage(await tempDataDir());
+    const { stdout: output } = await runUsage(await tempDataDir());
     expect(output).toMatch(/Today, \d{4}-\d{2}-\d{2}: \$0\.0000 of \$2\.00, 0 calls/);
   });
 
@@ -109,10 +109,25 @@ describe("npm run usage", () => {
     }
     await writeFile(killSwitchPath(dataDir), "");
 
-    const output = await runUsage(dataDir);
+    const { stdout: output } = await runUsage(dataDir);
     expect(output).toContain("Kill switch: ON");
     expect(output).toMatch(/Today, \d{4}-\d{2}-\d{2}: \$0\.0281 of \$2\.00, 2 calls/);
     expect(output).toContain(`${HAIKU}  $0.0281  2 calls`);
     expect(output).toContain(`${reservedAt}  b  write-section  $0.0200`);
+  });
+
+  it("reports the lines it can read when a crash cut one off and a later entry followed it, and warns about the cut one", async () => {
+    const dataDir = await tempDataDir();
+    const ledger = createFileLedger(dataDir);
+    const reservedAt = new Date().toISOString();
+    const [reserveA, settleA] = call("a", reservedAt, { usd: 0.0081 });
+    await ledger.append(reserveA!);
+    await appendFile(path.join(dataDir, "ledger", `${monthOf(reservedAt)}.jsonl`), JSON.stringify(settleA).slice(0, 40));
+    for (const entry of call("b", reservedAt, { usd: 0.003 })) await ledger.append(entry);
+
+    const { stdout, stderr } = await runUsage(dataDir);
+    expect(stdout).toMatch(/Today, \d{4}-\d{2}-\d{2}: \$0\.0230 of \$2\.00, 2 calls/);
+    expect(stdout).toContain(`${reservedAt}  a  write-section  $0.0200`);
+    expect(stderr).toContain("Skipped line 2 of");
   });
 });

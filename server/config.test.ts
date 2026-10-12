@@ -1,0 +1,43 @@
+import { describe, expect, it } from "vitest";
+import { config } from "./config.ts";
+import { createGateway } from "./gateway/gateway.ts";
+import { prices } from "./gateway/prices.ts";
+import { GatewayBusy, type Job, type ModelClient, type ModelEvent, type Prompt } from "./gateway/types.ts";
+import { createFileLedger } from "./storage/file-ledger.ts";
+import { tempDataDir, waitUntil } from "./testing.ts";
+
+const PROMPT: Prompt = { system: "", messages: [{ role: "user", content: "" }] };
+
+describe("committed config", () => {
+  it("leaves room for a librarian turn and a plan while every section run is writing", async () => {
+    const dataDir = await tempDataDir();
+    let calls = 0;
+    const answersOnlyAnAbort: ModelClient = {
+      async *stream({ signal }) {
+        calls++;
+        await new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+      },
+    };
+    const gateway = await createGateway({ client: answersOnlyAnAbort, ledger: createFileLedger(dataDir), config, prices, dataDir });
+    const controller = new AbortController();
+    const start = (job: Job) => collect(gateway.stream(job, PROMPT, controller.signal));
+
+    const running = [
+      ...Array.from({ length: config.maxConcurrentRuns }, () => start("write-section")),
+      start("librarian"),
+      start("plan-manual"),
+    ];
+    await waitUntil(() => calls === config.maxConcurrentRuns + 2);
+    await expect(start("librarian")).rejects.toThrow(GatewayBusy);
+
+    controller.abort();
+    await Promise.allSettled(running);
+    await gateway.idle();
+  });
+});
+
+async function collect(events: AsyncIterable<ModelEvent>): Promise<ModelEvent[]> {
+  const collected: ModelEvent[] = [];
+  for await (const event of events) collected.push(event);
+  return collected;
+}

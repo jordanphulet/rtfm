@@ -30,7 +30,8 @@ server/
   dev.ts                  npm run dev: Vite plus `node --watch server/main.ts`
   config.ts               committed settings (section 8)
   ports.ts                API_PORT, alone, so Vite's config can import it
-  app.ts                  startServer(config, replaced?): locks the data folder; storage, models, gateway, routes
+  app.ts                  startServer(config, replaced?): locks the data folder; storage, models, gateway, routes;
+                          close() waits for model calls to settle
   testing.ts              helpers shared by the tests
   usage.ts                npm run usage
   api/
@@ -124,9 +125,12 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   the proxy's `configure` hook destroys the browser's response too, so the reader's stream fails with "couldn't
   write this section" instead of hanging.
 - `npm run server` runs the server alone, for `curl` and `npm run preview`.
-- `main.ts` closes the server on SIGINT and SIGTERM, which releases the data folder's lock
-  (section 3), then exits. Under `npm run dev` that covers Ctrl-C, `dev.ts` forwarding a signal,
-  and `node --watch` restarting the server after an edit. If the folder is in use, `main.ts`
+- `main.ts` prints `API server on http://127.0.0.1:<port>` and the model source. On SIGINT and
+  SIGTERM it closes the server and then exits. `close()` closes every connection, which aborts the
+  sections being written and the librarian's replies; waits until the gateway is idle, so each
+  aborted call's settle is in the ledger (section 5); then releases the data folder's lock
+  (section 3). Under `npm run dev` the signal comes from Ctrl-C, `dev.ts` forwarding one, or
+  `node --watch` restarting the server after an edit. If the folder is in use, `main.ts`
   prints the refusal and exits with code 1; under `npm run dev`, `node --watch` then waits for a
   file change and Vite keeps running without an API server.
 - `.claude/launch.json` runs `npm run dev`.
@@ -375,8 +379,8 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
     moment can both take it over: one removes the lock the other has just created.
   - **A PID reused** by an unrelated process makes a stale lock look held; the message names the
     PID, and the lock file can be deleted once no server is using the folder.
-  - **Released** when `close()` has closed the server, and when `startServer` fails after taking
-    it (a model not in the price table, a port in use). A process killed without a chance to
+  - **Released** when `close()` has closed the server and the gateway is idle, and when
+    `startServer` fails after taking it (a model not in the price table, a port in use). A process killed without a chance to
     close (SIGKILL, a crash) leaves its lock, which the next start takes over.
 
 - **Written sections:** a section is written when its `.md` file exists, so there is no status
@@ -396,7 +400,14 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
   removal fails part-way, the failure is logged and the delete still succeeds: the manual is
   already gone, and the leftover folder is ignored.
 - **`markSeeded`** rewrites `seeded.json` through a temp file and a `rename`.
-- **Replay:** reading the ledger skips a cut-off last line, left by a crash mid-append.
+- **A line cut off by a crash.** A crash mid-append can leave a last line with no newline.
+  - Reading skips any line that doesn't parse, wherever it is, with a warning naming the file and
+    line, so neither the gateway's replay nor `npm run usage` throws on it.
+  - Skipping is safe for the caps. A `reserve` is awaited before the model is called, so a cut-off
+    `reserve` means no call was made. A cut-off `settle` leaves its `reserve` unsettled, counted at
+    its worst case.
+  - `append` writes a newline first when the file doesn't end in one, so the next entry starts its
+    own line rather than gluing onto the cut-off one.
 - **Seeding:** on start, `seedStore` seeds each manual in `server/seed/` once. The store keeps a
   record of the seed manuals it has seeded (`seededManualIds`), and for each seed manual not in
   it:
@@ -532,8 +543,10 @@ every job's model against the price table (`ModelNotPriced`), then reads the cre
 (`CredentialsMissing`), then builds the Bedrock client, the file ledger, one gateway, and the
 writer on it, all before it seeds or listens. The librarian and its planner use the same
 gateway, so one set of caps covers every job. Either problem therefore stops the server from starting, and an unpriced
-model is reported without reading any secret. Tests replace either model with
-`startServer(config, { writer, librarian })`.
+model is reported without reading any secret. `createModels` also returns `idle`: the gateway's
+`idle()` with Bedrock, and one that resolves at once with the fakes, which record nothing. Tests
+replace either model with `startServer(config, { writer, librarian })`, and a test that passes
+its own gateway passes its `idle` too, so `close()` waits for it.
 
 **One writer per section** (`writer/runs.ts`): an in-memory `Map` keyed by `manualId/sectionId`.
 
@@ -600,7 +613,14 @@ type ModelEvent =
 async function createGateway(deps: {
   client: ModelClient; ledger: UsageLedger; config: GatewayConfig;
   prices: PriceTable; dataDir: string; now?: () => Date;
-}): Promise<{ stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncIterable<ModelEvent> }>;
+}): Promise<RunningGateway>;
+
+interface Gateway {                      // what the section writer and the agent loop see
+  stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncIterable<ModelEvent>;
+}
+interface RunningGateway extends Gateway {
+  idle(): Promise<void>;                 // resolves once no call is running and every settle is written
+}
 // the stream's first step throws SpendingRefused ("daily-cap" | "monthly-cap" | "kill-switch")
 // or GatewayBusy; a stalled call throws ModelStalled, and a stream that ends without a stop
 // reason throws ModelStreamIncomplete
@@ -617,14 +637,17 @@ signal that is already aborted is refused without a reservation.
 **Callers must read the stream with `for await`**, which calls `return()` when they stop early,
 so the call is aborted and settled. An iterator that is abandoned without `return()` never
 settles. The caps stay safe, because its reservation keeps counting at the worst case, but the
-call stays "running" until the server restarts.
+call stays "running", and the gateway never becomes idle, so stopping the server would wait
+for it forever.
 
 Then, for each call:
 
 1. **Kill switch.** If `.data/STOP` exists (`existsSync`, so steps 1–5 up to the ledger write are
    one synchronous step), refuse. Creating the file stops new calls at once, with no restart, and
    deleting it resumes them. A call already running finishes; it is bounded by `max_tokens`.
-2. **Concurrency.** If `maxConcurrentCalls` (3) calls are running, throw `GatewayBusy`.
+2. **Concurrency.** If `maxConcurrentCalls` (5) calls are running, throw `GatewayBusy`. That is
+   the 3 section runs plus 2 (section 8), so three sections being written leave room for the
+   librarian and the planner.
 3. **Worst case.** `(inputBound × highest input price) + (max_tokens × output price)`.
    - `inputBound` adds up:
      - the UTF-8 bytes of the system prompt, of each message's text or, for block content, its
@@ -688,6 +711,14 @@ Then, for each call:
        output (`max_tokens`)** and marked `estimated: true`. The stream doesn't tell us what
        Bedrock billed after the cut, so the gateway assumes the most it can be.
      - `estimated` is also set if a complete call never reported its input or output tokens.
+   - **The call stays running until its settle is written.** Only then does it free its
+     concurrency slot and its unused worst case, so until then the totals hold the worst case,
+     and `idle()` counts it as running.
+
+**Stopping.** `idle()` resolves once no call is running, at once if none is. A call ends after its
+settle append, whether the append succeeds or fails. The server's `close()` awaits it after
+closing every connection (section 1), so the process never exits between a call's abort and its
+settle, which would leave the call unsettled and counted at its worst case.
 
 **The ledger is the durable record.** On start, the gateway replays this month's file into its
 totals. A `reserve` with no `settle` (the server died mid-call) counts at its worst case, and
@@ -787,8 +818,9 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
 - The result goes into a local object, never `process.env`.
 - It takes exactly `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`, and treats an
   empty or blank value, or a missing file, as missing.
-- If any is missing, it throws `CredentialsMissing`, which names the missing variables and never
-  prints a value, so the server refuses to start with the Bedrock models. `app.ts` calls it when
+- If any is missing, it throws `CredentialsMissing`, which names the missing variables and the
+  models that need them (the section writer, the librarian and the planner) and never prints a
+  value, so the server refuses to start with the Bedrock models. `app.ts` calls it when
   `config.models` is `"bedrock"`.
 
 **Tests, all offline**
@@ -823,12 +855,16 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
     librarian turn that ends in tool calls; a mid-stream
     exception frame, a body cut off mid-frame, and a body that ends between frames without a
     stop each settle as `failed` at the full reserved output.
-  - Through the real gateway with a 200ms idle timeout: a `plan-manual` tool input sent in 12
-    fragments 100ms apart (over 1.2s in all) completes and settles as `complete`, because each
+  - Through the real gateway with a 1s idle timeout: a `plan-manual` tool input sent in 6
+    fragments 250ms apart (1.5s in all) completes and settles as `complete`, because each
     fragment restarts the timer (without the `tool-input` events it would stall); a
-    stream silent for 400ms before its input still stops with `ModelStalled`.
+    stream silent for 2s before its input still stops with `ModelStalled`.
   - `credentials.test.ts` covers reading the three keys from a temp file without touching
-    `process.env`, and refusing a missing or empty key, or a missing file.
+    `process.env`, and refusing a missing or empty key, or a missing file, with a message that
+    names the models that need them.
+- **Timing.** Tests that race the idle timer against real time leave wide margins: a pause meant
+  to stay inside a timeout is at most a quarter of it, and one meant to outlast it is at least
+  twice as long. So they hold when several test runs share the machine.
 - **Gateway.** A fake `ModelClient` covers:
   - each cap, including a call refused on its worst case, running calls and unsettled
     reservations counting at their worst case, and last month's spend not counting;
@@ -840,7 +876,18 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
     timeout beside one that uses the shared one;
   - an aborted stream, recorded at its full reserved output, and a failed one;
   - a client that ends without a `stop`, and one that ends quietly after the signal aborts;
-  - a failed reserve append, which releases the reservation.
+  - a failed reserve append, which releases the reservation;
+  - replaying a ledger with a line cut off by a crash, still counting the lines around it;
+  - `idle()`: at once with no call running, and otherwise only once every running call's settle
+    is written.
+- **Ledger.** `file-ledger.test.ts` covers a cut-off last line, an entry appended after one
+  (written on its own line, and both read back), and a line that doesn't parse in the middle of
+  the file, each skipped with a warning. `usage-report.test.ts` runs `npm run usage` on a ledger
+  with a cut-off line followed by more entries.
+- **Shutdown and concurrency.** `app.test.ts` stops a server while a librarian call is running
+  on a ledger that is slow to settle, and checks that the settle is written and the lock
+  released by the time `close()` resolves. `config.test.ts` checks that, with the committed
+  config, a librarian turn and a plan both get through while every section run is writing.
 
 **`npm run usage`** (`server/usage.ts`, with the formatting in `gateway/usage-report.ts`) prints
 today's and this month's spend (UTC) against the caps, by model and by job. It also shows call
@@ -1196,11 +1243,11 @@ export const config: ServerConfig = {
   port: API_PORT,
   dataDir: fileURLToPath(new URL("../.data", import.meta.url)),   // <repo>/.data, whatever the cwd
   models: modelsFromEnv(process.env.RTFM_MODELS),   // "fake" (default) or "bedrock"; anything else throws
-  maxConcurrentRuns: 3,
+  maxConcurrentRuns: MAX_CONCURRENT_RUNS,   // 3
   sectionWordsRequested: 650,
   sectionExpectedCharacters: 4800,
   caps: { dailyUsd: 2, monthlyUsd: 20 },
-  maxConcurrentCalls: 3,
+  maxConcurrentCalls: MAX_CONCURRENT_RUNS + CALLS_BESIDE_RUNS,   // 3 + 2
   idleTimeoutMs: 30_000,
   jobs: {
     "write-section": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 2048 },
@@ -1215,6 +1262,10 @@ export const config: ServerConfig = {
   models, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
   `startServer` and the gateway take it as it is, so tests and the shot script spread `config`
   and override what they need.
+- **`maxConcurrentCalls` is `maxConcurrentRuns + 2`**, both from one constant. The section runs
+  can use at most 3 calls between them, so 2 are always left for the librarian's turns and the
+  planner's plans, one each or two of either. With equal limits, three sections being written
+  would refuse every librarian reply with `GatewayBusy`.
 - **The `global.` model ID.** Every job uses the `global.` inference profile rather than `us.`,
   which costs 10% more; nothing here needs routing that stays in the US.
 - **`maxTokens: 2048`.** The sample sections are 460–660 words (about 650–950 tokens), so this

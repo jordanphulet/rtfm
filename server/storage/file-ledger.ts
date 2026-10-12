@@ -1,7 +1,9 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { mkdir, open, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { readIfExists } from "./files.ts";
 import type { LedgerEntry, UsageLedger } from "./types.ts";
+
+const NEWLINE = 0x0a;
 
 export function createFileLedger(dataDir: string): UsageLedger {
   const ledgerDir = path.join(dataDir, "ledger");
@@ -10,15 +12,37 @@ export function createFileLedger(dataDir: string): UsageLedger {
   return {
     async append(entry) {
       await mkdir(ledgerDir, { recursive: true });
-      await appendFile(monthFile(monthOf(entry.reservedAt)), `${JSON.stringify(entry)}\n`);
+      const file = await open(monthFile(monthOf(entry.reservedAt)), "a+");
+      try {
+        const line = `${JSON.stringify(entry)}\n`;
+        await file.appendFile((await endsMidLine(file)) ? `\n${line}` : line);
+      } finally {
+        await file.close();
+      }
     },
 
     async entriesForMonth(month) {
-      const text = (await readIfExists(monthFile(month))) ?? "";
-      const completeLines = text.split("\n").slice(0, -1);
-      return completeLines.map((line) => JSON.parse(line) as LedgerEntry);
+      const file = monthFile(month);
+      const lines = ((await readIfExists(file)) ?? "").split("\n");
+      return lines.flatMap((line, index) => {
+        if (line === "") return [];
+        try {
+          return [JSON.parse(line) as LedgerEntry];
+        } catch {
+          console.warn(`Skipped line ${index + 1} of ${file}, which isn't JSON (cut off by a crash mid-append?)`);
+          return [];
+        }
+      });
     },
   };
+}
+
+/** True when the file's last line has no newline, as a crash mid-append leaves it. */
+async function endsMidLine(file: FileHandle): Promise<boolean> {
+  const { size } = await file.stat();
+  if (size === 0) return false;
+  const { buffer } = await file.read(Buffer.alloc(1), 0, 1, size - 1);
+  return buffer[0] !== NEWLINE;
 }
 
 export function monthOf(isoTime: string): string {

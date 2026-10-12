@@ -7,7 +7,7 @@ const server = await startServer(config).catch((error: unknown) => {
   console.error(error.message);
   process.exit(1);
 });
-console.log(`API server on http://localhost:${server.port} (${config.models} models)`);
+console.log(`API server on http://127.0.0.1:${server.port} (${config.models} models)`);
 
 async function stop() {
   await server.close();

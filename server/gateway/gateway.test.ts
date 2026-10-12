@@ -1,9 +1,11 @@
-import { rm, writeFile } from "node:fs/promises";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { appendFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFileLedger } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry, UsageLedger } from "../storage/types.ts";
 import { tempDataDir, waitUntil } from "../testing.ts";
-import { createGateway, killSwitchPath, type Gateway } from "./gateway.ts";
+import { createGateway, killSwitchPath, type RunningGateway } from "./gateway.ts";
 import type { PriceTable } from "./prices.ts";
 import {
   GatewayBusy,
@@ -116,6 +118,7 @@ describe("model gateway", () => {
 
   afterEach(() => {
     for (const controller of controllers.splice(0)) controller.abort();
+    vi.restoreAllMocks();
   });
 
   function signal(): AbortSignal {
@@ -131,7 +134,7 @@ describe("model gateway", () => {
   async function gateway(
     client: ModelClient,
     { config = gatewayConfig(), now = () => NOW }: { config?: GatewayConfig; now?: () => Date } = {},
-  ): Promise<Gateway> {
+  ): Promise<RunningGateway> {
     return createGateway({ client, ledger, config, prices: PRICES, dataDir, now });
   }
 
@@ -246,6 +249,18 @@ describe("model gateway", () => {
       await expect(collect(stream)).rejects.toThrow(SpendingRefused);
     });
 
+    it("replays a ledger with a line cut off by a crash, counting every line it can read", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const crashed = { callId: "crashed", reservedAt: "2026-10-11T08:00:00.000Z", job: "write-section", model: MODEL };
+      await seedLedger([{ kind: "reserve", ...crashed, worstCaseUsd: 1.8 }]);
+      await appendFile(path.join(dataDir, "ledger", "2026-10.jsonl"), '{"kind":"settle","callId":"crashed"');
+      await seedLedger([{ kind: "reserve", ...crashed, callId: "after", worstCaseUsd: 0.01 }]);
+
+      const stream = (await gateway(fakeClient().client)).stream("write-section", EMPTY_PROMPT, signal());
+      await expect(collect(stream)).rejects.toThrow(SpendingRefused);
+      expect(warn).toHaveBeenCalledOnce();
+    });
+
     it("frees the unused part of a reservation once the call settles", async () => {
       const config = gatewayConfig({ caps: { dailyUsd: 0.6, monthlyUsd: 20 } });
       const running = await gateway(fakeClient().client, { config });
@@ -328,15 +343,14 @@ describe("model gateway", () => {
 
   it("gives a job with its own idle timeout that long, and every other job the shared one", async () => {
     const config = gatewayConfig({
-      idleTimeoutMs: 30,
-      jobs: { ...JOBS, "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS, idleTimeoutMs: 300 } },
+      idleTimeoutMs: 50,
+      jobs: { ...JOBS, "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS, idleTimeoutMs: 2000 } },
     });
     const pausing: ModelClient = {
       async *stream({ signal }) {
         const [first, ...rest] = COMPLETE_EVENTS;
         yield first!;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        signal.throwIfAborted();
+        await sleep(400, undefined, { signal });
         yield* rest;
       },
     };
@@ -475,6 +489,46 @@ describe("model gateway", () => {
     const [settle] = await settleEntries();
     expect(settle).toMatchObject({ outcome: "failed", inputTokens: EMPTY_PROMPT_BOUND, outputTokens: MAX_TOKENS, estimated: true });
     expect(settle!.usd).toBeCloseTo((EMPTY_PROMPT_BOUND * 1 + MAX_TOKENS * 5) / 1_000_000, 12);
+  });
+
+  it("is idle at once when no call is running", async () => {
+    const running = await gateway(fakeClient().client);
+    await running.idle();
+    await collect(running.stream("write-section", EMPTY_PROMPT, signal()));
+    await running.idle();
+  });
+
+  it("becomes idle only once every running call has settled and its settle is written", async () => {
+    const fileLedger = ledger;
+    let settleAppending = false;
+    let writeSettles!: () => void;
+    const settlesWritable = new Promise<void>((resolve) => (writeSettles = resolve));
+    ledger = {
+      async append(entry) {
+        if (entry.kind === "settle") {
+          settleAppending = true;
+          await settlesWritable;
+        }
+        await fileLedger.append(entry);
+      },
+      entriesForMonth: (month) => fileLedger.entriesForMonth(month),
+    };
+    const { client, requests } = fakeClient({ events: [], ending: "hang" });
+    const running = await gateway(client);
+    void collect(running.stream("write-section", EMPTY_PROMPT, signal())).catch(() => {});
+    void collect(running.stream("librarian", EMPTY_PROMPT, signal())).catch(() => {});
+    await waitUntil(() => requests.length === 2);
+
+    let idle = false;
+    void running.idle().then(() => (idle = true));
+    for (const controller of controllers) controller.abort();
+    await waitUntil(() => settleAppending);
+    await sleep(20);
+    expect(idle).toBe(false);
+
+    writeSettles();
+    await waitUntil(() => idle);
+    expect(await settleEntries()).toMatchObject([{ outcome: "aborted" }, { outcome: "aborted" }]);
   });
 
   it("refuses a call whose signal is already aborted, without reserving", async () => {

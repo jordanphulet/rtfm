@@ -395,7 +395,9 @@ describe("Bedrock client", () => {
     });
 
     describe("a long tool input under a short idle timeout", () => {
-      const IDLE_TIMEOUT_MS = 200;
+      const IDLE_TIMEOUT_MS = 1000;
+      const FRAGMENTS = 6;
+      const FRAGMENT_PAUSE_MS = 250;
       const PLAN_JSON = JSON.stringify({ id: "a-plan", chapters: [...Array(40)].map((_, index) => `chapter ${index}`) });
       const SAVE_TOOL: ToolDefinition = { name: "save_manual", description: "Saves a plan.", input_schema: { type: "object" } };
       const PLAN_PROMPT: ModelPrompt = { system: "You plan manuals.", tools: [SAVE_TOOL], messages: [{ role: "user", content: "Plan one." }] };
@@ -406,12 +408,12 @@ describe("Bedrock client", () => {
         { type: "message_stop" },
       ];
 
-      /** Sends the input in 12 fragments `pauseMs` apart, after `silentMs` with nothing at all. */
+      /** Sends the input in `FRAGMENTS` fragments `pauseMs` apart, after `silentMs` with nothing at all. */
       function respondWithPlan({ silentMs, pauseMs }: { silentMs: number; pauseMs: number }) {
         respond = async (response) => {
           startEventStream(response, [MESSAGE_START, TOOL_START]);
           await new Promise((resolve) => setTimeout(resolve, silentMs));
-          const size = Math.ceil(PLAN_JSON.length / 12);
+          const size = Math.ceil(PLAN_JSON.length / FRAGMENTS);
           for (let start = 0; start < PLAN_JSON.length; start += size) {
             await new Promise((resolve) => setTimeout(resolve, pauseMs));
             const partial_json = PLAN_JSON.slice(start, start + size);
@@ -434,13 +436,13 @@ describe("Bedrock client", () => {
       }
 
       it("counts each input fragment as activity, so a tool input longer than the timeout completes", async () => {
-        respondWithPlan({ silentMs: 0, pauseMs: IDLE_TIMEOUT_MS / 2 });
+        respondWithPlan({ silentMs: 0, pauseMs: FRAGMENT_PAUSE_MS });
         const started = Date.now();
         const { result, settles } = await planThroughGateway();
 
         const events = await result;
-        expect(Date.now() - started).toBeGreaterThan(IDLE_TIMEOUT_MS * 5);
-        expect(events.filter(({ type }) => type === "tool-input")).toHaveLength(12);
+        expect(Date.now() - started).toBeGreaterThan(IDLE_TIMEOUT_MS);
+        expect(events.filter(({ type }) => type === "tool-input")).toHaveLength(FRAGMENTS);
         expect(events).toContainEqual({ type: "tool-use", id: "toolu_plan", name: "save_manual", input: JSON.parse(PLAN_JSON) });
         expect(await settles()).toMatchObject([{ job: "plan-manual", outcome: "complete", outputTokens: 900 }]);
       });

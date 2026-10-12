@@ -23,6 +23,11 @@ export interface Gateway {
   stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncIterable<ModelEvent>;
 }
 
+export interface RunningGateway extends Gateway {
+  /** Resolves once no call is running and every call's settle has been written to the ledger. */
+  idle(): Promise<void>;
+}
+
 export interface GatewayDeps {
   client: ModelClient;
   ledger: UsageLedger;
@@ -55,13 +60,21 @@ export function killSwitchPath(dataDir: string): string {
   return path.join(dataDir, "STOP");
 }
 
-export async function createGateway({ client, ledger, config, prices, dataDir, now = () => new Date() }: GatewayDeps): Promise<Gateway> {
+export async function createGateway({
+  client,
+  ledger,
+  config,
+  prices,
+  dataDir,
+  now = () => new Date(),
+}: GatewayDeps): Promise<RunningGateway> {
   for (const { model } of Object.values(config.jobs)) {
     if (!(model in prices.models)) throw new ModelNotPriced(model);
   }
 
   const committedUsd = new Map<string, number>();
   let runningCalls = 0;
+  const idleWaiters: (() => void)[] = [];
 
   for (const call of callsFrom(await ledger.entriesForMonth(monthOf(now().toISOString())))) {
     commit(call.reservedAt, chargedUsd(call));
@@ -97,6 +110,12 @@ export async function createGateway({ client, ledger, config, prices, dataDir, n
   function release(reservation: Reservation, usd: number) {
     commit(reservation.reservedAt, usd - reservation.worstCaseUsd);
     runningCalls--;
+    if (runningCalls === 0) for (const resolve of idleWaiters.splice(0)) resolve();
+  }
+
+  function idle(): Promise<void> {
+    if (runningCalls === 0) return Promise.resolve();
+    return new Promise((resolve) => idleWaiters.push(resolve));
   }
 
   async function settle(reservation: Reservation, outcome: Outcome, reported: Partial<TokenCounts>) {
@@ -108,20 +127,23 @@ export async function createGateway({ client, ledger, config, prices, dataDir, n
       cacheReadTokens: reported.cacheReadTokens ?? 0,
     };
     const usd = costUsd(reservation.price, tokens);
-    release(reservation, usd);
     const { callId, reservedAt, job, model } = reservation;
-    await ledger.append({
-      kind: "settle",
-      callId,
-      reservedAt,
-      at: now().toISOString(),
-      job,
-      model,
-      ...tokens,
-      usd,
-      outcome,
-      estimated: !outputKnown || reported.inputTokens === undefined,
-    });
+    try {
+      await ledger.append({
+        kind: "settle",
+        callId,
+        reservedAt,
+        at: now().toISOString(),
+        job,
+        model,
+        ...tokens,
+        usd,
+        outcome,
+        estimated: !outputKnown || reported.inputTokens === undefined,
+      });
+    } finally {
+      release(reservation, usd);
+    }
   }
 
   async function* stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncGenerator<ModelEvent> {
@@ -168,7 +190,7 @@ export async function createGateway({ client, ledger, config, prices, dataDir, n
     }
   }
 
-  return { stream };
+  return { stream, idle };
 }
 
 function inputTokenBound({ system, tools = [], messages }: ModelPrompt, toolUseSystemPromptTokens: number): number {
