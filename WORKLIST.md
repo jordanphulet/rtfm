@@ -520,7 +520,7 @@ When this phase is done:
   where a fix is visible, and each change is explained.
 
 ### OH.8 — The landing page: coming back, the phone delete, and the delete flow (browser audit)
-- **Status:** todo
+- **Status:** doing (agent: a713ba4368698c110)
 - **Depends on:** OH.7 (both change `DESIGN.md`)
 - **Files:** `src/home/**`, `src/library/**`, `src/agent/**`, `src/ui/README.md`, `DESIGN.md`
 - **Do:**
