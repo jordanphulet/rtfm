@@ -149,7 +149,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   real spend is under $0.10.
 
 ### RL.7 — Creating a manual through the librarian
-- **Status:** doing (agent: a1ebd94060aea5a6c)
+- **Status:** done
 - **Depends on:** RL.6
 - **Files:** `server/agent/**`, `server/api/**`, `server/storage/**`, `server/app.ts`,
   `server/config.ts`, `server/gateway/**` (a new job), `src/agent/**`, `src/home/**`,
@@ -186,7 +186,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   the user's steps.
 
 ### RL.8b — Docs describe what exists
-- **Status:** todo
+- **Status:** doing (agent: a50ac888ad296910f)
 - **Depends on:** RL.7
 - **Files:** `ARCHITECTURE.md`, `README.md`, `DESIGN.md`, `research/**`, the folder READMEs,
   and comments in `server/**` and `src/**`
@@ -267,7 +267,7 @@ are enforced by the harness instead of resting on instructions. When this phase 
 
 ### PR.2 — Rules the harness enforces
 - **Status:** todo
-- **Depends on:** PR.1, RL.7 (RL.6 and RL.7 also change `scripts/**`)
+- **Depends on:** PR.1, RL.9 (RL.8b and RL.9 also change `README.md` and may touch anything)
 - **Files:** `.claude/settings.json` (new), `scripts/hooks/**` (new), `PROCESS.md`, `README.md`
 - **Do:**
   - `README.md`'s "Where things live" describes `PROCESS.md`, `WORKLIST.md` and `CLAUDE.md` as
