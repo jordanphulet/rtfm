@@ -414,7 +414,7 @@ When this phase is done:
   across chunks, and every markdown context left alone.
 
 ### OH.3 — Full audit
-- **Status:** todo
+- **Status:** doing (auditors: a9116061f6bc38e38 server, a0f993b8e9edb7efe browser, a077e5cbd7fe94e0d docs and tests)
 - **Depends on:** OH.1, OH.2
 - **Files:** none (read-only)
 - **Do:** auditors (the read-only role in `PROCESS.md`) review the whole repo, split by area so
