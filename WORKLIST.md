@@ -446,7 +446,7 @@ When this phase is done:
   non-JSON request is refused before any route runs.
 
 ### OH.5 — Ledger, concurrency and shutdown (server audit)
-- **Status:** todo
+- **Status:** doing (agent: ad0a94a25f48aabfb)
 - **Depends on:** OH.4
 - **Files:** `server/storage/file-ledger.ts` and its test, `server/config.ts`, `server/gateway/**`,
   `server/app.ts`, `server/main.ts`, `ARCHITECTURE.md`
@@ -543,7 +543,7 @@ When this phase is done:
   where a fix is visible, and each change is explained.
 
 ### OH.9 — A faster, steadier test suite and shot script (tests audit)
-- **Status:** todo
+- **Status:** doing (agent: a1c6d3d59c5a95a8e)
 - **Depends on:** OH.4 (both change `scripts/screenshots.ts`)
 - **Files:** `src/manual/repair.test.tsx`, `scripts/**` except `scripts/hooks/**`
 - **Do:**
