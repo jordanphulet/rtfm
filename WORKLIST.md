@@ -426,3 +426,21 @@ When this phase is done:
   added by the orchestrator.
 - **Done when:** every area is audited and its findings are either added as tasks or listed as
   not worth fixing, with a reason, in the orchestrator's summary to the user.
+
+### OH.4 — The API answers only this machine's own pages
+- **Status:** todo
+- **Depends on:** OH.3 (the server audit)
+- **Files:** `server/app.ts`, `server/api/node-adapter.ts`, `server/api/*.test.ts`,
+  `vite.config.ts`, `scripts/screenshots.ts`, `ARCHITECTURE.md`
+- **Do:**
+  - The server listens on `127.0.0.1` only (today it listens on every interface, so anyone on
+    the same network can delete manuals or spend the caps). Vite's proxy and the screenshot
+    script point at `http://127.0.0.1:<port>`.
+  - Before routing, the adapter rejects a request whose `Host` isn't `localhost`, `127.0.0.1` or
+    `[::1]` (with any port), and one whose `Origin`, when present, isn't a localhost origin; and
+    it requires `content-type: application/json` whenever a request has a body. Today any web
+    page can POST a text/plain librarian request or open a section stream and spend money.
+  - Tests for each rejection and for the normal page requests passing; ARCHITECTURE.md §1 and §2
+    describe it.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass, and a cross-origin or
+  non-JSON request is refused before any route runs.
