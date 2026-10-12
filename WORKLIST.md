@@ -211,7 +211,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   nothing but wording changed.
 
 ### RL.9 — Final check
-- **Status:** doing (agent: a1e51aa5f88ce5022)
+- **Status:** done
 - **Depends on:** RL.0, RL.1, RL.2, RL.3, RL.7, RL.8, RL.8b
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
@@ -223,6 +223,27 @@ Out of scope: web access for any model, the passphrase, and deploying.
   - Update the docs so they match the code; read the repo as a newcomer would.
 - **Done when:** all commands pass, every live check behaves as described, the docs match the
   code, and the report gives this phase's Bedrock spend from the ledger.
+
+### RL.10 — Librarian follow-ups from the final check
+- **Status:** todo
+- **Depends on:** RL.9
+- **Files:** `server/agent/librarian/**`, `server/api/**`, `src/agent/**`, `src/home/**`,
+  `DESIGN.md`, `ARCHITECTURE.md`, the READMEs for `src/agent` and `src/home`
+- **Do:**
+  - **The librarian learns how a proposed delete ended.** Today the page never reports the
+    dialog's outcome, so after the user presses Keep it, asking again gets "the confirmation is
+    already on the page" with no tool call and no dialog. Send the outcome (kept or deleted) back
+    with the conversation so the next reply knows, and make sure a repeated request always calls
+    `propose_delete` again.
+  - **No narrated tool calls.** Haiku sometimes opens a reply with "Let me get the correct id for
+    you." despite the prompt. Tighten the prompt, or drop text the model writes before a tool
+    call in the same turn, whichever is simpler and keeps replies honest.
+  - **Named-manual marks on a create request.** "Start a new manual about keeping a bonsai tree
+    alive" marked *Keeping a Sourdough Starter Alive* as "In your library" because of the word
+    "alive". Don't mark existing manuals in a message that asks to create one.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass, with tests for each; live
+  with Haiku 4.5 on `.data/`, a delete kept in the dialog and then asked for again opens the
+  dialog again; this task's real spend is under $0.05.
 
 ---
 
