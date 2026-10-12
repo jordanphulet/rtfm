@@ -194,7 +194,7 @@ generic"):
 | Gradients, glass, glows, neon | Flat fills only. The green is a muted indicator-lamp green, never saturated or haloed; the meter and write head are solid 1–3px lines; previews have a border, no blur, no shadow. |
 | Emoji as icons | None. Every mark is a glyph IBM Plex contains (`‹ › ↑ ↓`) or is drawn in CSS (rings, chevron, corner mark, tick). |
 | Rounded cards with shadows | Nothing is a card. The start page is a list; code is a tinted block with 2px corners; no shadows anywhere. |
-| Pill badges | Status is a ring plus a word. The current-row tint has 4px corners. |
+| Pill badges | Status is a ring plus a word. The TOC's current-row tint is square; start-page and ledger row tints have 4px corners. |
 | Inter on slate-900 | IBM Plex on low-chroma graphite `#121314` (slate-900 is a saturated blue). |
 | Purple or blue accent | One cue-light green with exactly two meanings (live, actionable). It never decorates. |
 | A border on every element | Hairlines with a named job only: head rule, `hr`, table rows, outline track, pager tops, previews, compact header, appendix dividers, start-page chapter lines. Columns are separated by tone or space. |
@@ -250,7 +250,7 @@ with a matching `--leading-*` token.
 | Token | Size / line | Weight · width | Use |
 | --- | --- | --- | --- |
 | `--text-micro` | 12 / 16 | Mono 400, +0.02em; or Sans 600 | Status readouts, code language tag, table headers, outline and group labels, the ledger's column header and readouts |
-| `--text-ui` | 14 / 20 | 400–600 · wdth 85 | TOC, outline, tables, previews, footnotes, subtitles in the ledger, cues |
+| `--text-ui` | 14 / 20 | 400–600 · wdth 85 (TOC, outline, tables, previews) or 100 (footnotes, start-page summaries, ledger subtitles, cues) | TOC, outline, tables, previews, footnotes, start-page summaries, subtitles in the ledger, cues |
 | `--text-reply` | 16 / 24 | 400 · wdth 100 | The librarian's replies (`ReplyMarkdown`), your messages and the field |
 | `--text-body` | **17 / 28** (phone **16 / 24**) | 400 · wdth 100 | Paragraphs, lists, H4, pager titles, ledger titles |
 | `--text-lead` | 20 / 28 (phone 17 / 28) | 400 | Section summary, start-page subtitle, blockquotes, the empty library's sentence |
@@ -288,7 +288,7 @@ job. A muted signal green (not neon, not teal), so it reads as an indicator lamp
 | `--ink` | `#D3D7D8` | Body text (cool off-white, no cream) | 12.8:1 |
 | `--ink-muted` | `#AEB4B7` | Summaries, labels, outline, footnotes, the failed status line, written-ring fill and written ticks (1.5:1 above ink-faint, so the two meta tiers stay apart) | 8.9:1 |
 | `--ink-faint` | `#8C9296` | Unwritten titles, label numerals, meta, the field's border (at least 4.7:1 on every ground, including tint) | 5.9:1 |
-| `--cue` | `#5FC48A` | GO green: live/writing state, link hover, footnote references, focus ring (at least 7.0:1 on every ground) | 8.6:1 |
+| `--cue` | `#5FC48A` | GO green: live/writing state, link hover, footnote references, focus ring (at least 6.9:1 on every ground, including tint) | 8.6:1 |
 | `--cue-deep` | `#377D57` | Link underlines and the writing-link dash (non-text, at least 3:1 on ground) | 3.8:1 |
 | `--cue-tint` | `#15261D` | A briefly highlighted target: a footnote, a ledger row, the field (ink on it 10.9:1) | — |
 | `--selection` | `#22412F` | `::selection` background (ink-strong on it 9.8:1) | — |
@@ -298,7 +298,8 @@ No second accent. Hairlines are always `--rule` or `--rule-strong`.
 ### Radii, motion and sizes
 
 - **Radii:** `--radius-s` 2px (code, inline code, checkboxes, focus ring, small buttons),
-  `--radius-m` 4px (TOC, start-page and ledger row highlights, previews, compact header buttons,
+  `--radius-m` 4px (the TOC's `Library` link and manual title, start-page and ledger row
+  highlights, previews, compact header buttons,
   the librarian's field, the cue rows, the dock's toggle, the delete confirmation). Rings are
   circles. Nothing else is rounded.
 - **Durations:** `--dur-quick` 150ms (hover color), `--dur-base` 200ms (preview, sheets, outline
@@ -597,8 +598,8 @@ manager says plainly what happened. It is the settle without the finish.
 - **It never scrolls on its own.** The **tail line** sits just below the live block: micro mono,
   the readout `Being written · 46%` in cue, and a **Follow ↓** text button (`aria-pressed`). When
   pressed it reads `Following ↓` in cue and keeps the tail line 24px above the viewport bottom after
-  each chunk (an instant scroll, never smooth). Any upward scroll (wheel, touch, PageUp, ↑, Home)
-  or a second press stops it. The tail line is removed when writing ends or fails; it is the lowest
+  each chunk (an instant scroll, never smooth). An upward wheel scroll, any touch scroll, PageUp, ↑,
+  Home or a second press stops it. The tail line is removed when writing ends or fails; it is the lowest
   thing on the page, so nothing above moves.
 - Screen readers: a visually hidden `aria-live="polite"` region announces only state changes
   ("Being written", "Written", or a failure), never percentages.
@@ -918,7 +919,8 @@ console's channel list.
   - **Written cell:** the readout `3 of 14`, `--text-micro` mono, tabular, `--ink-muted` (`--ink-faint`
     at 0), with a visually hidden ` sections written`; 4px below, the **section strip**.
   - **Delete cell:** a `.text-button` `Delete` (`--text-ui`, wdth 85), `--ink-faint`, aligned to
-    the first line of the title, pulled right by `--space-2` so its text meets the ledger edge.
+    the first line of the title, pulled right by `--space-2` so its text, not its padded box, ends
+  on the row's text edge.
     Accessible name `Delete The Birthday Party Field Manual`. `data-shot="delete"`. It sits above
     the stretched link (`position: relative; z-index: 1`).
 - **Hover:** the row takes `--ground-hover`, the title turns `--cue` (`--dur-quick`). Hovering
@@ -1061,8 +1063,8 @@ text edge.
   in. Chunks themselves just appear, with no fade or typewriter effect.
 - **The settle** (streaming → idle): the bar retracts and the lamp goes out. Green leaves the
   panel.
-- Replies use ordinary wrapping, never `pretty` (`ReplyMarkdown` handles this), so lines already
-  written never re-flow.
+- Replies use ordinary wrapping, never `pretty` (nothing in `ReplyMarkdown` or `.markdown` sets
+  `text-wrap`), so lines already written never re-flow.
 
 ### When a reply fails
 
@@ -1125,7 +1127,7 @@ nothing out. While a confirmation is open, those actions do nothing.
   chunk never counts as scrolling away.
 - **Newest ↓.** While you're more than 24px from the bottom, the composer's readout slot (below)
   becomes a `.text-button` `Newest ↓`, or `Replying ↓` with a breathing lamp (`.write-head-lamp`)
-  while a reply streams. It jumps to the bottom (instant) and resumes following. It lives in a
+  while a reply is in progress (thinking or streaming). It jumps to the bottom (instant) and resumes following. It lives in a
   fixed slot, never floating over the text.
 
 ### The composer: the most prominent control
@@ -1220,7 +1222,7 @@ down to the top of the dock (the dock and sheet share one fixed grid, so the doc
   hairline once scrolled, so short conversations hang from a titled top instead of floating under
   empty ground. Then the same conversation as the panel (intro and cues when empty), padding 16px
   `--panel-pad` 16px `--panel-gutter`, newest at the bottom. When you've scrolled up, `Newest ↓`
-  (`Replying ↓` with the lamp while a reply streams) appears in a slot at the sheet's foot.
+  (`Replying ↓` with the lamp while a reply is in progress) appears in a slot at the sheet's foot.
 - **Where focus goes when it opens** (`focusOnOpen`):
   - after a send: the dock's field, so the keyboard stays up;
   - from the toggle: the conversation's scroll region;
@@ -1390,13 +1392,14 @@ about.
 
 | What | Motion | Reduced motion |
 | --- | --- | --- |
-| Hover colors (only under `(hover: hover)`, so nothing sticks after a tap on touch) | `--dur-quick` `--ease-out` | Instant (token) |
+| Hover colors (under `(hover: hover)`, or undone under `(hover: none)` for the shared link and text-button hovers, so nothing sticks after a tap on touch) | `--dur-quick` `--ease-out` | Instant (token) |
 | Thinking line appearing | Fade in, `--dur-base` | Appears |
 | Lamp | `breathe`, `--dur-breathe` | Steady lamp |
 | Write-head bar | Draws in, `--dur-quick`; retracts on settle, `--dur-settle` | Present while streaming, gone when done |
 | Shelf mark | Fade, `--dur-base` | Appears and disappears |
 | Row flash (named-manual jump), field flash (cue loaded) | `target-flash`: `--cue-tint` fading over `--dur-target` | A static `--cue-tint` until focus leaves the row or field |
-| Phone sheet, confirmation | `Sheet` fade and 8px rise, `--dur-base` `--ease-out` | Appear (token) |
+| Phone sheet, phone confirmation | Fade and 8px rise, `--dur-base` `--ease-out` | Appear (token) |
+| Desktop confirmation | `Sheet` fade and 8px drop, `--dur-base` `--ease-out` | Appears (token) |
 | Scrim | Fade, `--dur-base` | Appears |
 | Deleted row | Collapse, `--dur-base` `--ease-in-out` | Removed at once |
 | Panel header line | Fades in, `--dur-settle` | Appears |
@@ -1408,7 +1411,8 @@ switched off where it is defined; all the information stays.
 ## States
 
 Each state is set up by a URL option (`src/library/README.md`, `src/agent/README.md`), a few
-clicks, or (for the failures) the shot script answering the page's API requests itself, and
+clicks, or (for the failures and `created`) the shot script answering or rewriting the page's
+API requests itself, and
 `npm run shot` captures it at both sizes. The library is the seven seed manuals as a fresh server
 serves them: *The Haunt That Listens* 7 of 18 written, the others 0. Every reply is the server's
 scripted fake model's, so the shots cost nothing and never change between runs.
@@ -1417,9 +1421,9 @@ scripted fake model's, so the shots cost nothing and never change between runs.
 | --- | --- | --- |
 | `first-visit` | Full ledger (7 rows, in title order); panel with the intro and four cues above the field, which has focus | Head and rows; dock reading `Librarian · Try asking` |
 | `typing` | Draft in the field (focus ring, hint `Enter sends…`); the Birthday Party row marked | Draft in the dock's field; the Birthday Party row marked |
-| `thinking` | Your treehouse line, then the thinking lamp, at the bottom of the panel | Sheet open (conversation loaded), same, above the dock; toggle `Thinking…` |
+| `thinking` | Your treehouse line, then the thinking lamp, at the bottom of the panel | Sheet open (conversation loaded), same, above the dock; the sheet's header reads `Thinking…`, the toggle `Library · 7 manuals` |
 | `working` | The same, with the planner's line: `Planning “Building a Treehouse”…` in the thinking line and the header | The same in the sheet |
-| `streaming` | The reply about the new treehouse manual half-written, bar and lamp on the live paragraph | The same in the sheet; toggle `Replying…` |
+| `streaming` | The reply about the new treehouse manual half-written, bar and lamp on the live paragraph | The same in the sheet; its header reads `Replying…` |
 | `created` | The same reply settled (“*Building a Treehouse* is on your shelf… Shall I open it?”); the library has loaded again, with the new *Building a Treehouse* row in title order (8 manuals) | Sheet open on the reply |
 | `conversation` | Three exchanges (the list of manuals, “Opening *The Haunt That Listens*.”, the fallback), scrolled to the newest; the Sourdough row marked; named-manual lines under turns 2 and 3 | Sheet open at the newest |
 | `delete-confirm` | First row lit above the scrim, confirmation anchored under it on the Written column, focus on Keep it | Confirmation at the bottom edge, first row lit |
@@ -1453,8 +1457,8 @@ Hooks: `agent-input` on the field (one is visible at every width), `delete` on e
 ## Build structure
 
 The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/library/` (the manuals:
-`useLibrary()`, `deleteManual()`, `removeFromLibrary()`) and `src/agent/` (the librarian:
-`useAgent()`, `useAgentActions()`).
+`useLibrary()`, `refreshLibrary()`, `deleteManual()`, `removeFromLibrary()`) and `src/agent/` (the
+librarian: `useAgent()`, `useAgentActions()`, `LIBRARIAN_LIMITS`).
 
 - `index.tsx`: `Home` wraps `HomePage` in `LibraryErrorBoundary` (its own file, styled by
   `library-error.css`), which shows the unreachable notice. `HomePage` is the `ui home` root. It

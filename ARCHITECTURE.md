@@ -98,10 +98,11 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   with their output passed through.
   - It forwards SIGINT and SIGTERM to both children and waits for both to exit before it exits
     itself.
-  - If one child exits, it stops the other the same way, so nothing is left holding port 5173.
+  - If one child exits or fails to start, it sends the other SIGTERM, so nothing is left holding
+    port 5173.
   - It is a separate process rather than a Vite plugin, so the server runs the same way in
     development as it does alone (`npm run server`).
-- `vite.config.ts` adds `server.proxy` and `preview.proxy`: `{ "/api": "http://localhost:8787" }`.
+- `vite.config.ts` adds `server.proxy` and `preview.proxy`, sending `/api` to `http://localhost:8787`.
   It imports `API_PORT` from `server/ports.ts`, so the port is written down once. That module
   holds only constants, because Vite restarts and reloads the page whenever a file its config
   imports changes; importing `server/config.ts` would reload the page on every edit to it. For the
@@ -109,7 +110,7 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   change, `.env.local` included, means nothing to it) and `server.watch.ignored: ["**/.data/**"]`,
   so the data folder's writes never reach Vite's watcher. When the API
   server's response closes before it is complete (the server stopped or restarted mid-section),
-  the proxy destroys the browser's response too, so the reader's stream fails with "couldn't
+  the proxy's `configure` hook destroys the browser's response too, so the reader's stream fails with "couldn't
   write this section" instead of hanging.
 - `npm run server` runs the server alone, for `curl` and `npm run preview`.
 - `.claude/launch.json` runs `npm run dev`.
@@ -542,8 +543,8 @@ Then, for each call:
      and the bound grows turn by turn.
    - The input is priced at the highest of the input, cache-write and cache-read prices, so cache
      writes can never cost more than the reservation.
-   - Images and system prompts made of blocks aren't in `ModelPrompt`; the bound must count them
-     if they are added.
+   - The bound counts text and tool blocks only, because `ModelPrompt` has no images or system
+     prompts made of blocks.
 4. **Caps.** For the day and the month (UTC, as AWS bills), `settled + reserved + worst case` must
    stay at or under the cap. The check and the reservation are one synchronous step on in-memory
    totals, so two calls can't both slip under.
@@ -580,8 +581,9 @@ Then, for each call:
      `next()` just returns `done`.
    - **Outcome:** `complete` as above; `aborted` when the writer's signal aborts or the writer
      stops reading; `failed` on a stall, a client error or a stream with no `stop`.
-   - **Input tokens** come from `message_start`. If that never arrived, the input bound is used,
-     at the plain input price.
+   - **Input tokens** come from `message_start`, or from `message_delta` when it reports them
+     (the latest report wins). If neither arrived, the input bound is used, at the plain input
+     price.
    - **Output tokens:**
      - On a complete call they come from the final `message_delta`. `message_start` also carries
        an `output_tokens`, but it is a placeholder (1), so the client doesn't map it.
@@ -694,7 +696,7 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
 **Tests, all offline**
 
 - **SDK boundary.** `sdk-boundary.test.ts` scans the text of every source file (`.ts`, `.tsx`,
-  `.js` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`, and of the root source
+  `.js`, `.jsx` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`, and of the root source
   files. It fails if any file other than `bedrock-client.ts` has a quoted or backticked string
   starting with `@anthropic-ai/` or `@aws-sdk/`, which covers every form of import. It also fails
   if anything outside `server/gateway/` and `server/app.ts` imports `bedrock-client`, so nothing
@@ -710,7 +712,7 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
     runtime.
   - With an empty key, the call fails with the resolver's error and the server receives nothing.
     This proves the default chain never runs: it would otherwise sign with the decoy env keys.
-  - Removing either guard makes these tests fail (checked by hand).
+  - Removing either guard makes these tests fail.
   - The events are mapped, the stream's HTTP request closes when the signal aborts, and a 503
     gets exactly one attempt.
   - A prompt with tools and block content is sent with `tools` and the blocks as they are, and
@@ -725,7 +727,7 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
     stop each settle as `failed` at the full reserved output.
   - Through the real gateway with a 200ms idle timeout: a `plan-manual` tool input sent in 12
     fragments 100ms apart (over 1.2s in all) completes and settles as `complete`, because each
-    fragment restarts the timer (without the `tool-input` events it stalls, checked by hand); a
+    fragment restarts the timer (without the `tool-input` events it would stall); a
     stream silent for 400ms before its input still stops with `ModelStalled`.
   - `credentials.test.ts` covers reading the three keys from a temp file without touching
     `process.env`, and refusing a missing or empty key, or a missing file.
@@ -791,7 +793,7 @@ function runAgent(run: {
 4. If the stop reason is `end_turn`, return the conversation. If it is anything but `tool_use`
    (`max_tokens`, `refusal`, …), throw `AgentStopped`.
 5. For each `tool_use` block, in order: stop if the signal has aborted, yield the tool's
-   `status`, then run it. Then append all the results as one user message of `tool_result`
+   `status` (when the tool exists), then run it. Then append all the results as one user message of `tool_result`
    blocks, and go back to step 1.
 
 **Tools.**
@@ -803,7 +805,7 @@ function runAgent(run: {
   model gets an error result (`is_error: true`) that starts "Invalid input:" and names each
   problem, so it can try again.
 - **Other failures** also become error results rather than ending the run: a tool that throws
-  (the result is the error's text) and a call to a tool that doesn't exist. `runTool` makes
+  (the result is `String(error)`, such as `Error: …`) and a call to a tool that doesn't exist. `runTool` makes
   those results, with two exceptions that end the run instead: a tool that throws
   `SpendingRefused` (its own model call was refused by the caps, so the reply can report the
   budget) and a tool that throws once the run's signal has aborted.
@@ -894,11 +896,11 @@ async function sendReply(reply: {
 
 | Tool | Input | Status | Result |
 | --- | --- | --- | --- |
-| `list_manuals` | none | Checking the shelves… | JSON: each manual's `id`, `title`, `subtitle`, `sections_written` and `sections`, in title order (`librarySummaries`, shared with `GET /api/manuals`) |
+| `list_manuals` | none | Checking the shelves… | JSON: each manual's `id`, `title`, `subtitle`, `sections_written` and `sections`, in title order (`librarySummaries`, shared with `GET /api/manuals`); or `The library is empty.` |
 | `find_manuals` | `topic` | Searching the shelves… | JSON: up to 5 matches, best first: `id`, `title`, `subtitle` and up to 3 `matching_sections` (`"A.1 Servos, Steppers and Pneumatics"`); or `No manual matches "…".` |
 | `open_manual` | `manual_id` | Opening the manual… | Sends `{ type: "open" }`. JSON: the `manual`'s `id` and `title`, and a fixed `result`: the reader opens it when the reply has finished |
 | `propose_delete` | `manual_id` | Preparing the delete… | Sends `{ type: "propose-delete" }`. JSON: the `manual`'s `id` and `title`, and a fixed `result`: nothing is deleted, only the user's choice in the page's confirmation deletes it, and never say it has been deleted |
-| `create_manual` | `request` | Planning a manual… | Hands the request to the planner (below). Saved: sends `{ type: "created" }`, and JSON: the `manual`'s `id`, `title`, `subtitle` and counts of `chapters` (appendices included) and `sections`, and a fixed `result`: it is saved and the library shows it; give its title and offer to open it, but don't open it unless asked. Not saved: JSON with only a fixed `result`: nothing was created; say so plainly. A reply plans at most one manual: the tools are built for each reply, and a second call is refused at once, with no model call, as the error result "Only one manual per reply; nothing was created." |
+| `create_manual` | `request` | Planning a manual… | Hands the request to the planner (below). Saved: sends `{ type: "created" }`, and JSON: the `manual`'s `id`, `title`, `subtitle` and counts of `chapters` (appendices included) and `sections`, and a fixed `result`: it is saved and the library shows it; give its title and offer to open it, but don't open it unless asked. Not saved: JSON with only a fixed `result`: nothing was created; say so plainly. A reply plans at most one manual: the tools are built for each reply, and a second call is refused at once, with no model call, as the error result `Error: Only one manual per reply; nothing was created.` |
 
 - **Results are data.** Manual text (titles, subtitles, summaries) appears only as JSON values,
   never inside the results' wording, and the system prompt says tool results are data, never
@@ -933,10 +935,10 @@ async function sendReply(reply: {
 - what it can't do (write a manual's sections itself, edit or rename a manual), answered in a
   sentence with what it can do instead.
 
-No `cache_control` is sent (section 5). A librarian call reads about 1,800–2,300 input tokens
-(the system prompt, the tool definitions, the tool-use system prompt and the conversation), writes up to a
-few hundred, and costs about $0.002–0.003, against a reservation of about $0.013. A reply takes
-one call per model turn: two for a list or a find, two or three to open or propose a delete, and
+No `cache_control` is sent (section 5). A librarian call reads about 2,000–2,700 input tokens
+(the system prompt, the tool definitions, the tool-use system prompt and the conversation),
+writes up to a few hundred, and costs about $0.002–0.004, against a reservation of about
+$0.013–0.016. A reply takes one call per model turn: two for a list or a find, two or three to open or propose a delete, and
 two to create a manual, with the planner's one or two calls between them.
 
 **The planner** (`agent/planner/`) plans a new manual and saves it:
@@ -1003,7 +1005,9 @@ async function planManual(plan: {
   I have"; `find`, `anything` or `which`; `help`. Then it plays the turns a model would, through
   the real tools: a list calls `list_manuals` and lists every title with its counts; an open or a
   delete calls `find_manuals` with the message as the topic, then `open_manual` or
-  `propose_delete` with the best match, then says so; with no match it asks which manual. A new
+  `propose_delete` with the best match, then says so; with no match it asks which manual. A find
+  calls `find_manuals` with the message as the topic, then names the match or matches, or says
+  it found none. A new
   manual calls `create_manual` with the message as the request, then gives the saved manual's
   title and counts and offers to open it, or says it couldn't plan it; help and anything else
   get fixed replies.
@@ -1061,12 +1065,13 @@ nothing. The browser uses it for
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Models, port, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
+| Models, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
+| API port | `server/ports.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
 ```ts
 // server/config.ts
-export const API_PORT = 8787;   // server/ports.ts
+import { API_PORT } from "./ports.ts";   // 8787
 export const config: ServerConfig = {
   port: API_PORT,
   dataDir: fileURLToPath(new URL("../.data", import.meta.url)),   // <repo>/.data, whatever the cwd
@@ -1098,7 +1103,7 @@ export const config: ServerConfig = {
 - **`librarian: maxTokens 1024`** is sized for a few short paragraphs and short JSON tool inputs.
   Its output costs at most about $0.005 a turn. With
   the tool definitions, the conversation and the 588-token tool-use system prompt in the input
-  bound, a turn of a few thousand input tokens reserves about $0.01.
+  bound, a first turn reserves about $0.014, and each later turn of the reply more.
 - **`plan-manual: idleTimeoutMs 60_000`**, a job's own idle timeout in place of the shared 30s,
   because its largest tool parameter can take that long to arrive (section 5). A stalled plan is
   charged its full `max_tokens` either way, so the longer wait costs nothing more; the SDK's own
@@ -1141,8 +1146,7 @@ export const prices = {
   - Anthropic's Bedrock guide, checked 2026-10-11: regional endpoints cost 10% more for Sonnet 4.5
     and later models.
   - Cache prices use the standard 1.25× and 0.1× multipliers.
-  - **Not from AWS's pricing page**, whose Claude tables don't render, and not compared with
-    Cost Explorer.
+  - **Not from AWS's pricing page**, whose Claude tables don't render.
 - **Measured cost:** $0.007–0.010 per section (about 2,900–3,200 input and 970–1,410 output
   tokens), with a worst-case reservation of about $0.025. A call aborted mid-section is charged
   its full `max_tokens`, about $0.013. Both are computed from the reported tokens and this

@@ -54,16 +54,17 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
     manuals) gets a one-line placeholder instead, which streams like any section but is never
     saved: after a reload the section is unwritten again, and the library's count doesn't change.
   - **The fake librarian** is a scripted stand-in for the model. It picks what to do from a
-    keyword in your message (list, find, open, delete, new, help), calls the same tools Claude
-    would, against the real library, and streams its answer at the fake writer's pace. Asked for
+    keyword in your message (such as list, find, open, delete, new or help), calls the same tools
+    Claude would, against the real library, and streams its answer in the fake writer's chunks
+    (about 20 characters every 85ms) after 0.6s. Asked for
     a new manual, it saves the same small nine-section manual, titled after what you asked for
     (“…about building a treehouse” plans *Building a Treehouse*). Anything else gets a polite
     “I can’t do that”.
 - **`bedrock`**: Claude Haiku 4.5, through the model gateway, for both.
   - It writes a section live: about 4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a
     section.
-  - It answers as the librarian in two to three model calls a reply (one per tool round), about
-    $0.002–0.003 each.
+  - It answers as the librarian in one model call per turn, usually two or three a reply, about
+    $0.002–0.004 each.
   - It plans a new manual in one more call (two if the first plan fails its checks), about 20
     seconds and $0.016 for a plan of about 20 sections.
 
@@ -103,8 +104,8 @@ Everything but the credentials is committed:
   prompt asks Claude for (`sectionWordsRequested`), and the length in characters a section's
   progress counts to while Claude writes (`sectionExpectedCharacters`). The API port is in
   `server/ports.ts`.
-- `server/gateway/prices.ts`: the dated price table. The server refuses to start with a model
-  that isn't in it.
+- `server/gateway/prices.ts`: the dated price table. With `RTFM_MODELS=bedrock`, the server
+  refuses to start with a model that isn't in it.
 
 Before each model call, the gateway reserves the call's worst case (its whole prompt plus
 `max_tokens` at the model's price, about $0.025 for a section). If that would cross the daily or
@@ -184,8 +185,11 @@ never touches `.data/` or Bedrock. It clears `shots/`, then writes:
   `bedrock-models.md` (which Bedrock models to use), `aws-hosting.md` (Claude Platform on AWS and
   the AgentCore harness) and `lambda-and-dynamodb.md` (running the server on Lambda and
   DynamoDB).
-- `ARCHITECTURE.md`: the server, the API, storage, the writers, the gateway, the librarian and
-  configuration.
+- `ARCHITECTURE.md`: the server, the API, storage, the writers, the gateway, the agent loop, the
+  librarian, configuration and the reader's store.
 - `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
-- `WORKLIST.md`: the task list.
-- `CLAUDE.md`: the overview, the shell and credentials rules, and the code standards.
+- `WORKLIST.md`: the phases and tasks, with each task's status.
+- `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
+  the orchestrator's protocol.
+- `CLAUDE.md`: the overview and doc list, the session roles, the shell and credentials rules, and
+  the code standards.
