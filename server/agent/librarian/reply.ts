@@ -29,7 +29,12 @@ export async function sendReply({ gateway, store, conversation, signal, send }: 
     gateway: countingTurns,
     job: "librarian",
     system: LIBRARIAN_SYSTEM_PROMPT,
-    tools: librarianTools({ store, onAction: (action) => send({ event: "action", data: action }) }),
+    tools: librarianTools({
+      gateway,
+      store,
+      onStatus: (text) => send({ event: "status", data: { text } }),
+      onAction: (action) => send({ event: "action", data: action }),
+    }),
     messages: conversation.map(promptMessage),
     signal,
   });

@@ -1,4 +1,4 @@
-export type Job = "write-section" | "librarian";
+export type Job = "write-section" | "librarian" | "plan-manual";
 
 export interface ToolDefinition {
   name: string;
@@ -40,6 +40,7 @@ export interface ModelClient {
 export type ModelEvent =
   | { type: "text"; text: string }
   | { type: "tool-use"; id: string; name: string; input: unknown }
+  | { type: "tool-input"; json: string }
   | { type: "usage"; inputTokens?: number; outputTokens?: number; cacheWriteTokens?: number; cacheReadTokens?: number }
   | { type: "stop"; reason: string };
 
@@ -47,7 +48,8 @@ export interface GatewayConfig {
   caps: { dailyUsd: number; monthlyUsd: number };
   maxConcurrentCalls: number;
   idleTimeoutMs: number;
-  jobs: Record<Job, { model: string; maxTokens: number }>;
+  /** A job's own `idleTimeoutMs`, if it has one, replaces the shared one for its calls. */
+  jobs: Record<Job, { model: string; maxTokens: number; idleTimeoutMs?: number }>;
 }
 
 export type SpendingRefusal = "daily-cap" | "monthly-cap" | "kill-switch";

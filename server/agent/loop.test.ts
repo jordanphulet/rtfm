@@ -56,6 +56,7 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
     jobs: {
       "write-section": { model: MODEL, maxTokens: 2048 },
       librarian: { model: MODEL, maxTokens: 1024 },
+      "plan-manual": { model: MODEL, maxTokens: 4096 },
     },
   };
   const { client, prompts } = scriptedClient(turns);
@@ -194,6 +195,41 @@ describe("the agent loop", () => {
     expect(prompts[1]!.messages.at(-1)!.content).toEqual([
       { type: "tool_result", tool_use_id: "call-1", content: "Error: The shelf is locked", is_error: true },
     ]);
+  });
+
+  it("lets a tool's own refusal by the caps, or its abort, end the run instead of answering the model", async () => {
+    const refusing = defineTool({
+      name: "plan_manual",
+      description: "Plans a manual with its own model call.",
+      input: {},
+      status: "Planning…",
+      run: async () => {
+        throw new SpendingRefused("daily-cap");
+      },
+    });
+    const refused = await librarian([toolUseTurn([{ id: "call-1", name: "plan_manual" }]), textTurn("Unused.")], {
+      extraTools: [refusing],
+    });
+    await expect(drain(refused.run())).rejects.toThrow(SpendingRefused);
+    expect(refused.prompts).toHaveLength(1);
+
+    const controller = new AbortController();
+    const aborting = defineTool({
+      name: "plan_manual",
+      description: "Plans a manual with its own model call.",
+      input: {},
+      status: "Planning…",
+      run: async (_input, signal) => {
+        controller.abort();
+        signal.throwIfAborted();
+        return "unreachable";
+      },
+    });
+    const aborted = await librarian([toolUseTurn([{ id: "call-1", name: "plan_manual" }]), textTurn("Unused.")], {
+      extraTools: [aborting],
+    });
+    await expect(drain(aborted.run(controller.signal))).rejects.toThrow(/abort/i);
+    expect(aborted.prompts).toHaveLength(1);
   });
 
   it("stops mid-run when the gateway's caps refuse the next turn", async () => {

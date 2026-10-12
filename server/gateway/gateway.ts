@@ -139,7 +139,8 @@ export async function createGateway({ client, ledger, config, prices, dataDir, n
     let stopped = false;
     let outcome: Outcome = "aborted";
     const cutOff = new AbortController();
-    const idle = idleTimer(config.idleTimeoutMs, () => cutOff.abort(new ModelStalled(config.idleTimeoutMs)));
+    const idleTimeoutMs = config.jobs[job].idleTimeoutMs ?? config.idleTimeoutMs;
+    const idle = idleTimer(idleTimeoutMs, () => cutOff.abort(new ModelStalled(idleTimeoutMs)));
     try {
       idle.restart();
       const events = client.stream({ model, maxTokens, prompt, signal: AbortSignal.any([signal, cutOff.signal]) });

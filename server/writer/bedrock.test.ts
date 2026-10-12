@@ -31,6 +31,7 @@ function gatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
     jobs: {
       "write-section": { model: MODEL, maxTokens: 2048 },
       librarian: { model: MODEL, maxTokens: 1024 },
+      "plan-manual": { model: MODEL, maxTokens: 4096 },
     },
     ...overrides,
   };

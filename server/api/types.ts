@@ -58,7 +58,10 @@ export const LIBRARIAN_LIMITS = {
   messageCharacters: 4000,
 };
 
-export type PageAction = { type: "open"; manualId: string } | { type: "propose-delete"; manualId: string };
+export type PageAction =
+  | { type: "open"; manualId: string }
+  | { type: "propose-delete"; manualId: string }
+  | { type: "created"; manualId: string };
 
 export type LibrarianEvent =
   | { event: "status"; data: { text: string } }

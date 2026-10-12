@@ -48,14 +48,15 @@ export function previewFraction(query: URLSearchParams): number | undefined {
 /**
  * The scripted fake model's reply to the conversation, whatever model is configured, played at
  * once and cut at the last chunk end at or before the fraction: the statuses and text up to the
- * cut, then `frozen`, or `done` when nothing was cut. Page actions are never sent.
+ * cut, then `frozen`, or `done` when nothing was cut. Page actions are never sent, and a manual it
+ * plans is never saved.
  */
 export function librarianPreview(store: ManualStore, conversation: LibrarianMessage[], fraction: number): EventStream {
   return async (sink) => {
     const events: LibrarianEvent[] = [];
     await sendReply({
       gateway: fakeLibrarianModel(INSTANT_PACE),
-      store,
+      store: { ...store, createManual: async () => "created" },
       conversation,
       signal: new AbortController().signal,
       send: (event) => events.push(event),

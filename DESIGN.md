@@ -20,14 +20,14 @@ code and this doc disagree, one of them is a bug.
   - the reader shows the manual named in its URL, which the server stores, writes and streams in;
   - the library lists the manuals the same server stores (`src/library/`);
   - the librarian is an agent on the server that lists, finds, opens and proposes deleting
-    manuals, and the page shows its replies and carries out what it opens or proposes
-    (`src/agent/`).
+    manuals, and starts new ones, which an LLM plans; the page shows its replies, carries out
+    what it opens or proposes, and lists what it creates (`src/agent/`).
 - **Failure states only where something can fail:** a section the server couldn't write has two
   (see [When a section can’t be written](#when-a-section-cant-be-written)); on the landing page,
   the library can fail to load ([The library can’t be reached](#the-library-cant-be-reached)), a
   delete can fail ([When a delete fails](#when-a-delete-fails)), and a reply can fail ([When a
-  reply fails](#when-a-reply-fails)). The librarian can't create a manual: asked for one, it says
-  so.
+  reply fails](#when-a-reply-fails)). A new manual whose plan fails its checks isn't created, and
+  the librarian says so in its reply, as words, not as a failure state.
 - **Dark only.**
 
 ## Data model
@@ -116,6 +116,9 @@ These rules are locked: any change to the landing page keeps them.
 - It acts only through the page: it can **open** a manual (the page goes to the reader) and
   **propose a delete** (the page opens its own delete confirmation for that manual). **Only your
   confirmation in that dialog deletes**; neither the librarian nor the page deletes on its own.
+- It can **start a new manual** when you ask for one. While the manual is planned, the thinking
+  state says so; once it is saved, the library shows it at once, and the librarian offers to open
+  it.
 - The conversation stays while you're on the page.
 - If you've scrolled up in the conversation, a new reply never pulls you back down.
 
@@ -820,8 +823,9 @@ shown as a channel strip. The librarian is the prompt corner beside it, a calm c
 - **The corner points at the shelf.** When your draft or your latest message names a manual, that
   row is marked on the shelf, and the turn in the conversation carries a link that takes you to it.
 - **The corner calls the cue; the shelf runs it.** When the librarian opens a manual, the page
-  goes to it; when it proposes a delete, the shelf's own confirmation rises over that row. The
-  librarian never changes the library itself: the deciding control is always the library's.
+  goes to it; when it proposes a delete, the shelf's own confirmation rises over that row; when
+  it starts a new manual, the new row takes its place on the shelf. The librarian only ever adds
+  to the library, and only when you ask: deleting is always the library's own control.
 
 The named-manual link is visual only: a mark and a jump, never an action. The conversation is a
 persistent log that stays beside the library for the whole visit, never a transient popup; the
@@ -1042,6 +1046,11 @@ text edge.
     line, and stays until the next words arrive: `Checking the shelves…` (listing),
     `Searching the shelves…` (finding), `Opening the manual…`, `Preparing the delete…`,
     `Planning a manual…` (asked for a new one). The words change in place, with no motion.
+  - **Planning a manual** takes about half a minute, so its line moves on as the plan does: about
+    a second in, once the planned title has arrived, `Planning “Restoring a Vintage Pinball
+    Machine”…`; if the first plan fails its checks, `Revising the plan…`, then `Revising “…”…`.
+  - The activity is one line, here and in the header: a line too long for the panel ends in an
+    ellipsis (`text-overflow`), and the live region still says it whole.
   - **Mid-reply.** When a tool runs after some of the reply has arrived, the reply settles (its
     bar retracts) and the thinking line returns under it, 12px below, with the tool's line. The
     next words continue the same reply as a new paragraph, and the bar comes back on them.
@@ -1075,11 +1084,17 @@ in the reader's terms:
 - Any action the reply would have carried is dropped.
 - The live region announces the reply so far, then the title and the sentence.
 
-### Opening and proposing a delete
+### Opening, proposing a delete, and a new manual
 
-The librarian's tools hand the page an action. The page carries it out **when the reply is
-done**, so you read what the librarian said first; a reply that fails carries nothing out. While
-a confirmation is open, an action does nothing.
+The librarian's tools hand the page an action. The page carries out an open or a proposed delete
+**when the reply is done**, so you read what the librarian said first; a reply that fails carries
+nothing out. While a confirmation is open, those actions do nothing.
+
+- **A new manual:** the server has already saved it, so the page loads the library again **as
+  soon as it hears**, before the reply has finished and even if the reply then fails. The new row
+  appears in title order, as any row would, with no flash, scroll or focus change: you are still
+  talking to the librarian, whose reply names the manual and offers to open it. The named-manual
+  line under your message stays as it was when you sent it, before the manual existed.
 
 - **Open:** the page goes to `/read/<its id>`, as clicking the row would. The conversation stays
   for when you come back.
@@ -1153,7 +1168,7 @@ against the composer**, so they read as one unit with it (and the first exchange
 same place):
 
 - `Ask about your manuals` `--text-h3` 600 `--ink-strong`; 8px; `It can list, find and open your
-  manuals, and delete one once you confirm.` `--text-ui` `--ink-muted`, `pretty`.
+  manuals, start a new one, and delete one once you confirm.` `--text-ui` `--ink-muted`, `pretty`.
 - 24px; `Try asking`, `--text-micro` Sans 600 `--ink-muted`; 8px; up to four **cues**, each a
   `<button>` row: `--text-ui` `--ink`, in curly quotes, padding 8px 12px pulled left by 12px so the
   text aligns, `--radius-m`, hover `--ground-hover` and `--ink-strong`. Drawn from the library
@@ -1238,8 +1253,8 @@ Every one is a single click, tap or keystroke, at every width.
 ### The delete confirmation
 
 A true modal, anchored to the row it deletes, so you see exactly what's going. The row's
-**Delete** opens it, and so does the librarian when it proposes a delete ([Opening and proposing a
-delete](#opening-and-proposing-a-delete)): the same dialog, the same steps.
+**Delete** opens it, and so does the librarian when it proposes a delete ([Opening, proposing a
+delete, and a new manual](#opening-proposing-a-delete-and-a-new-manual)): the same dialog, the same steps.
 
 - **The modal:** a `Sheet` with `role="alertdialog"`, `aria-modal="true"`, `aria-labelledby` on
   its title and `aria-describedby` on its text. The page wrapper (skip link, library, and panel or
@@ -1403,8 +1418,9 @@ scripted fake model's, so the shots cost nothing and never change between runs.
 | `first-visit` | Full ledger (7 rows, in title order); panel with the intro and four cues above the field, which has focus | Head and rows; dock reading `Librarian · Try asking` |
 | `typing` | Draft in the field (focus ring, hint `Enter sends…`); the Birthday Party row marked | Draft in the dock's field; the Birthday Party row marked |
 | `thinking` | Your treehouse line, then the thinking lamp, at the bottom of the panel | Sheet open (conversation loaded), same, above the dock; toggle `Thinking…` |
-| `working` | The same, with the tool's line: `Planning a manual…` in the thinking line and the header | The same in the sheet |
-| `streaming` | The “can’t create yet” reply half-written: numbered list growing, bar and lamp on the live block | The same in the sheet; toggle `Replying…` |
+| `working` | The same, with the planner's line: `Planning “Building a Treehouse”…` in the thinking line and the header | The same in the sheet |
+| `streaming` | The reply about the new treehouse manual half-written, bar and lamp on the live paragraph | The same in the sheet; toggle `Replying…` |
+| `created` | The same reply settled (“*Building a Treehouse* is on your shelf… Shall I open it?”); the library has loaded again, with the new *Building a Treehouse* row in title order (8 manuals) | Sheet open on the reply |
 | `conversation` | Three exchanges (the list of manuals, “Opening *The Haunt That Listens*.”, the fallback), scrolled to the newest; the Sourdough row marked; named-manual lines under turns 2 and 3 | Sheet open at the newest |
 | `delete-confirm` | First row lit above the scrim, confirmation anchored under it on the Written column, focus on Keep it | Confirmation at the bottom edge, first row lit |
 | `fallback` | Your geese line, the fallback reply settled; the Geese row marked | Sheet open on the reply |
@@ -1452,7 +1468,8 @@ The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/libra
   `LibrarianHead` (with `StatusDetail`, which the dock's toggle uses too), `NewestButton`,
   `Conversation` (the log, the cues when empty, and the thinking line), `Turn` (one message, the
   named-manual line under yours, and a failed reply's note), `Cues`, `Composer`.
-- Page actions: `HomePage` carries them out (`act`: navigate, or open the confirmation);
+- Page actions: `HomePage` carries them out (`act`: load the library again, navigate, or open the
+  confirmation);
   `LibrarianPanel` and `PhoneAgent` receive them with `useAgentActions`, and `PhoneAgent` closes
   its sheet before a proposed delete.
 - Helpers: `references.ts` (the matcher and `namedWhenSent`), `cuePrompts.ts` (the cues and the

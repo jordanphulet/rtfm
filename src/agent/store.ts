@@ -78,8 +78,9 @@ function send(text: string) {
 
 /**
  * Sends the finished exchanges and the new message, and shows the reply as it streams. A page
- * action is handed to the page once the reply is done. `freeze` asks for the scripted reply,
- * cut at that fraction, which then stays as it is.
+ * action is handed to the page once the reply is done, except `created`, which reports a manual
+ * already saved and is handed over as it arrives. `freeze` asks for the scripted reply, cut at
+ * that fraction, which then stays as it is.
  */
 async function reply(text: string, freeze?: number) {
   const conversation: LibrarianMessage[] = [...recentExchanges(state.messages), { role: "user", text }];
@@ -107,7 +108,8 @@ async function reply(text: string, freeze?: number) {
           showReply({}, "streaming");
           break;
         case "action":
-          action = event.data;
+          if (event.data.type === "created") actionHandler?.(event.data);
+          else action = event.data;
           break;
         case "done":
           showReply({ text: raw }, "idle");
@@ -151,8 +153,9 @@ export function useAgent(): UseAgentResult {
 }
 
 /**
- * Hands each page action to `handler` once its reply is done, while the calling component is
- * mounted. An action that arrives while no component is listening is dropped.
+ * Hands each page action to `handler` once its reply is done (`created` as soon as it arrives),
+ * while the calling component is mounted. An action that arrives while no component is listening
+ * is dropped.
  */
 export function useAgentActions(handler: ActionHandler) {
   const latest = useRef(handler);

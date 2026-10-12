@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { BrowserContextOptions, Locator, Page } from "playwright";
 import { FAKE_REPLIES } from "../server/agent/librarian/fake-model.ts";
-import type { FailureReason } from "../server/api/types.ts";
+import { fakePlan } from "../server/agent/planner/fake-planner.ts";
+import type { FailureReason, ManualSummary } from "../server/api/types.ts";
+import { sectionsInReadingOrder } from "../server/storage/manual.ts";
 import { startServer } from "../server/app.ts";
 import { config } from "../server/config.ts";
 import { captureAll, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
@@ -15,6 +17,7 @@ const HOME_DIR = `${SHOTS_DIR}/home`;
 const TYPED_MESSAGE = "Delete the manual about birthday parties";
 const UNHANDLED_MESSAGE = "Sing me a sea shanty about geese";
 const LIST_MESSAGE = "What do I have?";
+const NEW_MANUAL_MESSAGE = "Let’s start a new manual about building a treehouse";
 const CLICK_TIMEOUT_MS = 3000;
 const REPLY_TIMEOUT_MS = 10_000;
 
@@ -118,6 +121,7 @@ function homeShots(): Shot[] {
     { state: "thinking", path: "/?agentFreeze=thinking" },
     { state: "working", path: "/?agentFreeze=0" },
     { state: "streaming", path: "/?agentFreeze=0.5" },
+    { state: "created", path: "/?agentFreeze=1", beforeLoad: createPlannedManual },
     { state: "conversation", path: "/?conversation=demo", fullPage: true },
     { state: "delete-confirm", path: "/", prepare: openDeleteConfirmation },
     { state: "fallback", path: "/", prepare: sendUnhandledMessage },
@@ -198,6 +202,39 @@ async function failReplies(page: Page, reason: FailureReason) {
       contentType: "text/event-stream",
       body: `event: failed\ndata: ${JSON.stringify({ reason })}\n\n`,
     }),
+  );
+}
+
+/**
+ * Plays the fake model's treehouse reply as the server does when it saves the manual: the reply
+ * comes from the preview, which saves nothing, so every other shot keeps the seed library, and
+ * this page alone is told the manual was created and then lists it.
+ */
+async function createPlannedManual(page: Page) {
+  const plan = fakePlan(NEW_MANUAL_MESSAGE);
+  const planned: ManualSummary = {
+    id: plan.id,
+    title: plan.title,
+    subtitle: plan.subtitle,
+    chapterCount: plan.chapters.length + plan.appendices.length,
+    sectionCount: sectionsInReadingOrder(plan).length,
+    writtenCount: 0,
+  };
+  let created = false;
+  await page.route("**/api/manuals", async (route) => {
+    const response = await route.fetch();
+    const manuals = (await response.json()) as ManualSummary[];
+    const listed = created ? [...manuals, planned].sort((a, b) => a.title.localeCompare(b.title, "en")) : manuals;
+    await route.fulfill({ response, json: listed });
+  });
+  await page.route(
+    (url) => url.pathname === "/api/librarian",
+    async (route) => {
+      const response = await route.fetch();
+      const action = `event: action\ndata: ${JSON.stringify({ type: "created", manualId: plan.id })}\n\n`;
+      created = true;
+      await route.fulfill({ response, body: (await response.text()).replace("event: done", `${action}event: done`) });
+    },
   );
 }
 

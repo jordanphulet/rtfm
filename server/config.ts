@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { GatewayConfig } from "./gateway/types.ts";
-
-export const API_PORT = 8787;
+import { API_PORT } from "./ports.ts";
 
 export type ModelSource = "fake" | "bedrock";
 
@@ -27,6 +26,7 @@ export const config: ServerConfig = {
   jobs: {
     "write-section": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 2048 },
     librarian: { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 1024 },
+    "plan-manual": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 4096, idleTimeoutMs: 60_000 },
   },
 };
 

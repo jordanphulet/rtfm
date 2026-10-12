@@ -14,7 +14,7 @@ export function Cues({ manuals, onCue }: CuesProps) {
     <div className="cues">
       <h3 className="cues-title">Ask about your manuals</h3>
       <p className="cues-intro">
-        It can list, find and open your manuals, and delete one once you confirm.
+        It can list, find and open your manuals, start a new one, and delete one once you confirm.
       </p>
       <p className="cues-label" id={labelId}>
         Try asking

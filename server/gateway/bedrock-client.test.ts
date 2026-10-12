@@ -10,6 +10,7 @@ import type { AwsCredentials } from "./credentials.ts";
 import { createGateway } from "./gateway.ts";
 import { prices } from "./prices.ts";
 import {
+  ModelStalled,
   ModelStreamIncomplete,
   type GatewayConfig,
   type Job,
@@ -256,6 +257,9 @@ describe("Bedrock client", () => {
     expect(events).toEqual([
       { type: "usage", inputTokens: 42, cacheWriteTokens: 0, cacheReadTokens: 0 },
       { type: "text", text: "Let me look." },
+      { type: "tool-input", json: "" },
+      { type: "tool-input", json: '{"topic": "ge' },
+      { type: "tool-input", json: 'ese"}' },
       { type: "tool-use", id: "toolu_2", name: "find_manuals", input: { topic: "geese" } },
       { type: "tool-use", id: "toolu_3", name: "list_manuals", input: {} },
       { type: "usage", outputTokens: 31 },
@@ -276,7 +280,7 @@ describe("Bedrock client", () => {
 
     const events = await collect(bedrockClient().stream({ ...request(), prompt: TOOL_PROMPT }));
 
-    expect(events).toEqual([
+    expect(events.filter(({ type }) => type !== "tool-input")).toEqual([
       { type: "usage", inputTokens: 42, cacheWriteTokens: 0, cacheReadTokens: 0 },
       { type: "text", text: "Let me look." },
       { type: "usage", outputTokens: 1024 },
@@ -316,6 +320,7 @@ describe("Bedrock client", () => {
       jobs: {
         "write-section": { model: MODEL, maxTokens: MAX_TOKENS },
         librarian: { model: MODEL, maxTokens: MAX_TOKENS },
+        "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS },
       },
     };
 
@@ -387,6 +392,66 @@ describe("Bedrock client", () => {
 
       await expect(result).rejects.toThrow(ModelStreamIncomplete);
       chargedAtFullOutput((await settles())[0]);
+    });
+
+    describe("a long tool input under a short idle timeout", () => {
+      const IDLE_TIMEOUT_MS = 200;
+      const PLAN_JSON = JSON.stringify({ id: "a-plan", chapters: [...Array(40)].map((_, index) => `chapter ${index}`) });
+      const SAVE_TOOL: ToolDefinition = { name: "save_manual", description: "Saves a plan.", input_schema: { type: "object" } };
+      const PLAN_PROMPT: ModelPrompt = { system: "You plan manuals.", tools: [SAVE_TOOL], messages: [{ role: "user", content: "Plan one." }] };
+      const TOOL_START = { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "toolu_plan", name: "save_manual", input: {} } };
+      const TOOL_END = [
+        { type: "content_block_stop", index: 0 },
+        { type: "message_delta", delta: { stop_reason: "tool_use", stop_sequence: null }, usage: { output_tokens: 900 } },
+        { type: "message_stop" },
+      ];
+
+      /** Sends the input in 12 fragments `pauseMs` apart, after `silentMs` with nothing at all. */
+      function respondWithPlan({ silentMs, pauseMs }: { silentMs: number; pauseMs: number }) {
+        respond = async (response) => {
+          startEventStream(response, [MESSAGE_START, TOOL_START]);
+          await new Promise((resolve) => setTimeout(resolve, silentMs));
+          const size = Math.ceil(PLAN_JSON.length / 12);
+          for (let start = 0; start < PLAN_JSON.length; start += size) {
+            await new Promise((resolve) => setTimeout(resolve, pauseMs));
+            const partial_json = PLAN_JSON.slice(start, start + size);
+            response.write(chunkFrame({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json } }));
+          }
+          for (const event of TOOL_END) response.write(chunkFrame(event));
+          response.end();
+        };
+      }
+
+      async function planThroughGateway() {
+        const dataDir = await tempDataDir();
+        const ledger = createFileLedger(dataDir);
+        const shortTimeout = { ...config, idleTimeoutMs: IDLE_TIMEOUT_MS };
+        const gateway = await createGateway({ client: bedrockClient(), ledger, config: shortTimeout, prices, dataDir });
+        const result = collect(gateway.stream("plan-manual", PLAN_PROMPT, new AbortController().signal));
+        const settles = async () =>
+          (await ledger.entriesForMonth(monthOf(new Date().toISOString()))).filter((entry) => entry.kind === "settle");
+        return { result, settles };
+      }
+
+      it("counts each input fragment as activity, so a tool input longer than the timeout completes", async () => {
+        respondWithPlan({ silentMs: 0, pauseMs: IDLE_TIMEOUT_MS / 2 });
+        const started = Date.now();
+        const { result, settles } = await planThroughGateway();
+
+        const events = await result;
+        expect(Date.now() - started).toBeGreaterThan(IDLE_TIMEOUT_MS * 5);
+        expect(events.filter(({ type }) => type === "tool-input")).toHaveLength(12);
+        expect(events).toContainEqual({ type: "tool-use", id: "toolu_plan", name: "save_manual", input: JSON.parse(PLAN_JSON) });
+        expect(await settles()).toMatchObject([{ job: "plan-manual", outcome: "complete", outputTokens: 900 }]);
+      });
+
+      it("still stops a stream that sends nothing for longer than the timeout", async () => {
+        respondWithPlan({ silentMs: IDLE_TIMEOUT_MS * 2, pauseMs: 0 });
+        const { result, settles } = await planThroughGateway();
+
+        await expect(result).rejects.toThrow(ModelStalled);
+        expect(await settles()).toMatchObject([{ job: "plan-manual", outcome: "failed", estimated: true }]);
+      });
     });
   });
 });

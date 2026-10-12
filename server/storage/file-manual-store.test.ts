@@ -25,7 +25,13 @@ describe("file manual store", () => {
 
   it("stores and reads a manual", async () => {
     expect(await store.getManual(manual.id)).toBeUndefined();
-    await store.putManual(manual);
+    expect(await store.createManual(manual)).toBe("created");
+    expect(await store.getManual(manual.id)).toEqual(manual);
+  });
+
+  it("never replaces a manual whose id is taken", async () => {
+    await store.createManual(manual);
+    expect(await store.createManual({ ...manual, title: "Another Manual" })).toBe("exists");
     expect(await store.getManual(manual.id)).toEqual(manual);
   });
 
@@ -35,8 +41,8 @@ describe("file manual store", () => {
 
   it("lists the stored manuals, skipping folders that aren't manuals", async () => {
     expect(await store.listManuals()).toEqual([]);
-    await store.putManual(manual);
-    await store.putManual({ ...manual, id: "another-manual" });
+    await store.createManual(manual);
+    await store.createManual({ ...manual, id: "another-manual" });
     await mkdir(path.join(dataDir, "manuals", "no-manual-json"));
     const leftover = path.join(dataDir, "manuals", "a-manual.leftover.deleting");
     await mkdir(leftover);
@@ -47,7 +53,7 @@ describe("file manual store", () => {
   });
 
   it("saves a body once and keeps the first one", async () => {
-    await store.putManual(manual);
+    await store.createManual(manual);
     expect(await store.getBody(manual.id, "s")).toBeUndefined();
     expect(await store.saveBody(manual.id, "s", "first")).toBe("saved");
     expect(await store.saveBody(manual.id, "s", "second")).toBe("already-written");
@@ -55,7 +61,7 @@ describe("file manual store", () => {
   });
 
   it("lets only one of two simultaneous saves win, and leaves no temp files", async () => {
-    await store.putManual(manual);
+    await store.createManual(manual);
     const results = await Promise.all([
       store.saveBody(manual.id, "s", "one"),
       store.saveBody(manual.id, "s", "two"),
@@ -65,7 +71,7 @@ describe("file manual store", () => {
   });
 
   it("refuses a section id that isn't a slug", async () => {
-    await store.putManual(manual);
+    await store.createManual(manual);
     await expect(store.saveBody(manual.id, "../s", "x")).rejects.toThrow("Not a valid id");
   });
 
@@ -75,7 +81,7 @@ describe("file manual store", () => {
   });
 
   it("lists the written sections, ignoring temp files", async () => {
-    await store.putManual(manual);
+    await store.createManual(manual);
     expect(await store.writtenSectionIds(manual.id)).toEqual([]);
     await store.saveBody(manual.id, "s", "body");
     await writeFile(path.join(dataDir, "manuals", manual.id, "sections", "t.md.1234.tmp"), "half");
@@ -83,8 +89,8 @@ describe("file manual store", () => {
   });
 
   it("deletes a manual with its sections, and nothing else", async () => {
-    await store.putManual(manual);
-    await store.putManual({ ...manual, id: "kept" });
+    await store.createManual(manual);
+    await store.createManual({ ...manual, id: "kept" });
     await store.saveBody(manual.id, "s", "body");
     const ledgerFile = path.join(dataDir, "ledger", "2026-10.jsonl");
     await mkdir(path.dirname(ledgerFile));
@@ -99,7 +105,7 @@ describe("file manual store", () => {
   });
 
   it("counts a manual as deleted once it is renamed away, even if removing its files fails", async () => {
-    await store.putManual(manual);
+    await store.createManual(manual);
     await store.saveBody(manual.id, "s", "body");
     const manualsDir = path.join(dataDir, "manuals");
     await chmod(path.join(manualsDir, manual.id, "sections"), 0o500);
@@ -122,7 +128,7 @@ describe("file manual store", () => {
   });
 
   it("can't save a section into a deleted manual", async () => {
-    await store.putManual(manual);
+    await store.createManual(manual);
     await store.deleteManual(manual.id);
     await expect(store.saveBody(manual.id, "s", "late")).rejects.toThrow("There is no manual");
     expect(await readdir(path.join(dataDir, "manuals"))).toEqual([]);

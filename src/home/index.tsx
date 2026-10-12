@@ -116,11 +116,16 @@ function HomePage() {
   }
 
   /**
-   * Carries out the librarian's action, unless a confirmation is already open. A proposed delete
-   * for a manual the page doesn't list reloads the library once; if it still isn't there, nothing
-   * opens, and the librarian's reply has already said what it did.
+   * Carries out the librarian's action. A created manual is loaded into the library at once. Any
+   * other action waits for no confirmation to be open. A proposed delete for a manual the page
+   * doesn't list reloads the library once; if it still isn't there, nothing opens, and the
+   * librarian's reply has already said what it did.
    */
   async function act(action: AgentAction, showLibrary?: () => Promise<void>) {
+    if (action.type === "created") {
+      void refreshLibrary();
+      return;
+    }
     if (toDelete) return;
     if (action.type === "open") {
       navigate(`/read/${encodeURIComponent(action.manualId)}`);

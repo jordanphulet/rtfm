@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { link, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isErrorCode, namesInFolder, readIfExists } from "./files.ts";
+import { ID_PATTERN } from "./manual.ts";
 import type { ManualStore, StoredManual } from "./types.ts";
 
-const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const SECTION_FILE_EXTENSION = ".md";
 
 export function createFileManualStore(dataDir: string): ManualStore {
@@ -35,9 +35,21 @@ export function createFileManualStore(dataDir: string): ManualStore {
 
     getManual,
 
-    async putManual(manual) {
-      await mkdir(manualDir(manual.id), { recursive: true });
-      await writeAtomically(manualFile(manual.id), JSON.stringify(manual, null, 2));
+    async createManual(manual) {
+      await mkdir(manualsDir, { recursive: true });
+      try {
+        await mkdir(manualDir(manual.id));
+      } catch (error) {
+        if (isErrorCode(error, "EEXIST")) return "exists";
+        throw error;
+      }
+      try {
+        await writeAtomically(manualFile(manual.id), JSON.stringify(manual, null, 2));
+      } catch (error) {
+        await rm(manualDir(manual.id), { recursive: true, force: true });
+        throw error;
+      }
+      return "created";
     },
 
     async deleteManual(manualId) {

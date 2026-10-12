@@ -20,9 +20,8 @@ export function defineTool<Shape extends z.core.$ZodShape>({ name, description, 
   run(input: z.infer<z.ZodObject<Shape, z.core.$strict>>, signal: AbortSignal): Promise<string>;
 }): AgentTool {
   const schema = z.strictObject(input);
-  const { $schema, ...inputSchema } = z.toJSONSchema(schema);
   return {
-    definition: { name, description, input_schema: { ...inputSchema, type: "object" } },
+    definition: toolDefinition({ name, description, schema }),
     status,
     async run(rawInput, signal) {
       const parsed = schema.safeParse(rawInput);
@@ -30,4 +29,14 @@ export function defineTool<Shape extends z.core.$ZodShape>({ name, description, 
       return { content: await run(parsed.data, signal) };
     },
   };
+}
+
+/** What the model sees of a tool: its input's JSON Schema, from the schema that checks the input. */
+export function toolDefinition({ name, description, schema }: {
+  name: string;
+  description: string;
+  schema: z.ZodObject;
+}): ToolDefinition {
+  const { $schema, ...inputSchema } = z.toJSONSchema(schema);
+  return { name, description, input_schema: { ...inputSchema, type: "object" } };
 }

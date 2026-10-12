@@ -1,5 +1,5 @@
 import type { Gateway } from "../gateway/gateway.ts";
-import type { ContentBlock, Job, ModelEvent, PromptMessage } from "../gateway/types.ts";
+import { SpendingRefused, type ContentBlock, type Job, type ModelEvent, type PromptMessage } from "../gateway/types.ts";
 import type { AgentTool } from "./tool.ts";
 
 export type AgentEvent = { type: "status"; text: string } | { type: "text"; text: string };
@@ -66,6 +66,8 @@ async function runTool(tool: AgentTool | undefined, toolUse: ToolUse, signal: Ab
     const { content, isError } = await tool.run(toolUse.input, signal);
     return isError ? { ...result, content, is_error: true } : { ...result, content };
   } catch (error) {
+    if (error instanceof SpendingRefused) throw error;
+    signal.throwIfAborted();
     return { ...result, content: String(error), is_error: true };
   }
 }

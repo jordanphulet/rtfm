@@ -44,7 +44,10 @@ export function createBedrockClient(
             break;
           case "content_block_delta":
             if (event.delta.type === "text_delta") yield { type: "text", text: event.delta.text };
-            if (event.delta.type === "input_json_delta") toolUses.get(event.index)!.json += event.delta.partial_json;
+            if (event.delta.type === "input_json_delta") {
+              toolUses.get(event.index)!.json += event.delta.partial_json;
+              yield { type: "tool-input", json: event.delta.partial_json };
+            }
             break;
           case "content_block_stop": {
             const toolUse = toolUses.get(event.index);

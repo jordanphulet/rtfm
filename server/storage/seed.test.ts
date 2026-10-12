@@ -123,7 +123,7 @@ describe("seedStore", () => {
     await addSeedManual(seedDir, "beta");
     const store = createFileManualStore(await tempDataDir());
     const storedEarlier = { ...fixtureManual("alpha"), title: "Stored earlier" };
-    await store.putManual(storedEarlier);
+    await store.createManual(storedEarlier);
     await store.saveBody("alpha", "second", "written earlier");
 
     await seedStore(store, seedDir);

@@ -89,7 +89,7 @@ function chapterContents(manual: StoredManual, chapter: StoredChapter): string {
   const sections = chapter.sections.map(
     (section) => content(`- ${section.label} ${section.title} (section:${section.id}): ${section.summary}`),
   );
-  return [chapterName(manual, chapter), ...sections].join("\n");
+  return [content(chapterName(manual, chapter)), ...sections].join("\n");
 }
 
 function sectionRequest(manual: StoredManual, { section, wordsRequested, example }: SectionRequest): string {

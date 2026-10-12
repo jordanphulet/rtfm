@@ -2,20 +2,23 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Gateway } from "../../gateway/gateway.ts";
 import type { ContentBlock, ModelEvent, PromptMessage } from "../../gateway/types.ts";
 import { chunkEnds } from "../../writer/fake.ts";
+import { fakePlannerTurn } from "../planner/fake-planner.ts";
 
 export interface FakeLibrarianPace {
   firstEventDelayMs: number;
   chunkIntervalMs: number;
+  planDelayMs: number;
 }
 
-const CONVERSATION_PACE: FakeLibrarianPace = { firstEventDelayMs: 600, chunkIntervalMs: 85 };
-export const INSTANT_PACE: FakeLibrarianPace = { firstEventDelayMs: 0, chunkIntervalMs: 0 };
+const CONVERSATION_PACE: FakeLibrarianPace = { firstEventDelayMs: 600, chunkIntervalMs: 85, planDelayMs: 2400 };
+export const INSTANT_PACE: FakeLibrarianPace = { firstEventDelayMs: 0, chunkIntervalMs: 0, planDelayMs: 0 };
 
 type Intent = "delete" | "create" | "open" | "list" | "find" | "help" | "fallback";
 type Step = { text: string } | { tool: string; input: Record<string, string> };
 type ToolResult = Extract<ContentBlock, { type: "tool_result" }>;
 type ToolUse = Extract<ContentBlock, { type: "tool_use" }>;
 type Found = { id: string; title: string; sections_written?: number; sections?: number }[];
+type Created = { manual?: { title: string; chapters: number; sections: number } };
 
 const INTENT_KEYWORDS: [Intent, string[]][] = [
   ["delete", ["delete", "remove"]],
@@ -29,17 +32,15 @@ const INTENT_KEYWORDS: [Intent, string[]][] = [
 const WHAT_I_CAN_DO = `- **list** the manuals you have;
 - **find** the one about a topic;
 - **open** a manual in the reader;
+- **start** a new manual from your description;
 - **delete** a manual, once you confirm.`;
 
 export const FAKE_REPLIES = {
-  help: `I look after your library. I can:\n\n${WHAT_I_CAN_DO}\n\nI can’t create new manuals yet.`,
-  fallback: "I can’t do that, I’m afraid. I can list, find, open and delete your manuals; ask me for help any time.",
-  createUnavailable: `I can’t start new manuals yet, I’m afraid, so nothing was created. Here’s what I can do instead:
-
-1. **List** the manuals you have.
-2. **Find** the one that covers a topic.
-3. **Open** a manual to read it.
-4. **Delete** a manual you’re done with, once you confirm.`,
+  help: `I look after your library. I can:\n\n${WHAT_I_CAN_DO}`,
+  fallback: "I can’t do that, I’m afraid. I can list, find, open, start and delete your manuals; ask me for help any time.",
+  created: ({ title, chapters, sections }: { title: string; chapters: number; sections: number }) =>
+    `*${title}* is on your shelf: ${chapters} chapters and ${sections} sections, with nothing written yet. Each section is written the first time you open it.\n\nShall I open it?`,
+  createFailed: "I couldn’t plan that manual, I’m afraid, so nothing was created. Ask me again, perhaps in a few more words.",
   notFound: "I couldn’t find a manual about that. Ask me what you have, and I’ll list them.",
   whichToOpen: "Which manual would you like to open? Ask me what you have, and I’ll list them.",
   whichToDelete: "Tell me which manual to delete, and I’ll ask you to confirm before it goes.",
@@ -47,13 +48,22 @@ export const FAKE_REPLIES = {
 };
 
 /**
- * A scripted stand-in for the model behind the librarian, for development, tests and screenshots.
- * It reads the user's latest message for a keyword, calls the tools a model would, and answers
- * from their results. It makes no model call, so nothing is reserved or recorded.
+ * A scripted stand-in for the model behind the librarian and the planner, for development, tests
+ * and screenshots. It reads the user's latest message for a keyword, calls the tools a model would,
+ * and answers from their results; asked for a plan, it plans `fakePlan`. It makes no model call, so
+ * nothing is reserved or recorded.
  */
 export function fakeLibrarianModel(pace: FakeLibrarianPace = CONVERSATION_PACE): Gateway {
   return {
-    async *stream(_job, { messages }, signal): AsyncGenerator<ModelEvent> {
+    async *stream(job, { messages }, signal): AsyncGenerator<ModelEvent> {
+      if (job === "plan-manual") {
+        await sleep(pace.firstEventDelayMs, undefined, { signal });
+        for (const event of fakePlannerTurn(messages)) {
+          yield event;
+          if (event.type === "tool-input") await sleep(pace.planDelayMs, undefined, { signal });
+        }
+        return;
+      }
       const step = nextStep(messages);
       await sleep(pace.firstEventDelayMs, undefined, { signal });
       if ("tool" in step) {
@@ -114,7 +124,7 @@ function stepAfter(call: ToolUse, result: ToolResult, intent: Intent, messages: 
         text: `I’ve found *${titleOf(messages, call)}*. It stays unless you confirm: choose **Delete manual** to delete it, or **Keep it**.`,
       };
     case "create_manual":
-      return { text: FAKE_REPLIES.createUnavailable };
+      return { text: createdReply(result.content) };
     default:
       throw new Error(`The fake librarian never calls "${call.name}"`);
   }
@@ -129,6 +139,11 @@ function afterFind(intent: Intent, found: Found): Step {
   if (!best) return { text: FAKE_REPLIES.notFound };
   if (found.length === 1) return { text: `*${best.title}* looks like the one.` };
   return { text: `These look closest:\n\n${found.map(({ title }) => `- *${title}*`).join("\n")}` };
+}
+
+function createdReply(content: string): string {
+  const { manual } = JSON.parse(content) as Created;
+  return manual ? FAKE_REPLIES.created(manual) : FAKE_REPLIES.createFailed;
 }
 
 function listReply(found: Found): string {

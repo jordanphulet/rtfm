@@ -2,7 +2,8 @@
 
 The manuals on the landing page (`src/home/`), as the API server stores them: it loads the
 library from `GET /api/manuals` and deletes through `DELETE /api/manuals/:manualId`
-(`ARCHITECTURE.md` › The API). There is no create or rename.
+(`ARCHITECTURE.md` › The API). It creates nothing itself: the librarian creates manuals on the
+server, and `refreshLibrary` brings them in. There is no rename.
 
 Import everything from `src/library`:
 
@@ -59,8 +60,8 @@ The store asks for no confirmation; the landing page does.
 
 Fetches `GET /api/manuals` again, updates the list, and resolves to it. If the fetch fails, or a
 `removeFromLibrary` happened while it was under way, the list stays as it was and that is what it
-resolves to. It never throws. The landing page uses it when the librarian proposes deleting a
-manual the list doesn't have yet.
+resolves to. It never throws. The landing page uses it when the librarian creates a manual, and
+when the librarian proposes deleting a manual the list doesn't have yet.
 
 ## `removeFromLibrary(id: string): void`
 

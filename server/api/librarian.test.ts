@@ -1,6 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { FAKE_REPLIES, fakeLibrarianModel, INSTANT_PACE } from "../agent/librarian/fake-model.ts";
+import { ONE_PER_REPLY } from "../agent/librarian/create-manual.ts";
+import { fakePlan } from "../agent/planner/fake-planner.ts";
 import { scriptedClient, textTurn, toolUseTurn } from "../agent/scripted-client.ts";
 import { startServer, type RunningServer } from "../app.ts";
 import { config as committedConfig } from "../config.ts";
@@ -9,7 +11,7 @@ import type { PriceTable } from "../gateway/prices.ts";
 import type { GatewayConfig, ModelEvent } from "../gateway/types.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import { SAMPLE_ID, tempDataDir } from "../testing.ts";
-import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage } from "./types.ts";
+import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage, type ManualSummary } from "./types.ts";
 
 const MODEL = "test-model";
 const PRICES: PriceTable = {
@@ -17,6 +19,8 @@ const PRICES: PriceTable = {
   models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
 };
 const GEESE_ID = "negotiating-with-geese";
+const TREEHOUSE_REQUEST = "Let’s start a new manual about building a treehouse";
+const TREEHOUSE = fakePlan(TREEHOUSE_REQUEST);
 const PARTY_ID = "the-birthday-party-field-manual";
 
 const servers: RunningServer[] = [];
@@ -51,7 +55,11 @@ async function scriptedGateway(turns: ModelEvent[][], dataDir: string, caps = { 
     caps,
     maxConcurrentCalls: 3,
     idleTimeoutMs: 1000,
-    jobs: { "write-section": { model: MODEL, maxTokens: 2048 }, librarian: { model: MODEL, maxTokens: 1024 } },
+    jobs: {
+      "write-section": { model: MODEL, maxTokens: 2048 },
+      librarian: { model: MODEL, maxTokens: 1024 },
+      "plan-manual": { model: MODEL, maxTokens: 4096 },
+    },
   };
   const ledger = createFileLedger(dataDir);
   const { client, prompts } = scriptedClient(turns);
@@ -132,12 +140,28 @@ describe("the librarian with the scripted fake model", () => {
     expect(replyText(events)).toBe(FAKE_REPLIES.whichToDelete);
   });
 
-  it("says plainly that it can't create a manual yet", async () => {
-    const { ask } = await start();
-    const events = await ask("Let’s start a new manual about building a treehouse");
+  it("plans a new manual and saves it, announcing it to the page at once", async () => {
+    const { ask, base } = await start();
+    const events = await ask(TREEHOUSE_REQUEST);
 
-    expect(events[0]).toEqual({ event: "status", data: { text: "Planning a manual…" } });
-    expect(replyText(events)).toBe(FAKE_REPLIES.createUnavailable);
+    expect(events.filter(({ event }) => event !== "text")).toEqual([
+      { event: "status", data: { text: "Planning a manual…" } },
+      { event: "status", data: { text: "Planning “Building a Treehouse”…" } },
+      { event: "action", data: { type: "created", manualId: TREEHOUSE.id } },
+      { event: "done", data: {} },
+    ]);
+    expect(replyText(events)).toBe(FAKE_REPLIES.created({ title: TREEHOUSE.title, chapters: 4, sections: 9 }));
+    const library = (await (await fetch(`${base}/manuals`)).json()) as ManualSummary[];
+    expect(library.find(({ id }) => id === TREEHOUSE.id)).toMatchObject({ title: "Building a Treehouse", writtenCount: 0 });
+  });
+
+  it("says plainly when the plan can't be saved", async () => {
+    const { ask } = await start();
+    await ask(TREEHOUSE_REQUEST);
+    const events = await ask(TREEHOUSE_REQUEST);
+
+    expect(events.filter(({ event }) => event === "action")).toEqual([]);
+    expect(replyText(events)).toBe(FAKE_REPLIES.createFailed);
   });
 
   it("answers anything else without a tool", async () => {
@@ -184,15 +208,17 @@ describe("the librarian's preview", () => {
     expect(replyText(events)).toBe("Opening *The Haunt That Listens*.");
   });
 
-  it("cuts the reply for ?freeze=0.5 and stays frozen", async () => {
-    const { ask } = await start(neverCalled);
-    const events = await ask("Let’s start a new manual about building a treehouse", { query: "?freeze=0.5" });
+  it("cuts the reply for ?freeze=0.5 and stays frozen, saving nothing it plans", async () => {
+    const { ask, base } = await start(neverCalled);
+    const events = await ask(TREEHOUSE_REQUEST, { query: "?freeze=0.5" });
     const shown = replyText(events);
+    const whole = FAKE_REPLIES.created({ title: TREEHOUSE.title, chapters: 4, sections: 9 });
 
     expect(events.at(-1)).toEqual({ event: "frozen", data: {} });
-    expect(FAKE_REPLIES.createUnavailable.startsWith(shown)).toBe(true);
-    expect(shown.length).toBeLessThanOrEqual(FAKE_REPLIES.createUnavailable.length / 2);
-    expect(shown.length).toBeGreaterThan(FAKE_REPLIES.createUnavailable.length / 2 - 40);
+    expect(whole.startsWith(shown)).toBe(true);
+    expect(shown.length).toBeLessThanOrEqual(whole.length / 2);
+    expect(shown.length).toBeGreaterThan(whole.length / 2 - 40);
+    expect((await fetch(`${base}/manuals/${TREEHOUSE.id}`)).status).toBe(404);
   });
 
   it.each(["?freeze=", "?freeze=half", "?freeze=-0.1", "?freeze=1.5"])("refuses %s", async (query) => {
@@ -263,6 +289,78 @@ describe("the librarian through the gateway", () => {
       ["librarian", "complete"],
       ["librarian", "complete"],
     ]);
+  });
+
+  it("creates a manual through the planner's own job, between two librarian turns", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway, prompts, ledgerEntries } = await scriptedGateway(
+      [
+        toolUseTurn([{ id: "call-1", name: "create_manual", input: { request: "a manual about treehouses" } }]),
+        toolUseTurn([{ id: "plan-1", name: "save_manual", input: TREEHOUSE }]),
+        textTurn("*Building a Treehouse* is on your shelf. Shall I open it?"),
+      ],
+      dataDir,
+    );
+    const { ask, base } = await start(gateway, dataDir);
+
+    const events = await ask("Start a manual about treehouses");
+
+    expect(events).toEqual([
+      { event: "status", data: { text: "Planning a manual…" } },
+      { event: "action", data: { type: "created", manualId: TREEHOUSE.id } },
+      { event: "text", data: { text: "*Building a Treehouse* is on your shelf. Shall I open it?" } },
+      { event: "done", data: {} },
+    ]);
+    expect(prompts[1]!.tools!.map(({ name }) => name)).toEqual(["save_manual"]);
+    expect(prompts[1]!.messages[0]!.content).toContain("<request>\na manual about treehouses\n</request>");
+    expect(JSON.parse((prompts[2]!.messages.at(-1)!.content as { content: string }[])[0]!.content)).toMatchObject({
+      manual: { id: TREEHOUSE.id, title: TREEHOUSE.title, chapters: 4, sections: 9 },
+    });
+    expect((await fetch(`${base}/manuals/${TREEHOUSE.id}`)).status).toBe(200);
+    const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
+    expect(settles.map(({ job }) => job)).toEqual(["librarian", "plan-manual", "librarian"]);
+  });
+
+  it("plans at most one manual per reply, refusing a second call without a model call", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway, prompts, ledgerEntries } = await scriptedGateway(
+      [
+        toolUseTurn([{ id: "call-1", name: "create_manual", input: { request: "a manual about treehouses" } }]),
+        toolUseTurn([{ id: "plan-1", name: "save_manual", input: TREEHOUSE }]),
+        toolUseTurn([{ id: "call-2", name: "create_manual", input: { request: "another about kites" } }]),
+        textTurn("One is on your shelf."),
+      ],
+      dataDir,
+    );
+    const { ask } = await start(gateway, dataDir);
+
+    const events = await ask("Start two manuals, treehouses and kites");
+
+    expect(events.filter(({ event }) => event === "action")).toEqual([
+      { event: "action", data: { type: "created", manualId: TREEHOUSE.id } },
+    ]);
+    expect(prompts[3]!.messages.at(-1)!.content).toEqual([
+      { type: "tool_result", tool_use_id: "call-2", content: `Error: ${ONE_PER_REPLY}`, is_error: true },
+    ]);
+    const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
+    expect(settles.map(({ job }) => job)).toEqual(["librarian", "plan-manual", "librarian", "librarian"]);
+  });
+
+  it("fails the reply with budget when the caps refuse the planner's call", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway, ledgerEntries } = await scriptedGateway(
+      [toolUseTurn([{ id: "call-1", name: "create_manual", input: { request: "a manual about treehouses" } }])],
+      dataDir,
+      { dailyUsd: 0.02, monthlyUsd: 20 },
+    );
+    const { ask } = await start(gateway, dataDir);
+
+    expect(await ask("Start a manual about treehouses")).toEqual([
+      { event: "status", data: { text: "Planning a manual…" } },
+      { event: "failed", data: { reason: "budget" } },
+    ]);
+    const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
+    expect(settles.map(({ job }) => job)).toEqual(["librarian"]);
   });
 
   it("starts a later turn's text on a new paragraph even when the tool between was unknown", async () => {

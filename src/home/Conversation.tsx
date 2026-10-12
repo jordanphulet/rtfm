@@ -44,7 +44,7 @@ export function Conversation({ messages, status, activity, manuals, stick, onJum
             {status === "thinking" && (
               <li className="thinking write-head-line" data-live>
                 <span className="visually-hidden">Librarian: </span>
-                {activity}
+                <span className="thinking-text">{activity}</span>
               </li>
             )}
           </ol>

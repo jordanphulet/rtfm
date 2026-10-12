@@ -29,6 +29,7 @@ const PRICES: PriceTable = {
 const JOBS: GatewayConfig["jobs"] = {
   "write-section": { model: MODEL, maxTokens: MAX_TOKENS },
   librarian: { model: MODEL, maxTokens: MAX_TOKENS },
+  "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS },
 };
 const EMPTY_PROMPT: Prompt = { system: "", messages: [{ role: "user", content: "" }] };
 const EMPTY_PROMPT_BOUND = 100 + 10;
@@ -323,6 +324,30 @@ describe("model gateway", () => {
     expect(requests[0]!.signal.aborted).toBe(true);
     const [settle] = await settleEntries();
     expect(settle).toMatchObject({ outcome: "failed", inputTokens: 50, outputTokens: MAX_TOKENS, estimated: true });
+  });
+
+  it("gives a job with its own idle timeout that long, and every other job the shared one", async () => {
+    const config = gatewayConfig({
+      idleTimeoutMs: 30,
+      jobs: { ...JOBS, "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS, idleTimeoutMs: 300 } },
+    });
+    const pausing: ModelClient = {
+      async *stream({ signal }) {
+        const [first, ...rest] = COMPLETE_EVENTS;
+        yield first!;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        signal.throwIfAborted();
+        yield* rest;
+      },
+    };
+    const running = await gateway(pausing, { config });
+
+    expect(await collect(running.stream("plan-manual", EMPTY_PROMPT, signal()))).toEqual(COMPLETE_EVENTS);
+    await expect(collect(running.stream("write-section", EMPTY_PROMPT, signal()))).rejects.toThrow(ModelStalled);
+    expect((await settleEntries()).map(({ job, outcome }) => [job, outcome])).toEqual([
+      ["plan-manual", "complete"],
+      ["write-section", "failed"],
+    ]);
   });
 
   it("stops a call that never sends its first event", async () => {

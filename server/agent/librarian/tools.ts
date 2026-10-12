@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { librarySummaries } from "../../api/library.ts";
 import type { PageAction } from "../../api/types.ts";
+import type { Gateway } from "../../gateway/gateway.ts";
 import type { ManualStore, StoredManual } from "../../storage/types.ts";
 import { defineTool, type AgentTool } from "../tool.ts";
 import { createManualTool } from "./create-manual.ts";
@@ -13,9 +14,14 @@ const TOOL_STATUS = {
   delete: "Preparing the delete…",
 };
 
-/** The librarian's tools. Opening and deleting only hand an action to the page. */
-export function librarianTools({ store, onAction }: {
+/**
+ * The librarian's tools. Opening and deleting only hand an action to the page; creating has the
+ * planner save a new manual, reporting its progress through `onStatus`.
+ */
+export function librarianTools({ gateway, store, onStatus, onAction }: {
+  gateway: Gateway;
   store: ManualStore;
+  onStatus: (text: string) => void;
   onAction: (action: PageAction) => void;
 }): AgentTool[] {
   async function manualById(manualId: string): Promise<StoredManual> {
@@ -95,6 +101,6 @@ export function librarianTools({ store, onAction }: {
         });
       },
     }),
-    createManualTool(),
+    createManualTool({ gateway, store, onStatus, onAction }),
   ];
 }

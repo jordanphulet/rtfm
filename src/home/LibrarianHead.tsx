@@ -25,7 +25,7 @@ export function StatusDetail({ messageCount, status, activity }: LibrarianStatus
       <span className="status-detail" data-live="">
         <Separator />
         <StatusRing status="writing" />
-        {status === "thinking" ? activity : "Replying…"}
+        <span className="status-text">{status === "thinking" ? activity : "Replying…"}</span>
       </span>
     );
   }

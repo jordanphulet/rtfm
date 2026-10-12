@@ -1,14 +1,15 @@
 # RTFM
 
 A web app for reading hypothetical manuals. An LLM writes a manual's table of contents first, then
-writes each section only when a reader opens it. Today the app has two pages:
+writes each section only when a reader opens it. The app has two pages:
 
 - **The landing page** (`/`): your library of manuals, beside a librarian agent you talk to. The
   library lists the manuals a local API server stores, with how many sections of each are
   written, and deletes them through it. The librarian lists and finds manuals, opens one in the
-  reader, and proposes deleting one, which happens only if you confirm it in the library's own
-  dialog. It answers with a scripted fake model by default or with Claude Haiku 4.5 on Amazon
-  Bedrock.
+  reader, starts a new one (the model plans its title, voice and table of contents, and it appears
+  in the library), and proposes deleting one, which happens only if you confirm it in the
+  library's own dialog. It answers with a scripted fake model by default or with Claude Haiku 4.5
+  on Amazon Bedrock.
 - **The reader** (`/read/<manual>`): any manual in the library. Opening a section that isn't
   written yet has the server write it and stream it in, with a fake writer by default or with
   Claude Haiku 4.5 on Amazon Bedrock.
@@ -27,7 +28,7 @@ npm run dev                       # then open http://localhost:5173/
 
 `npm run dev` starts Vite on port 5173 and the API server on port 8787 (restarted by
 `node --watch` when its code changes). Vite passes every request under `/api` to the server.
-Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/config.ts`):
+Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 
 - If 5173 is taken, Vite exits, and `npm run dev` stops the API server too.
 - If 8787 is taken, the API server fails to start and `node --watch` waits for a file change,
@@ -54,13 +55,17 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/config.ts`):
     saved: after a reload the section is unwritten again, and the library's count doesn't change.
   - **The fake librarian** is a scripted stand-in for the model. It picks what to do from a
     keyword in your message (list, find, open, delete, new, help), calls the same tools Claude
-    would, against the real library, and streams its answer at the fake writer's pace. Anything
-    else gets a polite “I can’t do that”.
+    would, against the real library, and streams its answer at the fake writer's pace. Asked for
+    a new manual, it saves the same small nine-section manual, titled after what you asked for
+    (“…about building a treehouse” plans *Building a Treehouse*). Anything else gets a polite
+    “I can’t do that”.
 - **`bedrock`**: Claude Haiku 4.5, through the model gateway, for both.
   - It writes a section live: about 4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a
     section.
   - It answers as the librarian in two to three model calls a reply (one per tool round), about
     $0.002–0.003 each.
+  - It plans a new manual in one more call (two if the first plan fails its checks), about 20
+    seconds and $0.016 for a plan of about 20 sections.
 
 To switch to Claude:
 
@@ -92,11 +97,12 @@ Any value of `RTFM_MODELS` other than `fake` or `bedrock` stops the server from 
 
 Everything but the credentials is committed:
 
-- `server/config.ts`: the port, the data folder, the models, the spending caps ($2 a day and $20 a
-  month, UTC), how many sections may be written and how many model calls may run at once, the
-  30s stall timeout, each job's model and `max_tokens`, the length in words the prompt asks
-  Claude for (`sectionWordsRequested`), and the length in characters a section's progress counts
-  to while Claude writes (`sectionExpectedCharacters`).
+- `server/config.ts`: the data folder, the models, the spending caps ($2 a day and $20 a month,
+  UTC), how many sections may be written and how many model calls may run at once, the 30s stall
+  timeout (60s for planning a manual), each job's model and `max_tokens`, the length in words the
+  prompt asks Claude for (`sectionWordsRequested`), and the length in characters a section's
+  progress counts to while Claude writes (`sectionExpectedCharacters`). The API port is in
+  `server/ports.ts`.
 - `server/gateway/prices.ts`: the dated price table. The server refuses to start with a model
   that isn't in it.
 

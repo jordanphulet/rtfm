@@ -4,7 +4,7 @@ The librarian's conversation on the landing page (`src/home/`). You send a messa
 sends the conversation to the server's librarian (`POST /api/librarian`, `ARCHITECTURE.md` › The
 librarian) and streams the reply back: what the librarian is doing while it works, then its text.
 A reply can end with a page action, opening a manual or proposing a delete, which the store hands
-to the page. The conversation lives in memory for the life of the page (it survives route changes,
+to the page, and a reply that creates a manual tells the page so as soon as it is saved. The conversation lives in memory for the life of the page (it survives route changes,
 not reloads), and only the browser keeps it.
 
 Import everything from `src/agent`:
@@ -55,7 +55,7 @@ Every component that calls `useAgent()` sees the same conversation.
    - text appends to the agent message (created with the first text) and sets `status` to
      `"streaming"`.
 4. When the reply is done, sets `status` back to `"idle"` and hands its page action, if any, to
-   the handler (below).
+   the handler (below). A `created` action is handed over as soon as it arrives instead.
 5. If the reply fails, sets `failure` on the agent message (keeping any text that arrived) and
    `status` to `"idle"`:
    - `"budget"`: a spending cap would be crossed, or the kill switch is on;
@@ -79,14 +79,19 @@ and bulleted or numbered lists. Each turn of the model after a tool starts a new
 ## `useAgentActions(handler)`
 
 ```ts
-type AgentAction = { type: "open"; manualId: string } | { type: "propose-delete"; manualId: string };
+type AgentAction =
+  | { type: "open"; manualId: string }
+  | { type: "propose-delete"; manualId: string }
+  | { type: "created"; manualId: string };
 
 useAgentActions((action) => { /* navigate, or open the delete confirmation */ });
 ```
 
-Hands each page action to `handler` once its reply is **done**, while the calling component is
-mounted. A reply carries at most one action that counts: the last one. An action from a reply
-that failed, or that arrives while no component is handling actions, is dropped. The latest
+Hands each `open` or `propose-delete` action to `handler` once its reply is **done**, while the
+calling component is mounted. A reply carries at most one of those that counts: the last one. One
+from a reply that failed, or any action that arrives while no component is handling actions, is
+dropped. A `created` action is handed over **as soon as it arrives**, even if the reply then
+fails: it reports a manual the server has already saved. The latest
 `handler` is always used, so it can be an inline function. Only one component should call it at
 a time.
 
@@ -94,6 +99,8 @@ a time.
 - `propose-delete`: the librarian asks to delete the manual. **Nothing is deleted.** Open the
   page's own delete confirmation for it; only the user's choice there deletes it, through
   `deleteManual` in `src/library`.
+- `created`: the librarian created the manual, and the server has saved it. Load the library
+  again (`refreshLibrary` in `src/library`) so it appears.
 
 ## URL options
 
@@ -107,7 +114,7 @@ no page actions and costs nothing.
 | *(none)*                | Empty | `"idle"` |
 | `?conversation=demo`    | Three finished exchanges, asked for in turn with `?freeze=1`: "What do I have?" (a list of the manuals), "Open the one about haunted houses" ("Opening *The Haunt That Listens*."), "Can you translate the sourdough manual into Klingon?" (the fake model's "I can’t do that…") | `"idle"` |
 | `?agentFreeze=thinking` | Adds the user message "Let’s start a new manual about building a treehouse", and asks for no reply | `"thinking"`, forever |
-| `?agentFreeze=<0–1>`    | Adds the same user message and its reply (the fake model's “can’t create yet”), cut at the last chunk at or before that fraction, repaired. At 0 only the loop's status shows (`activity` `"Planning a manual…"`) | `"thinking"` at 0, `"streaming"` above, forever |
+| `?agentFreeze=<0–1>`    | Adds the same user message and its reply (the fake model's “*Building a Treehouse* is on your shelf…”, which the preview never saves), cut at the last chunk at or before that fraction, repaired. At 0 only the statuses show, ending with the planner's (`activity` `"Planning “Building a Treehouse”…"`); at 1 the reply is whole | `"thinking"` at 0, `"streaming"` above, `"idle"` at 1; frozen ones forever |
 
 - `agentFreeze` takes `thinking` or any number from 0 to 1. Any other value is ignored.
 - The frozen message comes after the demo turns, so `?conversation=demo&agentFreeze=0.5` shows a
@@ -123,6 +130,7 @@ no page actions and costs nothing.
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useAgent, useAgentActions } from "../agent";
+import { refreshLibrary } from "../library";
 import { ReplyMarkdown } from "../ui";
 
 function Conversation({ onProposeDelete }: { onProposeDelete: (manualId: string) => void }) {
@@ -131,7 +139,8 @@ function Conversation({ onProposeDelete }: { onProposeDelete: (manualId: string)
   const [draft, setDraft] = useState("");
 
   useAgentActions((action) => {
-    if (action.type === "open") navigate(`/read/${action.manualId}`);
+    if (action.type === "created") void refreshLibrary();
+    else if (action.type === "open") navigate(`/read/${action.manualId}`);
     else onProposeDelete(action.manualId);
   });
 

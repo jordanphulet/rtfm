@@ -206,6 +206,20 @@ describe("useAgent", () => {
     await reply(requests[1]!, { event: "action", data: { type: "open", manualId: "negotiating-with-geese" } }, done);
     expect(actions).toEqual([]);
   });
+
+  it("hands over a created manual as soon as it arrives, even if the reply then fails", async () => {
+    const { readAgent, requests, handleActions } = await loadAgent();
+    const actions: AgentAction[] = [];
+    handleActions((action) => actions.push(action));
+    readAgent().send("Start a manual about kites");
+    await flush();
+    requests[0]!.send({ event: "action", data: { type: "created", manualId: "flying-kites" } });
+    await flush();
+    expect(actions).toEqual([{ type: "created", manualId: "flying-kites" }]);
+
+    await reply(requests[0]!, { event: "failed", data: { reason: "budget" } });
+    expect(actions).toEqual([{ type: "created", manualId: "flying-kites" }]);
+  });
 });
 
 describe("URL options", () => {
@@ -237,9 +251,12 @@ describe("URL options", () => {
     const { readAgent, requests } = await loadAgent("?agentFreeze=0.5");
     await flush();
     expect(requests[0]!.url).toBe("/api/librarian?freeze=0.5");
-    await reply(requests[0]!, status("Planning a manual…"), text("I can’t start new **manu"), { event: "frozen", data: {} });
+    await reply(requests[0]!, status("Planning a manual…"), text("*Building a Treehouse* is on your **shel"), {
+      event: "frozen",
+      data: {},
+    });
     expect(readAgent().status).toBe("streaming");
-    expect(readAgent().messages[1]!.text).toBe("I can’t start new **manu**");
+    expect(readAgent().messages[1]!.text).toBe("*Building a Treehouse* is on your **shel**");
     readAgent().send("help");
     expect(requests).toHaveLength(1);
   });
@@ -247,8 +264,11 @@ describe("URL options", () => {
   it("?agentFreeze=0 holds the loop's status", async () => {
     const { readAgent, requests } = await loadAgent("?agentFreeze=0");
     await flush();
-    await reply(requests[0]!, status("Planning a manual…"), { event: "frozen", data: {} });
-    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Planning a manual…" });
+    await reply(requests[0]!, status("Planning a manual…"), status("Planning “Building a Treehouse”…"), {
+      event: "frozen",
+      data: {},
+    });
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Planning “Building a Treehouse”…" });
     expect(readAgent().messages).toHaveLength(1);
   });
 
