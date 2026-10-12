@@ -124,7 +124,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   an abort.
 
 ### RL.6 — The librarian with real tools
-- **Status:** doing (agent: a9f6016a7a512a70a)
+- **Status:** done
 - **Depends on:** RL.5
 - **Files:** `server/agent/**`, `server/api/**`, `server/app.ts`, `server/config.ts`,
   `src/agent/**`, `src/home/**`, `DESIGN.md`, `scripts/**`, `ARCHITECTURE.md`, the READMEs for
@@ -149,11 +149,12 @@ Out of scope: web access for any model, the passphrase, and deploying.
   real spend is under $0.10.
 
 ### RL.7 — Creating a manual through the librarian
-- **Status:** todo
+- **Status:** doing (agent: a1ebd94060aea5a6c)
 - **Depends on:** RL.6
 - **Files:** `server/agent/**`, `server/api/**`, `server/storage/**`, `server/app.ts`,
-  `server/config.ts`, `src/agent/**`, `src/home/**`, `src/library/**`, `DESIGN.md`, `scripts/**`,
-  `ARCHITECTURE.md`
+  `server/config.ts`, `server/gateway/**` (a new job), `src/agent/**`, `src/home/**`,
+  `src/library/**`, `DESIGN.md`, `scripts/**`, `ARCHITECTURE.md`, the READMEs for `src/agent` and
+  `src/library`, and `README.md`'s lines about the librarian
 - **Do:**
   - The librarian's create tool hands the user's request to a planner: Claude writes the
     manual's title, subtitle, voice and table of contents (chapters, appendices, a summary for
