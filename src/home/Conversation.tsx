@@ -8,6 +8,7 @@ import "./conversation.css";
 interface ConversationProps {
   messages: AgentMessage[];
   status: AgentStatus;
+  activity: string;
   manuals: ManualSummary[];
   stick: StickToBottom;
   onJump: (id: string) => void;
@@ -15,7 +16,7 @@ interface ConversationProps {
   onCue: (prompt: string) => void;
 }
 
-export function Conversation({ messages, status, manuals, stick, onJump, onHover, onCue }: ConversationProps) {
+export function Conversation({ messages, status, activity, manuals, stick, onJump, onHover, onCue }: ConversationProps) {
   return (
     <div
       ref={stick.scrollRef}
@@ -42,7 +43,8 @@ export function Conversation({ messages, status, manuals, stick, onJump, onHover
             ))}
             {status === "thinking" && (
               <li className="thinking write-head-line" data-live>
-                <span className="visually-hidden">Librarian: </span>Thinking…
+                <span className="visually-hidden">Librarian: </span>
+                {activity}
               </li>
             )}
           </ol>

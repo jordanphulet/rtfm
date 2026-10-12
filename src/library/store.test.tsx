@@ -85,8 +85,9 @@ describe("the library store", () => {
     respond([GEESE, summary("haunt", 8)]);
     const store = await loadStore();
     await readLoaded(store);
-    await store.refreshLibrary();
+    const refreshed = await store.refreshLibrary();
     expect(read(store)?.[1].writtenCount).toBe(8);
+    expect(refreshed).toBe(read(store));
   });
 
   it("keeps a removal made while a refresh was on its way", async () => {
@@ -99,7 +100,7 @@ describe("the library store", () => {
     const refresh = store.refreshLibrary();
     store.removeFromLibrary("geese");
     answerRefresh([GEESE, HAUNT]);
-    await refresh;
+    expect(await refresh).toEqual([HAUNT]);
     expect(read(store)).toEqual([HAUNT]);
   });
 
@@ -108,7 +109,7 @@ describe("the library store", () => {
     fake.responses.push(() => Promise.reject(new Error("unreachable")));
     const store = await loadStore();
     await readLoaded(store);
-    await store.refreshLibrary();
+    expect(await store.refreshLibrary()).toEqual([GEESE, HAUNT]);
     expect(read(store)).toEqual([GEESE, HAUNT]);
   });
 });

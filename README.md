@@ -5,7 +5,10 @@ writes each section only when a reader opens it. Today the app has two pages:
 
 - **The landing page** (`/`): your library of manuals, beside a librarian agent you talk to. The
   library lists the manuals a local API server stores, with how many sections of each are
-  written, and deletes them through it. The librarian gives canned replies and changes nothing.
+  written, and deletes them through it. The librarian lists and finds manuals, opens one in the
+  reader, and proposes deleting one, which happens only if you confirm it in the library's own
+  dialog. It answers with a scripted fake model by default or with Claude Haiku 4.5 on Amazon
+  Bedrock.
 - **The reader** (`/read/<manual>`): any manual in the library. Opening a section that isn't
   written yet has the server write it and stream it in, with a fake writer by default or with
   Claude Haiku 4.5 on Amazon Bedrock.
@@ -40,17 +43,24 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/config.ts`):
 | `npm run shot`    | Screenshots both pages in every state, with its own dev server on port 5174. See below. |
 | `npm run usage`   | Today's and this month's model spend, by model and by job. See below. |
 
-## The section writers
+## The models
 
-`RTFM_WRITER` chooses who writes unwritten sections:
+`RTFM_MODELS` chooses who writes unwritten sections and who answers as the librarian:
 
-- **`fake`** (the default): replays the sample manual's own text for the section after 1.2s, about
-  20 characters every 85ms. A section that has no sample text (every section of the other six
-  manuals) gets a one-line placeholder instead, which streams like any section but is never
-  saved: after a reload the section is unwritten again, and the library's count doesn't change.
-  It costs nothing. Tests and screenshots always use it.
-- **`bedrock`**: Claude Haiku 4.5 writes the section live through the model gateway: about
-  4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a section.
+- **`fake`** (the default). Nothing costs anything, and tests and screenshots always use it.
+  - **The fake writer** replays the sample manual's own text for the section after 1.2s, about
+    20 characters every 85ms. A section that has no sample text (every section of the other six
+    manuals) gets a one-line placeholder instead, which streams like any section but is never
+    saved: after a reload the section is unwritten again, and the library's count doesn't change.
+  - **The fake librarian** is a scripted stand-in for the model. It picks what to do from a
+    keyword in your message (list, find, open, delete, new, help), calls the same tools Claude
+    would, against the real library, and streams its answer at the fake writer's pace. Anything
+    else gets a polite “I can’t do that”.
+- **`bedrock`**: Claude Haiku 4.5, through the model gateway, for both.
+  - It writes a section live: about 4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a
+    section.
+  - It answers as the librarian in two to three model calls a reply (one per tool round), about
+    $0.002–0.003 each.
 
 To switch to Claude:
 
@@ -64,24 +74,25 @@ To switch to Claude:
    AWS_REGION=us-west-2
    ```
 
-   The Bedrock writer reads these three from that file and from nowhere else: never from the
+   The server reads these three from that file and from nowhere else: never from the
    environment, a profile or `~/.aws`. If any is missing, the server refuses to start and names
    the missing ones.
-3. Start it with the Bedrock writer:
+3. Start it with Bedrock:
 
    ```sh
-   RTFM_WRITER=bedrock npm run dev
+   RTFM_MODELS=bedrock npm run dev
    ```
 
-4. Open an unwritten section, then run `npm run usage` to see what it cost.
+4. Open an unwritten section or ask the librarian something, then run `npm run usage` to see what
+   it cost.
 
-Any value of `RTFM_WRITER` other than `fake` or `bedrock` stops the server from starting.
+Any value of `RTFM_MODELS` other than `fake` or `bedrock` stops the server from starting.
 
 ## Configuration
 
 Everything but the credentials is committed:
 
-- `server/config.ts`: the port, the data folder, the writer, the spending caps ($2 a day and $20 a
+- `server/config.ts`: the port, the data folder, the models, the spending caps ($2 a day and $20 a
   month, UTC), how many sections may be written and how many model calls may run at once, the
   30s stall timeout, each job's model and `max_tokens`, the length in words the prompt asks
   Claude for (`sectionWordsRequested`), and the length in characters a section's progress counts
@@ -91,7 +102,8 @@ Everything but the credentials is committed:
 
 Before each model call, the gateway reserves the call's worst case (its whole prompt plus
 `max_tokens` at the model's price, about $0.025 for a section). If that would cross the daily or
-monthly cap, the call is refused, nothing is charged, and the reader shows "budget reached".
+monthly cap, the call is refused, nothing is charged, and the reader shows "budget reached" (the
+librarian's reply says its budget is used up).
 After the call, the reservation is settled to what it really cost.
 
 To try a different setting without changing the committed one (a tiny cap, say), call
@@ -113,11 +125,12 @@ stays deleted, and a manual already in `.data/` is left as it is.
 - `.data/ledger/<yyyy-mm>.jsonl`: the usage ledger, one line per model call reserved and settled.
   The caps are computed from it, so **never delete or edit it**.
 - `.data/STOP`: **the kill switch.** While this file exists, the gateway refuses every new model
-  call at once, with no restart, and the reader shows "budget reached". Delete it to resume.
+  call at once, with no restart, and the reader and the librarian say their budget is reached.
+  Delete it to resume.
   A call already running finishes.
 
-The caps and the kill switch apply only to the Bedrock writer. The fake writer makes no model
-calls, so it never reaches the gateway.
+The caps and the kill switch apply only to the Bedrock models. The fake writer and the fake
+librarian make no model calls, so they never reach the gateway.
 
 ```sh
 touch .data/STOP   # stop all model calls
@@ -134,7 +147,7 @@ Only one server should use a data folder at a time: the caps are checked in the 
 
 ## Screenshots
 
-`npm run shot` starts its own API server with the fake writer on a temporary data folder, so it
+`npm run shot` starts its own API server with the fake models on a temporary data folder, so it
 never touches `.data/` or Bedrock. It clears `shots/`, then writes:
 
 - `shots/reader/<state>-<desktop|mobile|desktop-reduced>.png`, for the states `start`, `toc`,
@@ -156,13 +169,14 @@ never touches `.data/` or Bedrock. It clears `shots/`, then writes:
   it, and the markdown renderer. Its README documents the API.
 - `src/library/`: the landing page's store, which loads the library from the API and deletes
   through it. Its README documents the API.
-- `src/agent/`: the scripted librarian. Its README documents the API and the canned replies.
-- `server/`: the API server, storage, the section writers and the model gateway. The seven seed
-  manuals are in `server/seed/`. `ARCHITECTURE.md` documents it.
-- `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`), and
-  `chunk-ends.test.ts`, which checks that the browser and the fake writer chunk text alike.
+- `src/agent/`: the librarian's conversation. It sends the conversation to the librarian on the
+  server and streams back each reply. Its README documents the API and the URL options.
+- `server/`: the API server, storage, the section writers, the librarian agent and the model
+  gateway. The seven seed manuals are in `server/seed/`. `ARCHITECTURE.md` documents it.
+- `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`).
 - `research/`: research for the back-end (`bedrock-models.md`: which Bedrock models to use).
-- `ARCHITECTURE.md`: the server, the API, storage, the writers, the gateway and configuration.
+- `ARCHITECTURE.md`: the server, the API, storage, the writers, the gateway, the librarian and
+  configuration.
 - `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
 - `WORKLIST.md`: the task list.
 - `CLAUDE.md`: the overview, the shell and credentials rules, and the code standards.

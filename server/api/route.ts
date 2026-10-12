@@ -1,6 +1,7 @@
 export interface ApiRequest {
   params: Record<string, string>;
   query: URLSearchParams;
+  body: unknown;
   signal: AbortSignal;
 }
 
@@ -16,10 +17,11 @@ export interface EventSink {
 export type EventStream = (sink: EventSink) => Promise<void>;
 
 export interface Route {
-  method: "GET" | "DELETE";
+  method: "GET" | "POST" | "DELETE";
   pattern: string;
   handle(request: ApiRequest): Promise<JsonResponse | EventStream>;
 }
 
 export const notFound: JsonResponse = { status: 404, body: { error: "Not found" } };
 export const noContent: JsonResponse = { status: 204, body: undefined };
+export const badRequest: JsonResponse = { status: 400, body: { error: "Bad request" } };

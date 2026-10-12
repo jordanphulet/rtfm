@@ -67,6 +67,21 @@
   margin-top: var(--space-3);
 }
 
+.home .reply-failure {
+  margin: 0;
+  font: var(--text-reply) / var(--leading-reply) var(--font-sans);
+  color: var(--ink-muted);
+}
+
+.home .reply + .reply-failure {
+  margin-top: var(--space-3);
+}
+
+.home .reply-failure strong {
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
 .home .thinking {
   display: flex;
   align-items: center;

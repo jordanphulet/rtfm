@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { useAgentActions } from "../agent";
 import { Sheet } from "../ui";
 import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
@@ -14,7 +15,7 @@ interface PhoneAgentProps extends AgentSideProps {
   openOnMount: boolean;
 }
 
-export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, openOnMount }: PhoneAgentProps) {
+export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, onAction, openOnMount }: PhoneAgentProps) {
   const stick = useStickToBottom();
   const scopeRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -22,6 +23,7 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
   const openedBy = useRef<OpenedBy>("load");
   const libraryScroll = useRef<number | null>(null);
   const busy = agent.status !== "idle";
+  useAgentActions((action) => onAction(action, closeForConfirmation));
 
   useLayoutEffect(() => {
     if (open || libraryScroll.current === null) return;
@@ -51,6 +53,12 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
     requestAnimationFrame(() => onJump(id));
   }
 
+  /** A proposed delete's confirmation opens over the library, so the sheet closes first. */
+  function closeForConfirmation(): Promise<void> {
+    setOpen(false);
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
   function focusOnOpen(): HTMLElement | null {
     if (openedBy.current === "send") return composer.fieldRef.current;
     if (openedBy.current === "toggle") return stick.scrollRef.current;
@@ -72,11 +80,13 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
         <LibrarianHead
           messageCount={agent.messages.length}
           status={agent.status}
+          activity={agent.activity}
           edge={stick.scrolledFromTop}
         />
         <Conversation
           messages={agent.messages}
           status={agent.status}
+          activity={agent.activity}
           manuals={manuals}
           stick={stick}
           onJump={jump}
@@ -105,7 +115,7 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
           ) : (
             <span className="dock-label">
               <span className="dock-name">Librarian</span>
-              <StatusDetail messageCount={agent.messages.length} status={agent.status} />
+              <StatusDetail messageCount={agent.messages.length} status={agent.status} activity={agent.activity} />
             </span>
           )}
           <span className="dock-action">{open ? "Hide ↓" : "Show ↑"}</span>

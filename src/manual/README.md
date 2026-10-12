@@ -2,9 +2,8 @@
 
 Everything the app needs to read a manual: the data model, a live store that reads the manual from
 the API server and streams unwritten sections from it, and the markdown renderer. The reader in
-`src/reader/` is built on it. The librarian in `src/agent/` streams its canned replies with
-`streamChunks` and `frozenLength` from `streamer.ts` and repairs them with `repair.ts`, imported
-straight from those files (they aren't part of the API below).
+`src/reader/` is built on it. The librarian in `src/agent/` repairs its streamed replies with
+`repair.ts`, imported straight from that file (it isn't part of the API below).
 
 ```ts
 import {
@@ -29,9 +28,6 @@ described in `DESIGN.md`, and the API in `ARCHITECTURE.md` › The API. The samp
   streams and failures. Only the queue of streams waiting for a slot is shared, because the limit
   on open streams is the page's.
 - `repair.ts`: closes or holds back unfinished markdown, so a partial text renders cleanly.
-- `streamer.ts`: `chunkEnds`, `streamChunks` and `frozenLength`, for the librarian's canned
-  replies. `server/writer/fake.ts` has its own copy of `chunkEnds`, so server code
-  never imports from `src/`; `scripts/chunk-ends.test.ts` checks the two agree on every seed body.
 - `reading-order.ts`: the navigation helpers.
 - `Markdown.tsx`: the renderer.
 

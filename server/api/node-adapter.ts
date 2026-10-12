@@ -1,5 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { notFound, type EventStream, type JsonResponse, type Route } from "./route.ts";
+import { badRequest, notFound, type EventStream, type JsonResponse, type Route } from "./route.ts";
+
+const MAX_BODY_CHARACTERS = 256 * 1024;
+
+class UnreadableBody extends Error {}
 
 export function createRequestHandler(routes: Route[]) {
   return async (request: IncomingMessage, response: ServerResponse) => {
@@ -13,11 +17,13 @@ export function createRequestHandler(routes: Route[]) {
       const result = await match.route.handle({
         params: match.params,
         query: url.searchParams,
+        body: await readJsonBody(request),
         signal: controller.signal,
       });
       if (typeof result === "function") await writeEvents(response, result);
       else writeJson(response, result);
     } catch (error) {
+      if (error instanceof UnreadableBody) return writeJson(response, badRequest);
       console.error(`${request.method} ${request.url} failed:`, error);
       if (response.headersSent) response.end();
       else writeJson(response, { status: 500, body: { error: "Internal error" } });
@@ -41,6 +47,21 @@ function matchRoute(routes: Route[], method: string | undefined, pathname: strin
     if (matches) return { route, params };
   }
   return undefined;
+}
+
+/** The request's JSON body, or undefined when it has none. */
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  let text = "";
+  for await (const chunk of request.setEncoding("utf8")) {
+    text += chunk;
+    if (text.length > MAX_BODY_CHARACTERS) throw new UnreadableBody();
+  }
+  if (text === "") return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new UnreadableBody();
+  }
 }
 
 function decodedOrUndefined(pathPart: string): string | undefined {

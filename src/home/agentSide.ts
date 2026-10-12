@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import type { UseAgentResult } from "../agent";
+import type { AgentAction, UseAgentResult } from "../agent";
 import type { ManualSummary } from "../library";
 
 interface ComposerState {
@@ -19,4 +19,6 @@ export interface AgentSideProps {
   onJump: (id: string) => void;
   onHover: (id: string | null) => void;
   onCue: (prompt: string) => void;
+  /** `showLibrary` makes the library visible before a confirmation opens over it. */
+  onAction: (action: AgentAction, showLibrary?: () => Promise<void>) => void;
 }

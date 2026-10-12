@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { BrowserContextOptions, Locator, Page } from "playwright";
-import type { ViteDevServer } from "vite";
+import { FAKE_REPLIES } from "../server/agent/librarian/fake-model.ts";
+import type { FailureReason } from "../server/api/types.ts";
 import { startServer } from "../server/app.ts";
 import { config } from "../server/config.ts";
-import type * as RepliesModule from "../src/agent/replies.ts";
 import { captureAll, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
 
 const PORT = 5174;
@@ -14,6 +14,7 @@ const READER_DIR = `${SHOTS_DIR}/reader`;
 const HOME_DIR = `${SHOTS_DIR}/home`;
 const TYPED_MESSAGE = "Delete the manual about birthday parties";
 const UNHANDLED_MESSAGE = "Sing me a sea shanty about geese";
+const LIST_MESSAGE = "What do I have?";
 const CLICK_TIMEOUT_MS = 3000;
 const REPLY_TIMEOUT_MS = 10_000;
 
@@ -64,11 +65,11 @@ const HOME_SIZES: Size[] = [
 ];
 
 const dataDir = await mkdtemp(path.join(tmpdir(), "rtfm-shots-"));
-const apiServer = await startServer({ ...config, port: 0, dataDir, writer: "fake" });
+const apiServer = await startServer({ ...config, port: 0, dataDir, models: "fake" });
 try {
   const viteServer = await startViteServer(PORT, apiServer.port);
   try {
-    process.exitCode = (await captureShots(viteServer)) ? 0 : 1;
+    process.exitCode = (await captureShots()) ? 0 : 1;
   } finally {
     await viteServer.close();
   }
@@ -77,13 +78,11 @@ try {
   await rm(dataDir, { recursive: true, force: true });
 }
 
-async function captureShots(viteServer: ViteDevServer): Promise<boolean> {
+async function captureShots(): Promise<boolean> {
   await clearShots();
-  const replies = (await viteServer.ssrLoadModule("/src/agent/replies.ts")) as typeof RepliesModule;
-  const fallbackReply = withoutEmphasis(replies.replyTo(UNHANDLED_MESSAGE));
   const results = await captureAll(`http://localhost:${PORT}`, [
     ...captureGroups(READER_DIR, READER_SIZES, readerShots()),
-    ...captureGroups(HOME_DIR, HOME_SIZES, homeShots(fallbackReply)),
+    ...captureGroups(HOME_DIR, HOME_SIZES, homeShots()),
   ]);
   return printSummary(results);
 }
@@ -112,15 +111,19 @@ function readerShots(): Shot[] {
   ];
 }
 
-function homeShots(fallbackReply: string): Shot[] {
+function homeShots(): Shot[] {
   return [
     { state: "first-visit", path: "/" },
     { state: "typing", path: "/", prepare: typeMessage },
     { state: "thinking", path: "/?agentFreeze=thinking" },
+    { state: "working", path: "/?agentFreeze=0" },
     { state: "streaming", path: "/?agentFreeze=0.5" },
     { state: "conversation", path: "/?conversation=demo", fullPage: true },
     { state: "delete-confirm", path: "/", prepare: openDeleteConfirmation },
-    { state: "fallback", path: "/", prepare: (page) => sendUnhandledMessage(page, fallbackReply) },
+    { state: "fallback", path: "/", prepare: sendUnhandledMessage },
+    { state: "proposed-delete", path: "/", prepare: askToDelete },
+    { state: "reply-budget", path: "/", beforeLoad: (page) => failReplies(page, "budget"), prepare: sendListMessage },
+    { state: "reply-failed", path: "/", beforeLoad: (page) => failReplies(page, "error"), prepare: sendListMessage },
     { state: "empty", path: "/?library=empty" },
     {
       state: "library-unreachable",
@@ -165,12 +168,37 @@ async function typeMessage(page: Page) {
   await settle(page);
 }
 
-async function sendUnhandledMessage(page: Page, reply: string) {
-  const input = await clickHook(page, "agent-input");
-  await input.pressSequentially(UNHANDLED_MESSAGE);
-  await input.press("Enter");
-  await page.getByText(reply).first().waitFor({ timeout: REPLY_TIMEOUT_MS });
+async function sendUnhandledMessage(page: Page) {
+  await sendMessage(page, UNHANDLED_MESSAGE);
+  await page.getByText(withoutEmphasis(FAKE_REPLIES.fallback)).first().waitFor({ timeout: REPLY_TIMEOUT_MS });
   await settle(page);
+}
+
+async function askToDelete(page: Page) {
+  await sendMessage(page, TYPED_MESSAGE);
+  await page.getByRole("alertdialog").waitFor({ timeout: REPLY_TIMEOUT_MS });
+  await settle(page);
+}
+
+async function sendListMessage(page: Page) {
+  await sendMessage(page, LIST_MESSAGE);
+  await page.locator(".reply-failure").first().waitFor({ timeout: REPLY_TIMEOUT_MS });
+  await settle(page);
+}
+
+async function sendMessage(page: Page, message: string) {
+  const input = await clickHook(page, "agent-input");
+  await input.pressSequentially(message);
+  await input.press("Enter");
+}
+
+async function failReplies(page: Page, reason: FailureReason) {
+  await page.route("**/api/librarian", (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      body: `event: failed\ndata: ${JSON.stringify({ reason })}\n\n`,
+    }),
+  );
 }
 
 async function openDeleteConfirmation(page: Page) {

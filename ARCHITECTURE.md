@@ -1,15 +1,19 @@
 # RTFM — architecture
 
 A local Node server stores the manuals and their sections. It writes unwritten sections, with a fake
-writer or with Claude Haiku 4.5 on Amazon Bedrock, and streams them to the reader. An agent loop runs
-a model with tools over several turns. Every model call, including each turn of the loop, goes
-through one gateway that caps spending.
+writer or with Claude Haiku 4.5 on Amazon Bedrock, and streams them to the reader. The librarian on
+the landing page is an agent: an agent loop runs a model with the library's tools over several
+turns, with a scripted fake model or with Claude Haiku 4.5. Every Bedrock call, including each turn
+of the loop, goes through one gateway that caps spending.
 
 ```
 browser (Vite, :5173)                        server (node:http, :8787)
   src/library store ┐
-  src/manual store ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake writer
+  src/manual store ─┤
+  src/agent store  ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake writer
                                                   │                    └──▶ Bedrock writer ──▶ gateway ──▶ Bedrock
+                                                  ├──▶ librarian ──▶ agent loop ──▶ fake librarian model
+                                                  │                             └──▶ gateway ──▶ Bedrock
                                                   └──▶ storage/ (manuals, sections, ledger: files in .data/)
 ```
 
@@ -23,8 +27,8 @@ Node 22.18+, as `scripts/` does, with its own `tsconfig.server.json` (`module: n
 server/
   main.ts                 starts the server from config.ts (npm run server)
   dev.ts                  npm run dev: Vite plus `node --watch server/main.ts`
-  config.ts               committed settings (section 7)
-  app.ts                  startServer(config, writer?): builds storage, writer and gateway; routes
+  config.ts               committed settings (section 8)
+  app.ts                  startServer(config, replaced?): builds storage, the models and the gateway; routes
   testing.ts              helpers shared by the tests
   usage.ts                npm run usage
   api/
@@ -37,6 +41,7 @@ server/
     delete-manual.ts      DELETE /api/manuals/:manualId
     section.ts            GET /api/manuals/:manualId/sections/:sectionId
     section-stream.ts     GET /api/manuals/:manualId/sections/:sectionId/stream
+    librarian.ts          POST /api/librarian: the librarian's reply to a conversation (section 7)
     preview.ts            ?freeze, ?fail and ?library=empty: canned, never stored, never billed
   storage/
     types.ts              ManualStore, UsageLedger
@@ -60,6 +65,13 @@ server/
     loop.ts               runAgent: model turns and tool calls through the gateway (section 6)
     tool.ts               defineTool: a tool's schema, status line and handler
     scripted-client.ts    a fake ModelClient that plays scripted turns, tool calls included
+    librarian/            the librarian agent (section 7)
+      reply.ts            sendReply: runs the loop on a conversation and sends the reply's events
+      prompt.ts           the system prompt
+      tools.ts            list, find, open and propose a delete
+      create-manual.ts    the create tool, which says creating isn't available
+      find.ts             findManuals: manuals that match a topic
+      fake-model.ts       the scripted fake model
   gateway/
     types.ts              ModelClient, ModelPrompt, ModelEvent, GatewayConfig, refusal errors
     gateway.ts            caps, reservations, concurrency, idle timeout, kill switch, ledger
@@ -90,7 +102,7 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
 - `npm run server` runs the server alone, for `curl` and `npm run preview`.
 - `.claude/launch.json` runs `npm run dev`.
 - `npm run shot` starts the server in process with `startServer({ ...config, port: 0,
-  dataDir: <temp dir>, writer: "fake" })` and points its Vite proxy at it. Every run starts from
+  dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it. Every run starts from
   the seed and never touches `.data/` or Bedrock.
 
 **Plain handlers, ready for Lambda.** Handlers import only `api/route.ts`, never `node:http` or
@@ -101,6 +113,7 @@ the Node adapter.
 export interface ApiRequest {
   params: Record<string, string>;   // from the route pattern
   query: URLSearchParams;
+  body: unknown;                    // the parsed JSON body, or undefined when there is none
   signal: AbortSignal;              // aborts when the client disconnects
 }
 export interface JsonResponse { status: number; body: unknown }
@@ -109,7 +122,7 @@ export interface EventSink {
 }
 export type EventStream = (sink: EventSink) => Promise<void>;   // the stream ends when it resolves
 export interface Route {
-  method: "GET" | "DELETE";
+  method: "GET" | "POST" | "DELETE";
   pattern: string;
   handle(request: ApiRequest): Promise<JsonResponse | EventStream>;   // so a stream route can 404
 }
@@ -118,15 +131,19 @@ export interface Route {
 The Node adapter:
 
 - matches `method` exactly, and `pattern` by splitting the path on `/`;
+- reads the body as JSON, up to 262,144 characters; a body that is too long or isn't JSON gets `400 { error:
+  "Bad request" }` before any handler runs;
 - turns `res.on("close")` into the `AbortSignal`;
 - writes the SSE headers (`content-type: text/event-stream`, `cache-control: no-cache`);
 - writes a response whose `body` is `undefined` with no body and no content type (`noContent`, 204).
 
 ## 2. The API
 
-The wire types live in `server/api/types.ts`. The browser imports them with `import type`, so
-nothing from `server/` reaches the bundle: `src/manual/types.ts` re-exports the manual's types,
-and `src/library/types.ts` re-exports `ManualSummary`.
+The wire types live in `server/api/types.ts`. The browser imports them with `import type`:
+`src/manual/types.ts` re-exports the manual's types, `src/library/types.ts` re-exports
+`ManualSummary`, and `src/agent/types.ts` the librarian's. The one value the browser imports is
+`LIBRARIAN_LIMITS`, which the file defines with no imports, so nothing else from `server/` reaches
+the bundle.
 
 ```ts
 interface ManualSummary { id; title; subtitle; chapterCount; sectionCount; writtenCount }
@@ -139,6 +156,17 @@ type SectionEvent =
   | { event: "written"; data: {} }
   | { event: "frozen";  data: {} }
   | { event: "failed";  data: { reason: "budget" | "error" } };
+
+interface LibrarianMessage { role: "user" | "agent"; text: string }
+const LIBRARIAN_LIMITS = { earlierExchanges: 10, messageCharacters: 4000 };
+type PageAction = { type: "open"; manualId: string } | { type: "propose-delete"; manualId: string };
+type LibrarianEvent =
+  | { event: "status"; data: { text: string } }   // a tool is running: "Searching the shelves…"
+  | { event: "text";   data: { text: string } }   // the next piece of the reply
+  | { event: "action"; data: PageAction }
+  | { event: "done";   data: {} }
+  | { event: "frozen"; data: {} }                 // previews only
+  | { event: "failed"; data: { reason: "budget" | "error" } };
 ```
 
 | Route | Response |
@@ -148,6 +176,7 @@ type SectionEvent =
 | `DELETE /api/manuals/:manualId` | `204` (no body), `404`, or `409 { error }` while a section of it is being written |
 | `GET /api/manuals/:manualId/sections/:sectionId` | `200 { status, body? }`, with the body only when written, or `404` |
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
+| `POST /api/librarian` with `{ messages: LibrarianMessage[] }` | `text/event-stream` of `LibrarianEvent`s (section 7), or `400` |
 
 Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
 `500 { error: "Internal error" }` (or, once a stream has started, the stream just ends).
@@ -204,15 +233,15 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
 - **Retrying** is the reader's **Try again**, in place with no reload: the store opens the stream
   again, which starts a new run because the server kept the section unwritten. Until then a
   failure sticks for the page load. A reload would also abort this tab's other running sections.
-- **Preview options**, for screenshots: `?freeze=<0–1>` and `?fail=budget|error` on a stream, and
-  `?library=empty` on `GET /api/manuals`.
+- **Preview options**, for screenshots: `?freeze=<0–1>` and `?fail=budget|error` on a stream,
+  `?library=empty` on `GET /api/manuals`, and `?freeze=<0–1>` on `POST /api/librarian` (section 7).
   - `api/preview.ts` handles them before any run, writer or storage write is touched, so they cost
-    nothing and change nothing, whichever writer is configured.
+    nothing and change nothing, whichever models are configured.
   - **Empty library** answers `200 []`, so the landing page's empty state can be shown without
     deleting anything.
   - The stream options only apply to sections that aren't written.
-  - **Freeze** cuts the seed body at the last chunk end at or before the fraction (the rule in
-    `frozenLength`). It sends one `append` (none for 0) with `progress = cut / body.length`, then
+  - **Freeze** cuts the seed body at the last chunk end at or before the fraction (`cutAt` in
+    `api/preview.ts`). It sends one `append` (none for 0) with `progress = cut / body.length`, then
     `frozen`, and ends the stream. The client closes the source and stays in the writing state.
     The stream must end, because `npm run shot` waits for `networkidle`.
   - **Fail** sends `failed` with that reason.
@@ -311,11 +340,9 @@ class WriteFailed extends Error {
 ```
 
 **`writer/fake.ts`** waits 1.2s, then yields the seed body about 20 characters every 85ms, split at
-word boundaries, the same pace as the librarian's canned replies.
+word boundaries, the same pace as the fake librarian's replies.
 
-- It has its own copy of `chunkEnds`, because server code never imports from `src/`;
-  `scripts/chunk-ends.test.ts` checks that it chunks every seed body as `src/manual/streamer.ts`
-  does.
+- `chunkEnds` splits a body into these chunks. The fake librarian and the previews use it too.
 - `progress` is exact.
 - A section with no seed body gets a short placeholder, with every chunk marked `placeholder`,
   so the reader can be tried on any manual without storing anything.
@@ -379,12 +406,15 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   progress usually ends a little short of 100% and then jumps to written, rather than waiting at
   99%.
 
-**Choosing a writer:** `config.writer`, which defaults to `"fake"` (used by tests and screenshots);
-`RTFM_WRITER=bedrock` selects Claude. With `"bedrock"`, `startServer` checks every job's model
-against the price table (`ModelNotPriced`), then reads the credentials (`CredentialsMissing`),
-then builds the Bedrock client, the file ledger, the gateway and the writer, all before it seeds
-or listens. Either problem therefore stops the server from starting, and an unpriced model is
-reported without reading any secret.
+**Choosing the models:** `config.models`, which defaults to `"fake"` (used by tests and
+screenshots), chooses both the section writer and the librarian's model (`createModels` in
+`app.ts`); `RTFM_MODELS=bedrock` selects Claude for both. With `"bedrock"`, `startServer` checks
+every job's model against the price table (`ModelNotPriced`), then reads the credentials
+(`CredentialsMissing`), then builds the Bedrock client, the file ledger, one gateway, and the
+writer on it, all before it seeds or listens. The librarian uses the same gateway, so one set of
+caps covers both jobs. Either problem therefore stops the server from starting, and an unpriced
+model is reported without reading any secret. Tests replace either model with
+`startServer(config, { writer, librarian })`.
 
 **One writer per section** (`writer/runs.ts`): an in-memory `Map` keyed by `manualId/sectionId`.
 
@@ -623,8 +653,8 @@ prefix is too short to cache.
 - It takes exactly `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`, and treats an
   empty or blank value, or a missing file, as missing.
 - If any is missing, it throws `CredentialsMissing`, which names the missing variables and never
-  prints a value, so the server refuses to start with the Bedrock writer. `app.ts` calls it when
-  `config.writer` is `"bedrock"`.
+  prints a value, so the server refuses to start with the Bedrock models. `app.ts` calls it when
+  `config.models` is `"bedrock"`.
 
 **Tests, all offline**
 
@@ -752,8 +782,8 @@ function runAgent(run: {
   gateway call underneath is aborted and settled, as section 5 requires.
 
 **Events.** `status` and `text` are the only events, so a route can forward each as a
-server-sent event as it is. Text from different turns arrives in order, with the statuses of the
-tools run between them.
+server-sent event as it is (section 7). Text from different turns arrives in order, with the
+statuses of the tools run between them.
 
 **Tests** (`loop.test.ts`) drive `runAgent` through the real gateway, with a temp data folder,
 the seed manuals and a file ledger. `scripted-client.ts` is the fake model: `scriptedClient(turns)`
@@ -774,12 +804,131 @@ plays one list of `ModelEvent`s per call and records each prompt, and `textTurn(
 - a turn that stops at `max_tokens`, one that ends with nothing in it, and one that stops for a
   tool without calling one: `AgentStopped`.
 
-## 7. Configuration
+## 7. The librarian
+
+The librarian on the landing page is the agent loop (section 6) with the library's tools, behind
+one route. The browser keeps the conversation and sends it whole with each message; the reply
+streams back.
+
+```ts
+// server/agent/librarian/reply.ts
+async function sendReply(reply: {
+  gateway: Gateway; store: ManualStore; conversation: LibrarianMessage[];
+  signal: AbortSignal; send: (event: LibrarianEvent) => void;
+}): Promise<void>;
+```
+
+**The route** (`api/librarian.ts`), `POST /api/librarian` with `{ messages }`:
+
+- **Checked first.** At most `LIBRARIAN_LIMITS.earlierExchanges` (10) earlier exchanges and the
+  new message, so 1–21 messages, each `user` or `agent` with 1–4,000 characters
+  (`messageCharacters`) of text after trimming, alternating from a `user` message and ending with
+  one. Anything else, or a `?freeze` that isn't a number from 0 to 1, is `400 { error: "Bad
+  request" }`. The browser sends only the latest 10 exchanges whose reply finished, leaving out
+  any with a message over the limit, so a failed reply never reaches the model and a long
+  conversation keeps working. The limits also bound what one reply can cost.
+- **Plain text only.** Each message becomes a prompt message with string content (`agent` becomes
+  `assistant`). The model never sees earlier replies' tool calls, only what was said, and the
+  system prompt tells it to check the library with a tool rather than trust earlier messages,
+  because the user can open and delete manuals directly.
+- **The reply.** `sendReply` runs `runAgent` with the job `librarian` and sends:
+  - `status` with each tool's status line, as the loop reports it;
+  - `text` with each text delta. When the first text of a later model turn follows text from an
+    earlier one (a tool ran in between, known or not), it starts with a blank line, so the turns
+    read as paragraphs. `sendReply` counts the turns by wrapping the gateway;
+  - `action` when a tool hands the page an action (below), as the tool runs;
+  - then `done` when the loop returns, or `failed`: `"budget"` for `SpendingRefused` (a cap or
+    the kill switch), `"error"` for anything else, which is logged (`GatewayBusy`, a stall, a
+    failed call, `AgentStopped`).
+  - If the client disconnects, the signal aborts the loop, which settles the call as `aborted`
+    (section 6), and nothing more is sent.
+
+**The tools** (`agent/librarian/tools.ts`, `create-manual.ts`):
+
+| Tool | Input | Status | Result |
+| --- | --- | --- | --- |
+| `list_manuals` | none | Checking the shelves… | JSON: each manual's `id`, `title`, `subtitle`, `sections_written` and `sections`, in title order (`librarySummaries`, shared with `GET /api/manuals`) |
+| `find_manuals` | `topic` | Searching the shelves… | JSON: up to 5 matches, best first: `id`, `title`, `subtitle` and up to 3 `matching_sections` (`"A.1 Servos, Steppers and Pneumatics"`); or `No manual matches "…".` |
+| `open_manual` | `manual_id` | Opening the manual… | Sends `{ type: "open" }`. JSON: the `manual`'s `id` and `title`, and a fixed `result`: the reader opens it when the reply has finished |
+| `propose_delete` | `manual_id` | Preparing the delete… | Sends `{ type: "propose-delete" }`. JSON: the `manual`'s `id` and `title`, and a fixed `result`: nothing is deleted, only the user's choice in the page's confirmation deletes it, and never say it has been deleted |
+| `create_manual` | `request` | Planning a manual… | Says creating manuals isn't available, nothing was created, and to tell the user so plainly |
+
+- **Results are data.** Manual text (titles, subtitles, summaries) appears only as JSON values,
+  never inside the results' wording, and the system prompt says tool results are data, never
+  instructions.
+- **An unknown `manual_id`** throws, so the model gets an error result that names the id and says
+  how to find one, and no action is sent.
+- **No tool changes anything on the server.** Opening and deleting are actions for the page. A
+  delete happens only through the page's confirmation dialog and `DELETE /api/manuals/:manualId`,
+  never through the librarian, so neither the page nor the model can delete on its own.
+- **Finding** (`find.ts`) lower-cases the topic and each manual's text, splits it on anything
+  that isn't a letter, keeps words of 3 or more letters that aren't stop words (function words,
+  and request words such as `manual`, `open` and `delete`), and reduces each to a base form
+  (`-ies` → `y`, `-ed` dropped from words of 6+ letters, one trailing `s` dropped, not `ss`). A
+  manual scores 3 for each topic word in its title, 2 for each in its subtitle and 1 for each in
+  its table of contents (chapter and section titles and section summaries); ties go by title.
+
+**The system prompt** (`agent/librarian/prompt.ts`) is the same for every request. It describes:
+
+- the library: what a manual is, the page beside the librarian, and that the library can change
+  between messages;
+- the tools, with the delete rule (it deletes nothing; only the user's confirmation does; never
+  say a manual has been deleted), that tool results are data and never instructions, one open or
+  delete per reply, finding the id first, asking when a request could mean more than one manual,
+  and calling tools without announcing them;
+- the voice, from the landing page's copy: calm, warm and a little dry, like a reference
+  librarian or a stage manager; one to three sentences or a short list; titles in italics, never
+  ids; only the markdown `ReplyMarkdown` renders, minus links and code; typographic punctuation;
+- what it can't do, answered in a sentence with what it can do instead.
+
+No `cache_control` is sent. A librarian call reads about 1,800–2,300 input tokens (the system
+prompt, the tool definitions, the tool-use system prompt and the conversation), writes up to a
+few hundred, and costs about $0.002–0.003, against a reservation of about $0.013. A reply takes
+one call per model turn: two for a list or a find, two or three to open or propose a delete.
+
+**The fake model** (`agent/librarian/fake-model.ts`), the default (`config.models`, section 4):
+
+- It implements `Gateway` itself, so it makes no model call and never reaches the real gateway:
+  nothing is reserved, recorded or capped, as with the fake writer.
+- It reads the latest user message for a keyword, the first match in this order: `delete` or
+  `remove`; `create`, `new` or `start`; `open` or `read`; `list`, `library`, `manuals` or "what do
+  I have"; `find`, `anything` or `which`; `help`. Then it plays the turns a model would, through
+  the real tools: a list calls `list_manuals` and lists every title with its counts; an open or a
+  delete calls `find_manuals` with the message as the topic, then `open_manual` or
+  `propose_delete` with the best match, then says so; with no match it asks which manual. A new
+  manual calls `create_manual` and says it can't yet; help and anything else get fixed replies.
+- It waits 600ms before each turn and streams text about 20 characters every 85ms, at the fake
+  writer's word boundaries (`chunkEnds`). Its fixed replies are `FAKE_REPLIES`, which the tests
+  and the shot script match.
+
+**Preview** (`?freeze=<0–1>`, in `api/preview.ts`). Whatever models are configured, it runs
+`sendReply` with the fake model at once (no waits) and collects the events. It then sends the
+statuses and the text up to the last chunk end at or before that fraction of the reply's text,
+then `frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never sent. Since no tool
+changes anything, a preview costs nothing and changes nothing. The browser uses it for
+`?conversation=demo` and `?agentFreeze=` (`src/agent/README.md`).
+
+**Tests**, all offline:
+
+- `api/librarian.test.ts`, with the fake model: a list, a find-and-open with its `open` action,
+  a proposed delete that leaves the manual in place until `DELETE`, a delete that names no
+  manual, the create reply, a fallback with no tool, and the requests refused with `400` (bad
+  bodies, a message over the limit, too many exchanges; the limit itself is accepted); the
+  previews at 1, 0.5 and 0 through a configured model that throws if called, and the invalid
+  `?freeze` values. Through the real gateway with `scriptedClient`: a three-turn reply with its
+  events in order, the paragraph break, the plain-text conversation and the five tools sent, and
+  one settled `librarian` call per turn; the paragraph break after an unknown tool; an unknown
+  id; `failed: "budget"` for a cap and for the kill switch; `failed: "error"` after text for a
+  call stopped at `max_tokens`.
+- `agent/librarian/find.test.ts`: which manual comes first for a topic, matching by the table of
+  contents, title over subtitle, and nothing for request words alone.
+
+## 8. Configuration
 
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Writer, port, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
+| Models, port, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
 ```ts
@@ -788,7 +937,7 @@ export const API_PORT = 8787;
 export const config: ServerConfig = {
   port: API_PORT,
   dataDir: fileURLToPath(new URL("../.data", import.meta.url)),   // <repo>/.data, whatever the cwd
-  writer: writerFromEnv(process.env.RTFM_WRITER),   // "fake" (default) or "bedrock"; anything else throws
+  models: modelsFromEnv(process.env.RTFM_MODELS),   // "fake" (default) or "bedrock"; anything else throws
   maxConcurrentRuns: 3,
   sectionWordsRequested: 650,
   sectionExpectedCharacters: 4800,
@@ -804,7 +953,7 @@ export const config: ServerConfig = {
 
 - **Types.** `config` is a `ServerConfig`, which extends `GatewayConfig` (`caps`,
   `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) with the port, data dir,
-  writer, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
+  models, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
   `startServer` and the gateway take it as it is, so tests and the shot script spread `config`
   and override what they need.
 - **The `global.` model ID.** Both jobs use the `global.` inference profile rather than `us.`,
@@ -853,7 +1002,7 @@ export const prices = {
   tokens), with a worst-case reservation of about $0.025. A call aborted mid-section is charged
   its full `max_tokens`, about $0.013. Not yet checked against Cost Explorer.
 
-## 8. The reader's store (`src/manual/`)
+## 9. The reader's store (`src/manual/`)
 
 **How it reads the API**
 
@@ -885,13 +1034,13 @@ export const prices = {
 
 - The manuals live only on the server; the seed manuals are in `server/seed/`.
 - The browser's types have no `body` or `voice`.
-- `streamer.ts` holds only `chunkEnds`, `streamChunks` and `frozenLength`, for the canned
-  librarian.
+- The browser never splits text into chunks: it shows what each stream sends.
 
 **Tests and scripts that read the sample**
 
 - Tests that need sample bodies read `server/seed/the-haunt-that-listens/`: `repair.test.tsx`
-  with Vite's `import.meta.glob`, `scripts/chunk-ends.test.ts` with `node:fs`.
+  with Vite's `import.meta.glob`, cutting each body at word ends about 20 characters apart, as a
+  stream would; the server's tests with `node:fs`.
 - `SHOT_MANUAL` and `SHOT_SECTIONS` are in `scripts/shot.ts`. `Markdown.test.tsx` uses its own
   literal section ids.
 

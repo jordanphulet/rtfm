@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
-import { useAgent, type AgentMessage, type AgentStatus } from "../agent";
-import { deleteManual, removeFromLibrary, useLibrary, type ManualSummary } from "../library";
+import { useNavigate } from "react-router";
+import { useAgent, type AgentAction, type AgentMessage, type UseAgentResult } from "../agent";
+import { deleteManual, refreshLibrary, removeFromLibrary, useLibrary, type ManualSummary } from "../library";
 import "../ui";
 import type { AgentSideProps } from "./agentSide";
 import { STARTER_PROMPT } from "./cuePrompts";
@@ -13,6 +14,7 @@ import { LibraryHead } from "./LibraryHead";
 import { collapse, flash } from "./motion";
 import { PhoneAgent } from "./PhoneAgent";
 import { namedManuals, namedWhenSent } from "./references";
+import { replyFailureWords } from "./replyFailure";
 import { useFocusShortcut } from "./useFocusShortcut";
 import { useMediaQuery } from "./useMediaQuery";
 import "./tokens.css";
@@ -32,6 +34,7 @@ export default function Home() {
 function HomePage() {
   const manuals = useLibrary();
   const agent = useAgent();
+  const navigate = useNavigate();
   const wide = useMediaQuery(WIDE);
   const [loadedWithConversation] = useState(() => agent.messages.length > 0);
   const [hasBeenWide, setHasBeenWide] = useState(wide);
@@ -45,6 +48,7 @@ function HomePage() {
   const startRef = useRef<HTMLButtonElement>(null);
   const rows = useRef(new Map<string, HTMLLIElement>());
   const focusAfterKeep = useRef<HTMLElement | null>(null);
+  const proposedByLibrarian = useRef(false);
 
   useFocusShortcut(fieldRef);
 
@@ -105,15 +109,39 @@ function HomePage() {
     flash(row);
   }
 
-  function askToDelete(manual: ManualSummary) {
+  function askToDelete(manual: ManualSummary, byLibrarian = false) {
+    proposedByLibrarian.current = byLibrarian;
     setDeleteStage("confirming");
     setToDelete(manual);
   }
 
+  /**
+   * Carries out the librarian's action, unless a confirmation is already open. A proposed delete
+   * for a manual the page doesn't list reloads the library once; if it still isn't there, nothing
+   * opens, and the librarian's reply has already said what it did.
+   */
+  async function act(action: AgentAction, showLibrary?: () => Promise<void>) {
+    if (toDelete) return;
+    if (action.type === "open") {
+      navigate(`/read/${encodeURIComponent(action.manualId)}`);
+      return;
+    }
+    const listed = (list: ManualSummary[]) => list.find((each) => each.id === action.manualId);
+    const manual = listed(manuals) ?? listed(await refreshLibrary());
+    if (!manual) return;
+    await showLibrary?.();
+    findRow(manual.id)?.scrollIntoView({ block: "nearest", behavior: "instant" });
+    askToDelete(manual, true);
+  }
+
   function keep() {
     if (deleteStage === "deleting") return;
-    if (toDelete) focusAfterKeep.current = findRow(toDelete.id)?.querySelector(".row-delete") ?? null;
+    if (toDelete) focusAfterKeep.current = proposedByLibrarian.current ? fieldRef.current : rowDelete(toDelete.id);
     setToDelete(null);
+  }
+
+  function rowDelete(id: string): HTMLElement | null {
+    return findRow(id)?.querySelector(".row-delete") ?? null;
   }
 
   async function confirmDelete(manual: ManualSummary) {
@@ -134,6 +162,7 @@ function HomePage() {
     removeFromLibrary(manual.id);
     setDeleteNotice(`Deleted ${manual.title}.`);
     requestAnimationFrame(() => {
+      if (proposedByLibrarian.current) return fieldRef.current?.focus();
       const next = neighbour && findRow(neighbour.id)?.querySelector<HTMLElement>(".row-title");
       (next ?? startRef.current)?.focus();
     });
@@ -151,6 +180,7 @@ function HomePage() {
     onJump: jumpToManual,
     onHover: setHoveredId,
     onCue: loadPrompt,
+    onAction: act,
   };
 
   return (
@@ -159,7 +189,7 @@ function HomePage() {
         {deleteNotice}
       </p>
       <p className="visually-hidden" aria-live="polite">
-        {agentNotice(agent.messages, agent.status)}
+        {agentNotice(agent)}
       </p>
       <div className="page" inert={toDelete !== null}>
         <a className="skip-link" href="#librarian-field" onClick={skipToLibrarian}>
@@ -208,9 +238,11 @@ function markedManuals(
   return [];
 }
 
-function agentNotice(messages: AgentMessage[], status: AgentStatus): string {
-  if (status === "thinking") return "Thinking";
+function agentNotice({ messages, status, activity }: UseAgentResult): string {
+  if (status === "thinking") return activity.replace(/…$/, "");
   if (status === "streaming") return "";
   const last = messages.at(-1);
-  return last?.role === "agent" ? last.text.replaceAll(/[*_`]/g, "") : "";
+  if (last?.role !== "agent") return "";
+  const failure = last.failure ? replyFailureWords(last.failure) : null;
+  return [last.text.replaceAll(/[*_`]/g, ""), failure?.title, failure?.text].filter(Boolean).join(" ");
 }

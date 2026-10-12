@@ -1,51 +1,48 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { repairPartialMarkdown } from "../manual/repair";
-import { frozenLength, streamChunks } from "../manual/streamer";
-import { replyTo } from "./replies";
-import type { AgentMessage, AgentStatus } from "./types";
+import { streamReply } from "./api";
+import { LIBRARIAN_LIMITS, type AgentAction, type AgentMessage, type AgentStatus, type LibrarianMessage } from "./types";
 
-const THINKING_MS = 600;
+const THINKING = "Thinking…";
 const DEMO_MESSAGES = [
   "What do I have?",
   "Open the one about haunted houses",
   "Can you translate the sourdough manual into Klingon?",
 ];
 const FROZEN_MESSAGE = "Let’s start a new manual about building a treehouse";
+const WHOLE_REPLY = 1;
 
 interface AgentState {
   messages: AgentMessage[];
   status: AgentStatus;
+  activity: string;
 }
 
 export interface UseAgentResult extends AgentState {
   send: (text: string) => void;
 }
 
+type ActionHandler = (action: AgentAction) => void;
+
 let messageCount = 0;
-let state = startingState(new URLSearchParams(window.location.search));
+let state: AgentState = { messages: [], status: "idle", activity: THINKING };
+let actionHandler: ActionHandler | null = null;
 const listeners = new Set<() => void>();
 
-function startingState(params: URLSearchParams): AgentState {
-  const demo = params.get("conversation") === "demo" ? DEMO_MESSAGES : [];
-  const messages = demo.flatMap((text) => [
-    newMessage("user", text),
-    newMessage("agent", replyTo(text)),
-  ]);
+void startFromUrl(new URLSearchParams(window.location.search));
 
+/** The URL options: replies played by the server's scripted fake model, so they cost nothing. */
+async function startFromUrl(params: URLSearchParams) {
+  if (params.get("conversation") === "demo") {
+    for (const text of DEMO_MESSAGES) await reply(text, WHOLE_REPLY);
+  }
   const freeze = params.get("agentFreeze");
   if (freeze === "thinking") {
-    return { messages: [...messages, newMessage("user", FROZEN_MESSAGE)], status: "thinking" };
+    setState({ messages: [...state.messages, newMessage("user", FROZEN_MESSAGE)], status: "thinking" });
+    return;
   }
   const fraction = Number(freeze);
-  if (freeze && fraction >= 0 && fraction <= 1) {
-    const reply = replyTo(FROZEN_MESSAGE);
-    const shown = repairPartialMarkdown(reply.slice(0, frozenLength(reply, fraction)));
-    return {
-      messages: [...messages, newMessage("user", FROZEN_MESSAGE), newMessage("agent", shown)],
-      status: "streaming",
-    };
-  }
-  return { messages, status: "idle" };
+  if (freeze && fraction >= 0 && fraction <= 1) await reply(FROZEN_MESSAGE, fraction);
 }
 
 function newMessage(role: AgentMessage["role"], text: string): AgentMessage {
@@ -76,26 +73,99 @@ function setState(changes: Partial<AgentState>) {
 function send(text: string) {
   const message = text.trim();
   if (message === "" || state.status !== "idle") return;
-
-  setState({ messages: [...state.messages, newMessage("user", message)], status: "thinking" });
-  setTimeout(() => streamReply(replyTo(message)), THINKING_MS);
+  void reply(message);
 }
 
-function streamReply(reply: string) {
-  const id = newMessageId();
-  const showReply = (text: string, status: AgentStatus) => {
-    const others = state.messages.filter((message) => message.id !== id);
-    setState({ messages: [...others, { id, role: "agent", text }], status });
-  };
+/**
+ * Sends the finished exchanges and the new message, and shows the reply as it streams. A page
+ * action is handed to the page once the reply is done. `freeze` asks for the scripted reply,
+ * cut at that fraction, which then stays as it is.
+ */
+async function reply(text: string, freeze?: number) {
+  const conversation: LibrarianMessage[] = [...recentExchanges(state.messages), { role: "user", text }];
+  setState({ messages: [...state.messages, newMessage("user", text)], status: "thinking", activity: THINKING });
 
-  streamChunks(
-    reply,
-    (shownLength) => showReply(repairPartialMarkdown(reply.slice(0, shownLength)), "streaming"),
-    () => showReply(reply, "idle"),
-  );
+  const replyId = newMessageId();
+  let raw = "";
+  let action: AgentAction | null = null;
+
+  function showReply(changes: Partial<AgentMessage>, status: AgentStatus) {
+    const others = state.messages.filter((message) => message.id !== replyId);
+    const message: AgentMessage = { id: replyId, role: "agent", text: repairPartialMarkdown(raw), ...changes };
+    const shown = message.text === "" && !message.failure ? others : [...others, message];
+    setState({ messages: shown, status });
+  }
+
+  try {
+    for await (const event of streamReply(conversation, freeze)) {
+      switch (event.event) {
+        case "status":
+          setState({ status: "thinking", activity: event.data.text });
+          break;
+        case "text":
+          raw += event.data.text;
+          showReply({}, "streaming");
+          break;
+        case "action":
+          action = event.data;
+          break;
+        case "done":
+          showReply({ text: raw }, "idle");
+          if (action) actionHandler?.(action);
+          return;
+        case "frozen":
+          return;
+        case "failed":
+          showReply({ failure: event.data.reason }, "idle");
+          return;
+      }
+    }
+    showReply({ failure: "error" }, "idle");
+  } catch {
+    showReply({ failure: "error" }, "idle");
+  }
+}
+
+/**
+ * The latest exchanges whose reply finished, so the model sees no half-answered turn, within the
+ * route's limits: an exchange with a message too long to send is left out.
+ */
+function recentExchanges(messages: AgentMessage[]): LibrarianMessage[] {
+  const sendable = (text: string) => text.trim() !== "" && text.length <= LIBRARIAN_LIMITS.messageCharacters;
+  const exchanges: LibrarianMessage[][] = [];
+  messages.forEach((question, index) => {
+    const answer = messages[index + 1];
+    if (question.role !== "user" || answer?.role !== "agent" || answer.failure) return;
+    if (!sendable(question.text) || !sendable(answer.text)) return;
+    exchanges.push([
+      { role: "user", text: question.text },
+      { role: "agent", text: answer.text },
+    ]);
+  });
+  return exchanges.slice(-LIBRARIAN_LIMITS.earlierExchanges).flat();
 }
 
 export function useAgent(): UseAgentResult {
-  const { messages, status } = useSyncExternalStore(subscribe, getState, getState);
-  return { messages, status, send };
+  const { messages, status, activity } = useSyncExternalStore(subscribe, getState, getState);
+  return { messages, status, activity, send };
+}
+
+/**
+ * Hands each page action to `handler` once its reply is done, while the calling component is
+ * mounted. An action that arrives while no component is listening is dropped.
+ */
+export function useAgentActions(handler: ActionHandler) {
+  const latest = useRef(handler);
+  useEffect(() => {
+    latest.current = handler;
+  });
+  useEffect(() => handleActions((action) => latest.current(action)), []);
+}
+
+/** Makes `handler` the one that receives page actions, until the returned function is called. */
+export function handleActions(handler: ActionHandler): () => void {
+  actionHandler = handler;
+  return () => {
+    if (actionHandler === handler) actionHandler = null;
+  };
 }

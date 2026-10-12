@@ -19,10 +19,10 @@ async function start(writer: SectionWriter = recordingWriter(), dataDir?: string
     ...committedConfig,
     port: 0,
     dataDir: dataDir ?? (await tempDataDir()),
-    writer: "fake",
+    models: "fake",
     maxConcurrentRuns: 3,
   };
-  const server = await startServer(config, writer);
+  const server = await startServer(config, { writer });
   servers.push(server);
   const library = `http://localhost:${server.port}/api/manuals`;
   const base = `${library}/${SAMPLE_ID}`;

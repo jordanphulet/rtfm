@@ -10,13 +10,16 @@ export function libraryRoute(store: ManualStore): Route {
     pattern: "/api/manuals",
     async handle({ query }) {
       if (wantsEmptyLibrary(query)) return { status: 200, body: [] };
-
-      const manuals = await store.listManuals();
-      const summaries = await Promise.all(manuals.map((manual) => summaryOf(store, manual)));
-      summaries.sort((a, b) => a.title.localeCompare(b.title, "en"));
-      return { status: 200, body: summaries };
+      return { status: 200, body: await librarySummaries(store) };
     },
   };
+}
+
+/** Every stored manual's summary, sorted by title. */
+export async function librarySummaries(store: ManualStore): Promise<ManualSummary[]> {
+  const manuals = await store.listManuals();
+  const summaries = await Promise.all(manuals.map((manual) => summaryOf(store, manual)));
+  return summaries.sort((a, b) => a.title.localeCompare(b.title, "en"));
 }
 
 async function summaryOf(store: ManualStore, manual: StoredManual): Promise<ManualSummary> {

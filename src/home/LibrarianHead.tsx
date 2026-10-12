@@ -5,6 +5,7 @@ import "./librarian-head.css";
 interface LibrarianStatusProps {
   messageCount: number;
   status: AgentStatus;
+  activity: string;
 }
 
 export function LibrarianHead({ edge, ...detail }: LibrarianStatusProps & { edge: boolean }) {
@@ -18,13 +19,13 @@ export function LibrarianHead({ edge, ...detail }: LibrarianStatusProps & { edge
   );
 }
 
-export function StatusDetail({ messageCount, status }: LibrarianStatusProps) {
+export function StatusDetail({ messageCount, status, activity }: LibrarianStatusProps) {
   if (status !== "idle") {
     return (
       <span className="status-detail" data-live="">
         <Separator />
         <StatusRing status="writing" />
-        {status === "thinking" ? "Thinking…" : "Replying…"}
+        {status === "thinking" ? activity : "Replying…"}
       </span>
     );
   }

@@ -61,4 +61,13 @@ describe("Turn", () => {
     expect(afterDelete).toContain("Moving House Without Losing the Cat — no longer in your library");
     expect(afterDelete).not.toMatch(/<button[^>]*>Moving House/);
   });
+
+  it("shows a failed reply's note under any text that arrived, and no empty reply", () => {
+    const partial = render({ id: "reply", role: "agent", text: "You have", failure: "budget" }, []);
+    expect(partial).toMatch(/You have[\s\S]*<strong>Budget reached\.<\/strong> The librarian’s budget is used up/);
+
+    const empty = render({ id: "reply", role: "agent", text: "", failure: "error" }, []);
+    expect(empty).toContain("<strong>This reply failed.</strong>");
+    expect(empty).not.toContain("reply-markdown");
+  });
 });

@@ -3,12 +3,12 @@ import type { GatewayConfig } from "./gateway/types.ts";
 
 export const API_PORT = 8787;
 
-export type WriterName = "fake" | "bedrock";
+export type ModelSource = "fake" | "bedrock";
 
 export interface ServerConfig extends GatewayConfig {
   port: number;
   dataDir: string;
-  writer: WriterName;
+  models: ModelSource;
   maxConcurrentRuns: number;
   sectionWordsRequested: number;
   sectionExpectedCharacters: number;
@@ -17,7 +17,7 @@ export interface ServerConfig extends GatewayConfig {
 export const config: ServerConfig = {
   port: API_PORT,
   dataDir: fileURLToPath(new URL("../.data", import.meta.url)),
-  writer: writerFromEnv(process.env.RTFM_WRITER),
+  models: modelsFromEnv(process.env.RTFM_MODELS),
   maxConcurrentRuns: 3,
   sectionWordsRequested: 650,
   sectionExpectedCharacters: 4800,
@@ -30,7 +30,7 @@ export const config: ServerConfig = {
   },
 };
 
-function writerFromEnv(value = "fake"): WriterName {
+function modelsFromEnv(value = "fake"): ModelSource {
   if (value === "fake" || value === "bedrock") return value;
-  throw new Error(`RTFM_WRITER must be "fake" or "bedrock", not "${value}"`);
+  throw new Error(`RTFM_MODELS must be "fake" or "bedrock", not "${value}"`);
 }

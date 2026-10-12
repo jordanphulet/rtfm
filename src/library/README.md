@@ -8,7 +8,7 @@ Import everything from `src/library`:
 
 ```ts
 import {
-  deleteManual, removeFromLibrary, useLibrary,
+  deleteManual, refreshLibrary, removeFromLibrary, useLibrary,
   type DeleteResult, type ManualSummary,
 } from "../library";
 ```
@@ -54,6 +54,13 @@ Deletes a manual on the server. It never throws, and it **doesn't change the lis
 | `"failed"`        | Any other answer, no answer within 10 seconds, or no server   |
 
 The store asks for no confirmation; the landing page does.
+
+## `refreshLibrary(): Promise<ManualSummary[]>`
+
+Fetches `GET /api/manuals` again, updates the list, and resolves to it. If the fetch fails, or a
+`removeFromLibrary` happened while it was under way, the list stays as it was and that is what it
+resolves to. It never throws. The landing page uses it when the librarian proposes deleting a
+manual the list doesn't have yet.
 
 ## `removeFromLibrary(id: string): void`
 
@@ -101,4 +108,4 @@ function Shelf() {
 
 - `types.ts`: `ManualSummary` (re-exported from the server) and `DeleteResult`.
 - `api.ts`: the API's URLs: `fetchLibrary` and `deleteManual`.
-- `store.ts`: `useLibrary`, `removeFromLibrary`, and the background refresh.
+- `store.ts`: `useLibrary`, `refreshLibrary`, `removeFromLibrary`, and the background refresh.

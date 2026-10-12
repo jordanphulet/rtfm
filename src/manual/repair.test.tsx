@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { describe, expect, it } from "vitest";
 import { repairPartialMarkdown } from "./repair";
-import { chunkEnds } from "./streamer";
 
 const SEED_BODIES = import.meta.glob<string>("../../server/seed/the-haunt-that-listens/sections/*.md", {
   query: "?raw",
@@ -86,12 +85,22 @@ describe("repairPartialMarkdown", () => {
     expect(bodies).toHaveLength(18);
     for (const [file, body] of bodies) {
       expect(repairPartialMarkdown(body), file).toBe(body);
-      for (const end of chunkEnds(body)) {
+      for (const end of streamedCuts(body)) {
         expectNoRawSyntax(body.slice(0, end), file);
       }
     }
   });
 });
+
+/** Cuts at word ends at least 20 characters apart, about the size of a streamed chunk. */
+function streamedCuts(body: string): number[] {
+  const cuts: number[] = [];
+  for (const word of body.matchAll(/\S+\s*/g)) {
+    const end = word.index + word[0].length;
+    if (end - (cuts.at(-1) ?? 0) >= 20) cuts.push(end);
+  }
+  return [...cuts, body.length];
+}
 
 function expectNoRawSyntax(partial: string, label = "") {
   const visible = visibleProse(repairPartialMarkdown(partial));

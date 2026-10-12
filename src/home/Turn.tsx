@@ -1,8 +1,9 @@
 import { Fragment } from "react";
-import type { AgentMessage } from "../agent";
+import type { AgentMessage, FailureReason } from "../agent";
 import type { ManualSummary } from "../library";
 import { ReplyMarkdown } from "../ui";
 import { namedWhenSent } from "./references";
+import { replyFailureWords } from "./replyFailure";
 
 interface TurnProps {
   message: AgentMessage;
@@ -17,7 +18,8 @@ export function Turn({ message, live, manuals, onJump, onHover }: TurnProps) {
     return (
       <li className="turn-reply write-head" data-live={live || undefined}>
         <span className="visually-hidden">Librarian: </span>
-        <ReplyMarkdown className="reply">{message.text}</ReplyMarkdown>
+        {message.text !== "" && <ReplyMarkdown className="reply">{message.text}</ReplyMarkdown>}
+        {message.failure && <ReplyFailure reason={message.failure} />}
       </li>
     );
   }
@@ -59,5 +61,14 @@ export function Turn({ message, live, manuals, onJump, onHover }: TurnProps) {
         </p>
       ))}
     </li>
+  );
+}
+
+function ReplyFailure({ reason }: { reason: FailureReason }) {
+  const { title, text } = replyFailureWords(reason);
+  return (
+    <p className="reply-failure">
+      <strong>{title}</strong> {text}
+    </p>
   );
 }

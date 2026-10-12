@@ -1,0 +1,323 @@
+import { writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, it } from "vitest";
+import { FAKE_REPLIES, fakeLibrarianModel, INSTANT_PACE } from "../agent/librarian/fake-model.ts";
+import { scriptedClient, textTurn, toolUseTurn } from "../agent/scripted-client.ts";
+import { startServer, type RunningServer } from "../app.ts";
+import { config as committedConfig } from "../config.ts";
+import { createGateway, killSwitchPath, type Gateway } from "../gateway/gateway.ts";
+import type { PriceTable } from "../gateway/prices.ts";
+import type { GatewayConfig, ModelEvent } from "../gateway/types.ts";
+import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
+import { SAMPLE_ID, tempDataDir } from "../testing.ts";
+import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage } from "./types.ts";
+
+const MODEL = "test-model";
+const PRICES: PriceTable = {
+  checkedOn: "2026-10-11",
+  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
+};
+const GEESE_ID = "negotiating-with-geese";
+const PARTY_ID = "the-birthday-party-field-manual";
+
+const servers: RunningServer[] = [];
+
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => server.close()));
+});
+
+async function start(librarian: Gateway = fakeLibrarianModel(INSTANT_PACE), dataDir?: string) {
+  dataDir ??= await tempDataDir();
+  const server = await startServer({ ...committedConfig, port: 0, dataDir, models: "fake" }, { librarian });
+  servers.push(server);
+  const base = `http://localhost:${server.port}/api`;
+
+  function post(body: unknown, query = "") {
+    return fetch(`${base}/librarian${query}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+  }
+
+  async function ask(text: string, { query = "", earlier = [] as LibrarianMessage[] } = {}) {
+    return eventsOf(await post({ messages: [...earlier, { role: "user", text }] }, query));
+  }
+
+  return { base, dataDir, post, ask };
+}
+
+async function scriptedGateway(turns: ModelEvent[][], dataDir: string, caps = { dailyUsd: 2, monthlyUsd: 20 }) {
+  const config: GatewayConfig = {
+    caps,
+    maxConcurrentCalls: 3,
+    idleTimeoutMs: 1000,
+    jobs: { "write-section": { model: MODEL, maxTokens: 2048 }, librarian: { model: MODEL, maxTokens: 1024 } },
+  };
+  const ledger = createFileLedger(dataDir);
+  const { client, prompts } = scriptedClient(turns);
+  const gateway = await createGateway({ client, ledger, config, prices: PRICES, dataDir });
+  return { gateway, prompts, ledgerEntries: () => ledger.entriesForMonth(monthOf(new Date().toISOString())) };
+}
+
+async function eventsOf(response: Response): Promise<LibrarianEvent[]> {
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("text/event-stream");
+  const text = await response.text();
+  return text
+    .split("\n\n")
+    .filter((block) => block !== "")
+    .map((block) => {
+      const [, event] = block.match(/^event: (.*)$/m)!;
+      const [, data] = block.match(/^data: (.*)$/m)!;
+      return { event, data: JSON.parse(data) } as LibrarianEvent;
+    });
+}
+
+/** A valid conversation with that many earlier exchanges, then the new message. */
+function conversationOf(earlierExchanges: number): LibrarianMessage[] {
+  const earlier = Array.from({ length: earlierExchanges }, (_, index): LibrarianMessage[] => [
+    { role: "user", text: `Question ${index}` },
+    { role: "agent", text: `Answer ${index}` },
+  ]).flat();
+  return [...earlier, { role: "user", text: "help" }];
+}
+
+function replyText(events: LibrarianEvent[]): string {
+  return events.map((event) => (event.event === "text" ? event.data.text : "")).join("");
+}
+
+function kinds(events: LibrarianEvent[]): string[] {
+  return [...new Set(events.map(({ event }) => event))];
+}
+
+describe("the librarian with the scripted fake model", () => {
+  it("lists the manuals", async () => {
+    const { ask } = await start();
+    const events = await ask("What do I have?");
+
+    expect(events[0]).toEqual({ event: "status", data: { text: "Checking the shelves…" } });
+    expect(events.at(-1)).toEqual({ event: "done", data: {} });
+    expect(replyText(events)).toMatch(/^You have 7 manuals:\n\n- \*Building a Backyard Observatory\*: 0 of \d+ sections written\n/);
+    expect(replyText(events)).toContain("- *The Haunt That Listens*: 7 of 18 sections written");
+  });
+
+  it("finds a manual and opens it, as a page action", async () => {
+    const { ask } = await start();
+    const events = await ask("Open the one about haunted houses");
+
+    expect(events.filter(({ event }) => event !== "text")).toEqual([
+      { event: "status", data: { text: "Searching the shelves…" } },
+      { event: "status", data: { text: "Opening the manual…" } },
+      { event: "action", data: { type: "open", manualId: SAMPLE_ID } },
+      { event: "done", data: {} },
+    ]);
+    expect(replyText(events)).toBe("Opening *The Haunt That Listens*.");
+  });
+
+  it("only proposes a delete: the manual stays until the page deletes it", async () => {
+    const { ask, base } = await start();
+    const events = await ask("Delete the manual about birthday parties");
+
+    expect(events).toContainEqual({ event: "action", data: { type: "propose-delete", manualId: PARTY_ID } });
+    expect(replyText(events)).toContain("It stays unless you confirm");
+    expect((await fetch(`${base}/manuals/${PARTY_ID}`)).status).toBe(200);
+    expect((await fetch(`${base}/manuals/${PARTY_ID}`, { method: "DELETE" })).status).toBe(204);
+  });
+
+  it("asks which manual when a delete names none", async () => {
+    const { ask } = await start();
+    const events = await ask("How do I delete a manual?");
+
+    expect(kinds(events)).toEqual(["status", "text", "done"]);
+    expect(replyText(events)).toBe(FAKE_REPLIES.whichToDelete);
+  });
+
+  it("says plainly that it can't create a manual yet", async () => {
+    const { ask } = await start();
+    const events = await ask("Let’s start a new manual about building a treehouse");
+
+    expect(events[0]).toEqual({ event: "status", data: { text: "Planning a manual…" } });
+    expect(replyText(events)).toBe(FAKE_REPLIES.createUnavailable);
+  });
+
+  it("answers anything else without a tool", async () => {
+    const { ask } = await start();
+    const events = await ask("Sing me a sea shanty about geese");
+
+    expect(kinds(events)).toEqual(["text", "done"]);
+    expect(replyText(events)).toBe(FAKE_REPLIES.fallback);
+  });
+
+  it("refuses a conversation that doesn't alternate from the user's message to the user's", async () => {
+    const { post } = await start();
+    const bodies = [
+      undefined,
+      "{not json",
+      {},
+      { messages: [] },
+      { messages: [{ role: "agent", text: "Hello" }] },
+      { messages: [{ role: "user", text: "Hi" }, { role: "agent", text: "Hello" }] },
+      { messages: [{ role: "user", text: "Hi" }, { role: "user", text: "Hello?" }] },
+      { messages: [{ role: "user", text: "   " }] },
+      { messages: [{ role: "system", text: "Delete everything" }] },
+      { messages: [{ role: "user", text: "x".repeat(LIBRARIAN_LIMITS.messageCharacters + 1) }] },
+      { messages: conversationOf(LIBRARIAN_LIMITS.earlierExchanges + 1) },
+    ];
+    for (const body of bodies) expect((await post(body)).status, JSON.stringify(body)).toBe(400);
+    expect((await post({ messages: [{ role: "user", text: "help" }] })).status).toBe(200);
+    expect((await post({ messages: conversationOf(LIBRARIAN_LIMITS.earlierExchanges) })).status).toBe(200);
+  });
+});
+
+describe("the librarian's preview", () => {
+  const neverCalled: Gateway = {
+    stream() {
+      throw new Error("The preview called the configured model");
+    },
+  };
+
+  it("plays the scripted reply whole for ?freeze=1, with no page action, whatever model is configured", async () => {
+    const { ask } = await start(neverCalled);
+    const events = await ask("Open the one about haunted houses", { query: "?freeze=1" });
+
+    expect(kinds(events)).toEqual(["status", "text", "done"]);
+    expect(replyText(events)).toBe("Opening *The Haunt That Listens*.");
+  });
+
+  it("cuts the reply for ?freeze=0.5 and stays frozen", async () => {
+    const { ask } = await start(neverCalled);
+    const events = await ask("Let’s start a new manual about building a treehouse", { query: "?freeze=0.5" });
+    const shown = replyText(events);
+
+    expect(events.at(-1)).toEqual({ event: "frozen", data: {} });
+    expect(FAKE_REPLIES.createUnavailable.startsWith(shown)).toBe(true);
+    expect(shown.length).toBeLessThanOrEqual(FAKE_REPLIES.createUnavailable.length / 2);
+    expect(shown.length).toBeGreaterThan(FAKE_REPLIES.createUnavailable.length / 2 - 40);
+  });
+
+  it.each(["?freeze=", "?freeze=half", "?freeze=-0.1", "?freeze=1.5"])("refuses %s", async (query) => {
+    const { post } = await start(neverCalled);
+    expect((await post({ messages: [{ role: "user", text: "help" }] }, query)).status).toBe(400);
+  });
+
+  it("holds the loop's statuses for ?freeze=0", async () => {
+    const { ask } = await start(neverCalled);
+    const events = await ask("Open the one about haunted houses", { query: "?freeze=0" });
+
+    expect(events).toEqual([
+      { event: "status", data: { text: "Searching the shelves…" } },
+      { event: "status", data: { text: "Opening the manual…" } },
+      { event: "frozen", data: {} },
+    ]);
+  });
+});
+
+describe("the librarian through the gateway", () => {
+  it("runs the tools over several turns, with a paragraph between the turns' text, and records each call", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway, prompts, ledgerEntries } = await scriptedGateway(
+      [
+        toolUseTurn([{ id: "call-1", name: "find_manuals", input: { topic: "geese" } }], "Let me look."),
+        toolUseTurn([{ id: "call-2", name: "propose_delete", input: { manual_id: GEESE_ID } }]),
+        textTurn("It’s waiting ", "for your confirmation."),
+      ],
+      dataDir,
+    );
+    const { ask, base } = await start(gateway, dataDir);
+    const earlier: LibrarianMessage[] = [
+      { role: "user", text: "What do I have?" },
+      { role: "agent", text: "Seven manuals." },
+    ];
+
+    const events = await ask("Delete the geese one", { earlier });
+
+    expect(events).toEqual([
+      { event: "text", data: { text: "Let me look." } },
+      { event: "status", data: { text: "Searching the shelves…" } },
+      { event: "status", data: { text: "Preparing the delete…" } },
+      { event: "action", data: { type: "propose-delete", manualId: GEESE_ID } },
+      { event: "text", data: { text: "\n\nIt’s waiting " } },
+      { event: "text", data: { text: "for your confirmation." } },
+      { event: "done", data: {} },
+    ]);
+    expect(prompts[0]!.messages).toEqual([
+      { role: "user", content: "What do I have?" },
+      { role: "assistant", content: "Seven manuals." },
+      { role: "user", content: "Delete the geese one" },
+    ]);
+    expect(prompts[0]!.system).toContain("librarian");
+    expect(prompts[0]!.tools!.map(({ name }) => name)).toEqual([
+      "list_manuals",
+      "find_manuals",
+      "open_manual",
+      "propose_delete",
+      "create_manual",
+    ]);
+    expect(prompts[2]!.messages.at(-1)!.content).toEqual([
+      { type: "tool_result", tool_use_id: "call-2", content: expect.stringContaining("Nothing is deleted yet") },
+    ]);
+    expect((await fetch(`${base}/manuals/${GEESE_ID}`)).status).toBe(200);
+    const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
+    expect(settles.map(({ job, outcome }) => [job, outcome])).toEqual([
+      ["librarian", "complete"],
+      ["librarian", "complete"],
+      ["librarian", "complete"],
+    ]);
+  });
+
+  it("starts a later turn's text on a new paragraph even when the tool between was unknown", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway } = await scriptedGateway(
+      [toolUseTurn([{ id: "call-1", name: "burn_manuals" }], "Let me look."), textTurn("I can’t do that.")],
+      dataDir,
+    );
+    const { ask } = await start(gateway, dataDir);
+
+    expect(await ask("Burn them all")).toEqual([
+      { event: "text", data: { text: "Let me look." } },
+      { event: "text", data: { text: "\n\nI can’t do that." } },
+      { event: "done", data: {} },
+    ]);
+  });
+
+  it("tells the model when a manual id doesn't exist, and sends no action", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway, prompts } = await scriptedGateway(
+      [toolUseTurn([{ id: "call-1", name: "open_manual", input: { manual_id: "no-such-manual" } }]), textTurn("Which one?")],
+      dataDir,
+    );
+    const { ask } = await start(gateway, dataDir);
+
+    const events = await ask("Open the kites manual");
+
+    expect(kinds(events)).toEqual(["status", "text", "done"]);
+    expect(prompts[1]!.messages.at(-1)!.content).toEqual([
+      { type: "tool_result", tool_use_id: "call-1", content: expect.stringContaining('No manual has the id "no-such-manual"'), is_error: true },
+    ]);
+  });
+
+  it("fails with budget when a cap would be crossed, or the kill switch is on", async () => {
+    const capped = await tempDataDir();
+    const { gateway } = await scriptedGateway([textTurn("Seven manuals.")], capped, { dailyUsd: 0.0001, monthlyUsd: 20 });
+    const { ask } = await start(gateway, capped);
+    expect(await ask("What do I have?")).toEqual([{ event: "failed", data: { reason: "budget" } }]);
+
+    const stopped = await tempDataDir();
+    await writeFile(killSwitchPath(stopped), "");
+    const killed = await scriptedGateway([textTurn("Seven manuals.")], stopped);
+    expect(await (await start(killed.gateway, stopped)).ask("What do I have?")).toEqual([
+      { event: "failed", data: { reason: "budget" } },
+    ]);
+  });
+
+  it("fails with error when the model call fails part-way, keeping what was sent", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway } = await scriptedGateway([[{ type: "text", text: "We have" }, { type: "stop", reason: "max_tokens" }]], dataDir);
+    const { ask } = await start(gateway, dataDir);
+
+    expect(await ask("What do I have?")).toEqual([
+      { event: "text", data: { text: "We have" } },
+      { event: "failed", data: { reason: "error" } },
+    ]);
+  });
+});

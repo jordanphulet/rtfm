@@ -29,10 +29,12 @@ function loadOnce(): Promise<void> {
   return firstLoad;
 }
 
-export async function refreshLibrary() {
+/** Fetches the list again and returns it; if that fails, returns the list as it was. */
+export async function refreshLibrary(): Promise<ManualSummary[]> {
   const removalsBefore = removalCount;
   const fresh = await fetchLibrary().catch(() => undefined);
   if (fresh && removalCount === removalsBefore) setManuals(fresh);
+  return manuals;
 }
 
 function refreshOnReturn() {

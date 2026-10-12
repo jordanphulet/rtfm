@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type KeyboardEvent, type RefObject } from "react";
+import { LIBRARIAN_LIMITS } from "../agent";
 import { NewestButton } from "./NewestButton";
 import "./composer.css";
 
@@ -51,6 +52,7 @@ export function Composer({
         aria-label="Ask the librarian"
         placeholder="Ask the librarian…"
         rows={layout === "panel" ? 2 : 1}
+        maxLength={LIBRARIAN_LIMITS.messageCharacters}
         value={draft}
         onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={sendOnEnter}

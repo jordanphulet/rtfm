@@ -1,14 +1,44 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { replyTo } from "./replies";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UseAgentResult } from "./store";
+import type { AgentAction, LibrarianEvent, LibrarianMessage } from "./types";
 
-async function loadAgent(search = "") {
+interface Request {
+  url: string;
+  messages: LibrarianMessage[];
+  send: (...events: LibrarianEvent[]) => void;
+  end: () => void;
+}
+
+/** Stands in for the server: each POST waits for the test to send its events. */
+function fakeServer() {
+  const requests: Request[] = [];
+  const fetch = vi.fn(async (url: string, init: RequestInit) => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start: (c) => (controller = c) });
+    const encoder = new TextEncoder();
+    requests.push({
+      url,
+      messages: JSON.parse(String(init.body)).messages,
+      send: (...events) => {
+        for (const { event, data } of events) {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        }
+      },
+      end: () => controller.close(),
+    });
+    return new Response(body, { headers: { "content-type": "text/event-stream" } });
+  });
+  return { fetch, requests };
+}
+
+async function loadAgent(search = "", server = fakeServer()) {
   vi.stubGlobal("window", { location: { search } });
+  vi.stubGlobal("fetch", server.fetch);
   vi.resetModules();
-  const { useAgent } = await import("./store");
+  const { useAgent, handleActions } = await import("./store");
 
-  return () => {
+  function readAgent() {
     let agent: UseAgentResult | undefined;
     function Probe() {
       agent = useAgent();
@@ -16,132 +46,226 @@ async function loadAgent(search = "") {
     }
     renderToStaticMarkup(<Probe />);
     return agent!;
-  };
+  }
+  return { readAgent, handleActions, requests: server.requests };
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
+async function flush() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function reply(request: Request, ...events: LibrarianEvent[]) {
+  request.send(...events);
+  request.end();
+  await flush();
+}
+
+const text = (value: string): LibrarianEvent => ({ event: "text", data: { text: value } });
+const status = (value: string): LibrarianEvent => ({ event: "status", data: { text: value } });
+const done: LibrarianEvent = { event: "done", data: {} };
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe("useAgent", () => {
   it("starts with an empty, idle conversation", async () => {
-    const readAgent = await loadAgent();
+    const { readAgent, requests } = await loadAgent();
     expect(readAgent()).toMatchObject({ messages: [], status: "idle" });
+    expect(requests).toEqual([]);
   });
 
-  it("thinks for 600ms, then streams the reply to completion", async () => {
-    const readAgent = await loadAgent();
+  it("sends the message, shows the loop's statuses, then streams the reply to completion", async () => {
+    const { readAgent, requests } = await loadAgent();
     readAgent().send("  What do I have?  ");
-    expect(readAgent().status).toBe("thinking");
-    expect(readAgent().messages).toEqual([
-      { id: expect.any(String), role: "user", text: "What do I have?" },
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Thinking…" });
+    expect(readAgent().messages).toEqual([{ id: expect.any(String), role: "user", text: "What do I have?" }]);
+    await flush();
+    expect(requests[0]).toMatchObject({ url: "/api/librarian", messages: [{ role: "user", text: "What do I have?" }] });
+
+    requests[0]!.send(status("Checking the shelves…"));
+    await flush();
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Checking the shelves…" });
+
+    requests[0]!.send(text("You have **two"));
+    await flush();
+    expect(readAgent().status).toBe("streaming");
+    expect(readAgent().messages[1]).toMatchObject({ role: "agent", text: "You have **two**" });
+
+    await reply(requests[0]!, text(" manuals**."), done);
+    expect(readAgent().status).toBe("idle");
+    expect(readAgent().messages[1]).toEqual({ id: expect.any(String), role: "agent", text: "You have **two manuals**." });
+  });
+
+  it("goes back to thinking when a tool runs after the reply has started", async () => {
+    const { readAgent, requests } = await loadAgent();
+    readAgent().send("Open the geese one");
+    await flush();
+    requests[0]!.send(text("Let me look."), status("Searching the shelves…"));
+    await flush();
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Searching the shelves…" });
+    expect(readAgent().messages[1]!.text).toBe("Let me look.");
+  });
+
+  it("sends the finished exchanges with each new message, leaving out failed ones", async () => {
+    const { readAgent, requests } = await loadAgent();
+    readAgent().send("What do I have?");
+    await flush();
+    await reply(requests[0]!, text("Seven manuals."), done);
+    readAgent().send("Open the geese one");
+    await flush();
+    await reply(requests[1]!, text("Open"), { event: "failed", data: { reason: "error" } });
+    readAgent().send("Open the geese one, please");
+    await flush();
+
+    expect(requests[2]!.messages).toEqual([
+      { role: "user", text: "What do I have?" },
+      { role: "agent", text: "Seven manuals." },
+      { role: "user", text: "Open the geese one, please" },
     ]);
-
-    vi.advanceTimersByTime(599);
-    expect(readAgent().status).toBe("thinking");
-
-    vi.advanceTimersByTime(1);
-    const streaming = readAgent();
-    const reply = replyTo("What do I have?");
-    expect(streaming.status).toBe("streaming");
-    expect(streaming.messages).toHaveLength(2);
-    expect(streaming.messages[1].role).toBe("agent");
-    expect(streaming.messages[1].text.length).toBeGreaterThan(0);
-    expect(streaming.messages[1].text.length).toBeLessThan(reply.length);
-
-    vi.runAllTimers();
-    const done = readAgent();
-    expect(done.status).toBe("idle");
-    expect(done.messages[1]).toEqual({ id: streaming.messages[1].id, role: "agent", text: reply });
   });
 
-  it("shows repaired markdown mid-stream", async () => {
-    const readAgent = await loadAgent();
-    readAgent().send("help");
-    vi.advanceTimersByTime(600);
-    while (readAgent().status === "streaming") {
-      const text = readAgent().messages[1].text;
-      expect((text.match(/\*\*/g) ?? []).length % 2).toBe(0);
-      vi.advanceTimersByTime(85);
+  it("sends only the latest exchanges, leaving out any too long to send", async () => {
+    const { readAgent, requests } = await loadAgent();
+    const tooLong = "x".repeat(4001);
+    for (let index = 0; index < 12; index++) {
+      readAgent().send(`Question ${index}`);
+      await flush();
+      await reply(requests[index]!, text(index === 11 ? tooLong : `Answer ${index}`), done);
     }
+    readAgent().send("And now?");
+    await flush();
+
+    const sent = requests[12]!.messages;
+    expect(sent).toHaveLength(21);
+    expect(sent[0]).toEqual({ role: "user", text: "Question 1" });
+    expect(sent.at(-2)).toEqual({ role: "agent", text: "Answer 10" });
+    expect(sent.at(-1)).toEqual({ role: "user", text: "And now?" });
   });
 
-  it("ignores sends while a reply is in progress, and blank sends", async () => {
-    const readAgent = await loadAgent();
+  it.each([
+    ["budget", [{ event: "failed", data: { reason: "budget" } }] as LibrarianEvent[]],
+    ["error", [{ event: "failed", data: { reason: "error" } }] as LibrarianEvent[]],
+    ["error", [] as LibrarianEvent[]],
+  ])("marks the reply failed (%s) when the server says so or the stream ends early", async (reason, events) => {
+    const { readAgent, requests } = await loadAgent();
+    readAgent().send("What do I have?");
+    await flush();
+    await reply(requests[0]!, text("You have"), ...events);
+    expect(readAgent().status).toBe("idle");
+    expect(readAgent().messages[1]).toMatchObject({ role: "agent", text: "You have", failure: reason });
+  });
+
+  it("marks the reply failed when the server can't be reached", async () => {
+    const server = { fetch: vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))), requests: [] };
+    const { readAgent } = await loadAgent("", server);
+    readAgent().send("What do I have?");
+    await flush();
+    expect(readAgent().status).toBe("idle");
+    expect(readAgent().messages[1]).toMatchObject({ role: "agent", text: "", failure: "error" });
+  });
+
+  it("ignores blank sends and sends while a reply is in progress", async () => {
+    const { readAgent, requests } = await loadAgent();
     readAgent().send("   ");
     expect(readAgent().messages).toEqual([]);
-
     readAgent().send("help");
     readAgent().send("list");
-    vi.advanceTimersByTime(700);
-    readAgent().send("list");
-    vi.runAllTimers();
-    expect(readAgent().messages.map((message) => message.role)).toEqual(["user", "agent"]);
+    await flush();
+    expect(requests).toHaveLength(1);
+    expect(readAgent().messages).toHaveLength(1);
+  });
 
-    readAgent().send("list");
-    expect(readAgent().messages).toHaveLength(3);
+  it("hands a page action to the handler only once the reply is done", async () => {
+    const { readAgent, requests, handleActions } = await loadAgent();
+    const actions: AgentAction[] = [];
+    handleActions((action) => actions.push(action));
+    readAgent().send("Delete the geese one");
+    await flush();
+    requests[0]!.send({ event: "action", data: { type: "propose-delete", manualId: "negotiating-with-geese" } }, text("Confirm it?"));
+    await flush();
+    expect(actions).toEqual([]);
+
+    await reply(requests[0]!, done);
+    expect(actions).toEqual([{ type: "propose-delete", manualId: "negotiating-with-geese" }]);
+  });
+
+  it("drops a page action when the reply fails, or when nothing is handling actions", async () => {
+    const { readAgent, requests, handleActions } = await loadAgent();
+    const actions: AgentAction[] = [];
+    const stopHandling = handleActions((action) => actions.push(action));
+    readAgent().send("Open the geese one");
+    await flush();
+    await reply(requests[0]!, { event: "action", data: { type: "open", manualId: "negotiating-with-geese" } }, {
+      event: "failed",
+      data: { reason: "error" },
+    });
+    stopHandling();
+    readAgent().send("Open the geese one");
+    await flush();
+    await reply(requests[1]!, { event: "action", data: { type: "open", manualId: "negotiating-with-geese" } }, done);
+    expect(actions).toEqual([]);
   });
 });
 
 describe("URL options", () => {
-  it("?conversation=demo preloads three finished exchanges ending in the fallback", async () => {
-    const { messages, status } = (await loadAgent("?conversation=demo"))();
+  it("?conversation=demo asks for each demo reply whole, in turn, and ends idle", async () => {
+    const { readAgent, requests } = await loadAgent("?conversation=demo");
+    expect(readAgent().messages.map(({ role }) => role)).toEqual(["user"]);
+    for (const index of [0, 1, 2]) {
+      await flush();
+      expect(requests[index]!.url).toBe("/api/librarian?freeze=1");
+      expect(requests[index]!.messages).toHaveLength(index * 2 + 1);
+      await reply(requests[index]!, text(`Reply ${index + 1}.`), done);
+    }
+    const { messages, status } = readAgent();
     expect(status).toBe("idle");
-    expect(messages.map((message) => message.role)).toEqual([
-      "user", "agent", "user", "agent", "user", "agent",
-    ]);
-    expect(messages[1].text).toBe(replyTo("list"));
-    expect(messages[3].text).toBe(replyTo("open"));
-    expect(messages[5].text).toBe(replyTo("anything else"));
-    expect(new Set(messages.map((message) => message.id)).size).toBe(6);
+    expect(messages.map(({ role }) => role)).toEqual(["user", "agent", "user", "agent", "user", "agent"]);
+    expect(messages[5]!.text).toBe("Reply 3.");
+    expect(new Set(messages.map(({ id }) => id)).size).toBe(6);
   });
 
-  it("?agentFreeze=thinking adds a user message whose reply never arrives", async () => {
-    const readAgent = await loadAgent("?agentFreeze=thinking");
-    vi.runAllTimers();
-    const { messages, status } = readAgent();
-    expect(status).toBe("thinking");
-    expect(messages.map((message) => message.role)).toEqual(["user"]);
+  it("?agentFreeze=thinking adds a user message whose reply is never asked for", async () => {
+    const { readAgent, requests } = await loadAgent("?agentFreeze=thinking");
+    await flush();
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Thinking…" });
+    expect(readAgent().messages.map(({ role }) => role)).toEqual(["user"]);
+    expect(requests).toEqual([]);
   });
 
-  it("?agentFreeze=0.5 holds the reply half-streamed, with repaired markdown", async () => {
-    const readAgent = await loadAgent("?agentFreeze=0.5");
-    vi.runAllTimers();
-    const { messages, status } = readAgent();
-    const reply = replyTo(messages[0].text);
-    expect(status).toBe("streaming");
-    expect(messages.map((message) => message.role)).toEqual(["user", "agent"]);
-    expect(messages[1].text.length).toBeGreaterThan(reply.length * 0.4);
-    expect(messages[1].text.length).toBeLessThan(reply.length * 0.6);
-    expect((messages[1].text.match(/\*\*/g) ?? []).length % 2).toBe(0);
+  it("?agentFreeze=0.5 asks for the reply cut in half, which then stays as it is", async () => {
+    const { readAgent, requests } = await loadAgent("?agentFreeze=0.5");
+    await flush();
+    expect(requests[0]!.url).toBe("/api/librarian?freeze=0.5");
+    await reply(requests[0]!, status("Planning a manual…"), text("I can’t start new **manu"), { event: "frozen", data: {} });
+    expect(readAgent().status).toBe("streaming");
+    expect(readAgent().messages[1]!.text).toBe("I can’t start new **manu**");
+    readAgent().send("help");
+    expect(requests).toHaveLength(1);
+  });
+
+  it("?agentFreeze=0 holds the loop's status", async () => {
+    const { readAgent, requests } = await loadAgent("?agentFreeze=0");
+    await flush();
+    await reply(requests[0]!, status("Planning a manual…"), { event: "frozen", data: {} });
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Planning a manual…" });
+    expect(readAgent().messages).toHaveLength(1);
   });
 
   it("combines ?agentFreeze with ?conversation=demo", async () => {
-    const readAgent = await loadAgent("?conversation=demo&agentFreeze=thinking");
-    const { messages, status } = readAgent();
-    expect(status).toBe("thinking");
-    expect(messages).toHaveLength(7);
-    expect(messages[6].role).toBe("user");
+    const { readAgent, requests } = await loadAgent("?conversation=demo&agentFreeze=thinking");
+    for (const index of [0, 1, 2]) {
+      await flush();
+      await reply(requests[index]!, text("Reply."), done);
+    }
+    expect(readAgent().status).toBe("thinking");
+    expect(readAgent().messages).toHaveLength(7);
   });
 
-  it("ignores sends while a reply is frozen", async () => {
-    const readAgent = await loadAgent("?agentFreeze=0.5");
-    readAgent().send("help");
-    vi.runAllTimers();
-    expect(readAgent().messages).toHaveLength(2);
+  it.each(["?agentFreeze=later", "?agentFreeze=", "?agentFreeze=2"])("ignores %s", async (search) => {
+    const { readAgent, requests } = await loadAgent(search);
+    await flush();
+    expect(readAgent()).toMatchObject({ status: "idle", messages: [] });
+    expect(requests).toEqual([]);
   });
-
-  it.each(["?agentFreeze=later", "?agentFreeze=", "?agentFreeze=2"])(
-    "ignores %s",
-    async (search) => {
-      const { messages, status } = (await loadAgent(search))();
-      expect(status).toBe("idle");
-      expect(messages).toEqual([]);
-    },
-  );
 });

@@ -46,3 +46,24 @@ export type SectionEvent =
   | { event: "written"; data: NoData }
   | { event: "frozen"; data: NoData }
   | { event: "failed"; data: { reason: FailureReason } };
+
+export interface LibrarianMessage {
+  role: "user" | "agent";
+  text: string;
+}
+
+/** What one request to the librarian may hold: the earlier exchanges, then the new message. */
+export const LIBRARIAN_LIMITS = {
+  earlierExchanges: 10,
+  messageCharacters: 4000,
+};
+
+export type PageAction = { type: "open"; manualId: string } | { type: "propose-delete"; manualId: string };
+
+export type LibrarianEvent =
+  | { event: "status"; data: { text: string } }
+  | { event: "text"; data: { text: string } }
+  | { event: "action"; data: PageAction }
+  | { event: "done"; data: NoData }
+  | { event: "frozen"; data: NoData }
+  | { event: "failed"; data: { reason: FailureReason } };
