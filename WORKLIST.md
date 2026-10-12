@@ -593,6 +593,13 @@ When this phase is done:
     `RTFM_PORT` is for `npm run server` alone; an invalid port stops the server starting; the
     `server/config.ts` bullet says `RTFM_DATA_DIR` overrides the data folder;
   - `npm test` runs some browser tests in happy-dom (from OH.7);
+  - from OH.10, README is now the only home of: the reset steps; the `startServer({...config,
+    caps})` how-to; the fake writer's and librarian's pace under "The models" (1.2s, then about 20
+    characters every 85ms; 0.6s for the librarian), which other docs point to; the routes and
+    lazy loading under "Where things live". Costs and timings either point to ARCHITECTURE §8's
+    measurement table or match it exactly (planning is 21.3s, not "about 20 seconds"); the
+    worst-case reservation and full-`max_tokens` charging point to ARCHITECTURE §5;
+    `RTFM_DATA_DIR`/`RTFM_PORT` give the how-to and point to ARCHITECTURE §8 for the rules;
   - anything else OH.5–OH.10 changed that README describes.
 - **Done when:** README.md matches the code.
 
