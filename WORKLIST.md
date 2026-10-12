@@ -225,7 +225,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   code, and the report gives this phase's Bedrock spend from the ledger.
 
 ### RL.10 — Librarian follow-ups from the final check
-- **Status:** doing (agent: a4e794f5243cae936)
+- **Status:** done
 - **Depends on:** RL.9
 - **Files:** `server/agent/librarian/**`, `server/api/**`, `src/agent/**`, `src/home/**`,
   `DESIGN.md`, `ARCHITECTURE.md`, the READMEs for `src/agent` and `src/home`
