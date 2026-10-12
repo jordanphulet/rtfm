@@ -3,13 +3,14 @@ import type { Gateway } from "../../gateway/gateway.ts";
 import { SpendingRefused, type PromptMessage } from "../../gateway/types.ts";
 import type { ManualStore } from "../../storage/types.ts";
 import { runAgent } from "../loop.ts";
-import { LIBRARIAN_SYSTEM_PROMPT } from "./prompt.ts";
+import { DELETE_OUTCOME_NOTES, LIBRARIAN_SYSTEM_PROMPT } from "./prompt.ts";
 import { librarianTools } from "./tools.ts";
 
 /**
- * Runs the librarian on the conversation and sends its reply as it goes: statuses, text (with a
- * paragraph break where a later turn's text follows an earlier turn's), page actions, then `done`
- * or `failed`. A client that disconnects gets nothing more.
+ * Runs the librarian on the conversation and sends its reply as it goes: statuses, text, page
+ * actions, then `done` or `failed`. Text the model writes before calling a tool is withdrawn as
+ * soon as the call starts, so the reply is what it wrote after its last tool. A client that
+ * disconnects gets nothing more.
  */
 export async function sendReply({ gateway, store, conversation, signal, send }: {
   gateway: Gateway;
@@ -18,15 +19,21 @@ export async function sendReply({ gateway, store, conversation, signal, send }: 
   signal: AbortSignal;
   send: (event: LibrarianEvent) => void;
 }): Promise<void> {
-  let turn = 0;
-  const countingTurns: Gateway = {
-    stream(...call) {
-      turn += 1;
-      return gateway.stream(...call);
+  let textSent = false;
+  const withdrawingTextBeforeTools: Gateway = {
+    async *stream(...call) {
+      for await (const event of gateway.stream(...call)) {
+        if (event.type === "text") textSent = true;
+        if ((event.type === "tool-input" || event.type === "tool-use") && textSent) {
+          textSent = false;
+          send({ event: "withdraw", data: {} });
+        }
+        yield event;
+      }
     },
   };
   const run = runAgent({
-    gateway: countingTurns,
+    gateway: withdrawingTextBeforeTools,
     job: "librarian",
     system: LIBRARIAN_SYSTEM_PROMPT,
     tools: librarianTools({
@@ -35,19 +42,16 @@ export async function sendReply({ gateway, store, conversation, signal, send }: 
       onStatus: (text) => send({ event: "status", data: { text } }),
       onAction: (action) => send({ event: "action", data: action }),
     }),
-    messages: conversation.map(promptMessage),
+    messages: promptMessages(conversation),
     signal,
   });
-  let lastTextTurn = 0;
   try {
     for await (const event of run) {
       if (event.type === "status") {
         send({ event: "status", data: { text: event.text } });
         continue;
       }
-      const startsLaterTurn = lastTextTurn !== 0 && lastTextTurn !== turn;
-      lastTextTurn = turn;
-      send({ event: "text", data: { text: startsLaterTurn ? `\n\n${event.text.trimStart()}` : event.text } });
+      send({ event: "text", data: { text: event.text } });
     }
     send({ event: "done", data: {} });
   } catch (error) {
@@ -57,6 +61,14 @@ export async function sendReply({ gateway, store, conversation, signal, send }: 
   }
 }
 
-function promptMessage({ role, text }: LibrarianMessage): PromptMessage {
-  return { role: role === "agent" ? "assistant" : "user", content: text };
+/**
+ * The conversation as plain text. A user message that follows a reply which proposed a delete
+ * starts with the page's note of how that delete's confirmation ended.
+ */
+function promptMessages(conversation: LibrarianMessage[]): PromptMessage[] {
+  return conversation.map(({ role, text }, index) => {
+    if (role === "agent") return { role: "assistant", content: text };
+    const deleteOutcome = conversation[index - 1]?.deleteOutcome;
+    return { role: "user", content: deleteOutcome ? `${DELETE_OUTCOME_NOTES[deleteOutcome]}\n\n${text}` : text };
+  });
 }

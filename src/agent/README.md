@@ -13,7 +13,8 @@ Import everything from `src/agent`:
 ```ts
 import {
   LIBRARIAN_LIMITS, useAgent, useAgentActions,
-  type AgentAction, type AgentMessage, type AgentStatus, type FailureReason, type UseAgentResult,
+  type AgentAction, type AgentMessage, type AgentStatus, type DeleteOutcome, type FailureReason,
+  type UseAgentResult,
 } from "../agent";
 ```
 
@@ -25,6 +26,7 @@ interface UseAgentResult {
   status: AgentStatus;
   activity: string;       // while thinking: "Thinking…", or the running tool's line
   send: (text: string) => void;
+  reportDeleteOutcome: (outcome: DeleteOutcome) => void;
 }
 
 interface AgentMessage {
@@ -32,6 +34,7 @@ interface AgentMessage {
   role: "user" | "agent";
   text: string;           // markdown, always safe to render as-is; "" for a reply that failed first
   failure?: FailureReason;  // "budget" | "error": set on a reply that didn't finish
+  deleteOutcome?: DeleteOutcome;  // "kept" | "deleted": on a reply whose proposed delete has ended
 }
 
 type AgentStatus = "idle" | "thinking" | "streaming";
@@ -48,13 +51,15 @@ Every component that calls `useAgent()` sees the same conversation.
    user message and the reply that finished after it), then the new message. Exchanges whose
    reply failed, or with a message longer than `LIBRARIAN_LIMITS.messageCharacters` (4,000), are
    left out. The new message must fit that limit too, or the reply fails with `"error"`: put it
-   on your field's `maxLength`.
+   on your field's `maxLength`. A reply's `deleteOutcome` is sent with it, so the librarian knows
+   how the delete it proposed ended.
 3. As the reply streams:
-   - a running tool sets `status` to `"thinking"` and `activity` to its line, such as
-     `"Searching the shelves…"`. This can happen after some of the reply has arrived, between the
-     model's turns;
    - text appends to the agent message (created with the first text) and sets `status` to
-     `"streaming"`.
+     `"streaming"`;
+   - when the librarian calls a tool after writing some text, that text is withdrawn: the agent
+     message is removed, `status` goes back to `"thinking"` and `activity` to `"Thinking…"`;
+   - a running tool sets `status` to `"thinking"` and `activity` to its line, such as
+     `"Searching the shelves…"`.
 4. When the reply is done, sets `status` back to `"idle"` and hands its page action, if any, to
    the handler (below). A `created` action is handed over as soon as it arrives instead.
 5. If the reply fails, sets `failure` on the agent message (keeping any text that arrived) and
@@ -66,7 +71,7 @@ Every component that calls `useAgent()` sees the same conversation.
 ### Rendering a reply mid-stream
 
 - While `status` is `"thinking"`, show your thinking indicator with `activity` after the last
-  message. That is the user's message, or the reply so far when a tool runs mid-reply.
+  message, the user's.
 - While `status` is `"streaming"`, the **last message** is the reply being streamed. Its `text`
   is already repaired (unfinished bold closed, half-typed links held back, and so on), so render
   it with `ReplyMarkdown` from `src/ui` like any other message. Mark the live edge on the last
@@ -75,7 +80,7 @@ Every component that calls `useAgent()` sees the same conversation.
 - Every other message is complete, or has a `failure`.
 
 The text is the markdown `ReplyMarkdown` renders: paragraphs, **bold**, *italics* (manual titles)
-and bulleted or numbered lists. Each turn of the model after a tool starts a new paragraph.
+and bulleted or numbered lists. It is what the librarian wrote after its last tool.
 
 ## `useAgentActions(handler)`
 
@@ -99,9 +104,20 @@ a time.
 - `open`: the librarian opened the manual; go to `/read/<manualId>`.
 - `propose-delete`: the librarian asks to delete the manual. **Nothing is deleted.** Open the
   page's own delete confirmation for it; only the user's choice there deletes it, through
-  `deleteManual` in `src/library`.
+  `deleteManual` in `src/library`. When that confirmation closes, call `reportDeleteOutcome`
+  (below).
 - `created`: the librarian created the manual, and the server has saved it. Load the library
   again (`refreshLibrary` in `src/library`) so it appears.
+
+## `reportDeleteOutcome(outcome)`
+
+Tells the librarian how the confirmation for its latest proposed delete ended: `"kept"` (Keep it,
+Escape or the scrim) or `"deleted"` (once the server has deleted it). It sets `deleteOutcome` on
+the reply that proposed the delete, which `send` then passes to the server, so the next reply
+knows, and asking again proposes the delete again. Call it only for a confirmation the librarian
+opened, and only for a delete the server confirmed, or a Keep it before any delete was tried:
+a failed attempt may still have deleted the manual, so it reports nothing. Only the first call
+after a `propose-delete` is handed over counts; any other call does nothing.
 
 ## URL options
 

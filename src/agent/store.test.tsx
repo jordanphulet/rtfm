@@ -97,14 +97,21 @@ describe("useAgent", () => {
     expect(readAgent().messages[1]).toEqual({ id: expect.any(String), role: "agent", text: "You have **two manuals**." });
   });
 
-  it("goes back to thinking when a tool runs after the reply has started", async () => {
+  it("drops the reply so far when the server withdraws it for a tool call, keeping only what follows", async () => {
     const { readAgent, requests } = await loadAgent();
-    readAgent().send("Open the geese one");
+    readAgent().send("Delete the geese one");
     await flush();
-    requests[0]!.send(text("Let me look."), status("Searching the shelves…"));
+    requests[0]!.send(text("Let me get the correct id."));
     await flush();
-    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Searching the shelves…" });
-    expect(readAgent().messages[1]!.text).toBe("Let me look.");
+    expect(readAgent().messages).toHaveLength(2);
+
+    requests[0]!.send({ event: "withdraw", data: {} });
+    await flush();
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Thinking…" });
+    expect(readAgent().messages.map(({ role }) => role)).toEqual(["user"]);
+
+    await reply(requests[0]!, status("Preparing the delete…"), text("It’s waiting for you."), done);
+    expect(readAgent().messages[1]).toMatchObject({ role: "agent", text: "It’s waiting for you." });
   });
 
   it("sends the finished exchanges with each new message, leaving out failed ones", async () => {
@@ -205,6 +212,40 @@ describe("useAgent", () => {
     await flush();
     await reply(requests[1]!, { event: "action", data: { type: "open", manualId: "negotiating-with-geese" } }, done);
     expect(actions).toEqual([]);
+  });
+
+  it("sends how a proposed delete's confirmation ended with the reply that proposed it", async () => {
+    const { readAgent, requests, handleActions } = await loadAgent();
+    handleActions(() => {});
+    const proposeDelete: LibrarianEvent = { event: "action", data: { type: "propose-delete", manualId: "negotiating-with-geese" } };
+    readAgent().send("Delete the geese one");
+    await flush();
+    await reply(requests[0]!, proposeDelete, text("Confirm it, or keep it."), done);
+    readAgent().reportDeleteOutcome("kept");
+    readAgent().reportDeleteOutcome("deleted");
+    readAgent().send("Delete the geese one");
+    await flush();
+
+    expect(readAgent().messages[1]).toMatchObject({ role: "agent", deleteOutcome: "kept" });
+    expect(requests[1]!.messages).toEqual([
+      { role: "user", text: "Delete the geese one" },
+      { role: "agent", text: "Confirm it, or keep it.", deleteOutcome: "kept" },
+      { role: "user", text: "Delete the geese one" },
+    ]);
+
+    await reply(requests[1]!, proposeDelete, text("Confirm it, or keep it."), done);
+    readAgent().reportDeleteOutcome("deleted");
+    expect(readAgent().messages.map(({ deleteOutcome }) => deleteOutcome)).toEqual([undefined, "kept", undefined, "deleted"]);
+  });
+
+  it("notes no delete outcome on a reply that proposed none", async () => {
+    const { readAgent, requests, handleActions } = await loadAgent();
+    handleActions(() => {});
+    readAgent().send("Open the geese one");
+    await flush();
+    await reply(requests[0]!, { event: "action", data: { type: "open", manualId: "negotiating-with-geese" } }, text("Opening."), done);
+    readAgent().reportDeleteOutcome("kept");
+    expect(readAgent().messages[1]).not.toHaveProperty("deleteOutcome");
   });
 
   it("hands over a created manual as soon as it arrives, even if the reply then fails", async () => {

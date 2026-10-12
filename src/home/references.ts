@@ -12,13 +12,21 @@ const STOP_WORDS = new Set([
   "library", "help", "please", "want", "like", "make", "tell", "show",
 ]);
 
+const CREATE_REQUEST =
+  /\b(?:create|start|make|write|draft|generate|build|plan|like|want)\s+(?:me\s+)?(?:(?:a|an|another)\s+)?(?:new\s+)?(?:manual|one|guide)\b|\bnew\s+(?:manual|one|guide)\b/i;
+const EXISTING_MANUAL_WORDS = new Set(["open", "read", "delete", "remove"]);
+
 /**
  * The manuals a message names. A manual counts when the message shares at least one word with
  * its title, or at least two with its subtitle; the best match (most title words, then most
  * subtitle words) wins, ties included. Title words ending in "-ing" are ignored: they name an
- * activity ("Building a…", "Moving House…"), not the manual's topic.
+ * activity ("Building a…", "Moving House…"), not the manual's topic. A message that asks for a
+ * new manual names none, since its words describe a manual that doesn't exist yet: it has a
+ * phrase such as "start a new manual" or "build me one", and no word that acts on an existing
+ * manual, such as "open".
  */
 export function namedManuals(message: string, manuals: ManualSummary[]): ManualSummary[] {
+  if (asksForNewManual(message)) return [];
   const messageWords = wordsOf(message, 3);
   if (messageWords.size === 0) return [];
 
@@ -49,6 +57,11 @@ export function namedWhenSent(message: AgentMessage, manuals: ManualSummary[]): 
     namedAtSend.set(message, named);
   }
   return named;
+}
+
+function asksForNewManual(message: string): boolean {
+  const words = message.toLowerCase().match(/\p{L}+/gu) ?? [];
+  return CREATE_REQUEST.test(message) && !words.some((word) => EXISTING_MANUAL_WORDS.has(word));
 }
 
 function topicWords(title: string): Set<string> {

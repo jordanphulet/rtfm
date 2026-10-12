@@ -73,7 +73,7 @@ export function librarianTools({ gateway, store, onStatus, onAction }: {
     defineTool({
       name: "open_manual",
       description:
-        "Opens a manual in the reader: the page goes to it when your reply has finished. Use it when the user asks to open, read or go to a manual. Get the id from list_manuals or find_manuals first.",
+        "Opens a manual in the reader: the page goes to it when your reply has finished. Use it when the user asks to open, read or go to a manual. Get the id from list_manuals or find_manuals first, and write nothing before calling it.",
       input: { manual_id: z.string().min(1).describe("The manual's id, such as \"negotiating-with-geese\".") },
       status: TOOL_STATUS.open,
       async run({ manual_id }) {
@@ -88,7 +88,7 @@ export function librarianTools({ gateway, store, onStatus, onAction }: {
     defineTool({
       name: "propose_delete",
       description:
-        "Asks the user to confirm deleting one manual. It deletes nothing: when your reply has finished, the page opens its delete confirmation for that manual, and only the user's choice there deletes it or keeps it. Use it only when the user asks to delete a manual, for one manual per reply. Get the id from list_manuals or find_manuals first.",
+        "Asks the user to confirm deleting one manual. It deletes nothing: when your reply has finished, the page opens its delete confirmation for that manual, and only the user's choice there deletes it or keeps it. Use it only when the user asks to delete a manual, for one manual per reply. Get the id from list_manuals or find_manuals first, and write nothing before calling it.",
       input: { manual_id: z.string().min(1).describe("The manual's id, such as \"negotiating-with-geese\".") },
       status: TOOL_STATUS.delete,
       async run({ manual_id }) {

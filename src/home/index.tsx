@@ -7,6 +7,7 @@ import "../ui";
 import type { AgentSideProps } from "./agentSide";
 import { STARTER_PROMPT } from "./cuePrompts";
 import { DeleteConfirmation, failureText, type DeleteStage } from "./DeleteConfirmation";
+import { deleteOutcomeForLibrarian } from "./deleteOutcome";
 import { Ledger } from "./Ledger";
 import { LibrarianPanel } from "./LibrarianPanel";
 import { LibraryErrorBoundary } from "./LibraryErrorBoundary";
@@ -140,9 +141,15 @@ function HomePage() {
   }
 
   function keep() {
-    if (deleteStage === "deleting") return;
-    if (toDelete) focusAfterKeep.current = proposedByLibrarian.current ? fieldRef.current : rowDelete(toDelete.id);
+    if (deleteStage === "deleting" || !toDelete) return;
+    tellLibrarian("keep");
+    focusAfterKeep.current = proposedByLibrarian.current ? fieldRef.current : rowDelete(toDelete.id);
     setToDelete(null);
+  }
+
+  function tellLibrarian(closedBy: "keep" | "delete") {
+    const outcome = deleteOutcomeForLibrarian(closedBy, deleteStage, proposedByLibrarian.current);
+    if (outcome) agent.reportDeleteOutcome(outcome);
   }
 
   function rowDelete(id: string): HTMLElement | null {
@@ -159,6 +166,7 @@ function HomePage() {
       return;
     }
 
+    tellLibrarian("delete");
     const index = manuals.findIndex((each) => each.id === manual.id);
     const neighbour = manuals[index + 1] ?? manuals[index - 1];
     const row = findRow(manual.id);

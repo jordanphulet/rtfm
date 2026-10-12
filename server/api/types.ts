@@ -47,9 +47,14 @@ export type SectionEvent =
   | { event: "frozen"; data: NoData }
   | { event: "failed"; data: { reason: FailureReason } };
 
+/** How a delete confirmation the librarian opened ended. */
+export type DeleteOutcome = "kept" | "deleted";
+
 export interface LibrarianMessage {
   role: "user" | "agent";
   text: string;
+  /** On a reply that proposed a delete: how its confirmation ended. */
+  deleteOutcome?: DeleteOutcome;
 }
 
 /** What one request to the librarian may hold: the earlier exchanges, then the new message. */
@@ -66,6 +71,7 @@ export type PageAction =
 export type LibrarianEvent =
   | { event: "status"; data: { text: string } }
   | { event: "text"; data: { text: string } }
+  | { event: "withdraw"; data: NoData }
   | { event: "action"; data: PageAction }
   | { event: "done"; data: NoData }
   | { event: "frozen"; data: NoData }

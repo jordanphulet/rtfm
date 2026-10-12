@@ -965,6 +965,14 @@ From 768 to 1279 the ledger is the same, in the narrower library area.
     words (function words such as `the`, `one`, `through`, and request words such as `open`,
     `delete`, `manual`), and reduce each word to a base form: `-ies` → `y`, `-ed` dropped from
     words of 6+ letters, one trailing `s` dropped (not `ss`).
+  - **A message that asks for a new manual names none**: its words describe a manual that
+    doesn't exist yet. It asks for one when it has a create phrase and none of the words `open`,
+    `read`, `delete` or `remove`. A create phrase is `create`, `start`, `make`, `write`, `draft`,
+    `generate`, `build`, `plan`, `like` or `want`, then an optional `me`, an optional `a`, `an`
+    or `another`, an optional `new`, then `manual`, `one` or `guide` (“start a new manual”,
+    “build me one”, “I’d like a manual”); or `new manual`, `new one` or `new guide` anywhere.
+    A create word alone isn’t one: “What’s new in the sourdough manual?”, “make the sourdough one
+    shorter” and “where should I start with the geese one?” still name their manuals.
   - Message and title words count from 3 letters (`cat`), subtitle words from 4.
   - Title words ending in `-ing` are ignored: they name an activity (`Building a…`, `Moving
     House…`), not the topic.
@@ -982,7 +990,13 @@ From 768 to 1279 the ledger is the same, in the narrower library area.
   | Open the cat one / Open the cat’s manual | Moving House Without Losing the Cat |
   | Can you translate the sourdough manual into Klingon? | Keeping a Sourdough Starter Alive |
   | Sing me a sea shanty about geese | Negotiating With Geese |
+  | Open the new sourdough manual | Keeping a Sourdough Starter Alive |
+  | Delete the sourdough one and start a new one about bonsai | Keeping a Sourdough Starter Alive |
   | Let’s start a new manual about building a treehouse | nothing |
+  | What’s new in the sourdough manual? · Can you make the sourdough one shorter? · How do I make a sourdough starter? | Keeping a Sourdough Starter Alive |
+  | I want to start reading the geese manual · Where should I start with the geese one? | Negotiating With Geese |
+  | Start a new manual about keeping a bonsai tree alive | nothing (not *Keeping a Sourdough Starter Alive*, for “alive”) |
+  | I’d like / Generate / Build me a manual about keeping bonsai alive | nothing |
   | Which one should I read first? · Can you walk me through it? · How long will this take? · Tell me about your rescue dog · Start a manual about planning a wedding · What do I have? | nothing |
 
 ## The librarian panel (1024px and up)
@@ -1053,9 +1067,11 @@ text edge.
     Machine”…`; if the first plan fails its checks, `Revising the plan…`, then `Revising “…”…`.
   - The activity is one line, here and in the header: a line too long for the panel ends in an
     ellipsis (`text-overflow`), and the live region still says it whole.
-  - **Mid-reply.** When a tool runs after some of the reply has arrived, the reply settles (its
-    bar retracts) and the thinking line returns under it, 12px below, with the tool's line. The
-    next words continue the same reply as a new paragraph, and the bar comes back on them.
+  - **Words before a tool are taken back.** The librarian sometimes starts writing before it
+    calls a tool (“Let me check…”), saying what the activity line is about to say. When the call
+    starts, those words go: the reply so far is removed at once, with no motion, and the thinking
+    line takes its place, fading in as usual, with `Thinking…`, then the tool's line. The reply you keep is what the
+    librarian wrote after its last tool.
 - **Streaming:** the first chunk replaces the thinking line in the same place, so the first words
   land where the lamp was. The reply is a `.write-head`, and only the last message gets
   `data-live`, so the bar sits on the reply's live block, growing with the paragraph or list as it
@@ -1112,6 +1128,12 @@ nothing out. While a confirmation is open, those actions do nothing.
   - **Delete manual** deletes it through the same steps as the row's Delete.
   - **Focus returns to the field**, not the row, because you were talking to the librarian:
     after **Keep it**, Escape or the scrim, and after the manual is deleted.
+  - **The librarian hears how it ended.** Nothing is said on the page, but the reply that proposed
+    the delete is marked kept (Keep it, Escape or the scrim, before any delete was tried) or
+    deleted (once the server has deleted it), and your next message carries that to the
+    librarian. So asking again after Keep it opens the confirmation again. After a failed delete,
+    Keep it marks nothing, since the delete may still have happened on the server
+    (`deleteOutcome.ts`).
 
 ### Scrolling: newest in view, never pulled down
 

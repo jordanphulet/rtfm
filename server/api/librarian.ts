@@ -6,13 +6,15 @@ import { librarianPreview, previewFraction } from "./preview.ts";
 import { badRequest, type Route } from "./route.ts";
 import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage } from "./types.ts";
 
+const messageText = z.string().trim().min(1).max(LIBRARIAN_LIMITS.messageCharacters);
+
 const requestSchema = z.object({
   messages: z
     .array(
-      z.object({
-        role: z.enum(["user", "agent"]),
-        text: z.string().trim().min(1).max(LIBRARIAN_LIMITS.messageCharacters),
-      }),
+      z.discriminatedUnion("role", [
+        z.strictObject({ role: z.literal("user"), text: messageText }),
+        z.strictObject({ role: z.literal("agent"), text: messageText, deleteOutcome: z.enum(["kept", "deleted"]).optional() }),
+      ]),
     )
     .min(1)
     .max(LIBRARIAN_LIMITS.earlierExchanges * 2 + 1),

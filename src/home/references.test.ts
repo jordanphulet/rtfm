@@ -61,6 +61,13 @@ describe("namedManuals", () => {
     ["Open the cat’s manual", ["cat"]],
     ["Can you translate the sourdough manual into Klingon?", ["sourdough"]],
     ["Sing me a sea shanty about geese", ["geese"]],
+    ["Open the new sourdough manual", ["sourdough"]],
+    ["Delete the sourdough one and start a new one about bonsai", ["sourdough"]],
+    ["What’s new in the sourdough manual?", ["sourdough"]],
+    ["Can you make the sourdough one shorter?", ["sourdough"]],
+    ["I want to start reading the geese manual", ["geese"]],
+    ["Where should I start with the geese one?", ["geese"]],
+    ["How do I make a sourdough starter?", ["sourdough"]],
   ])("%s names %j", (message, ids) => {
     expect(idsNamedBy(message)).toEqual(ids);
   });
@@ -74,6 +81,14 @@ describe("namedManuals", () => {
     "How long will this take?",
     "Tell me about your rescue dog",
     "Start a manual about planning a wedding",
+    "Start a new manual about keeping a bonsai tree alive",
+    "Create a manual about haunted houses for cats",
+    "Make me one about negotiating with geese at airports",
+    "Write a manual on running a mail server for a birthday party",
+    "I’d like a manual about keeping bonsai alive",
+    "Generate a manual about keeping bonsai alive",
+    "Build me a manual about keeping bonsai alive",
+    "I want a new guide to keeping bonsai alive",
     "",
   ])("%s names nothing", (message) => {
     expect(idsNamedBy(message)).toEqual([]);

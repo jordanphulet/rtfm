@@ -1,7 +1,14 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { repairPartialMarkdown } from "../manual/repair";
 import { streamReply } from "./api";
-import { LIBRARIAN_LIMITS, type AgentAction, type AgentMessage, type AgentStatus, type LibrarianMessage } from "./types";
+import {
+  LIBRARIAN_LIMITS,
+  type AgentAction,
+  type AgentMessage,
+  type AgentStatus,
+  type DeleteOutcome,
+  type LibrarianMessage,
+} from "./types";
 
 const THINKING = "Thinking…";
 const DEMO_MESSAGES = [
@@ -20,6 +27,7 @@ interface AgentState {
 
 export interface UseAgentResult extends AgentState {
   send: (text: string) => void;
+  reportDeleteOutcome: (outcome: DeleteOutcome) => void;
 }
 
 type ActionHandler = (action: AgentAction) => void;
@@ -27,6 +35,7 @@ type ActionHandler = (action: AgentAction) => void;
 let messageCount = 0;
 let state: AgentState = { messages: [], status: "idle", activity: THINKING };
 let actionHandler: ActionHandler | null = null;
+let proposedDeleteReplyId: string | null = null;
 const listeners = new Set<() => void>();
 
 void startFromUrl(new URLSearchParams(window.location.search));
@@ -76,6 +85,14 @@ function send(text: string) {
   void reply(message);
 }
 
+/** Notes how the confirmation for the latest proposed delete ended, on the reply that proposed it. */
+function reportDeleteOutcome(deleteOutcome: DeleteOutcome) {
+  const replyId = proposedDeleteReplyId;
+  proposedDeleteReplyId = null;
+  if (!replyId) return;
+  setState({ messages: state.messages.map((message) => (message.id === replyId ? { ...message, deleteOutcome } : message)) });
+}
+
 /**
  * Sends the finished exchanges and the new message, and shows the reply as it streams. A page
  * action is handed to the page once the reply is done, except `created`, which reports a manual
@@ -107,13 +124,21 @@ async function reply(text: string, freeze?: number) {
           raw += event.data.text;
           showReply({}, "streaming");
           break;
+        case "withdraw":
+          raw = "";
+          setState({
+            messages: state.messages.filter((message) => message.id !== replyId),
+            status: "thinking",
+            activity: THINKING,
+          });
+          break;
         case "action":
           if (event.data.type === "created") actionHandler?.(event.data);
           else action = event.data;
           break;
         case "done":
           showReply({ text: raw }, "idle");
-          if (action) actionHandler?.(action);
+          if (action) handOver(action, replyId);
           return;
         case "frozen":
           return;
@@ -126,6 +151,13 @@ async function reply(text: string, freeze?: number) {
   } catch {
     showReply({ failure: "error" }, "idle");
   }
+}
+
+/** Hands a finished reply's action to the page, remembering the reply that proposed a delete. */
+function handOver(action: AgentAction, replyId: string) {
+  if (!actionHandler) return;
+  if (action.type === "propose-delete") proposedDeleteReplyId = replyId;
+  actionHandler(action);
 }
 
 /**
@@ -141,7 +173,7 @@ function recentExchanges(messages: AgentMessage[]): LibrarianMessage[] {
     if (!sendable(question.text) || !sendable(answer.text)) return;
     exchanges.push([
       { role: "user", text: question.text },
-      { role: "agent", text: answer.text },
+      { role: "agent", text: answer.text, deleteOutcome: answer.deleteOutcome },
     ]);
   });
   return exchanges.slice(-LIBRARIAN_LIMITS.earlierExchanges).flat();
@@ -149,7 +181,7 @@ function recentExchanges(messages: AgentMessage[]): LibrarianMessage[] {
 
 export function useAgent(): UseAgentResult {
   const { messages, status, activity } = useSyncExternalStore(subscribe, getState, getState);
-  return { messages, status, activity, send };
+  return { messages, status, activity, send, reportDeleteOutcome };
 }
 
 /**

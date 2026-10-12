@@ -83,7 +83,7 @@ export function fakeLibrarianModel(pace: FakeLibrarianPace = CONVERSATION_PACE):
 }
 
 function nextStep(messages: PromptMessage[]): Step {
-  const question = messages.findLast((message) => typeof message.content === "string")?.content as string;
+  const question = userWords(messages.findLast((message) => typeof message.content === "string")?.content as string);
   const intent = intentOf(question);
   const last = messages.at(-1)!;
   if (typeof last.content === "string") return firstStep(intent, question);
@@ -91,6 +91,11 @@ function nextStep(messages: PromptMessage[]): Step {
   const result = last.content.find((block): block is ToolResult => block.type === "tool_result")!;
   const call = toolUses(messages).find((block) => block.id === result.tool_use_id)!;
   return stepAfter(call, result, intent, messages);
+}
+
+/** The user's message without the page's note at its start. */
+function userWords(message: string): string {
+  return message.replace(/^<page_note>[\s\S]*?<\/page_note>\s*/, "");
 }
 
 function firstStep(intent: Intent, question: string): Step {
