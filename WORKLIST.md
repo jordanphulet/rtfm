@@ -398,7 +398,7 @@ When this phase is done:
   refused, a stale lock taken over, and the lock released on stop.
 
 ### OH.2 — Typographic quotes while Claude writes
-- **Status:** doing (agent: ae3f4aef8d52f40e5)
+- **Status:** done
 - **Depends on:** OH.1 (both change `ARCHITECTURE.md`)
 - **Files:** `server/writer/**`, `ARCHITECTURE.md`, `DESIGN.md`
 - **Do:**
