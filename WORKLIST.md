@@ -446,7 +446,7 @@ When this phase is done:
   non-JSON request is refused before any route runs.
 
 ### OH.5 — Ledger, concurrency and shutdown (server audit)
-- **Status:** doing (agent: ad0a94a25f48aabfb)
+- **Status:** done
 - **Depends on:** OH.4
 - **Files:** `server/storage/file-ledger.ts` and its test, `server/config.ts`, `server/gateway/**`,
   `server/app.ts`, `server/main.ts`, `ARCHITECTURE.md`
