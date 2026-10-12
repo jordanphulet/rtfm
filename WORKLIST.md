@@ -211,7 +211,7 @@ Out of scope: web access for any model, the passphrase, and deploying.
   nothing but wording changed.
 
 ### RL.9 — Final check
-- **Status:** todo
+- **Status:** doing (agent: a1e51aa5f88ce5022)
 - **Depends on:** RL.0, RL.1, RL.2, RL.3, RL.7, RL.8, RL.8b
 - **Files:** anything, for small fixes and docs: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`,
   `DESIGN.md` and the folder READMEs
