@@ -129,6 +129,35 @@ describe("DeleteConfirmation's place beside its row", () => {
     expect(confirmHeight()).toBe("");
   });
 
+  describe("in a window too short for it below or above the row", () => {
+    const SHORT_HEIGHT = 375;
+    const LOWEST_TOP = SHORT_HEIGHT - 16 - 177;
+
+    beforeEach(() => {
+      vi.spyOn(window, "innerHeight", "get").mockReturnValue(SHORT_HEIGHT);
+    });
+
+    it("sits 16px above the bottom edge and scrolls the row until it ends 8px above it", () => {
+      show(250);
+      expect(confirmTop()).toBe(`${LOWEST_TOP}px`);
+      expect(scrollBy).toHaveBeenCalledWith({ top: 250 + 8 - LOWEST_TOP, behavior: "instant" });
+      expect(confirmHeight()).toBe("177px");
+    });
+
+    it("clears its height when it closes", () => {
+      show(250);
+      show(250, "confirming", null);
+      expect(confirmHeight()).toBe("");
+    });
+
+    it("still sits below a row it fits under, and scrolls nothing", () => {
+      show(150);
+      expect(confirmTop()).toBe("158px");
+      expect(scrollBy).not.toHaveBeenCalled();
+      expect(confirmHeight()).toBe("");
+    });
+  });
+
   it("places itself by the row once the page widens past 768px while it's open", () => {
     setWidth(375);
     show(675);

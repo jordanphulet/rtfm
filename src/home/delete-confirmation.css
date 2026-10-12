@@ -96,6 +96,12 @@ html:has(.home .confirm[data-open]) {
   }
 }
 
+@media (min-width: 768px) {
+  html:has(.home .confirm[data-open]) .home .library-inner {
+    padding-bottom: var(--confirm-height, 0);
+  }
+}
+
 @media (max-width: 767px) {
   html:has(.home .confirm[data-open]) .home .library {
     padding-bottom: max(calc(var(--dock-height) + var(--space-6)), calc(var(--confirm-height, 0px) + var(--space-2)));

@@ -1212,6 +1212,10 @@ new manual](#opening-proposing-a-delete-and-a-new-manual)): the same dialog, the
   right edge on the row's right edge, and its left edge placed so its text starts on the
   **Written** column's line (at least 360px wide). It is measured once on open. `--ground-raised`,
   1px `--rule-strong` border, `--radius-m`, padding 16px 20px, no shadow.
+- **In a window too short for either side** (each must stay 16px from the window's edge, as in a
+  phone held sideways): it sits 16px above the bottom edge and the page scrolls (instant) until
+  the row ends 8px above it, with `--confirm-height` giving the library room below its last row,
+  as on phone.
 - **Stacking:** the lifted row's ancestors (`.page`, `main`, the ledger) create no stacking
   context (no transform, opacity, filter, contain or isolation), so the row's `z-index` can rise
   above the scrim's.

@@ -31,11 +31,8 @@ export function DeleteConfirmation({ manual, stage, findRow, onKeep, onDelete }:
     const anchor = anchorRef.current;
     const row = manual && findRow(manual.id);
     if (!anchor || !row) return;
-    if (!phone) {
-      placeUnderRow(anchor, row);
-      return;
-    }
-    scrollRowAbove(anchor, row);
+    if (phone) scrollRowAbove(anchor, row);
+    else placeByRow(anchor, row);
     return () => {
       document.documentElement.style.removeProperty(CONFIRM_HEIGHT);
     };
@@ -112,10 +109,12 @@ function deleteLabel(stage: DeleteStage): string {
 }
 
 /**
- * Below the row (or above it if it doesn't fit), right-aligned with it, with the text starting
- * on the Written column's line. The width is set first, so the height read after it is final.
+ * Below the row, else above it, right-aligned with it, with the text starting on the Written
+ * column's line. The width is set first, so the height read after it is final. In a window too
+ * short for either, it sits 16px above the bottom edge and the page scrolls until the row ends 8px
+ * above it, with `--confirm-height` giving the library room below its last row to scroll that far.
  */
-function placeUnderRow(anchor: HTMLDivElement, row: HTMLElement) {
+function placeByRow(anchor: HTMLDivElement, row: HTMLElement) {
   const rowBox = row.getBoundingClientRect();
   const writtenLeft = row.querySelector(".row-written")?.getBoundingClientRect().left ?? rowBox.left;
   const left = Math.min(writtenLeft - textInset(anchor), rowBox.right - MIN_WIDTH_PX);
@@ -123,9 +122,18 @@ function placeUnderRow(anchor: HTMLDivElement, row: HTMLElement) {
   anchor.style.setProperty("--confirm-width", `${rowBox.right - left}px`);
 
   const height = anchor.offsetHeight;
-  const fitsBelow = rowBox.bottom + GAP_PX + height <= window.innerHeight - EDGE_PX;
-  const top = fitsBelow ? rowBox.bottom + GAP_PX : rowBox.top - GAP_PX - height;
-  anchor.style.setProperty("--confirm-top", `${top}px`);
+  const below = rowBox.bottom + GAP_PX;
+  const above = rowBox.top - GAP_PX - height;
+  const lowest = window.innerHeight - EDGE_PX - height;
+  if (below <= lowest) {
+    anchor.style.setProperty("--confirm-top", `${below}px`);
+  } else if (above >= EDGE_PX) {
+    anchor.style.setProperty("--confirm-top", `${above}px`);
+  } else {
+    anchor.style.setProperty("--confirm-top", `${lowest}px`);
+    document.documentElement.style.setProperty(CONFIRM_HEIGHT, `${height}px`);
+    window.scrollBy({ top: below - lowest, behavior: "instant" });
+  }
 }
 
 /**
