@@ -1,3 +1,4 @@
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { GatewayConfig } from "./gateway/types.ts";
 import { API_PORT } from "./ports.ts";
@@ -18,8 +19,8 @@ const MAX_CONCURRENT_RUNS = 3;
 const CALLS_BESIDE_RUNS = 2;
 
 export const config: ServerConfig = {
-  port: API_PORT,
-  dataDir: fileURLToPath(new URL("../.data", import.meta.url)),
+  port: portFromEnv(process.env.RTFM_PORT),
+  dataDir: dataDirFromEnv(process.env.RTFM_DATA_DIR),
   models: modelsFromEnv(process.env.RTFM_MODELS),
   maxConcurrentRuns: MAX_CONCURRENT_RUNS,
   sectionWordsRequested: 650,
@@ -37,4 +38,15 @@ export const config: ServerConfig = {
 function modelsFromEnv(value = "fake"): ModelSource {
   if (value === "fake" || value === "bedrock") return value;
   throw new Error(`RTFM_MODELS must be "fake" or "bedrock", not "${value}"`);
+}
+
+/** The folder `RTFM_DATA_DIR` names, or else `<repo>/.data`, whatever the working directory. */
+function dataDirFromEnv(value = ""): string {
+  return value === "" ? fileURLToPath(new URL("../.data", import.meta.url)) : path.resolve(value);
+}
+
+function portFromEnv(value = String(API_PORT)): number {
+  const port = Number(value);
+  if (value.trim() !== "" && Number.isInteger(port) && port >= 0 && port <= 65_535) return port;
+  throw new Error(`RTFM_PORT must be a port number from 0 to 65535, not "${value}"`);
 }

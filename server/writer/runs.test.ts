@@ -106,17 +106,19 @@ describe("runs", () => {
     expect(returning.text()).toBe(first.text());
   });
 
-  it("knows whether a section of a manual is being written", async () => {
+  it("knows which sections of a manual are being written", async () => {
     const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3 });
     const reader = recorder();
     expect(runs.isWriting(SAMPLE_ID)).toBe(false);
 
     await runs.join(manual, UNWRITTEN_ID, reader.listener);
     expect(runs.isWriting(SAMPLE_ID)).toBe(true);
+    expect(runs.writingSectionIds(SAMPLE_ID)).toEqual(new Set([UNWRITTEN_ID]));
     expect(runs.isWriting("the-haunt")).toBe(false);
 
     await waitUntil(() => reader.last() === "written");
     expect(runs.isWriting(SAMPLE_ID)).toBe(false);
+    expect(runs.writingSectionIds(SAMPLE_ID)).toEqual(new Set());
   });
 
   it("fails a run whose manual is deleted before it finishes, and stores nothing", async () => {
@@ -180,6 +182,36 @@ describe("runs", () => {
 
     expect(writer.signals).toHaveLength(1);
     expect(second.text()).toBe(first.text());
+  });
+
+  it("sends the stored body, not a second run, to a reader whose storage read began before the run finished", async () => {
+    let releaseLateRead = () => {};
+    const lateReadReleased = new Promise<void>((resolve) => (releaseLateRead = resolve));
+    let reads = 0;
+    const secondReadIsLate: ManualStore = {
+      ...store,
+      async getBody(manualId, sectionId) {
+        const read = ++reads;
+        const body = await store.getBody(manualId, sectionId);
+        if (read === 2) await lateReadReleased;
+        return body;
+      },
+    };
+    const writer = recordingWriter();
+    const runs = createRuns({ store: secondReadIsLate, writer, maxConcurrentRuns: 3 });
+    const first = recorder();
+    const late = recorder();
+
+    const firstJoined = runs.join(manual, UNWRITTEN_ID, first.listener);
+    const lateJoined = runs.join(manual, UNWRITTEN_ID, late.listener);
+    await firstJoined;
+    await waitUntil(() => first.last() === "written");
+    releaseLateRead();
+    await lateJoined;
+
+    expect(writer.signals).toHaveLength(1);
+    expect(late.events.map((event) => event.event)).toEqual(["append", "written"]);
+    expect(late.text()).toBe(first.text());
   });
 
   it("gives a reader who joins mid-run the text so far, then the same events", async () => {

@@ -1,3 +1,4 @@
+import { escapeTags } from "../../escape-tags.ts";
 import type { ToolDefinition } from "../../gateway/types.ts";
 import type { StoredManual } from "../../storage/types.ts";
 import { toolDefinition } from "../tool.ts";
@@ -40,7 +41,7 @@ A manual from this library, in the form save_manual takes. It shows the size of 
 `;
 
 export function plannerSystemPrompt(example: StoredManual): string {
-  return `${INSTRUCTIONS}${escaped(JSON.stringify(example, null, 2))}\n</example>`;
+  return `${INSTRUCTIONS}${escapeTags(JSON.stringify(example, null, 2))}\n</example>`;
 }
 
 export function planRequest({ request, takenIds, problems }: {
@@ -49,7 +50,7 @@ export function planRequest({ request, takenIds, problems }: {
   problems: string[];
 }): string {
   const parts = [
-    `<request>\n${escaped(request)}\n</request>`,
+    `<request>\n${escapeTags(request)}\n</request>`,
     `Ids already taken in the library: ${takenIds.join(", ") || "none"}.`,
   ];
   if (problems.length > 0) {
@@ -58,8 +59,4 @@ export function planRequest({ request, takenIds, problems }: {
     );
   }
   return parts.join("\n\n");
-}
-
-function escaped(text: string): string {
-  return text.replaceAll("<", "&lt;");
 }

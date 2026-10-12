@@ -2,40 +2,20 @@ import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import type { SectionEvent } from "../api/types.ts";
 import { createGateway, killSwitchPath } from "../gateway/gateway.ts";
-import type { PriceTable } from "../gateway/prices.ts";
-import type { GatewayConfig, ModelClient, ModelEvent, ModelRequest } from "../gateway/types.ts";
+import type { ModelClient, ModelEvent, ModelRequest } from "../gateway/types.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { LedgerEntry, StoredManual } from "../storage/types.ts";
-import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "../testing.ts";
+import { collect, SAMPLE_ID, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, UNWRITTEN_ID, waitUntil } from "../testing.ts";
 import { createBedrockWriter, SectionRejected } from "./bedrock.ts";
 import { createRuns } from "./runs.ts";
 import { WriteFailed, type WrittenChunk } from "./types.ts";
 
-const MODEL = "test-model";
-const PRICES: PriceTable = {
-  checkedOn: "2026-10-11",
-  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
-};
 const WORDS_REQUESTED = 650;
 const EXPECTED_CHARACTERS = 100;
 
 const GOOD_BODY =
   "Every room has a small, dull brain.[^dull]\n\n## A room, in states\n\nSee [The Show Must Stop](section:the-show-must-stop).\n\n[^dull]: Dull is good.\n";
-
-function gatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
-  return {
-    caps: { dailyUsd: 2, monthlyUsd: 20 },
-    maxConcurrentCalls: 3,
-    idleTimeoutMs: 1000,
-    jobs: {
-      "write-section": { model: MODEL, maxTokens: 2048 },
-      librarian: { model: MODEL, maxTokens: 1024 },
-      "plan-manual": { model: MODEL, maxTokens: 4096 },
-    },
-    ...overrides,
-  };
-}
 
 function inPieces(text: string, size = 7): string[] {
   const pieces: string[] = [];
@@ -57,7 +37,7 @@ function modelClient(pieces: string[], stopReason = "end_turn") {
   return { client, requests };
 }
 
-async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", config = gatewayConfig() } = {}) {
+async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", config = testGatewayConfig() } = {}) {
   const dataDir = await tempDataDir();
   const store = createFileManualStore(dataDir);
   await seedStore(store);
@@ -65,10 +45,10 @@ async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", co
   const ledgerEntries: LedgerEntry[] = [];
   const { client, requests } = modelClient(pieces, stopReason);
   const gateway = await createGateway({
-    client,
+    createClient: () => client,
     ledger: { append: async (entry) => void ledgerEntries.push(entry), entriesForMonth: async () => [] },
     config,
-    prices: PRICES,
+    prices: TEST_PRICES,
     dataDir,
   });
   const writer = createBedrockWriter({
@@ -78,12 +58,6 @@ async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", co
     expectedCharacters: EXPECTED_CHARACTERS,
   });
   return { dataDir, store, manual, writer, requests, ledgerEntries };
-}
-
-async function collect(chunks: AsyncIterable<WrittenChunk>): Promise<WrittenChunk[]> {
-  const collected: WrittenChunk[] = [];
-  for await (const chunk of chunks) collected.push(chunk);
-  return collected;
 }
 
 function write(writer: ReturnType<typeof createBedrockWriter>, manual: StoredManual) {
@@ -99,7 +73,7 @@ describe("the Bedrock writer", () => {
     expect(chunks.slice(0, -1).every((chunk) => /\s$/.test(chunk.text))).toBe(true);
     expect(chunks.every((chunk) => chunk.progress <= 0.99)).toBe(true);
     expect(chunks[0]!.progress).toBeCloseTo(chunks[0]!.text.length / EXPECTED_CHARACTERS);
-    expect(requests[0]!.model).toBe(MODEL);
+    expect(requests[0]!.model).toBe(TEST_MODEL);
     expect(requests[0]!.maxTokens).toBe(2048);
   });
 
@@ -150,7 +124,7 @@ describe("the Bedrock writer", () => {
 
   it("reports a spending cap as budget, before any call or charge", async () => {
     const { writer, manual, requests, ledgerEntries } = await setUp({
-      config: gatewayConfig({ caps: { dailyUsd: 0.001, monthlyUsd: 20 } }),
+      config: testGatewayConfig({ caps: { dailyUsd: 0.001, monthlyUsd: 20 } }),
     });
     await expect(write(writer, manual)).rejects.toEqual(new WriteFailed("budget"));
     expect(requests).toEqual([]);
@@ -205,12 +179,12 @@ describe("a run with the Bedrock writer", () => {
   });
 
   it("fails with error when the gateway is busy", async () => {
-    const setup = await setUp({ config: gatewayConfig({ maxConcurrentCalls: 0 }) });
+    const setup = await setUp({ config: testGatewayConfig({ maxConcurrentCalls: 0 }) });
     expect((await runEvents(setup)).at(-1)).toEqual({ event: "failed", data: { reason: "error" } });
   });
 
   it("fails with budget when a cap would be crossed", async () => {
-    const setup = await setUp({ config: gatewayConfig({ caps: { dailyUsd: 2, monthlyUsd: 0.001 } }) });
+    const setup = await setUp({ config: testGatewayConfig({ caps: { dailyUsd: 2, monthlyUsd: 0.001 } }) });
     expect((await runEvents(setup)).at(-1)).toEqual({ event: "failed", data: { reason: "budget" } });
   });
 });

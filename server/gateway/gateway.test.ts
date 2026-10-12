@@ -4,9 +4,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFileLedger } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry, UsageLedger } from "../storage/types.ts";
-import { tempDataDir, waitUntil } from "../testing.ts";
+import { collect, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, waitUntil } from "../testing.ts";
 import { createGateway, killSwitchPath, type RunningGateway } from "./gateway.ts";
-import type { PriceTable } from "./prices.ts";
 import {
   GatewayBusy,
   ModelNotPriced,
@@ -22,16 +21,11 @@ import {
   type ToolDefinition,
 } from "./types.ts";
 
-const MODEL = "test-model";
 const MAX_TOKENS = 100_000;
-const PRICES: PriceTable = {
-  checkedOn: "2026-10-11",
-  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
-};
 const JOBS: GatewayConfig["jobs"] = {
-  "write-section": { model: MODEL, maxTokens: MAX_TOKENS },
-  librarian: { model: MODEL, maxTokens: MAX_TOKENS },
-  "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS },
+  "write-section": { model: TEST_MODEL, maxTokens: MAX_TOKENS },
+  librarian: { model: TEST_MODEL, maxTokens: MAX_TOKENS },
+  "plan-manual": { model: TEST_MODEL, maxTokens: MAX_TOKENS },
 };
 const EMPTY_PROMPT: Prompt = { system: "", messages: [{ role: "user", content: "" }] };
 const EMPTY_PROMPT_BOUND = 100 + 10;
@@ -47,13 +41,7 @@ const COMPLETE_EVENTS: ModelEvent[] = [
 ];
 
 function gatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
-  return {
-    caps: { dailyUsd: 2, monthlyUsd: 20 },
-    maxConcurrentCalls: 3,
-    idleTimeoutMs: 1000,
-    jobs: JOBS,
-    ...overrides,
-  };
+  return testGatewayConfig({ jobs: JOBS, ...overrides });
 }
 
 type Ending = "end" | "hang" | "end-quietly-on-abort";
@@ -81,14 +69,8 @@ function untilAborted(signal: AbortSignal): Promise<never> {
   });
 }
 
-async function collect(events: AsyncIterable<ModelEvent>): Promise<ModelEvent[]> {
-  const collected: ModelEvent[] = [];
-  for await (const event of events) collected.push(event);
-  return collected;
-}
-
 function settledSpend(callId: string, reservedAt: string, usd: number): LedgerEntry[] {
-  const call = { callId, reservedAt, job: "write-section", model: MODEL };
+  const call = { callId, reservedAt, job: "write-section", model: TEST_MODEL };
   return [
     { kind: "reserve", ...call, worstCaseUsd: usd },
     {
@@ -135,7 +117,7 @@ describe("model gateway", () => {
     client: ModelClient,
     { config = gatewayConfig(), now = () => NOW }: { config?: GatewayConfig; now?: () => Date } = {},
   ): Promise<RunningGateway> {
-    return createGateway({ client, ledger, config, prices: PRICES, dataDir, now });
+    return createGateway({ createClient: () => client, ledger, config, prices: TEST_PRICES, dataDir, now });
   }
 
   async function seedLedger(entries: LedgerEntry[]) {
@@ -146,9 +128,13 @@ describe("model gateway", () => {
     return (await ledger.entriesForMonth(month)).filter((entry) => entry.kind === "settle");
   }
 
-  it("refuses at start-up a job whose model is not in the price table", async () => {
+  it("refuses at start-up a job whose model is not in the price table, before creating the client", async () => {
     const config = gatewayConfig({ jobs: { ...JOBS, librarian: { model: "unpriced-model", maxTokens: 10 } } });
-    await expect(gateway(fakeClient().client, { config })).rejects.toThrow(ModelNotPriced);
+    const createClient = vi.fn(() => fakeClient().client);
+    await expect(createGateway({ createClient, ledger, config, prices: TEST_PRICES, dataDir })).rejects.toThrow(
+      ModelNotPriced,
+    );
+    expect(createClient).not.toHaveBeenCalled();
   });
 
   it("streams the client's events and settles a complete call at its reported usage", async () => {
@@ -157,10 +143,10 @@ describe("model gateway", () => {
 
     expect(events).toEqual(COMPLETE_EVENTS);
     expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({ model: MODEL, maxTokens: MAX_TOKENS, prompt: EMPTY_PROMPT });
+    expect(requests[0]).toMatchObject({ model: TEST_MODEL, maxTokens: MAX_TOKENS, prompt: EMPTY_PROMPT });
 
     const [reserve, settle] = await ledger.entriesForMonth("2026-10");
-    expect(reserve).toMatchObject({ kind: "reserve", job: "write-section", model: MODEL, worstCaseUsd: WORST_CASE_USD });
+    expect(reserve).toMatchObject({ kind: "reserve", job: "write-section", model: TEST_MODEL, worstCaseUsd: WORST_CASE_USD });
     expect(settle).toMatchObject({
       kind: "settle",
       callId: reserve!.callId,
@@ -243,7 +229,7 @@ describe("model gateway", () => {
 
     it("counts a reservation left unsettled by a crash at its worst case", async () => {
       await seedLedger([
-        { kind: "reserve", callId: "crashed", reservedAt: "2026-10-11T08:00:00.000Z", job: "write-section", model: MODEL, worstCaseUsd: 1.8 },
+        { kind: "reserve", callId: "crashed", reservedAt: "2026-10-11T08:00:00.000Z", job: "write-section", model: TEST_MODEL, worstCaseUsd: 1.8 },
       ]);
       const stream = (await gateway(fakeClient().client)).stream("write-section", EMPTY_PROMPT, signal());
       await expect(collect(stream)).rejects.toThrow(SpendingRefused);
@@ -251,7 +237,7 @@ describe("model gateway", () => {
 
     it("replays a ledger with a line cut off by a crash, counting every line it can read", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const crashed = { callId: "crashed", reservedAt: "2026-10-11T08:00:00.000Z", job: "write-section", model: MODEL };
+      const crashed = { callId: "crashed", reservedAt: "2026-10-11T08:00:00.000Z", job: "write-section", model: TEST_MODEL };
       await seedLedger([{ kind: "reserve", ...crashed, worstCaseUsd: 1.8 }]);
       await appendFile(path.join(dataDir, "ledger", "2026-10.jsonl"), '{"kind":"settle","callId":"crashed"');
       await seedLedger([{ kind: "reserve", ...crashed, callId: "after", worstCaseUsd: 0.01 }]);
@@ -344,7 +330,7 @@ describe("model gateway", () => {
   it("gives a job with its own idle timeout that long, and every other job the shared one", async () => {
     const config = gatewayConfig({
       idleTimeoutMs: 50,
-      jobs: { ...JOBS, "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS, idleTimeoutMs: 2000 } },
+      jobs: { ...JOBS, "plan-manual": { model: TEST_MODEL, maxTokens: MAX_TOKENS, idleTimeoutMs: 2000 } },
     });
     const pausing: ModelClient = {
       async *stream({ signal }) {

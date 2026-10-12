@@ -1,3 +1,4 @@
+import { escapeTags } from "../escape-tags.ts";
 import type { Prompt } from "../gateway/types.ts";
 import { chaptersInReadingOrder, sectionsInReadingOrder } from "../storage/manual.ts";
 import type { StoredChapter, StoredManual, StoredSection } from "../storage/types.ts";
@@ -74,9 +75,9 @@ export function sectionsNearestFirst(manual: StoredManual, sectionId: string): S
 
 function manualBrief(manual: StoredManual): string {
   return `<manual>
-<title>${content(manual.title)}</title>
-<subtitle>${content(manual.subtitle)}</subtitle>
-<voice>${content(manual.voice)}</voice>
+<title>${escapeTags(manual.title)}</title>
+<subtitle>${escapeTags(manual.subtitle)}</subtitle>
+<voice>${escapeTags(manual.voice)}</voice>
 <contents>
 ${chaptersInReadingOrder(manual).map((chapter) => chapterContents(manual, chapter)).join("\n\n")}
 </contents>
@@ -87,9 +88,9 @@ Hold the manual's voice in every paragraph.`;
 
 function chapterContents(manual: StoredManual, chapter: StoredChapter): string {
   const sections = chapter.sections.map(
-    (section) => content(`- ${section.label} ${section.title} (section:${section.id}): ${section.summary}`),
+    (section) => escapeTags(`- ${section.label} ${section.title} (section:${section.id}): ${section.summary}`),
   );
-  return [content(chapterName(manual, chapter)), ...sections].join("\n");
+  return [escapeTags(chapterName(manual, chapter)), ...sections].join("\n");
 }
 
 function sectionRequest(manual: StoredManual, { section, wordsRequested, example }: SectionRequest): string {
@@ -114,14 +115,14 @@ function sectionRequest(manual: StoredManual, { section, wordsRequested, example
       .filter(Boolean)
       .join(" "),
   ];
-  return [example && exampleSection(example), content(request.filter(Boolean).join("\n\n"))]
+  return [example && exampleSection(example), escapeTags(request.filter(Boolean).join("\n\n"))]
     .filter(Boolean)
     .join("\n\n");
 }
 
 function exampleSection({ section, body }: WrittenExample): string {
   return `<written-section label="${attribute(section.label)}" title="${attribute(section.title)}">
-${content(body.trim())}
+${escapeTags(body.trim())}
 </written-section>
 
 That section of this manual is already written. Match its voice, its density and the way it uses markdown, but don't repeat what it says.`;
@@ -136,10 +137,6 @@ function chapterName(manual: StoredManual, chapter: StoredChapter): string {
   return `${kind} ${chapter.label}, “${chapter.title}”`;
 }
 
-function content(text: string): string {
-  return text.replaceAll("<", "&lt;");
-}
-
 function attribute(text: string): string {
-  return content(text).replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  return escapeTags(text).replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }

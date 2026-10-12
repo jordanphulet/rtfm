@@ -1,21 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createGateway } from "../../gateway/gateway.ts";
-import type { PriceTable } from "../../gateway/prices.ts";
-import type { GatewayConfig, ModelEvent } from "../../gateway/types.ts";
+import type { ModelEvent } from "../../gateway/types.ts";
 import { createFileLedger, monthOf } from "../../storage/file-ledger.ts";
 import { createFileManualStore } from "../../storage/file-manual-store.ts";
 import { seedStore } from "../../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../../storage/types.ts";
-import { tempDataDir } from "../../testing.ts";
+import { tempDataDir, TEST_PRICES, testGatewayConfig } from "../../testing.ts";
 import { scriptedClient, textTurn, toolUseTurn } from "../scripted-client.ts";
 import { fakePlan } from "./fake-planner.ts";
 import { planManual, REVISING_STATUS } from "./plan.ts";
 
-const MODEL = "test-model";
-const PRICES: PriceTable = {
-  checkedOn: "2026-10-11",
-  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
-};
 const REQUEST = "A manual about building a treehouse";
 const PLAN = fakePlan(REQUEST);
 const GEESE_ID = "negotiating-with-geese";
@@ -43,18 +37,14 @@ async function planner(turns: ModelEvent[][], { request = REQUEST, store: wrapSt
   await seedStore(seeded);
   const store = wrapStore(seeded);
   const ledger = createFileLedger(dataDir);
-  const config: GatewayConfig = {
-    caps: { dailyUsd: 2, monthlyUsd: 20 },
-    maxConcurrentCalls: 3,
-    idleTimeoutMs: 1000,
-    jobs: {
-      "write-section": { model: MODEL, maxTokens: 2048 },
-      librarian: { model: MODEL, maxTokens: 1024 },
-      "plan-manual": { model: MODEL, maxTokens: 4096 },
-    },
-  };
   const { client, prompts } = scriptedClient(turns);
-  const gateway = await createGateway({ client, ledger, config, prices: PRICES, dataDir });
+  const gateway = await createGateway({
+    createClient: () => client,
+    ledger,
+    config: testGatewayConfig(),
+    prices: TEST_PRICES,
+    dataDir,
+  });
   const statuses: string[] = [];
   const result = await planManual({
     gateway,

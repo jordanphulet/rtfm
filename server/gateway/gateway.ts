@@ -29,7 +29,8 @@ export interface RunningGateway extends Gateway {
 }
 
 export interface GatewayDeps {
-  client: ModelClient;
+  /** Called only once every job's model is in the price table, so an unpriced model is refused before any secret is read. */
+  createClient: () => ModelClient;
   ledger: UsageLedger;
   config: GatewayConfig;
   prices: PriceTable;
@@ -61,7 +62,7 @@ export function killSwitchPath(dataDir: string): string {
 }
 
 export async function createGateway({
-  client,
+  createClient,
   ledger,
   config,
   prices,
@@ -71,6 +72,7 @@ export async function createGateway({
   for (const { model } of Object.values(config.jobs)) {
     if (!(model in prices.models)) throw new ModelNotPriced(model);
   }
+  const client = createClient();
 
   const committedUsd = new Map<string, number>();
   let runningCalls = 0;

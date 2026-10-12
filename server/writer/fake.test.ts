@@ -1,16 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { StoredManual } from "../storage/types.ts";
-import { fastFakeWriter, SAMPLE_ID, UNWRITTEN_ID } from "../testing.ts";
+import { collect, fastFakeWriter, SAMPLE_ID, UNWRITTEN_ID } from "../testing.ts";
 import { chunkEnds, createFakeWriter, fakeBody } from "./fake.ts";
-import type { WrittenChunk } from "./types.ts";
 
 const manual = { id: SAMPLE_ID } as StoredManual;
-
-async function collect(chunks: AsyncIterable<WrittenChunk>): Promise<WrittenChunk[]> {
-  const collected: WrittenChunk[] = [];
-  for await (const chunk of chunks) collected.push(chunk);
-  return collected;
-}
 
 describe("chunkEnds", () => {
   it("cuts after whole words once a chunk reaches 20 characters", () => {

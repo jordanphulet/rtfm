@@ -13,7 +13,6 @@ import { createBedrockClient } from "./gateway/bedrock-client.ts";
 import { ENV_LOCAL_FILE, readAwsCredentials } from "./gateway/credentials.ts";
 import { createGateway, type Gateway, type RunningGateway } from "./gateway/gateway.ts";
 import { prices } from "./gateway/prices.ts";
-import { ModelNotPriced } from "./gateway/types.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { lockDataFolder } from "./storage/lock.ts";
@@ -115,11 +114,8 @@ export async function createModels(
 }
 
 function createBedrockGateway(config: ServerConfig, credentialsFile: URL): Promise<RunningGateway> {
-  for (const { model } of Object.values(config.jobs)) {
-    if (!(model in prices.models)) throw new ModelNotPriced(model);
-  }
   return createGateway({
-    client: createBedrockClient(readAwsCredentials(credentialsFile), { timeoutMs: config.idleTimeoutMs }),
+    createClient: () => createBedrockClient(readAwsCredentials(credentialsFile), { timeoutMs: config.idleTimeoutMs }),
     ledger: createFileLedger(config.dataDir),
     config,
     prices,

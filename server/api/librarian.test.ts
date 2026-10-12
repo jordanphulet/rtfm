@@ -8,17 +8,11 @@ import { scriptedClient, textTurn, toolUseTurn } from "../agent/scripted-client.
 import { startServer, type RunningServer } from "../app.ts";
 import { config as committedConfig } from "../config.ts";
 import { createGateway, killSwitchPath, type Gateway } from "../gateway/gateway.ts";
-import type { PriceTable } from "../gateway/prices.ts";
-import type { GatewayConfig, ModelEvent } from "../gateway/types.ts";
+import type { ModelEvent } from "../gateway/types.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
-import { SAMPLE_ID, tempDataDir } from "../testing.ts";
+import { collect, readEvents, SAMPLE_ID, tempDataDir, TEST_PRICES, testGatewayConfig } from "../testing.ts";
 import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage, type ManualSummary } from "./types.ts";
 
-const MODEL = "test-model";
-const PRICES: PriceTable = {
-  checkedOn: "2026-10-11",
-  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
-};
 const GEESE_ID = "negotiating-with-geese";
 const TREEHOUSE_REQUEST = "Let’s start a new manual about building a treehouse";
 const TREEHOUSE = fakePlan(TREEHOUSE_REQUEST);
@@ -45,41 +39,27 @@ async function start(librarian: Gateway = fakeLibrarianModel(INSTANT_PACE), data
   }
 
   async function ask(text: string, { query = "", earlier = [] as LibrarianMessage[] } = {}) {
-    return eventsOf(await post({ messages: [...earlier, { role: "user", text }] }, query));
+    return librarianEvents(await post({ messages: [...earlier, { role: "user", text }] }, query));
   }
 
   return { base, dataDir, post, ask };
 }
 
 async function scriptedGateway(turns: ModelEvent[][], dataDir: string, caps = { dailyUsd: 2, monthlyUsd: 20 }) {
-  const config: GatewayConfig = {
-    caps,
-    maxConcurrentCalls: 3,
-    idleTimeoutMs: 1000,
-    jobs: {
-      "write-section": { model: MODEL, maxTokens: 2048 },
-      librarian: { model: MODEL, maxTokens: 1024 },
-      "plan-manual": { model: MODEL, maxTokens: 4096 },
-    },
-  };
   const ledger = createFileLedger(dataDir);
   const { client, prompts } = scriptedClient(turns);
-  const gateway = await createGateway({ client, ledger, config, prices: PRICES, dataDir });
+  const gateway = await createGateway({
+    createClient: () => client,
+    ledger,
+    config: testGatewayConfig({ caps }),
+    prices: TEST_PRICES,
+    dataDir,
+  });
   return { gateway, prompts, ledgerEntries: () => ledger.entriesForMonth(monthOf(new Date().toISOString())) };
 }
 
-async function eventsOf(response: Response): Promise<LibrarianEvent[]> {
-  expect(response.status).toBe(200);
-  expect(response.headers.get("content-type")).toBe("text/event-stream");
-  const text = await response.text();
-  return text
-    .split("\n\n")
-    .filter((block) => block !== "")
-    .map((block) => {
-      const [, event] = block.match(/^event: (.*)$/m)!;
-      const [, data] = block.match(/^data: (.*)$/m)!;
-      return { event, data: JSON.parse(data) } as LibrarianEvent;
-    });
+function librarianEvents(response: Response): Promise<LibrarianEvent[]> {
+  return collect(readEvents<LibrarianEvent>(response));
 }
 
 /** A valid conversation with that many earlier exchanges, then the new message. */

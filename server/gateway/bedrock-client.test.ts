@@ -4,7 +4,7 @@ import { EventStreamCodec } from "@smithy/eventstream-codec";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import type { SettleEntry } from "../storage/types.ts";
-import { tempDataDir, waitUntil } from "../testing.ts";
+import { collect, tempDataDir, testGatewayConfig, waitUntil } from "../testing.ts";
 import { createBedrockClient, CREDENTIAL_CHAIN_REFUSED } from "./bedrock-client.ts";
 import type { AwsCredentials } from "./credentials.ts";
 import { createGateway } from "./gateway.ts";
@@ -12,7 +12,6 @@ import { prices } from "./prices.ts";
 import {
   ModelStalled,
   ModelStreamIncomplete,
-  type GatewayConfig,
   type Job,
   type ModelClient,
   type ModelEvent,
@@ -131,12 +130,6 @@ function exceptionFrame(exceptionType: string, message: string): Uint8Array {
 function startEventStream(response: ServerResponse, events: object[]) {
   response.writeHead(200, { "content-type": "application/vnd.amazon.eventstream" });
   for (const event of events) response.write(chunkFrame(event));
-}
-
-async function collect(events: AsyncIterable<ModelEvent>): Promise<ModelEvent[]> {
-  const collected: ModelEvent[] = [];
-  for await (const event of events) collected.push(event);
-  return collected;
 }
 
 describe("Bedrock client", () => {
@@ -313,16 +306,14 @@ describe("Bedrock client", () => {
   });
 
   describe("through the gateway", () => {
-    const config: GatewayConfig = {
-      caps: { dailyUsd: 2, monthlyUsd: 20 },
-      maxConcurrentCalls: 3,
+    const config = testGatewayConfig({
       idleTimeoutMs: 5000,
       jobs: {
         "write-section": { model: MODEL, maxTokens: MAX_TOKENS },
         librarian: { model: MODEL, maxTokens: MAX_TOKENS },
         "plan-manual": { model: MODEL, maxTokens: MAX_TOKENS },
       },
-    };
+    });
 
     async function streamThroughGateway(
       job: Job = "write-section",
@@ -330,7 +321,7 @@ describe("Bedrock client", () => {
     ): Promise<{ result: Promise<ModelEvent[]>; settles: () => Promise<SettleEntry[]> }> {
       const dataDir = await tempDataDir();
       const ledger = createFileLedger(dataDir);
-      const gateway = await createGateway({ client: bedrockClient(), ledger, config, prices, dataDir });
+      const gateway = await createGateway({ createClient: () => bedrockClient(), ledger, config, prices, dataDir });
       const result = collect(gateway.stream(job, prompt, new AbortController().signal));
       const month = monthOf(new Date().toISOString());
       const settles = async () =>
@@ -428,7 +419,7 @@ describe("Bedrock client", () => {
         const dataDir = await tempDataDir();
         const ledger = createFileLedger(dataDir);
         const shortTimeout = { ...config, idleTimeoutMs: IDLE_TIMEOUT_MS };
-        const gateway = await createGateway({ client: bedrockClient(), ledger, config: shortTimeout, prices, dataDir });
+        const gateway = await createGateway({ createClient: () => bedrockClient(), ledger, config: shortTimeout, prices, dataDir });
         const result = collect(gateway.stream("plan-manual", PLAN_PROMPT, new AbortController().signal));
         const settles = async () =>
           (await ledger.entriesForMonth(monthOf(new Date().toISOString()))).filter((entry) => entry.kind === "settle");

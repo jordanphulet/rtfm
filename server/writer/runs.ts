@@ -8,6 +8,7 @@ export type Leave = () => void;
 export interface Runs {
   join(manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave>;
   statusOf(manualId: string, sectionId: string): Promise<SectionStatus>;
+  writingSectionIds(manualId: string): Set<string>;
   isWriting(manualId: string): boolean;
 }
 
@@ -118,15 +119,21 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
     return (await store.getBody(manualId, sectionId)) === undefined ? "unwritten" : "written";
   }
 
+  function writingSectionIds(manualId: string): Set<string> {
+    const prefix = runKey(manualId, "");
+    const writing = [...runs].filter(([key, run]) => run !== WRITTEN && key.startsWith(prefix));
+    return new Set(writing.map(([key]) => key.slice(prefix.length)));
+  }
+
   function isWriting(manualId: string): boolean {
-    return [...runs].some(([key, run]) => run !== WRITTEN && key.startsWith(`${manualId}/`));
+    return writingSectionIds(manualId).size > 0;
   }
 
   function activeRunCount(): number {
     return [...runs.values()].filter((run) => run !== WRITTEN).length;
   }
 
-  return { join, statusOf, isWriting };
+  return { join, statusOf, writingSectionIds, isWriting };
 }
 
 function runKey(manualId: string, sectionId: string): string {

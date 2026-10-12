@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { link, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isErrorCode, namesInFolder, readIfExists } from "./files.ts";
+import { createExclusively, isErrorCode, namesInFolder, readIfExists, tempPathFor } from "./files.ts";
 import { ID_PATTERN } from "./manual.ts";
 import type { ManualStore, StoredManual } from "./types.ts";
 
@@ -70,17 +70,7 @@ export function createFileManualStore(dataDir: string): ManualStore {
     async saveBody(manualId, sectionId, body) {
       const target = sectionFile(manualId, sectionId);
       await makeSectionsDir(sectionsDir(manualId), manualId);
-      const temp = tempPathFor(target);
-      await writeFile(temp, body);
-      try {
-        await link(temp, target);
-        return "saved";
-      } catch (error) {
-        if (isErrorCode(error, "EEXIST")) return "already-written";
-        throw error;
-      } finally {
-        await rm(temp, { force: true });
-      }
+      return (await createExclusively(target, body)) ? "saved" : "already-written";
     },
 
     async writtenSectionIds(manualId) {
@@ -119,8 +109,4 @@ async function writeAtomically(target: string, content: string) {
 function checkedId(id: string): string {
   if (!ID_PATTERN.test(id)) throw new Error(`Not a valid id: "${id}"`);
   return id;
-}
-
-function tempPathFor(target: string): string {
-  return `${target}.${randomUUID()}.tmp`;
 }

@@ -32,8 +32,10 @@ server/
   ports.ts                API_PORT, alone, so Vite's config can import it
   app.ts                  startServer(config, replaced?): locks the data folder; storage, models, gateway, routes;
                           close() waits for model calls to settle
-  testing.ts              helpers shared by the tests
+  testing.ts              helpers shared by the tests: temp folders, fast fake writers, the test model's prices and
+                          gateway config (testGatewayConfig), collect, and readEvents for server-sent events
   usage.ts                npm run usage
+  escape-tags.ts          escapes `<` in text inserted in a prompt (the section writer's and the planner's)
   api/
     types.ts              the API contract shared with the browser (section 2)
     route.ts              Route, ApiRequest, EventSink: what handlers see
@@ -50,7 +52,7 @@ server/
     types.ts              ManualStore, UsageLedger
     file-manual-store.ts  manuals and sections as files
     file-ledger.ts        the usage ledger as JSON lines
-    files.ts              reads a file or folder that may not exist
+    files.ts              reads a file or folder that may not exist; creates a file only if it doesn't exist
     lock.ts               the data folder's lock: one server per folder
     manual.ts             a manual's chapters and sections in reading order; the id pattern
     seed.ts               seeds each manual in server/seed/ once
@@ -124,7 +126,8 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   server's response closes before it is complete (the server stopped or restarted mid-section),
   the proxy's `configure` hook destroys the browser's response too, so the reader's stream fails with "couldn't
   write this section" instead of hanging.
-- `npm run server` runs the server alone, for `curl` and `npm run preview`.
+- `npm run server` runs the server alone, for `curl` and `npm run preview`. `RTFM_DATA_DIR` and
+  `RTFM_PORT` (section 8) run it on another data folder or port; `main.test.ts` uses them.
 - `main.ts` prints `API server on http://127.0.0.1:<port>` and the model source. On SIGINT and
   SIGTERM it closes the server and then exits. `close()` closes every connection, which aborts the
   sections being written and the librarian's replies; waits until the gateway is idle, so each
@@ -264,6 +267,11 @@ A request with no `Host` at all is refused by Node itself, with `400`.
 
 Titles are sorted with `localeCompare(…, "en")`, so "The Haunt That Listens" sorts under T.
 
+**A manual** (`api/manual.ts`). Its sections' statuses come from one `writtenSectionIds` read, as
+the library's counts do, and never from the bodies. A section is `writing` if it has a run in
+progress (`runs.writingSectionIds`, taken before the read), otherwise `written` if it has a stored
+body, otherwise `unwritten`.
+
 **Deleting a manual** (`api/delete-manual.ts`) removes its table of contents and every written
 section. Nothing else is touched: not the ledger, not the seeding record (section 3), so a deleted
 seed manual stays deleted.
@@ -311,6 +319,8 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
   `?library=empty` on `GET /api/manuals`, and `?freeze=<0–1>` on `POST /api/librarian` (section 7).
   - `api/preview.ts` handles them before any run, writer or storage write is touched, so they cost
     nothing and change nothing, whichever models are configured.
+  - One parser (`previewFraction`) reads `?freeze` for both routes: anything but a number from 0
+    to 1 gets `400 { error: "Bad request" }`, on a stream whether or not the section is written.
   - **Empty library** answers `200 []`, so the landing page's empty state can be shown without
     deleting anything.
   - The stream options only apply to sections that aren't written.
@@ -368,9 +378,10 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 ```
 
 - **One server per data folder, enforced.** `startServer` first calls `lockDataFolder`
-  (`storage/lock.ts`), which creates `server.lock` holding the process's PID. It writes the PID to
-  a temp file and `link`s it into place; `link` fails if the lock exists, so of two starts only
-  one wins, and the lock is never seen empty.
+  (`storage/lock.ts`), which creates `server.lock` holding the process's PID with
+  `createExclusively` (`storage/files.ts`). That writes the PID to a temp file and `link`s it into
+  place; `link` fails if the lock exists, so of two starts only one wins, and the lock is never
+  seen empty.
   - **Held by a running process** (checked with `process.kill(pid, 0)`, where `EPERM` also means
     running): `startServer` throws `DataFolderInUse`, whose message names the folder and the PID.
     This includes a second start in the same process, as in the tests.
@@ -390,8 +401,9 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
   It then writes `manual.json` through a temp file and a `rename`; if that write fails, it removes
   the folder again, so the id isn't left taken by an empty folder. The seed and the planner both
   create manuals through it, and seeding throws if a seed manual's id turns out to be taken.
-- **`saveBody`** writes a temp file, then `link`s it into place. `link` fails if the file already
-  exists, so a section can't be written twice. It throws if the manual doesn't exist, rather than
+- **`saveBody`** creates the section's file with `createExclusively`, as the lock is created: a temp
+  file, then a `link` into place. `link` fails if the file already exists, so a section can't be
+  written twice. It throws if the manual doesn't exist, rather than
   creating its folder, so a late write can't leave a deleted manual's sections behind.
 - **`listManuals`** reads every folder in `manuals/` whose name is a slug and has a
   `manual.json`.
@@ -472,8 +484,9 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
     Haiku 4.5 wrote unbroken essays with no headings, lists or links. It adds about 1,000 input
     tokens, about $0.001 a section. A manual with nothing written yet gets no example.
   - **Escaping.** Manual text (chapter and section titles included, since a planned manual's come
-    from the model and the user's request) is inserted with `<` escaped, so it can't open or close a tag;
-    attribute values also escape `>` and `"`. Bodies keep `>`, which is blockquote syntax and
+    from the model and the user's request) is inserted with `<` escaped (`escapeTags`, which the
+    planner's prompt uses too), so it can't open or close a tag; attribute values also escape `>`
+    and `"`. Bodies keep `>`, which is blockquote syntax and
     can't form a tag on its own.
 - **The opening is held back** (`writer/section-text.ts`). Nothing is yielded until the first
   line that is not clutter is whole, so the cheap fixes happen before the reader sees anything.
@@ -538,12 +551,13 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
 
 **Choosing the models:** `config.models`, which defaults to `"fake"` (used by tests and
 screenshots), chooses both the section writer and the librarian's model, which also plans new
-manuals (`createModels` in `app.ts`); `RTFM_MODELS=bedrock` selects Claude for both. With `"bedrock"`, `startServer` checks
-every job's model against the price table (`ModelNotPriced`), then reads the credentials
-(`CredentialsMissing`), then builds the Bedrock client, the file ledger, one gateway, and the
-writer on it, all before it seeds or listens. The librarian and its planner use the same
-gateway, so one set of caps covers every job. Either problem therefore stops the server from starting, and an unpriced
-model is reported without reading any secret. `createModels` also returns `idle`: the gateway's
+manuals (`createModels` in `app.ts`); `RTFM_MODELS=bedrock` selects Claude for both. With
+`"bedrock"`, `startServer` builds one gateway on the file ledger, and the writer on it, all before
+it seeds or listens. `createGateway` checks every job's model against the price table
+(`ModelNotPriced`), and only then calls the client factory it is given, which reads the
+credentials (`CredentialsMissing`) and builds the Bedrock client. The librarian and its planner
+use the same gateway, so one set of caps covers every job. Either problem therefore stops the
+server from starting, and an unpriced model is reported without reading any secret. `createModels` also returns `idle`: the gateway's
 `idle()` with Bedrock, and one that resolves at once with the fakes, which record nothing. Tests
 replace either model with `startServer(config, { writer, librarian })`, and a test that passes
 its own gateway passes its `idle` too, so `close()` waits for it.
@@ -555,8 +569,8 @@ its own gateway passes its `idle` too, so `close()` waits for it.
 - **Finished runs stay in the map** as `written`, which closes the gap between a request reading
   storage and a run finishing. If `saveBody` returns `already-written`, the run sends `written`
   anyway: the stored body is the one that counts.
-- **`isWriting(manualId)`** says whether any section of a manual has a run in progress, for the
-  delete route.
+- **`writingSectionIds(manualId)`** names the sections of a manual that have a run in progress,
+  for the manual route; **`isWriting(manualId)`** says whether there are any, for the delete route.
 - **Statuses come from storage** for any section not being written. If a written section's file
   has been deleted by hand, opening it drops the stale `written` entry and writes it again.
 - **Listeners:** the first request starts the writer with its own `AbortController`. Later
@@ -611,7 +625,8 @@ type ModelEvent =
 
 // server/gateway/gateway.ts
 async function createGateway(deps: {
-  client: ModelClient; ledger: UsageLedger; config: GatewayConfig;
+  createClient: () => ModelClient;       // called once the prices check passes
+  ledger: UsageLedger; config: GatewayConfig;
   prices: PriceTable; dataDir: string; now?: () => Date;
 }): Promise<RunningGateway>;
 
@@ -630,7 +645,8 @@ Content blocks and tool definitions use Anthropic's field names, so `bedrock-cli
 to the SDK as they are.
 
 `createGateway` rejects with `ModelNotPriced` if any job's model is missing from the price table,
-so the server refuses to start. It is async because it replays the ledger before it returns. The
+so the server refuses to start. It checks before it calls `createClient`, so with Bedrock an
+unpriced model is reported without reading any secret. This is the only price-table check. It is async because it replays the ledger before it returns. The
 stream is an async generator, so a refusal surfaces on the first `next()`, before any event. A
 signal that is already aborted is refused without a reservation.
 
@@ -870,7 +886,7 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
     reservations counting at their worst case, and last month's spend not counting;
   - the input bound of a prompt with tools and blocks;
   - settling, and a settle that crosses midnight;
-  - an unpriced model at start-up;
+  - an unpriced model at start-up, refused before the client is created;
   - the concurrency limit, the kill switch, and the idle timeout, including a call that never
     sends its first event, a caller that holds an event too long, and a job with its own longer
     timeout beside one that uses the shared one;
@@ -888,6 +904,9 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
   on a ledger that is slow to settle, and checks that the settle is written and the lock
   released by the time `close()` resolves. `config.test.ts` checks that, with the committed
   config, a librarian turn and a plan both get through while every section run is writing.
+  `main.test.ts` spawns `main.ts` with the fake models on a temp folder and port 0: SIGTERM
+  releases the lock and exits with code 0, and a second instance on the same folder prints the
+  refusal and exits with code 1.
 
 **`npm run usage`** (`server/usage.ts`, with the formatting in `gateway/usage-report.ts`) prints
 today's and this month's spend (UTC) against the caps, by model and by job. It also shows call
@@ -1234,14 +1253,15 @@ nothing. The browser uses it for
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
 | Models, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
+| Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
 ```ts
 // server/config.ts
 import { API_PORT } from "./ports.ts";   // 8787
 export const config: ServerConfig = {
-  port: API_PORT,
-  dataDir: fileURLToPath(new URL("../.data", import.meta.url)),   // <repo>/.data, whatever the cwd
+  port: portFromEnv(process.env.RTFM_PORT),            // API_PORT unless set; 0 takes any free port
+  dataDir: dataDirFromEnv(process.env.RTFM_DATA_DIR),  // <repo>/.data (whatever the cwd) unless set
   models: modelsFromEnv(process.env.RTFM_MODELS),   // "fake" (default) or "bedrock"; anything else throws
   maxConcurrentRuns: MAX_CONCURRENT_RUNS,   // 3
   sectionWordsRequested: 650,
@@ -1262,6 +1282,11 @@ export const config: ServerConfig = {
   models, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
   `startServer` and the gateway take it as it is, so tests and the shot script spread `config`
   and override what they need.
+- **`RTFM_DATA_DIR` and `RTFM_PORT`** run the server on another data folder (resolved against
+  the working directory) or port, with nothing edited; `main.test.ts` runs `main.ts` on a temp
+  folder and port 0 this way. An empty `RTFM_DATA_DIR` means `.data/`; a `RTFM_PORT` that isn't
+  a whole number from 0 to 65535 stops the server from starting. Vite's proxy always points at
+  `API_PORT`, so `RTFM_PORT` is for `npm run server` alone.
 - **`maxConcurrentCalls` is `maxConcurrentRuns + 2`**, both from one constant. The section runs
   can use at most 3 calls between them, so 2 are always left for the librarian's turns and the
   planner's plans, one each or two of either. With equal limits, three sections being written

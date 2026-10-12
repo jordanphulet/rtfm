@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -132,5 +132,33 @@ describe("seedStore", () => {
     expect(await store.writtenSectionIds("alpha")).toEqual(["second"]);
     expect(await store.writtenSectionIds("beta")).toEqual(["first"]);
     expect((await store.seededManualIds()).sort()).toEqual(["alpha", "beta"]);
+  });
+});
+
+describe("the committed seeds", () => {
+  const seedDir = new URL("../seed/", import.meta.url);
+
+  async function committedSeeds() {
+    const entries = await readdir(seedDir, { withFileTypes: true });
+    const folders = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    return Promise.all(
+      folders.map(async (folder) => {
+        const json = await readFile(new URL(`${folder}/manual.json`, seedDir), "utf8");
+        return { folder, seed: JSON.parse(json) as { manual: StoredManual; writtenAtStart: string[] } };
+      }),
+    );
+  }
+
+  it("give each manual its folder's name as its id", async () => {
+    const seeds = await committedSeeds();
+    expect(seeds).not.toHaveLength(0);
+    for (const { folder, seed } of seeds) expect(seed.manual.id, folder).toBe(folder);
+  });
+
+  it("start written only sections in the manual's own table of contents", async () => {
+    for (const { folder, seed } of await committedSeeds()) {
+      const sectionIds = sectionsInReadingOrder(seed.manual).map(({ id }) => id);
+      for (const sectionId of seed.writtenAtStart) expect(sectionIds, `${folder}: ${sectionId}`).toContain(sectionId);
+    }
   });
 });

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../app.ts";
 import { config as committedConfig, type ServerConfig } from "../config.ts";
 import { readSeedBody } from "../storage/seed.ts";
-import { recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil, WRITTEN_ID } from "../testing.ts";
+import { collect, readEvents, recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil, WRITTEN_ID } from "../testing.ts";
 import type { SectionWriter } from "../writer/types.ts";
 import type { Manual, ManualSummary, SectionEvent, SectionState } from "./types.ts";
 
@@ -35,26 +35,8 @@ async function getJson<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function* readEvents(response: Response): AsyncGenerator<SectionEvent> {
-  expect(response.headers.get("content-type")).toBe("text/event-stream");
-  let buffer = "";
-  for await (const chunk of response.body!.pipeThrough(new TextDecoderStream())) {
-    buffer += chunk;
-    let end: number;
-    while ((end = buffer.indexOf("\n\n")) !== -1) {
-      const block = buffer.slice(0, end);
-      buffer = buffer.slice(end + 2);
-      const [, event] = block.match(/^event: (.*)$/m)!;
-      const [, data] = block.match(/^data: (.*)$/m)!;
-      yield { event, data: JSON.parse(data) } as SectionEvent;
-    }
-  }
-}
-
 async function streamAll(url: string): Promise<SectionEvent[]> {
-  const events: SectionEvent[] = [];
-  for await (const event of readEvents(await fetch(url))) events.push(event);
-  return events;
+  return collect(readEvents<SectionEvent>(await fetch(url)));
 }
 
 function textOf(events: SectionEvent[]): string {
@@ -137,7 +119,7 @@ describe("the API", () => {
 
     const firstEvents: SectionEvent[] = [];
     const firstDone = (async () => {
-      for await (const event of readEvents(await fetch(url))) firstEvents.push(event);
+      for await (const event of readEvents<SectionEvent>(await fetch(url))) firstEvents.push(event);
     })();
     await waitUntil(() => firstEvents.length >= 3);
     const manual = await getJson<Manual>(base);
@@ -161,7 +143,7 @@ describe("the API", () => {
     let appends = 0;
     await expect(
       (async () => {
-        for await (const event of readEvents(response)) {
+        for await (const event of readEvents<SectionEvent>(response)) {
           if (event.event === "append") appends += 1;
           if (appends === 2) controller.abort();
         }
@@ -219,6 +201,17 @@ describe("the API", () => {
       expect(await streamAll(`${base}/sections/${UNWRITTEN_ID}/stream?fail=error`)).toEqual([
         { event: "failed", data: { reason: "error" } },
       ]);
+    });
+
+    it("refuses a ?freeze that isn't a number from 0 to 1, without a writer", async () => {
+      const writer = recordingWriter();
+      const { base } = await start(writer);
+      for (const freeze of ["abc", "", "-0.1", "1.5", "NaN"]) {
+        const response = await fetch(`${base}/sections/${UNWRITTEN_ID}/stream?freeze=${freeze}`);
+        expect(response.status, freeze).toBe(400);
+        expect(await response.json()).toEqual({ error: "Bad request" });
+      }
+      expect(writer.signals).toHaveLength(0);
     });
 
     it("leaves written sections alone", async () => {
@@ -298,7 +291,7 @@ describe("the library", () => {
     const { base } = await start(writer);
     const events: SectionEvent[] = [];
     const streamDone = (async () => {
-      for await (const event of readEvents(await fetch(`${base}/sections/${UNWRITTEN_ID}/stream`))) events.push(event);
+      for await (const event of readEvents<SectionEvent>(await fetch(`${base}/sections/${UNWRITTEN_ID}/stream`))) events.push(event);
     })();
     await waitUntil(() => events.length >= 2);
 

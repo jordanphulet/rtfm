@@ -1,7 +1,7 @@
 import type { ManualStore, StoredManual } from "../storage/types.ts";
 import type { Runs } from "../writer/runs.ts";
 import { manualWithSection } from "./lookup.ts";
-import { notFound, type EventSink, type Route } from "./route.ts";
+import { badRequest, notFound, type EventSink, type Route } from "./route.ts";
 import { previewFrom, previewStream } from "./preview.ts";
 
 export function sectionStreamRoute(store: ManualStore, runs: Runs): Route {
@@ -13,6 +13,7 @@ export function sectionStreamRoute(store: ManualStore, runs: Runs): Route {
       if (!manual) return notFound;
 
       const preview = previewFrom(query);
+      if (preview === "invalid") return badRequest;
       if (preview && (await runs.statusOf(manualId, sectionId)) !== "written") {
         return previewStream(preview, manualId, sectionId);
       }

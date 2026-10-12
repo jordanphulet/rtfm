@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { config } from "./config.ts";
 import { createGateway } from "./gateway/gateway.ts";
 import { prices } from "./gateway/prices.ts";
-import { GatewayBusy, type Job, type ModelClient, type ModelEvent, type Prompt } from "./gateway/types.ts";
+import { GatewayBusy, type Job, type ModelClient, type Prompt } from "./gateway/types.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
-import { tempDataDir, waitUntil } from "./testing.ts";
+import { collect, tempDataDir, waitUntil } from "./testing.ts";
 
 const PROMPT: Prompt = { system: "", messages: [{ role: "user", content: "" }] };
 
@@ -18,7 +18,13 @@ describe("committed config", () => {
         await new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
       },
     };
-    const gateway = await createGateway({ client: answersOnlyAnAbort, ledger: createFileLedger(dataDir), config, prices, dataDir });
+    const gateway = await createGateway({
+      createClient: () => answersOnlyAnAbort,
+      ledger: createFileLedger(dataDir),
+      config,
+      prices,
+      dataDir,
+    });
     const controller = new AbortController();
     const start = (job: Job) => collect(gateway.stream(job, PROMPT, controller.signal));
 
@@ -35,9 +41,3 @@ describe("committed config", () => {
     await gateway.idle();
   });
 });
-
-async function collect(events: AsyncIterable<ModelEvent>): Promise<ModelEvent[]> {
-  const collected: ModelEvent[] = [];
-  for await (const event of events) collected.push(event);
-  return collected;
-}

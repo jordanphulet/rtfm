@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { link, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { isErrorCode, readIfExists } from "./files.ts";
+import { createExclusively, isErrorCode, readIfExists } from "./files.ts";
 
 export const LOCK_FILE_NAME = "server.lock";
 
@@ -25,21 +24,6 @@ export async function lockDataFolder(dataDir: string): Promise<DataFolderLock> {
     await rm(lockFile, { force: true });
   }
   return { release: () => rm(lockFile, { force: true }) };
-}
-
-/** `link` fails if the file exists, so of two creators only one wins, and the file is never seen empty. */
-async function createExclusively(file: string, content: string): Promise<boolean> {
-  const tempFile = `${file}.${randomUUID()}.tmp`;
-  await writeFile(tempFile, content);
-  try {
-    await link(tempFile, file);
-    return true;
-  } catch (error) {
-    if (isErrorCode(error, "EEXIST")) return false;
-    throw error;
-  } finally {
-    await rm(tempFile, { force: true });
-  }
 }
 
 async function lockHolder(lockFile: string): Promise<number | undefined> {

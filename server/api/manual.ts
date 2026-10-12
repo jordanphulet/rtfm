@@ -1,7 +1,7 @@
 import type { ManualStore, StoredChapter } from "../storage/types.ts";
 import type { Runs } from "../writer/runs.ts";
 import { notFound, type Route } from "./route.ts";
-import type { Chapter, Manual } from "./types.ts";
+import type { Chapter, Manual, SectionStatus } from "./types.ts";
 
 export function manualRoute(store: ManualStore, runs: Runs): Route {
   return {
@@ -11,22 +11,24 @@ export function manualRoute(store: ManualStore, runs: Runs): Route {
       const stored = await store.getManual(params.manualId);
       if (!stored) return notFound;
 
-      const withStatuses = (chapter: StoredChapter) => chapterWithStatuses(chapter, stored.id, runs);
+      const writingIds = runs.writingSectionIds(stored.id);
+      const writtenIds = new Set(await store.writtenSectionIds(stored.id));
+      const statusOf = (sectionId: string): SectionStatus => {
+        if (writingIds.has(sectionId)) return "writing";
+        return writtenIds.has(sectionId) ? "written" : "unwritten";
+      };
+      const withStatuses = (chapter: StoredChapter): Chapter => ({
+        ...chapter,
+        sections: chapter.sections.map((section) => ({ ...section, status: statusOf(section.id) })),
+      });
       const manual: Manual = {
         id: stored.id,
         title: stored.title,
         subtitle: stored.subtitle,
-        chapters: await Promise.all(stored.chapters.map(withStatuses)),
-        appendices: await Promise.all(stored.appendices.map(withStatuses)),
+        chapters: stored.chapters.map(withStatuses),
+        appendices: stored.appendices.map(withStatuses),
       };
       return { status: 200, body: manual };
     },
   };
-}
-
-async function chapterWithStatuses(chapter: StoredChapter, manualId: string, runs: Runs): Promise<Chapter> {
-  const sections = await Promise.all(
-    chapter.sections.map(async (section) => ({ ...section, status: await runs.statusOf(manualId, section.id) })),
-  );
-  return { ...chapter, sections };
 }

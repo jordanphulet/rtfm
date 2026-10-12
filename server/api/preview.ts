@@ -7,12 +7,13 @@ import type { LibrarianEvent, LibrarianMessage } from "./types.ts";
 
 export type Preview = { freeze: number } | { fail: "budget" | "error" };
 
-export function previewFrom(query: URLSearchParams): Preview | undefined {
+/** A section stream's preview, if one is asked for; `"invalid"` when `?freeze` isn't a number from 0 to 1. */
+export function previewFrom(query: URLSearchParams): Preview | "invalid" | undefined {
+  const freeze = previewFraction(query);
+  if (Number.isNaN(freeze)) return "invalid";
   const fail = query.get("fail");
   if (fail !== null) return { fail: fail === "budget" ? "budget" : "error" };
-  const freeze = query.get("freeze");
-  if (freeze !== null) return { freeze: Number(freeze) };
-  return undefined;
+  return freeze === undefined ? undefined : { freeze };
 }
 
 export function wantsEmptyLibrary(query: URLSearchParams): boolean {

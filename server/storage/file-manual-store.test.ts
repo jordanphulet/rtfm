@@ -35,6 +35,15 @@ describe("file manual store", () => {
     expect(await store.getManual(manual.id)).toEqual(manual);
   });
 
+  it("removes the manual's folder again when writing manual.json fails, so the id isn't left taken", async () => {
+    const unserializable = { ...manual, voice: 1n as unknown as string };
+    await expect(store.createManual(unserializable)).rejects.toThrow(TypeError);
+
+    expect(await readdir(path.join(dataDir, "manuals"))).toEqual([]);
+    expect(await store.createManual(manual)).toBe("created");
+    expect(await store.getManual(manual.id)).toEqual(manual);
+  });
+
   it("treats an id that isn't a slug as no manual", async () => {
     expect(await store.getManual("../outside")).toBeUndefined();
   });

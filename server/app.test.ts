@@ -65,7 +65,13 @@ describe("stopping", () => {
         await new Promise((_, reject) => request.signal.addEventListener("abort", () => reject(request.signal.reason)));
       },
     };
-    const gateway = await createGateway({ client: answersOnlyAnAbort, ledger: slowToSettle, config, prices, dataDir });
+    const gateway = await createGateway({
+      createClient: () => answersOnlyAnAbort,
+      ledger: slowToSettle,
+      config,
+      prices,
+      dataDir,
+    });
     const server = await startServer({ ...config, port: 0, dataDir, models: "fake" }, { librarian: gateway, idle: gateway.idle });
 
     void fetch(`http://127.0.0.1:${server.port}/api/librarian`, {

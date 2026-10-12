@@ -1,22 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createGateway } from "../gateway/gateway.ts";
-import type { PriceTable } from "../gateway/prices.ts";
-import { SpendingRefused, type GatewayConfig, type ModelEvent, type PromptMessage } from "../gateway/types.ts";
+import { SpendingRefused, type ModelEvent, type PromptMessage } from "../gateway/types.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore } from "../storage/types.ts";
-import { tempDataDir } from "../testing.ts";
+import { tempDataDir, TEST_PRICES, testGatewayConfig } from "../testing.ts";
 import { AgentStopped, runAgent, type AgentEvent } from "./loop.ts";
 import { scriptedClient, textTurn, toolUseTurn } from "./scripted-client.ts";
 import { defineTool, type AgentTool } from "./tool.ts";
 
-const MODEL = "test-model";
-const PRICES: PriceTable = {
-  checkedOn: "2026-10-11",
-  models: { [MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
-};
 const SYSTEM = "You are the librarian of a library of manuals.";
 const LIBRARY_STATUS = "Looking through the library…";
 const SEARCH_STATUS = "Searching the shelves…";
@@ -49,18 +43,14 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
   const store = createFileManualStore(dataDir);
   await seedStore(store);
   const ledger = createFileLedger(dataDir);
-  const config: GatewayConfig = {
-    caps,
-    maxConcurrentCalls: 3,
-    idleTimeoutMs: 1000,
-    jobs: {
-      "write-section": { model: MODEL, maxTokens: 2048 },
-      librarian: { model: MODEL, maxTokens: 1024 },
-      "plan-manual": { model: MODEL, maxTokens: 4096 },
-    },
-  };
   const { client, prompts } = scriptedClient(turns);
-  const gateway = await createGateway({ client, ledger, config, prices: PRICES, dataDir });
+  const gateway = await createGateway({
+    createClient: () => client,
+    ledger,
+    config: testGatewayConfig({ caps }),
+    prices: TEST_PRICES,
+    dataDir,
+  });
   const tools = [...libraryTools(store), ...extraTools];
 
   function run(signal = new AbortController().signal) {
