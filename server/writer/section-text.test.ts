@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSectionText, openingLength } from "./section-text.ts";
+import { withTypographicQuotes } from "./typographic-quotes.ts";
 
 const SECTION = { label: "3.2", title: "The Room Controller" };
 
@@ -81,5 +82,36 @@ describe("the section text", () => {
     const { ready, rest } = shown(["## The Room Controller\n", "Short."]);
     expect(ready).toEqual(["", ""]);
     expect(rest).toBe("Short.");
+  });
+
+  it("makes quotes typographic, deciding a quote split across chunks once its word is whole", () => {
+    const { ready, rest } = shown([`Every room.\nShe said "`, "Leave", `." It`, "'s the ", "bride'", "s veil, 5", "' 10", `" tall.`]);
+    expect(ready).toEqual(["Every room.\nShe said ", "", "“Leave.” ", "It’s the ", "", "bride’s veil, ", "5′ ", "10″ "]);
+    expect(rest).toBe("tall.");
+  });
+
+  it("shows the same typeset text however the model's text is split", () => {
+    const modelText = [
+      `"He keeps saying 'it's all fake'," she said, in the '90s, at 5' 10".`,
+      "",
+      "Send `{\"line\": \"...\"}` or ``it's `x` 'y'`` to [the \"Director\"](section:the-director \"It's\").",
+      "",
+      "```json",
+      `{"gesture": "none"}`,
+      "```",
+      "",
+      `See <https://example.com/it's>, https://example.com/'a' and <b title="x">"bold"</b>.`,
+      "",
+      `[Bob's]: https://example.com "Bob's"`,
+    ].join("\n");
+    const typeset = withTypographicQuotes(modelText);
+    expect(typeset).toContain(`“He keeps saying ‘it’s all fake’,” she said, in the ’90s, at 5′ 10″.`);
+
+    const splits = [[...modelText], ...[...modelText].map((_, at) => [modelText.slice(0, at), modelText.slice(at)])];
+    for (const pieces of splits) {
+      const { ready, rest, body } = shown(pieces);
+      expect(ready.join("") + rest).toBe(typeset);
+      expect(body).toBe(typeset);
+    }
   });
 });

@@ -1,4 +1,5 @@
 import type { StoredSection } from "../storage/types.ts";
+import { withTypographicQuotes } from "./typographic-quotes.ts";
 
 const PREAMBLE_MAX_LENGTH = 160;
 const BARE_ASSENT_MAX_LENGTH = 40;
@@ -23,22 +24,24 @@ export function createSectionText(section: Pick<StoredSection, "label" | "title"
   let shownLength = 0;
 
   function body(): string {
-    return bodyStart === undefined ? "" : modelText.slice(bodyStart);
+    return bodyStart === undefined ? "" : withTypographicQuotes(modelText.slice(bodyStart));
   }
 
   return {
     readyAfter(text) {
       modelText += text;
       bodyStart ??= openingLength(modelText, section, false);
-      const end = wholeWordsLength(body());
-      const ready = body().slice(shownLength, end);
+      const typeset = body();
+      const end = wholeWordsLength(typeset);
+      const ready = typeset.slice(shownLength, end);
       shownLength = end;
       return ready;
     },
     restAtEnd() {
       bodyStart ??= openingLength(modelText, section, true);
-      const rest = body().slice(shownLength);
-      shownLength = body().length;
+      const typeset = body();
+      const rest = typeset.slice(shownLength);
+      shownLength = typeset.length;
       return rest;
     },
     shownLength: () => shownLength,

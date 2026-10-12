@@ -757,7 +757,9 @@ reader's own, in `prose.css`.
 ## Typographic detail
 
 - All UI copy uses real punctuation: ’ “ ” – — … (`Waiting for the first words…`,
-  `Not yet written — opening it starts the writing.`). The content is already typographic.
+  `Not yet written — opening it starts the writing.`). The content is typographic too: the seed
+  manuals are written that way, and the server turns Claude's straight quotes and apostrophes
+  into curly ones as it streams, outside code (`ARCHITECTURE.md` §4).
 - Tabular figures: TOC, outline and pager labels, status percentages and word counts (with
   thousands separators), table cells, ordered-list markers, footnote references.
 - `::selection` in `--selection` with ink-strong text.

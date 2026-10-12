@@ -1,5 +1,5 @@
-const FENCE_OPENING = /^[\s>]*(`{3,}|~{3,})/;
-const FENCE_CLOSING = /^[\s>]*(`{3,}|~{3,})\s*$/;
+import { closesFence, fenceOpenedBy } from "./code-fences.ts";
+
 const INLINE_CODE = /`[^`\n]*`/g;
 const H1 = /^#\s/m;
 const FOOTNOTE_REFERENCE = /\[\^([^\]\s]+)\](?!:)/g;
@@ -32,11 +32,10 @@ function withoutCode(markdown: string): string {
   let openFence: string | undefined;
   const lines = markdown.split("\n").filter((line) => {
     if (openFence === undefined) {
-      openFence = line.match(FENCE_OPENING)?.[1];
+      openFence = fenceOpenedBy(line);
       return openFence === undefined;
     }
-    const closing = line.match(FENCE_CLOSING)?.[1];
-    if (closing?.[0] === openFence[0] && closing.length >= openFence.length) openFence = undefined;
+    if (closesFence(line, openFence)) openFence = undefined;
     return false;
   });
   return lines.join("\n").replace(INLINE_CODE, "");

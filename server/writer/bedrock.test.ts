@@ -187,6 +187,17 @@ describe("a run with the Bedrock writer", () => {
     expect(await setup.store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe(GOOD_BODY);
   });
 
+  it("makes the model's straight quotes typographic, outside code, and stores exactly what it streamed", async () => {
+    const body = `The bride's line: "Don't go." See [the 'Director'](section:the-show-must-stop "It's").\n\n\`\`\`json\n{"gesture": "none"}\n\`\`\`\n`;
+    const setup = await setUp({ pieces: inPieces(body, 3) });
+    const events = await runEvents(setup);
+    const streamed = events.flatMap((event) => (event.event === "append" ? [event.data.text] : [])).join("");
+    expect(streamed).toBe(
+      `The bride’s line: “Don’t go.” See [the ‘Director’](section:the-show-must-stop "It's").\n\n\`\`\`json\n{"gesture": "none"}\n\`\`\`\n`,
+    );
+    expect(await setup.store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe(streamed);
+  });
+
   it("fails with error, and stores nothing, when the output is rejected", async () => {
     const setup = await setUp({ pieces: ["Every room.[^missing]\n"] });
     expect((await runEvents(setup)).at(-1)).toEqual({ event: "failed", data: { reason: "error" } });

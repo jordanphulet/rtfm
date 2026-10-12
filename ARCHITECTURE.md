@@ -62,7 +62,9 @@ server/
     fake.ts               plays the seed body at a steady pace
     bedrock.ts            writes through the gateway, choosing an example section
     prompt.ts             builds the prompt
-    section-text.ts       holds back the opening and yields whole words
+    section-text.ts       holds back the opening, typesets quotes and yields whole words
+    typographic-quotes.ts curly quotes and apostrophes, outside code and link targets
+    code-fences.ts        where a fenced code block opens and closes
     validate.ts           cheap output checks
   agent/
     loop.ts               runAgent: model turns and tool calls through the gateway (section 6)
@@ -429,7 +431,33 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   "Absolutely" and is at most 40 characters, names the section or a draft, or says "here is"; or
   ends with a colon and names the section or a draft. "Of course, the first thing a guest hears
   is the door." is kept. The first line is usually the first paragraph, so the first chunk is
-  that whole paragraph. After that, the text is never changed.
+  that whole paragraph. After that, nothing is dropped, and text already shown never changes.
+- **Typographic quotes** (`writer/typographic-quotes.ts`). Straight quotes and apostrophes in
+  the body become “ ” ‘ ’, as the seed manuals are written, wherever the prompt's punctuation
+  rule slipped. The body (after the opening, before whole words are cut) is typeset as a whole
+  each time text arrives. Each quote is decided by the text before it and the rest of its word,
+  and whole-word yielding shows a word only once the whitespace after it has arrived, so a quote
+  is final before it is shown: nothing extra is held back, and the stored body is exactly the
+  streamed text. The seed bodies, with their quotes made straight, come back exactly.
+  - **Opening or closing.** A quote opens when it follows whitespace, the start of a line or one
+    of `( [ { > “ ‘ — – - / |` (looking past `*`, `_` and `~`) and is followed by a non-space;
+    otherwise it closes. A single quote that would open is an apostrophe instead before a digit
+    (’90s) or in ’em, ’tis, ’twas, ’til, ’cause and ’n’. Every other single quote is ’:
+    contractions, possessives (after a closing quote too: “The Raven”’s) and closing quotes.
+  - **Measurements.** After a digit, `'` and `"` become primes (5′ 10″, a 12″ step), unless a
+    quote of that kind is open on the line (“Room 101”, ‘Take 2’) or `'` is followed by a letter
+    (1990’s). Open quotes are tracked per line.
+  - **Left alone:** fenced code blocks (the same fence rules as validation); indented code blocks
+    (four spaces or a tab after a blank line, unless the last line before it was a list item or
+    indented, which makes it list content); inline code with any number of backticks (an
+    unclosed run leaves the rest of its line alone); link and image targets with their titles
+    (`](…)`, `section:` links included); the destination and title of a reference definition
+    (its label is typeset like the links that use it, so they still match); autolinks and
+    HTML-like tags (`<` then a letter, `/`, `!` or `?`, up to `>`); bare URLs (`http://`,
+    `https://` or `www.` up to whitespace, since GFM keeps a straight trailing quote out of the
+    link but a curly one in it, so `"https://…"` keeps its straight closing quote); and
+    backslash escapes.
+  - A quote that opens with a digit (‘5 o’clock’) gets an apostrophe.
 - **Whole words only.** It yields only up to the last whitespace and holds back the rest until
   more arrives or the stream ends. Chunks therefore end on whole words, like the fake's. Bedrock
   sends small deltas, so a section arrives as about 400 `append` events over 12–15 seconds.
