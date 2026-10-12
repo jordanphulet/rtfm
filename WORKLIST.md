@@ -520,7 +520,7 @@ When this phase is done:
   where a fix is visible, and each change is explained.
 
 ### OH.8 — The landing page: coming back, the phone delete, and the delete flow (browser audit)
-- **Status:** doing (agent: a713ba4368698c110)
+- **Status:** done
 - **Depends on:** OH.7 (both change `DESIGN.md`)
 - **Files:** `src/home/**`, `src/library/**`, `src/agent/**`, `src/ui/README.md`, `DESIGN.md`
 - **Do:**
@@ -595,3 +595,16 @@ When this phase is done:
   - `npm test` runs some browser tests in happy-dom (from OH.7);
   - anything else OH.5–OH.10 changed that README describes.
 - **Done when:** README.md matches the code.
+
+### OH.12 — The delete confirmation in a short window
+- **Status:** todo
+- **Depends on:** OH.10 (both change `DESIGN.md`)
+- **Files:** `src/home/DeleteConfirmation.tsx`, `src/home/delete-confirmation.css`, its test,
+  `DESIGN.md`
+- **Do:** from 768px up, `placeUnderRow` puts the confirmation above its row when it doesn't fit
+  below, even when it doesn't fit above either, so in a short landscape window (812×375) it can
+  sit partly off the top of the screen. Keep it fully on screen: for example, scroll the row so
+  the confirmation fits on one side, or fall back to the phone placement when neither side fits.
+  Choose the simplest design that keeps the row visible, within DESIGN.md's rules.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; a test covers a short
+  window; live at 812×375 the confirmation and its row are both on screen.
