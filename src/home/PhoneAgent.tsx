@@ -4,6 +4,7 @@ import { Sheet } from "../ui";
 import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
 import { LibrarianHead, Separator, StatusDetail } from "./LibrarianHead";
+import { manualCount } from "./manualCount";
 import { NewestButton } from "./NewestButton";
 import type { AgentSideProps } from "./agentSide";
 import { useStickToBottom } from "./useStickToBottom";
@@ -110,7 +111,7 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
             <span className="dock-label" aria-hidden="true">
               <span className="dock-name">Library</span>
               <Separator />
-              {describeManuals(manuals.length)}
+              {manualCount(manuals.length)}
             </span>
           ) : (
             <span className="dock-label">
@@ -129,9 +130,4 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
 /** The automatic open at load moves nothing: focus stays where the page left it. */
 function focusWhereItIs(): HTMLElement {
   return document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
-}
-
-function describeManuals(count: number): string {
-  if (count === 0) return "No manuals";
-  return count === 1 ? "1 manual" : `${count} manuals`;
 }

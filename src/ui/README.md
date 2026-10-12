@@ -214,19 +214,19 @@ Other props (`id`, `className`, `role`, `aria-*`, `onClick`, …) go to the pane
 
 ```tsx
 <Sheet
-  id="delete-sheet"
   role="alertdialog"
   aria-modal="true"
   aria-labelledby="delete-title"
   aria-describedby="delete-body"
   open={open}
   onClose={close}
+  focusOnOpen={(sheet) => sheet.querySelector<HTMLElement>("[data-keep]")}
   className="confirm"
 >
-  <h2 id="delete-title">Delete The Haunt That Listens?</h2>
+  <h2 id="delete-title">Delete “The Haunt That Listens”?</h2>
   <p id="delete-body">It leaves your library. This can’t be undone.</p>
-  <button type="button" className="text-button" onClick={close}>Keep it</button>
-  <button type="button" className="text-button" onClick={confirmDelete}>Delete</button>
+  <button type="button" className="confirm-delete" onClick={confirmDelete}>Delete manual</button>
+  <button type="button" className="text-button" data-keep onClick={close}>Keep it</button>
 </Sheet>
 ```
 

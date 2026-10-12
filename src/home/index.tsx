@@ -1,21 +1,21 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
-import { useNavigate } from "react-router";
+import { useNavigate, useNavigationType } from "react-router";
 import { useAgent, type AgentAction, type AgentMessage, type UseAgentResult } from "../agent";
-import { deleteManual, refreshLibrary, removeFromLibrary, useLibrary, type ManualSummary } from "../library";
+import { refreshLibrary, useLibrary, type ManualSummary } from "../library";
 import "../ui";
 import type { AgentSideProps } from "./agentSide";
 import { STARTER_PROMPT } from "./cuePrompts";
-import { DeleteConfirmation, failureText, type DeleteStage } from "./DeleteConfirmation";
-import { deleteOutcomeForLibrarian } from "./deleteOutcome";
+import { DeleteConfirmation } from "./DeleteConfirmation";
 import { Ledger } from "./Ledger";
 import { LibrarianPanel } from "./LibrarianPanel";
 import { LibraryErrorBoundary } from "./LibraryErrorBoundary";
 import { LibraryHead } from "./LibraryHead";
-import { collapse, flash } from "./motion";
+import { flash } from "./motion";
 import { PhoneAgent } from "./PhoneAgent";
 import { namedManuals, namedWhenSent } from "./references";
 import { replyFailureWords } from "./replyFailure";
+import { useDeleteFlow } from "./useDeleteFlow";
 import { useFocusShortcut } from "./useFocusShortcut";
 import { useMediaQuery } from "./useMediaQuery";
 import "./tokens.css";
@@ -23,6 +23,9 @@ import "./page.css";
 
 const WIDE = "(min-width: 1024px)";
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
+
+/** Set by the first mount, so the conversation sheet opens on load once per page load. */
+let homeHasMounted = false;
 
 export default function Home() {
   return (
@@ -36,34 +39,15 @@ function HomePage() {
   const manuals = useLibrary();
   const agent = useAgent();
   const navigate = useNavigate();
+  const arrivedBy = useNavigationType();
   const wide = useMediaQuery(WIDE);
-  const [loadedWithConversation] = useState(() => agent.messages.length > 0);
-  const [hasBeenWide, setHasBeenWide] = useState(wide);
-  if (wide && !hasBeenWide) setHasBeenWide(true);
+  const [sheetOpensOnLoad, setSheetOpensOnLoad] = useState(() => !homeHasMounted && !wide && agent.messages.length > 0);
+  if (wide && sheetOpensOnLoad) setSheetOpensOnLoad(false);
   const [draft, setDraft] = useState("");
-  const [toDelete, setToDelete] = useState<ManualSummary | null>(null);
-  const [deleteStage, setDeleteStage] = useState<DeleteStage>("confirming");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [deleteNotice, setDeleteNotice] = useState("");
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const startRef = useRef<HTMLButtonElement>(null);
   const rows = useRef(new Map<string, HTMLLIElement>());
-  const focusAfterKeep = useRef<HTMLElement | null>(null);
-  const proposedByLibrarian = useRef(false);
-
-  useFocusShortcut(fieldRef);
-
-  useEffect(() => {
-    if (window.matchMedia(WIDE).matches && window.matchMedia(FINE_POINTER).matches) {
-      fieldRef.current?.focus({ preventScroll: true });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (toDelete !== null) return;
-    focusAfterKeep.current?.focus();
-    focusAfterKeep.current = null;
-  }, [toDelete]);
 
   const registerRow = useCallback((id: string, row: HTMLLIElement | null) => {
     if (row) rows.current.set(id, row);
@@ -71,6 +55,30 @@ function HomePage() {
   }, []);
 
   const findRow = useCallback((id: string) => rows.current.get(id) ?? null, []);
+
+  const deletion = useDeleteFlow({
+    manuals,
+    findRow,
+    fieldRef,
+    startRef,
+    reportDeleteOutcome: agent.reportDeleteOutcome,
+  });
+
+  useFocusShortcut(fieldRef);
+
+  useLayoutEffect(() => {
+    if (arrivedBy === "PUSH") window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    homeHasMounted = true;
+  }, []);
+
+  useEffect(() => {
+    if (window.matchMedia(WIDE).matches && window.matchMedia(FINE_POINTER).matches) {
+      fieldRef.current?.focus({ preventScroll: true });
+    }
+  }, []);
 
   const lastSent = agent.messages.findLast((message) => message.role === "user");
   const namedIds = new Set(markedManuals(draft, lastSent, manuals).map((manual) => manual.id));
@@ -110,12 +118,6 @@ function HomePage() {
     flash(row);
   }
 
-  function askToDelete(manual: ManualSummary, byLibrarian = false) {
-    proposedByLibrarian.current = byLibrarian;
-    setDeleteStage("confirming");
-    setToDelete(manual);
-  }
-
   /**
    * Carries out the librarian's action. A created manual is loaded into the library at once. Any
    * other action waits for no confirmation to be open. A proposed delete for a manual the page
@@ -127,7 +129,7 @@ function HomePage() {
       void refreshLibrary();
       return;
     }
-    if (toDelete) return;
+    if (deletion.toDelete) return;
     if (action.type === "open") {
       navigate(`/read/${encodeURIComponent(action.manualId)}`);
       return;
@@ -137,48 +139,7 @@ function HomePage() {
     if (!manual) return;
     await showLibrary?.();
     findRow(manual.id)?.scrollIntoView({ block: "nearest", behavior: "instant" });
-    askToDelete(manual, true);
-  }
-
-  function keep() {
-    if (deleteStage === "deleting" || !toDelete) return;
-    tellLibrarian("keep");
-    focusAfterKeep.current = proposedByLibrarian.current ? fieldRef.current : rowDelete(toDelete.id);
-    setToDelete(null);
-  }
-
-  function tellLibrarian(closedBy: "keep" | "delete") {
-    const outcome = deleteOutcomeForLibrarian(closedBy, deleteStage, proposedByLibrarian.current);
-    if (outcome) agent.reportDeleteOutcome(outcome);
-  }
-
-  function rowDelete(id: string): HTMLElement | null {
-    return findRow(id)?.querySelector(".row-delete") ?? null;
-  }
-
-  async function confirmDelete(manual: ManualSummary) {
-    setDeleteStage("deleting");
-    setDeleteNotice("");
-    const result = await deleteManual(manual.id);
-    if (result !== "deleted") {
-      setDeleteStage(result);
-      setDeleteNotice(`Couldn’t delete ${manual.title}. ${failureText(result)}`);
-      return;
-    }
-
-    tellLibrarian("delete");
-    const index = manuals.findIndex((each) => each.id === manual.id);
-    const neighbour = manuals[index + 1] ?? manuals[index - 1];
-    const row = findRow(manual.id);
-    setToDelete(null);
-    if (row) await collapse(row);
-    removeFromLibrary(manual.id);
-    setDeleteNotice(`Deleted ${manual.title}.`);
-    requestAnimationFrame(() => {
-      if (proposedByLibrarian.current) return fieldRef.current?.focus();
-      const next = neighbour && findRow(neighbour.id)?.querySelector<HTMLElement>(".row-title");
-      (next ?? startRef.current)?.focus();
-    });
+    deletion.askToDelete(manual, true);
   }
 
   function skipToLibrarian(event: MouseEvent) {
@@ -199,12 +160,12 @@ function HomePage() {
   return (
     <div className="ui home">
       <p className="visually-hidden" aria-live="polite">
-        {deleteNotice}
+        {deletion.notice}
       </p>
       <p className="visually-hidden" aria-live="polite">
         {agentNotice(agent)}
       </p>
-      <div className="page" inert={toDelete !== null}>
+      <div className="page" inert={deletion.toDelete !== null}>
         <a className="skip-link" href="#librarian-field" onClick={skipToLibrarian}>
           Skip to the librarian
         </a>
@@ -215,8 +176,8 @@ function HomePage() {
               manuals={manuals}
               namedIds={namedIds}
               hoveredId={hoveredId}
-              liftedId={toDelete?.id ?? null}
-              onDelete={askToDelete}
+              liftedId={deletion.toDelete?.id ?? null}
+              onDelete={deletion.askToDelete}
               registerRow={registerRow}
               onStartNewManual={startNewManual}
               onAskLibrarian={focusField}
@@ -226,15 +187,15 @@ function HomePage() {
         {wide ? (
           <LibrarianPanel {...side} />
         ) : (
-          <PhoneAgent {...side} openOnMount={loadedWithConversation && !hasBeenWide} />
+          <PhoneAgent {...side} openOnMount={sheetOpensOnLoad} />
         )}
       </div>
       <DeleteConfirmation
-        manual={toDelete}
-        stage={deleteStage}
+        manual={deletion.toDelete}
+        stage={deletion.stage}
         findRow={findRow}
-        onKeep={keep}
-        onDelete={confirmDelete}
+        onKeep={deletion.keep}
+        onDelete={deletion.confirm}
       />
     </div>
   );

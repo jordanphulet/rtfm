@@ -1,11 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { DeleteResult, ManualSummary } from "../library";
 import { Sheet } from "../ui";
+import { useMediaQuery } from "./useMediaQuery";
 import "./delete-confirmation.css";
 
 const GAP_PX = 8;
 const EDGE_PX = 16;
 const MIN_WIDTH_PX = 360;
+const PHONE = "(max-width: 767px)";
+const CONFIRM_HEIGHT = "--confirm-height";
 
 export type DeleteStage = "confirming" | "deleting" | Exclude<DeleteResult, "deleted">;
 
@@ -22,12 +25,21 @@ export function DeleteConfirmation({ manual, stage, findRow, onKeep, onDelete }:
   if (manual && manual !== shown) setShown(manual);
 
   const anchorRef = useRef<HTMLDivElement>(null);
+  const phone = useMediaQuery(PHONE);
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
     const row = manual && findRow(manual.id);
-    if (anchor && row) placeUnderRow(anchor, row);
-  }, [manual, stage, findRow]);
+    if (!anchor || !row) return;
+    if (!phone) {
+      placeUnderRow(anchor, row);
+      return;
+    }
+    scrollRowAbove(anchor, row);
+    return () => {
+      document.documentElement.style.removeProperty(CONFIRM_HEIGHT);
+    };
+  }, [manual, stage, findRow, phone]);
 
   const open = manual !== null;
   const deleting = stage === "deleting";
@@ -114,6 +126,17 @@ function placeUnderRow(anchor: HTMLDivElement, row: HTMLElement) {
   const fitsBelow = rowBox.bottom + GAP_PX + height <= window.innerHeight - EDGE_PX;
   const top = fitsBelow ? rowBox.bottom + GAP_PX : rowBox.top - GAP_PX - height;
   anchor.style.setProperty("--confirm-top", `${top}px`);
+}
+
+/**
+ * On phone the confirmation is fixed to the bottom edge, so the page scrolls until the row ends
+ * 8px above it. `--confirm-height`, on `<html>` while it is open, gives the library room below its
+ * last row to scroll that far.
+ */
+function scrollRowAbove(anchor: HTMLDivElement, row: HTMLElement) {
+  document.documentElement.style.setProperty(CONFIRM_HEIGHT, `${anchor.offsetHeight}px`);
+  const overlap = row.getBoundingClientRect().bottom + GAP_PX - anchor.getBoundingClientRect().top;
+  if (overlap > 0) window.scrollBy({ top: overlap, behavior: "instant" });
 }
 
 function textInset(anchor: HTMLDivElement): number {

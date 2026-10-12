@@ -1,5 +1,6 @@
 import type { Ref } from "react";
 import type { ManualSummary } from "../library";
+import { manualCount } from "./manualCount";
 import "./library-head.css";
 
 interface LibraryHeadProps {
@@ -21,10 +22,10 @@ export function LibraryHead({ manuals, onStartNewManual, startRef }: LibraryHead
 }
 
 function summary(manuals: ManualSummary[]): string {
-  if (manuals.length === 0) return "No manuals";
+  const count = manualCount(manuals.length);
+  if (manuals.length === 0) return count;
   const written = sum(manuals.map((manual) => manual.writtenCount));
   const sections = sum(manuals.map((manual) => manual.sectionCount));
-  const count = manuals.length === 1 ? "1 manual" : `${manuals.length} manuals`;
   return `${count} · ${written} of ${sections} sections written`;
 }
 

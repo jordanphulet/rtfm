@@ -1248,9 +1248,9 @@ the library's gutter). Two rows, 4px apart:
    `--ink-muted`. Left: it names the half you'd go to.
    - Sheet closed: `Librarian` (600 `--ink-strong`) and the same status as the panel header
      (`· Try asking`, `· 6 messages`, `· ◉ Thinking…`, `· ◉ Replying…`).
-   - Sheet open: `Library · 7 manuals` (`No manuals`, `1 manual`), `aria-hidden`, so the button's
-     accessible name is "Hide ↓" with `aria-expanded`. The live status is already in the sheet's
-     own header, so it isn't said twice.
+   - Sheet open: `Library · 7 manuals` (`No manuals`, `1 manual`: the library head's wording,
+     from `manualCount.ts`), `aria-hidden`, so the button's accessible name is "Hide ↓" with
+     `aria-expanded`. The live status is already in the sheet's own header, so it isn't said twice.
 2. **The composer:** the same field and Send, side by side: the field one line tall (44px), growing
    to four lines; Send 44 × 44 to its right. No readout slot (there's no `/` on touch).
 
@@ -1279,9 +1279,10 @@ down to the top of the dock (the dock and sheet share one fixed grid, so the doc
     appears.
 - It **opens by itself** when you send, so your message and the thinking line are in view, and
   **on load when the conversation isn't empty** (the URL options), so the newest message is in
-  view. That second case applies only to a page that loads narrow and has never been wide:
-  narrowing a desktop window with a conversation shows the library, not a sheet popping open. The
-  scrolling rules are the panel's.
+  view. That second case happens once per page load, on the landing page's first showing, and
+  only if the page is narrow then and hasn't been wide since: narrowing a desktop window with a
+  conversation shows the library, not a sheet popping open, and coming back from the reader shows
+  the library too. The scrolling rules are the panel's.
 - It rises with the `Sheet`'s fade, overridden to `translateY(8px → 0)` because it comes from
   below.
 - A named-manual link closes the sheet first, then jumps to the row.
@@ -1323,7 +1324,12 @@ delete, and a new manual](#opening-proposing-a-delete-and-a-new-manual)): the sa
   above the scrim's.
 - **Phone placement (below 768px):** fixed to the bottom edge, full width, over the dock; a 1px
   `--rule-strong` top line, padding 20px 16px plus the safe-area inset; it rises
-  (`translateY(8px → 0)`).
+  (`translateY(8px → 0)`). If it would cover the row, the page scrolls (instant) until the row
+  ends 8px above it, measured on open and again when its text changes. While it's open the
+  library's bottom padding is at least its height plus 8px (`--confirm-height` on `<html>`, set
+  when it is measured and removed when it closes), so even the last row can scroll clear of it.
+- **Crossing 768px while it's open** (a phone turned sideways, a window resized): it takes the
+  other placement at once, placed by the row from 768px up, or scrolling the row clear below.
 - **Content:**
   - `Delete “The Birthday Party Field Manual”?` `--text-h3` 600 `--ink-strong`, `balance`; 8px.
   - `It leaves your library with its 3 written sections. This can’t be undone.` `--text-ui`
@@ -1343,7 +1349,10 @@ delete, and a new manual](#opening-proposing-a-delete-and-a-new-manual)): the sa
   the row collapses (height, padding, margin and opacity to 0 with the Web Animations API, timed
   by `--dur-base` and `--ease-in-out` read from the tokens, so reduced motion makes it instant),
   then `removeFromLibrary(id)`, and the rows below close up.
-  Focus moves to the next row's title link, else the previous row's, else **Start a new manual ›**.
+  Focus moves to the next row's title link, else the previous row's, in the library as it is
+  once the row has collapsed (a manual created meanwhile counts; if a refresh has already left
+  the deleted one out, the row now at its place, else the one before), else **Start a new
+  manual ›**.
   A polite live region says `Deleted The Birthday Party Field Manual.` The librarian says nothing:
   it didn't do it.
 
@@ -1377,6 +1386,8 @@ so in place, in its own style (re-measured, so it still clears the row):
   loaded at once and fetches it again in the background, so counts written in the meantime
   appear; nothing blanks or jumps. If that fetch fails, the list already shown stays. In
   development, StrictMode's double mount makes the first visit fetch twice, which is harmless.
+- **Where it opens:** a link to `/` (the reader's Library) opens it at the top, not at the
+  reader's scroll position. Back leaves the scroll to the browser, which restores where you were.
 - **`?library=empty`** is passed on to the server, whose preview answers with no manuals.
 
 ### The library can’t be reached
@@ -1512,9 +1523,11 @@ librarian: `useAgent()`, `useAgentActions()`, `LIBRARIAN_LIMITS`).
 - `index.tsx`: `Home` wraps `HomePage` in `LibraryErrorBoundary` (its own file, styled by
   `library-error.css`), which shows the unreachable notice. `HomePage` is the `ui home` root. It
   owns what the library and the librarian share (the draft, the named manuals, the hovered row,
-  the jump, the delete flow and focus return) and the two live regions. `page.css` holds the
-  two-column page, the narrow-width padding and the touch overrides for shared hovers;
-  `tokens.css` the sizes above.
+  the jump, the rows) and the two live regions, and starts at the top after a link.
+  `useDeleteFlow.ts` holds the delete flow: the manual being confirmed, the stage, the notice,
+  Keep it and Delete manual, telling the librarian how its delete ended, and focus return.
+  `page.css` holds the two-column page, the narrow-width padding and the touch overrides for
+  shared hovers; `tokens.css` the sizes above.
 - One component per file, each importing its own stylesheet: `LibraryHead`, `Ledger`, `LedgerRow`
   (styled by `ledger.css`), `SectionStrip`, `DeleteConfirmation` (with the scrim),
   `LibrarianPanel` (desktop), `PhoneAgent` (the dock and the conversation sheet),
@@ -1526,9 +1539,14 @@ librarian: `useAgent()`, `useAgentActions()`, `LIBRARIAN_LIMITS`).
   `LibrarianPanel` and `PhoneAgent` receive them with `useAgentActions`, and `PhoneAgent` closes
   its sheet before a proposed delete.
 - Helpers: `references.ts` (the matcher and `namedWhenSent`), `cuePrompts.ts` (the cues and the
-  starter prompt), `replyFailure.ts` (a failed reply's words), `agentSide.ts` (the props the panel
-  and the phone dock share), `motion.ts`
-  (the target flash and the row collapse), `useStickToBottom.ts`, `useFocusShortcut.ts`,
-  `useMediaQuery.ts`.
+  starter prompt), `replyFailure.ts` (a failed reply's words), `manualCount.ts` (`7 manuals` for
+  the head and the dock), `agentSide.ts` (the props the panel and the phone dock share),
+  `motion.ts` (the target flash and the row collapse), `useStickToBottom.ts`,
+  `useFocusShortcut.ts`, `useMediaQuery.ts`.
 - Tests: `references.test.ts` (the matcher), `Turn.test.tsx` (the named-manual line after a
-  delete, and a failed reply's note) and `DeleteConfirmation.test.tsx` (its words in each stage).
+  delete, and a failed reply's note), `DeleteConfirmation.test.tsx` (its words in each stage,
+  and its placement at each width, including crossing 768px while open),
+  `useStickToBottom.test.tsx` (following, and never pulling you down) and `HomePage.test.tsx`
+  (the librarian's actions, focus after a delete or Keep it, where the page opens, and the
+  sheet's open on load). The DOM tests run in happy-dom; `fakeWidth.ts` stands in for
+  `matchMedia` at a page width.

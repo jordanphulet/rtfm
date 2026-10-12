@@ -97,6 +97,10 @@ html:has(.home .confirm[data-open]) {
 }
 
 @media (max-width: 767px) {
+  html:has(.home .confirm[data-open]) .home .library {
+    padding-bottom: max(calc(var(--dock-height) + var(--space-6)), calc(var(--confirm-height, 0px) + var(--space-2)));
+  }
+
   .home .confirm-anchor {
     top: auto;
     right: 0;
