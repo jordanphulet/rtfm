@@ -9,19 +9,12 @@ code and this doc disagree, one of them is a bug.
 
 - A web app for reading hypothetical manuals. An LLM writes a manual's table of contents first,
   then each section when it is first opened.
-- Two pages, both loaded lazily by `src/App.tsx`:
+- Two pages (the routes are in `README.md` › Where things live):
   - **The landing page** (`/`, `src/home/`): your library of manuals, beside a librarian agent
-    you talk to.
-  - **The reader** (`/read/:manualId` is a manual's start page, `/read/:manualId/:sectionId` a
-    section; `src/reader/`): one manual whose table of contents already exists.
-  - Every other path, bare `/read` included, redirects to `/`.
-- A local API server (`server/`, described in `ARCHITECTURE.md`) does the work, with fake models
-  by default or with Claude Haiku 4.5 on Amazon Bedrock:
-  - the reader shows the manual named in its URL, which the server stores, writes and streams in;
-  - the library lists the manuals the same server stores (`src/library/`);
-  - the librarian is an agent on the server that lists, finds, opens and proposes deleting
-    manuals, and starts new ones, which an LLM plans; the page shows its replies, carries out
-    what it opens or proposes, and lists what it creates (`src/agent/`).
+    you talk to, which lists, finds, opens and proposes deleting manuals, and starts new ones.
+  - **The reader** (`/read/<manual>`, `src/reader/`): one manual's start page and its sections.
+- A local API server (`server/`, described in `ARCHITECTURE.md`) stores the manuals, writes their
+  sections, and runs the librarian.
 - **Failure states only where something can fail:** a section the server couldn't write has two
   (see [When a section can’t be written](#when-a-section-cant-be-written)); on the landing page,
   the library can fail to load ([The library can’t be reached](#the-library-cant-be-reached)), a
@@ -32,33 +25,10 @@ code and this doc disagree, one of them is a bug.
 
 ## Data model
 
-The API's types, defined in `server/api/types.ts` and re-exported by `src/manual/types.ts`. The
-reader reads them and never changes them.
-
-```ts
-interface Manual {
-  id: string;
-  title: string;
-  subtitle: string;
-  chapters: Chapter[];
-  appendices: Chapter[];  // same shape as chapters, lettered A, B, …
-}
-
-interface Chapter {
-  id: string;
-  label: string;          // "3" for chapters, "B" for appendices
-  title: string;
-  sections: Section[];
-}
-
-interface Section {
-  id: string;
-  label: string;          // "3.2" or "B.1"
-  title: string;
-  summary: string;        // one line, always available (it comes with the TOC)
-  status: "unwritten" | "writing" | "written";
-}
-```
+The API's types live in `server/api/types.ts`; the reader reads them and never changes them. A
+manual has a title, a subtitle, numbered chapters and lettered appendices (`A`, `B`), each holding
+labelled sections (`3.2`, `B.1`). Every section has a one-line summary, which comes with the table
+of contents and so is always available, and a status: `unwritten`, `writing` or `written`.
 
 A section's body is not part of the manual: the reader fetches it when the section is opened.
 Opening an `unwritten` section switches it to `writing`; the server writes it and streams it in,
@@ -66,8 +36,8 @@ and the section becomes `written`. If the server can't write it, the section goe
 `unwritten` and the reader says why. The hooks and the markdown renderer that expose this are
 documented in `src/manual/README.md`, and the API in `ARCHITECTURE.md`.
 
-The landing page lists summaries of manuals (`ManualSummary`, from the same file: id, title,
-subtitle and the chapter, section and written counts), documented in `src/library/README.md`.
+The landing page lists summaries of manuals (`ManualSummary`), documented in
+`src/library/README.md`.
 
 ## Reader behavior
 
@@ -79,7 +49,8 @@ These rules are locked: any change to the reader keeps them.
 - A section that is waiting for its first words shows its **title and summary**. Never a blank page.
 
 **Streaming**
-- Streaming text appears **in the final reading layout**, styled exactly as it will be when finished.
+- Streaming text appears **in the final reading layout**, styled exactly as it will be when
+  finished.
 - **Raw markdown syntax never shows**, even mid-stream. The renderer in `src/manual/` handles this.
 - **Nothing above the reading position moves** while text streams in.
 - **The page never scrolls on its own.** If the reader is at the bottom, they can choose to follow.
@@ -195,11 +166,11 @@ generic"):
 | Emoji as icons | None. Every mark is a glyph IBM Plex contains (`‹ › ↑ ↓`) or is drawn in CSS (rings, chevron, corner mark, tick). |
 | Rounded cards with shadows | Nothing is a card. The start page is a list; code is a tinted block with 2px corners; no shadows anywhere. |
 | Pill badges | Status is a ring plus a word. The TOC's current-row tint is square; start-page and ledger row tints have 4px corners. |
-| Inter on slate-900 | IBM Plex on low-chroma graphite `#121314` (slate-900 is a saturated blue). |
+| Inter on slate-900 | IBM Plex on low-chroma graphite (slate-900 is a saturated blue). |
 | Purple or blue accent | One cue-light green with exactly two meanings (live, actionable). It never decorates. |
 | A border on every element | Hairlines with a named job only: head rule, `hr`, table rows, outline track, pager tops, previews, compact header, appendix dividers, start-page chapter lines. Columns are separated by tone or space. |
 | Centering everything | All text is left-aligned (only the pager's "Next" is right-aligned, pointing forward). |
-| Giant hero heading | A 35px title, then the contents immediately. |
+| Giant hero heading | A `--text-title` title, then the contents immediately. |
 | Decorative icons | Every glyph carries state or direction. No icons beside TOC entries. |
 
 Also avoided: uppercase tracked eyebrows (labels are sentence case), 8–16px rounding on
@@ -227,47 +198,47 @@ rack of prompt books (see "The landing page").
 
 Every color, type size, spacing step, radius and timing is a custom property in
 `src/ui/tokens.css`, set on `:root` and shared by both pages. `src/ui/README.md` lists them with
-how to use them; this section says why they are what they are. Each page's own layout and
-component sizes are in its `tokens.css` (`src/reader/tokens.css` on `.reader`,
-`src/home/tokens.css` on `.home`) and are listed under that page. No other file defines a color,
-type size, spacing step, radius or timing.
+their values and how to use them; this section says why they are what they are. Each page's own
+layout and component sizes are in its `tokens.css` (`src/reader/tokens.css` on `.reader`,
+`src/home/tokens.css` on `.home`). No other file defines a color, type size, spacing step, radius
+or timing.
 
 ### Typefaces
 
 | Role | Font (loaded by `src/ui/fonts.ts`) | Settings | Why |
 | --- | --- | --- | --- |
 | Text and interface | **IBM Plex Sans Variable**, `--font-sans` | wght 400 / 500 / 600; wdth 100 for reading, **85** (`--wdth-tight`) for dense UI: the TOC, outline, tables, pager, previews and the librarian's header and lines | Engineering-manual lineage, and it has every glyph the content needs (`I²C`, `1½`, `N·m`, `‹ ›`, `↑ ↓`). wdth 85 packs dense UI about 6% tighter without a second family. |
-| Code and readouts | **IBM Plex Mono**, `--font-mono` | 400 | Same superfamily, so metrics and texture match. It is the "machine voice" for status readouts, language tags, percentages and counts. |
+| Code and readouts | **IBM Plex Mono**, `--font-mono` | 400 and 700, roman and italic, are loaded; readouts use 400 | Same superfamily, so metrics and texture match. It is the "machine voice" for status readouts, language tags, percentages and counts. |
 
 Body italics are Plex's true italic. No `font-optical-sizing` (Plex has no opsz axis). Measured on
 the sample text: Plex Sans 17px is about 7.58px per character, 16px about 7.13px.
 
 ### Type scale
 
-Minor third (×1.2) on a 17px base; line heights on the 4px grid. Each size is a `--text-*` token
-with a matching `--leading-*` token.
+A minor third (×1.2) on the body size, with line heights on the 4px grid. Each size is a
+`--text-*` token with a matching `--leading-*` token.
 
-| Token | Size / line | Weight · width | Use |
-| --- | --- | --- | --- |
-| `--text-micro` | 12 / 16 | Mono 400, +0.02em; or Sans 600 | Status readouts, code language tag, table headers, outline and group labels, the ledger's column header and readouts |
-| `--text-ui` | 14 / 20 | 400–600 · wdth 85 (TOC, outline, tables, previews) or 100 (footnotes, start-page summaries, ledger subtitles, cues) | TOC, outline, tables, previews, footnotes, start-page summaries, subtitles in the ledger, cues |
-| `--text-reply` | 16 / 24 | 400 · wdth 100 | The librarian's replies (`ReplyMarkdown`), your messages and the field |
-| `--text-body` | **17 / 28** (phone **16 / 24**) | 400 · wdth 100 | Paragraphs, lists, H4, pager titles, ledger titles |
-| `--text-lead` | 20 / 28 (phone 17 / 28) | 400 | Section summary, start-page subtitle, blockquotes, the empty library's sentence |
-| `--text-h3` | 20 / 28 | 600, −0.005em | H3, start-page chapter headings, the empty conversation's "Ask about your manuals", the delete confirmation's title |
-| `--text-h2` | 24 / 32 | 600, −0.008em | H2, start-page "Appendices" |
-| `--text-h1` | 29 / 36 | 600, −0.012em | Section title |
-| `--text-title` | 35 / 40 (phone 29 / 36) | 600, −0.015em | The page's one largest title: the manual title on the start page, `Library` on the landing page |
+| Token | Weight · width | Use |
+| --- | --- | --- |
+| `--text-micro` | Mono 400, +0.02em; or Sans 600; or Sans 400 wdth 85 | Status readouts, code language tag, table headers, outline and group labels, the ledger's column header and readouts; the status legend (Sans 400) |
+| `--text-ui` | 400–600 · wdth 85 (TOC, outline, tables, previews) or 100 (footnotes, start-page summaries, ledger subtitles, cues) | TOC, outline, tables, previews, footnotes, start-page summaries, subtitles in the ledger, cues |
+| `--text-reply` | 400 · wdth 100 | The librarian's replies (`ReplyMarkdown`), your messages and the field |
+| `--text-body` | 400 · wdth 100 | Paragraphs, lists, H4, pager titles, ledger titles |
+| `--text-lead` | 400 | Section summary, start-page subtitle, blockquotes, the empty library's sentence |
+| `--text-h3` | 600, −0.005em | H3, start-page chapter headings, the empty conversation's "Ask about your manuals", the delete confirmation's title, the unreachable library's title |
+| `--text-h2` | 600, −0.008em | H2, start-page "Appendices" |
+| `--text-h1` | 600, −0.012em | Section title |
+| `--text-title` | 600, −0.015em | The page's one largest title: the manual title on the start page, `Library` on the landing page |
 
-"Phone" means below 768px. The phone body steps off the scale to 16/24 on purpose: at 375px it
-keeps the measure at about 48 characters (17px would sit at the 45 limit), and a short line wants
-tighter leading. `--text-reply` takes the same 16/24 at every width, for the same reason: replies
-sit in narrow columns. It is the smallest size for text people read.
+"Phone" means below 768px. On phone the body steps off the scale on purpose: at 375px it keeps
+the measure at about 48 characters (the desktop size would sit at the 45 limit), and a short line
+wants tighter leading. `--text-lead` and `--text-title` step down with it. `--text-reply` is the
+phone body size at every width, for the same reason: replies sit in narrow columns. It is the
+smallest size for text people read.
 
 ### Spacing
 
-The 4px grid, `--space-1` (4px) to `--space-24` (96px); the steps are listed in
-`src/ui/README.md`.
+The 4px grid, `--space-1` to `--space-24`; the steps are listed in `src/ui/README.md`.
 
 ### Palette: graphite and the GO light
 
@@ -275,56 +246,51 @@ The booth's console: charcoal panels, off-white legends, and the cue light. A st
 light turns green for **GO**, the moment something happens live, which is exactly this accent's
 job. A muted signal green (not neon, not teal), so it reads as an indicator lamp, not a brand.
 
-| Token | Hex | Role | Contrast on ground |
-| --- | --- | --- | --- |
-| `--ground` | `#121314` | Page: graphite, neutral with a faint cool lean; the librarian's field (an inset) | — |
-| `--ground-side` | `#17191B` | The TOC column, the librarian's panel and dock; the tonal step *is* the divider (no border) | — |
-| `--ground-raised` | `#1C1E20` | Code blocks, previews, skip link, the delete confirmation | — |
-| `--ground-tint` | `#24272A` | Current TOC row, inline code, hover on buttons and start-page rows, the ready Send button | — |
-| `--ground-hover` | `#1E2023` | TOC and ledger row hover (lighter than the current row, so "here" stays unique) | — |
-| `--rule` | `#2B2E31` | Table row lines, outline track, compact header line, start-page chapter lines, the ledger's closing line, the composer and dock top lines | — |
-| `--rule-strong` | `#3C4044` | Head rule, `hr`, table header line, pager rules, preview border, appendix dividers, the ledger's header line, the rule beside your messages | — |
-| `--ink-strong` | `#EDEFEF` | Headings, `strong`, current items | 16.1:1 |
-| `--ink` | `#D3D7D8` | Body text (cool off-white, no cream) | 12.8:1 |
-| `--ink-muted` | `#AEB4B7` | Summaries, labels, outline, footnotes, the failed status line, written-ring fill and written ticks (1.5:1 above ink-faint, so the two meta tiers stay apart) | 8.9:1 |
-| `--ink-faint` | `#8C9296` | Unwritten titles, label numerals, meta, the field's border (at least 4.7:1 on every ground, including tint) | 5.9:1 |
-| `--cue` | `#5FC48A` | GO green: live/writing state, link hover, footnote references, focus ring (at least 6.9:1 on every ground, including tint) | 8.6:1 |
-| `--cue-deep` | `#377D57` | Link underlines and the writing-link dash (non-text, at least 3:1 on ground) | 3.8:1 |
-| `--cue-tint` | `#15261D` | A briefly highlighted target: a footnote, a ledger row, the field (ink on it 10.9:1) | — |
-| `--selection` | `#22412F` | `::selection` background (ink-strong on it 9.8:1) | — |
+| Token | Role | Contrast on ground |
+| --- | --- | --- |
+| `--ground` | Page: graphite, neutral with a faint cool lean; the librarian's field (an inset) | — |
+| `--ground-side` | The TOC column, the librarian's panel and dock; the tonal step *is* the divider (no border) | — |
+| `--ground-raised` | Code blocks, previews, skip link, the delete confirmation | — |
+| `--ground-tint` | Current TOC row, inline code, hover on buttons and start-page rows, the ready Send button | — |
+| `--ground-hover` | TOC and ledger row hover (lighter than the current row, so "here" stays unique) | — |
+| `--rule` | Table row lines, outline track, compact header line, start-page chapter lines, the ledger's closing line, the composer and dock top lines | — |
+| `--rule-strong` | Head rule, `hr`, table header line, pager rules, preview border, appendix dividers, the ledger's header line, the rule beside your messages | — |
+| `--ink-strong` | Headings, `strong`, current items | 16.1:1 |
+| `--ink` | Body text (cool off-white, no cream) | 12.8:1 |
+| `--ink-muted` | Summaries, labels, outline, footnotes, the failed status line, written-ring fill and written ticks (1.5:1 above ink-faint, so the two meta tiers stay apart) | 8.9:1 |
+| `--ink-faint` | Unwritten titles, label numerals, meta, the field's border (at least 4.7:1 on every ground, including tint) | 5.9:1 |
+| `--cue` | GO green: live/writing state, link hover, footnote references, focus ring (at least 6.9:1 on every ground, including tint) | 8.6:1 |
+| `--cue-deep` | Link underlines and the writing-link dash (non-text, at least 3:1 on ground) | 3.8:1 |
+| `--cue-tint` | A briefly highlighted target: a footnote, a ledger row, the field (ink on it 10.9:1) | — |
+| `--selection` | `::selection` background (ink-strong on it 9.8:1) | — |
 
 No second accent. Hairlines are always `--rule` or `--rule-strong`.
 
 ### Radii, motion and sizes
 
-- **Radii:** `--radius-s` 2px (code, inline code, checkboxes, focus ring, small buttons),
-  `--radius-m` 4px (the TOC's `Library` link and manual title, start-page and ledger row
-  highlights, previews, compact header buttons,
-  the librarian's field, the cue rows, the dock's toggle, the delete confirmation). Rings are
-  circles. Nothing else is rounded.
-- **Durations:** `--dur-quick` 150ms (hover color), `--dur-base` 200ms (preview, sheets, outline
-  rows, rows collapsing), `--dur-settle` 250ms (write-head retract, rule color, ring fill,
-  progress fill), `--dur-breathe` 1600ms (the live pulse), `--dur-target` 1600ms (a target
-  highlight fading), `--delay-preview` 300ms.
-- **Easing:** `--ease-out` `cubic-bezier(0.2, 0.8, 0.2, 1)` for things arriving; `--ease-in-out`
-  `cubic-bezier(0.4, 0, 0.2, 1)` for state changes; **linear** for the progress fill (it tracks a
-  measurement, so easing would make it lurch).
-- **Focus:** `--focus-ring` `2px solid var(--cue)`, `--focus-offset` 2px.
-- **Shared sizes:** `--measure` **576px** (about 76 characters of 17px Plex) · `--tap` 44px (touch
-  targets) · `--ring` 10px (1.5px border, so the writing dot and the solid fill centre cleanly) ·
-  `--write-head-width` 3px · `--write-head-lamp` 7px · `--list-indent` 28px. The full list,
-  including derived ones such as `--write-head-lamp-inset`, is in `src/ui/README.md`.
+- **Radii:** `--radius-s` for code, inline code, checkboxes, the focus ring and small buttons;
+  `--radius-m` for the TOC's `Library` link and manual title, start-page and ledger row
+  highlights, previews, compact header buttons, the librarian's field, the cue rows, the dock's
+  toggle and the delete confirmation. Rings are circles. Nothing else is rounded.
+- **Durations:** `--dur-quick` for hover color; `--dur-base` for previews, sheets, outline rows
+  and rows collapsing; `--dur-settle` for the write-head retract, rule color, ring fill and
+  progress fill; `--dur-breathe` for the live pulse; `--dur-target` for a target highlight
+  fading; `--delay-preview` before a hover preview opens.
+- **Easing:** `--ease-out` for things arriving; `--ease-in-out` for state changes; **linear** for
+  the progress fill (it tracks a measurement, so easing would make it lurch).
+- **Focus:** `--focus-ring` (a solid cue outline) at `--focus-offset`.
+- **Shared sizes:** `--measure`, about 76 characters of body Plex; `--tap`, the touch target;
+  `--ring`, the state ring, with a 1.5px border so the writing dot and the solid fill centre
+  cleanly; `--write-head-width` and `--write-head-lamp`; `--list-indent`.
 - **Reduced motion** sets `--dur-quick`, `--dur-base`, `--dur-settle` and `--delay-preview` to 0ms;
   each animation (breathe, outline rows, write head, target flash, thinking line) is switched off
   where it is defined.
 
 ### Page
 
-`src/ui/base.css` gives `html` `background: var(--ground)`, `color-scheme: dark`,
-`scrollbar-gutter: stable` (so the page growing past the viewport never shifts text sideways) and
-scrollbar colors (`scrollbar-color: var(--rule-strong) transparent`). Each page's root is
-`<div class="ui reader">` or `<div class="ui home">`: `.ui` sets the base type, selection and focus,
-and scopes the shared styles; all of a page's own CSS is scoped under its own class.
+The page keeps `scrollbar-gutter: stable`, so growing past the viewport never shifts text
+sideways. Each page's root is `<div class="ui reader">` or `<div class="ui home">`, and all of a
+page's own CSS is scoped under its own class (`src/ui/README.md` › Using it).
 
 # The reader
 
@@ -364,48 +330,43 @@ cross-references carry their status anyway.
 The phone at 375px is the design target.
 
 - **Sticky header**, 48px, `--ground`, 1px `--rule` bottom line:
-  - Left: **`Library`**, a link to `/`, 14/20 400 wdth 85 ink-muted, 44px tall with 8px side
+  - Left: **`Library`**, a link to `/`, `--text-ui` 400 wdth 85 ink-muted, 44px tall with 8px side
     padding, so its text lines up with the 16px phone gutter. Hover `--ground-tint` and cue text,
     like `‹ ›`. No glyph: `‹` already means "previous" here.
   - Then, flexible: the **location button** (40px tall, `data-shot="toc-toggle"`): status ring ·
-    `2.4` (tabular, ink-faint) · title (14/20, 500, wdth 85, ellipsis) · a CSS chevron that turns
-    when open. On the start page it reads "Contents".
+    `2.4` (tabular, ink-faint) · title (`--text-ui` 500 wdth 85, ellipsis) · a CSS chevron that
+    turns when open. On the start page it reads "Contents".
   - Right: `‹` and `›` links, 44×44, `aria-label="Previous: 2.3 Staying in Character"`. A missing
     side is omitted, never a dead glyph. On the start page, `›` goes to 1.1.
 - **Contents sheet** (one tap): fixed from the header to the bottom, `--ground`, its own scroll,
   page scroll locked while open. The same TOC, capped at the measure, with rows at body size and a
   44px minimum height for touch; the current entry is expanded with its live outline. It opens
   with opacity 0→1 and translateY(−8px→0) over `--dur-base` `--ease-out`.
-- **Text:** full width minus the gutter (32px at 768–1023px, where body text returns to 17/28 and
-  caps at the measure; 16px on phone). The centre starts 24px below the header. The measure at
-  375px is about 48 characters.
+- **Text:** full width minus the gutter (32px at 768–1023px, where body text returns to its desktop
+  size and caps at the measure; 16px on phone). The centre starts 24px below the header. The measure
+  at 375px is about 48 characters.
 - No hover previews below 1024px or on `hover: none` devices.
 - The outline is **never in the reading flow**: a disclosure that grew while headings streamed in
   would push the text down. It lives in the sheet instead.
 
 ### Reader sizes
 
-In `src/reader/tokens.css`, on `.reader`:
-
-- **Layout:** `--toc-width` 272px · `--outline-width` 240px · `--start-width` 720px ·
-  `--header-height` 48px · `--gutter` 64px (32px below 1024px, 16px on phone).
-- **Components:** `--bar-width` 2px (current-item bars) · `--write-head-offset` 28px (12px on
-  phone) · `--code-bleed` 20px (16px on phone) · `--label-col` 36px · `--label-col-wide` 48px (40px
-  on phone) · `--outline-number-col` 40px (48px below 1024px) · `--status-col` 136px ·
-  `--check-size` 14px · `--preview-width` 320px.
+The column widths, the header height, the gutter (which steps down below 1024px and on phone) and
+the reader's component sizes (bars, label columns, the code bleed, the preview width, the write
+head's offset) are tokens in `src/reader/tokens.css`, on `.reader`.
 
 ### Article head (every section, every state)
 
 Top to bottom (phone values in brackets):
 
-1. **Eyebrow row**, 14/20 wdth 85: left `Chapter 2 · Performers Without a Pulse` (ink-muted, links
-   to that chapter on the start page); right `‹ 2.3   3.1 ›` (tabular, ink-muted, cue on hover;
-   at 1.1 and B.2 only the side that exists). Appendices read `Appendix A · Parts and Sensor
+1. **Eyebrow row**, `--text-ui` wdth 85: left `Chapter 2 · Performers Without a Pulse` (ink-muted,
+   links to that chapter on the start page); right `‹ 2.3   3.1 ›` (tabular, ink-muted, cue on
+   hover; at 1.1 and B.2 only the side that exists). Appendices read `Appendix A · Parts and Sensor
    Reference`. 16px below. Below 1024px only the left part shows; previous/next live in the header.
-2. **Title**, H1 29/36 ink-strong, `text-wrap: balance`. The label `2.4` hangs in the left gutter
+2. **Title**, `--text-h1` ink-strong, `text-wrap: balance`. The label `2.4` hangs in the left gutter
    (see Hanging numbers): same size, weight 400, ink-faint, tabular, 16px left of the text edge, so
    the title aligns with the body. 12px below.
-3. **Summary**, 20/28 [17/28] ink-muted, `text-wrap: pretty`. 16px below.
+3. **Summary**, `--text-lead` ink-muted, `text-wrap: pretty`. 16px below.
 4. **Status line**: one line, a fixed 16px tall, micro mono, nowrap (the text changes, the layout
    doesn't):
    - waiting: writing ring + `Waiting for the first words…` (cue)
@@ -421,19 +382,19 @@ The head is identical in every state, so nothing in it ever reflows.
 ### The TOC
 
 - **Masthead** (padding 20/16/8): first **`Library`**, a link to `/` that takes you back to the
-  library: 14/20 400 ink-muted, the same voice as the eyebrow's chapter link (each goes up a
+  library: `--text-ui` 400 ink-muted, the same voice as the eyebrow's chapter link (each goes up a
   level), with no glyph and no underline; cue text on hover, `--dur-quick`. Its box is padding 4/8
   with the padding hung outside the text edge, like the title's, so the focus ring sits around
   the word. It adds 28px to the masthead, and the whole index still fits in 900px. The contents
-  sheet leaves it out, because the compact header already has it. Then the manual title, 14/20
+  sheet leaves it out, because the compact header already has it. Then the manual title, `--text-ui`
   600 ink-strong, linking to the manual's start page (it takes the current-row tint there); under
   it `7 of 18 sections written`, micro mono ink-faint, live; then the status legend (see Section
   states).
-- **Chapter row:** 14/20 600 ink-strong, wdth 85; the label in a 36px tabular column, ink-faint. A
-  heading, not a link (chapters have no page). 8px above each chapter group.
+- **Chapter row:** `--text-ui` 600 ink-strong, wdth 85; the label in a 36px tabular column,
+  ink-faint. A heading, not a link (chapters have no page). 8px above each chapter group.
 - **Section row:** 24px tall (padding 2/12), so the dense index fits the screen. Grid
   `36px label | title | 16px status`: labels align as a column (`2.4`, `A.1`), titles wrap under
-  the title, and rings form a status column at the right edge. 14/20 wdth 85; label ink-faint,
+  the title, and rings form a status column at the right edge. `--text-ui` wdth 85; label ink-faint,
   tabular.
 - **Hover:** `--ground-hover`, title to ink-strong, `--dur-quick`. **Focus:** the cue ring with a
   −2px offset, inside the scroll container so it isn't clipped. After its ring, each row states its
@@ -443,20 +404,20 @@ The head is identical in every state, so nothing in it ever reflows.
   `scrollTop`, never the page) to bring the current row into view when it is out of comfortable
   view.
 - **Appendices** come after the chapters: 16px gap, a 1px `--rule-strong` line, 12px, the group
-  label `Appendices` (12/16 Sans 600 ink-muted, sentence case), then the appendix groups with
-  lettered labels. A manual with no appendices has no group, label or line.
+  label `Appendices` (`--text-micro` Sans 600 ink-muted, sentence case), then the appendix groups
+  with lettered labels. A manual with no appendices has no group, label or line.
 
 ### Outline column (1200px and up)
 
-- **On this page** (label 12/16 Sans 600 ink-muted): the first row is the section title, so
-  something is always current. Then H2 rows with their clause number in `--outline-number-col`,
-  and H3 rows indented to the H2 *titles* so they nest under them. 14/20 wdth 85 ink-muted, over a
+- **On this page** (label `--text-micro` Sans 600 ink-muted): the first row is the section title, so
+  something is always current. Then H2 rows with their clause number in `--outline-number-col`, and
+  H3 rows indented to the H2 *titles* so they nest under them. `--text-ui` wdth 85 ink-muted, over a
   1px `--rule` track.
 - **Current heading:** ink-strong and a 2px ink-strong bar on the track. Current is the last
   heading whose top is above 25% of the viewport (a rAF-throttled scroll listener), else the title.
 - Built from the text (H2 and H3 lines outside code fences), so it grows as headings stream in.
-  While writing, new rows fade in over `--dur-base`. Rows only ever append. Before the first
-  heading, a hint reads `Headings appear as they’re written.`
+  While writing, new rows fade in and slide 4px from the left over `--dur-base`. Rows only ever
+  append. Before the first heading, a hint reads `Headings appear as they’re written.`
 - **Referenced here** (32px below): every `section:` link in the text, de-duplicated, in order of
   appearance: label (tabular, ink-faint) · title · ring, with the status in words for screen
   readers. It tells the reader where this section points and what is still unwritten, and also
@@ -470,19 +431,19 @@ The annotated contents, in the same shell. A reference is entered through its in
 (compact, no summaries) and this page (summaries and states) do different jobs.
 
 - **Head** (capped at the measure), 64px from the top:
-  - title `The Haunt That Listens`, 35/40 [29/36] ink-strong, 12px below;
-  - subtitle, 20/28 [17/28] ink-muted, `text-wrap: balance`, 16px below;
+  - title `The Haunt That Listens`, `--text-title` ink-strong, 12px below;
+  - subtitle, `--text-lead` ink-muted, `text-wrap: balance`, 16px below;
   - meta, micro mono ink-faint: `5 chapters · 2 appendices · 18 sections · 7 written`, 24px below
     (singular for one: `1 appendix`);
-  - **Begin at 1.1 Why a Haunt Should Listen ›**, 17/28 600 ink-strong with a 2px cue underline
-    (cue text on hover).
+  - **Begin at 1.1 Why a Haunt Should Listen ›**, `--text-body` 600 ink-strong with a 2px cue
+    underline (cue text on hover).
 - **Contents** (width 720), 48px below the head. Each chapter starts with a 1px `--rule` line and
   24px of space (a link to it stops 24px below the top, or 16px below the compact header), then a
-  heading row (20/28 600, label in the 48px label column). Section rows sit
-  on a grid `48px label | title + summary | 136px status`: title 17/28 500 (ink-strong, or
-  ink-muted while unwritten), summary 14/20 ink-muted, status as ring + word in micro mono (cue
-  while writing). The whole row is the link: padding 8/12, hover `--ground-tint` and title to cue.
-  On phone the status moves under the summary.
+  heading row (`--text-h3` 600, label in the 48px label column). Section rows sit on a grid `48px
+  label | title + summary | 136px status`: title `--text-body` 500 (ink-strong, or ink-muted while
+  unwritten), summary `--text-ui` ink-muted, status as ring + word in micro mono (cue while
+  writing). The whole row is the link: padding 8/12, hover `--ground-tint` and title to cue. On
+  phone the status moves under the summary.
 - **Appendices:** 48px, a 1px `--rule-strong` line, 48px, an H2-sized `Appendices` heading, then
   the same chapter blocks with lettered labels. A manual with no appendices ends after its last
   chapter.
@@ -500,11 +461,11 @@ tables and deserve the same craft.
 
 ### Previous and next
 
-- **Pager**, 64px below the body (or the tail line, or the failure notice): two cells, `1fr 1fr`, 16px apart, each with
-  a 1px `--rule-strong` top line and 12px above its text. Line 1, micro mono ink-faint:
-  `‹ Previous · 2.3` / `Next · Chapter 3 · 3.1 ›` (the chapter or appendix is named whenever the
-  link crosses a boundary). Line 2: the title, 17/28 500 wdth 85 ink-strong, with its status ring.
-  Next is right-aligned. Hover: title and top line to cue.
+- **Pager**, 64px below the body (or the tail line, or the failure notice): two cells, `1fr 1fr`,
+  16px apart, each with a 1px `--rule-strong` top line and 12px above its text. Line 1, micro mono
+  ink-faint: `‹ Previous · 2.3` / `Next · Chapter 3 · 3.1 ›` (the chapter or appendix is named
+  whenever the link crosses a boundary). Line 2: the title, `--text-body` 500 wdth 85 ink-strong,
+  with its status ring. Next is right-aligned. Hover: title and top line to cue.
 - The ends of the manual are never empty: before 1.1 the cell reads `Start of the manual` /
   `Back to contents`, after B.2 `End of the manual` / `Back to contents`.
 - Phone: stacked, full width, 24px apart, 44px+ targets.
@@ -544,7 +505,7 @@ tables and deserve the same craft.
 | State | TOC row (and sheet) | Section page | Inline cross-reference |
 | --- | --- | --- | --- |
 | **unwritten** | Title ink-faint; hollow ring (1.5px ink-faint) | Never painted: opening starts the writing, so it renders as *waiting* | Dashed underline (ink-faint), hollow ring after the text |
-| **writing, waiting** | Title ink; green ring with a half-size green centre that breathes (opacity 1 → 0.35 → 1 over 1.6s) | The head with `Waiting for the first words…`; the body holds only the tail line, with the write head beside it; the outline shows the title row and its hint | Dashed underline (cue-deep), green ring |
+| **writing, waiting** | Title ink; green ring with a half-size green centre that breathes (opacity 1 → 0.35 → 1 over `--dur-breathe`) | The head with `Waiting for the first words…`; the body holds only the tail line, with the write head beside it; the outline shows the title row and its hint | Dashed underline (cue-deep), green ring |
 | **writing, streaming** | Same as waiting | The final layout growing at the bottom; the write head on the live block; the head rule filling; the tail line `Being written · 46%  Follow ↓` | Same as waiting |
 | **written** | Title ink; solid ink-muted disc | No green anywhere; status `Written · n words`; no tail line | Solid 1px cue-deep underline, no ring |
 | **not written: budget reached** | As unwritten | No green anywhere; status `Not written · budget reached`; the failure notice where the tail line was | As unwritten |
@@ -573,8 +534,8 @@ manager says plainly what happened. It is the settle without the finish.
   reader needs to notice it, but never cue.
 - **The failure notice** takes the tail line’s place, the lowest thing above the pager, so
   nothing above the reading position moves. Body type at the measure:
-  - a title at 17/28 600 ink-strong (the H4 treatment), 4px above the text: `Budget reached` or
-    `Couldn’t write this section`;
+  - a title at `--text-body` 600 ink-strong (the H4 treatment), 4px above the text: `Budget reached`
+    or `Couldn’t write this section`;
   - one sentence in ink saying what happened and that nothing was kept, with an inline **Try
     again** (a `.link` button: cue-deep underline, cue on hover):
     - budget: “The writing budget won’t cover this section right now, so it stays unwritten, and
@@ -583,8 +544,8 @@ manager says plainly what happened. It is the settle without the finish.
       to write it from the start.”
 - **Text already streamed stays** where it is, 32px above the notice, because removing it would
   move the page under the reader. It keeps its plain wrapping, its footnotes stay hidden and its
-  code blocks keep Copy hidden, as while writing. Footnote references in it stay links to notes
-  that are hidden; that is accepted, since the notice says none of it was kept.
+  code blocks keep Copy hidden, as while writing. Footnote references in it stay links to the
+  hidden notes; the notice already says none of it was kept.
 - **Try again works in place**, without a reload, so sections still writing elsewhere on the page
   keep going. The kept text is cleared, the page returns to the waiting state (it moves, but only
   because the reader asked), and focus moves to the title, which is scrolled into view if needed.
@@ -597,8 +558,6 @@ manager says plainly what happened. It is the settle without the finish.
 - **Screen readers:** the live region announces `Not written: budget reached` or `Not written:
   couldn’t write this section`.
 - **Phone:** the same, at the phone body size.
-- **Screenshots:** `?fail=budget` and `?fail=error` on an unwritten section give the two states
-  straight away, with no text; `npm run shot` captures them as `budget` and `error`.
 
 ## Streaming
 
@@ -631,33 +590,29 @@ the shared write head (`src/ui/write-head.css`; its classes are documented in `s
 which the landing page uses for the librarian's replies too.
 
 1. **Gutter bar.** The prose is a `.write-head`, with `data-live` while writing. Its last block,
-   not counting footnotes, carries an `::after`: `--write-head-width` (3px), cue,
-   `--write-head-offset` (28px; 12px on phone) left of the text edge, so it clears a code block's
-   bleed, inset 4px top and bottom, so it grows with the paragraph, list or table as it fills. In
-   `prose.css` the reader shifts it for a code block (which bleeds into the gutter), and gives an
-   `hr` as the live block a bar 12px past its top and bottom, so the bar never collapses. Each new
-   block's bar draws in with `scaleY(0→1)`, origin top, `--dur-quick`. Solid fill: no glow, no
-   shadow.
-2. **The lamp.** At the foot of that bar, level with the line being written, sits a
-   `--write-head-lamp` (7px) square cue lamp (`::before`) that breathes like the TOC's writing
-   ring. It is the cue light of the concept: the exact line where words land.
+   not counting footnotes, carries the cue bar, set far enough left of the text edge
+   (`--write-head-offset`) to clear a code block's bleed, so it grows with the paragraph, list or
+   table as it fills. In `prose.css` the reader shifts it for a code block (which bleeds into the
+   gutter), and gives an `hr` as the live block a bar 12px past its top and bottom, so the bar
+   never collapses. Each new block's bar draws in from the top. Solid fill: no glow, no shadow.
+2. **The lamp.** At the foot of that bar, level with the line being written, sits a square cue
+   lamp that breathes like the TOC's writing ring. It is the cue light of the concept: the exact
+   line where words land.
 3. **The tail.** The tail line under the live block is a `.write-head-line`: it carries the same
    bar for the whole stream, and its cue readout sits beside **Follow ↓**, so bar, lamp,
    percentage and Follow read as one instrument. While waiting it has `data-live`, so the bar and
    lamp sit beside the tail line alone.
-4. **Head rule as meter.** `.head-rule::after`: cue over the head rule, drawn 2px tall while
-   writing (`inset: -0.5px 0`, no layout change), `transform: scaleX(var(--progress))`, origin
-   left, `transition: transform var(--dur-settle) linear`. `--progress` is the only value JS
-   provides.
+4. **Head rule as meter.** While writing, a 2px cue line over the head rule (no layout change)
+   fills from the left by `transform: scaleX(var(--progress))`, linearly over `--dur-settle`.
+   `--progress` is the only value JS provides.
 5. **Footnotes wait.** While writing, the footnotes block (whose notes are empty stubs until the
    last chunks) is `display: none`, so the tail line hugs the live text. It appears with the
    settle, below everything, so nothing above the reader moves.
-6. **The settle** (writing → written), all at once: the gutter bar retracts (`scaleY(1→0)`, origin
-   bottom, `--dur-settle` `--ease-in-out`; the `::after` exists on the last block in every state
-   and only its transform changes, so the transition can run); the meter's color fades from cue
-   to `--rule-strong`; the status line swaps to `Written · n words`; the TOC ring's centre dot
-   scales up to fill the ring while turning ink-muted. Green leaves the page; the section is now
-   reference.
+6. **The settle** (writing → written), all at once: the gutter bar retracts downwards (the bar
+   exists on the last block in every state and only its transform changes, so the transition can
+   run); the meter's color fades from cue to `--rule-strong`; the status line swaps to
+   `Written · n words`; the TOC ring's centre dot scales up to fill the ring while turning
+   ink-muted. Green leaves the page; the section is now reference.
 
 Why it serves reading: the bar marks exactly where new words land, so someone reading higher up
 knows the live edge without being dragged to it; the meter answers "how much is left" from the
@@ -667,17 +622,19 @@ trusted as finished.
 **Reduced motion:** the bar and a steady lamp are on the live block while writing and gone when
 written; the meter steps with each chunk; the ring shows a static half-size centre dot; outline
 rows and the contents sheet appear without movement; the footnote highlight is a static tint while
-targeted. All the information stays, none of the motion. (Playwright's `animations: "disabled"`
-resets infinite animations to their first keyframe, so the breathe keyframes start at opacity 1.)
+targeted. All the information stays, none of the motion. Screenshots are taken with Playwright's
+`animations: "disabled"`, which resets an infinite animation to its first keyframe, so `breathe`
+starts at opacity 1.
 
 ### The wrapping rule
 
 `text-wrap: pretty` can re-flow a whole paragraph when its content changes, so it never applies
 to text that streams:
 
-- The prose (`.prose`, around the prose root) carries `data-wrap="pretty"` **only if the section
-  was already written when this page load first saw it**. Otherwise it gets `data-wrap="plain"`
-  (ordinary wrapping) and keeps it after completion. There is no switch at the end, so finishing never re-flows anything.
+- The prose (`.prose`, around the prose root) carries `data-wrap="pretty"` **only if the section was
+  already written when this page load first saw it**. Otherwise it gets `data-wrap="plain"`
+  (ordinary wrapping) and keeps it after completion. There is no switch at the end, so finishing
+  never re-flows anything.
 - "Streamed this load" is a module-level `Set` of manual and section ids (`streamedThisLoad.ts`),
   filled by the shell from `useManual(manualId)` whenever a section is seen `writing`. This also
   catches a section that kept streaming while the reader was elsewhere. It resets on reload, like
@@ -695,11 +652,11 @@ Paragraphs, bold, inline code and lists come from the shared `.markdown` treatme
 `src/ui/markdown.css`, which the librarian's replies use too (at `--text-reply`); the rest is the
 reader's own, in `prose.css`.
 
-- **Paragraphs:** 17/28 [16/24] ink, 16px below, ragged right, no automatic hyphens.
-- **Headings:** H2 24/32 600 ink-strong, 48px above, 12px below. H3 20/28 600, 32 / 8. H4 17/28
-  600, 24 / 4 (a run-in-weight label at body size). An H3 or H4 directly after a heading: 16px
-  above. Ids are slugs from one scan of the text (see Build structure). `scroll-margin-top` 24px
-  (64px under the compact header).
+- **Paragraphs:** `--text-body` ink, 16px below, ragged right, no automatic hyphens.
+- **Headings:** H2 `--text-h2` 600 ink-strong, 48px above, 12px below. H3 `--text-h3` 600, 32 / 8.
+  H4 `--text-body` 600, 24 / 4 (a run-in-weight label at body size). An H3 or H4 directly after a
+  heading: 16px above. Ids are slugs from one scan of the text (see Build structure).
+  `scroll-margin-top` 24px (64px under the compact header).
 - **Clause numbers.** Every prose H2 carries a clause number (`2.4.1`, `2.4.2`, `A.1.3`), set like
   the section label: same size, weight 400, ink-faint, tabular, hanging 16px left of the text edge
   (inline before the heading where section labels are inline). A CSS counter on `.prose-root > h2`
@@ -709,21 +666,21 @@ reader's own, in `prose.css`.
   numbered-clause habit of real engineering manuals, and it keeps the page from reading as a
   generic docs template.
 - **Bold:** 600 ink-strong. **Italic:** Plex true italic, same color.
-- **Bulleted lists:** 28px indent; the marker is an en dash `–` in ink-faint, drawn with
+- **Bulleted lists:** `--list-indent`; the marker is an en dash `–` in ink-faint, drawn with
   `li::before` in the indent; nested lists 24px further, marker `·`; 4px between items, nested
   list 4px above.
 - **Numbered lists:** `::marker` in ink-muted 600 tabular, so `1.`–`5.` align.
-- **Checklists** (`ul.contains-task-list`): no dash; the disabled checkbox gets
-  `appearance: none` as a 14×14 box, 1.5px ink-faint border, radius 2, hanging in the indent and
-  centred on the first line. Checked: filled ink-muted, with a tick drawn by
-  `li:has(> input:checked)::before` as a rotated L of 2px `--ground` borders. The text stays ink:
-  these are preflight checks, not struck-out tasks.
-- **Blockquotes** (pull quotes and the cast's spoken lines): 20/28 ink-strong, a 2px
+- **Checklists** (`ul.contains-task-list`): no dash; the disabled checkbox gets `appearance: none`
+  as a `--check-size` square box, 1.5px ink-faint border, radius 2, hanging in the indent and
+  centred on the first line. Checked: filled ink-muted, with a tick drawn by `li:has(>
+  input:checked)::before` as a rotated L of 2px `--ground` borders. The text stays ink: these are
+  preflight checks, not struck-out tasks.
+- **Blockquotes** (pull quotes and the cast's spoken lines): `--text-lead` ink-strong, a 2px
   `--rule-strong` left rule, padding-left 20, 24px above and below. No italic and no added quote
   marks (the content brings its own).
 - **Tables:** in a wrapper with `overflow-x: auto` (focusable, labelled), 24px above and below,
-  full measure. 14/20 wdth 85, tabular figures; header 12/16 600 ink-muted with a 1px
-  `--rule-strong` line under it; rows separated by 1px `--rule`; no vertical lines, no zebra;
+  full measure. `--text-ui` wdth 85, tabular figures; header `--text-micro` 600 ink-muted with a
+  1px `--rule-strong` line under it; rows separated by 1px `--rule`; no vertical lines, no zebra;
   cell padding 8/12, with the first and last columns flush. The first column is 500 ink-strong
   (it names the row). GFM `---:` columns align right and never wrap (`150 ms` stays whole). A
   total row (first cell bold) gets a 1px ink-faint sum line above it, set as the bottom border of
@@ -731,25 +688,24 @@ reader's own, in `prose.css`.
   `position: sticky; left: 0` on `--ground` with a 1px `--rule` right edge, so the row stays named
   while a wide table scrolls; text cells keep at least 8rem and wrap inside it, and the cut-off
   column at the right edge shows that the table scrolls.
-- **Code blocks** (`CodeBlock`): `--ground-raised`, radius 2, extended `--code-bleed` (20px) into
+- **Code blocks** (`CodeBlock`): `--ground-raised`, radius 2, extended `--code-bleed` into
   each gutter so the code aligns with the body text; on phone the bleed reaches the screen edges
   and the radius is 0. A 32px strip at the top: the language tag on the left (`ts`, `text`; micro
   mono ink-faint), **Copy** on the right (a `.text-button`: micro mono ink-faint, ink-strong on
   hover; `Copied` or `Couldn’t copy` for 1.5s in a polite live region; hidden with `visibility`
-  while writing). Code 14/20 Plex Mono, ink, padding 8/20/16. `language-text` (the cast's prompts)
-  uses `pre-wrap` so prose prompts read on a phone; other languages scroll sideways (`.scroll-x`,
-  see `src/ui/README.md`), so a clipped line reads as scrollable even where the OS hides
-  scrollbars.
+  while writing). Code `--text-ui` Plex Mono, ink, padding 8/20/16. `language-text` (the cast's
+  prompts) uses `pre-wrap` so prose prompts read on a phone; other languages scroll sideways in a
+  `.scroll-x` region, whose scrollbar always shows.
 - **Inline code:** Plex Mono 0.88em, `--ground-tint`, padding 1px 4px, radius 2.
 - **Horizontal rule:** 1px `--rule-strong` across the measure, 40px above and below.
 - **Footnote references:** `sup` at 12px, 600, cue, tabular, `line-height: 0` with a relative
   offset (no line-gap bump), underline on hover.
 - **Footnotes:** 48px above, a 1px `--rule-strong` top line, 16px below it. The renderer's hidden
-  `h2` is shown as a label, 12/16 600 ink-muted. Notes 14/20 ink-muted, markers ink-faint, 8px
-  apart. Back-links render as `↑` instead of the renderer's `↩` (via `components.a` on
-  `data-footnote-backref`, keeping the `aria-label`; the loaded font subset has U+2191 but not
-  `↩`, `→` or `↗`), ink-faint, cue on hover. A targeted note or reference flashes `--cue-tint`
-  (the shared `target-flash`), fading over 1.6s.
+  `h2` is shown as a label, `--text-micro` 600 ink-muted. Notes `--text-ui` ink-muted, markers
+  ink-faint, 8px apart. Back-links render as `↑` instead of the renderer's `↩` (via `components.a`
+  on `data-footnote-backref`, keeping the `aria-label`; the loaded font subset has U+2191 but not
+  `↩`, `→` or `↗`), ink-faint, cue on hover. A targeted note or reference flashes `--cue-tint` (the
+  shared `target-flash`), fading over `--dur-target`.
 - **External links** (`http(s)` links, which the shared `MarkdownLink` from `src/ui` renders as an
   `ExternalLink`, styled by `.link`; the librarian's replies use the same rule): ink text, a 1px
   cue-deep underline at a 0.18em offset; cue text and underline on hover (`--dur-quick`). A
@@ -757,11 +713,12 @@ reader's own, in `prose.css`.
   They open in a new tab, with a visually hidden "(opens in a new tab)".
 - **Cross-references** (`SectionLink`, styled by `.link`): to a written section, the external-link
   underline without the corner mark; to an unwritten or writing one, see Section states. On hover
-  (after 300ms) or keyboard focus (at once), a **preview** opens below the link (1024px and up,
-  hover devices only): `4.2 · Chapter 4` in micro mono, the title 14/20 600 ink-strong, the summary 14/20
-  ink-muted, and a status line with its ring (`Not yet written — opening it starts the writing.`
-  for an unwritten target). A 320px card, `--ground-raised`, a 1px `--rule-strong` border, radius
-  4, padding 12/16, no shadow, fading in over `--dur-base`.
+  (after `--delay-preview`) or keyboard focus (at once), a **preview** opens below the link (1024px
+  and up, hover devices only): `4.2 · Chapter 4` in micro mono, the title `--text-ui` 600
+  ink-strong, the summary `--text-ui` ink-muted, and a status line with its ring (`Not yet written —
+  opening it starts the writing.` for an unwritten target). A `--preview-width` card,
+  `--ground-raised`, a 1px `--rule-strong` border, radius 4, padding 12/16, no shadow, fading in
+  over `--dur-base`.
   - **It follows WCAG 1.4.13.** It stays open while the pointer is over it: the card sits inside
     8px of transparent padding that bridges the gap to the link, so the pointer can cross to it.
     **Escape** dismisses it while the link or its card is hovered or the link is focused
@@ -773,9 +730,9 @@ reader's own, in `prose.css`.
     nesting) beside the link and referenced by `aria-describedby`, so it never joins the link text
     or find-in-page. Each link gets its own `anchor-name` and `position-anchor`, built from
     `useId()`.
-  - It is `display: none` until shown (fading in with `allow-discrete` and `@starting-style`):
-    Chrome remembers the last successful position-try fallback while a box exists, so a preview
-    first laid out below the fold would otherwise stay flipped above its link.
+  - It is `display: none` until shown (fading in with `allow-discrete` and `@starting-style`), so
+    each showing chooses its position afresh: Chrome keeps the last successful position-try
+    fallback while a box exists, which would keep a preview flipped above its link.
 
 ## Typographic detail
 
@@ -785,51 +742,30 @@ reader's own, in `prose.css`.
   into curly ones as it streams, outside code (`ARCHITECTURE.md` §4).
 - Tabular figures: TOC, outline and pager labels, status percentages and word counts (with
   thousands separators), table cells, ordered-list markers, footnote references.
-- `::selection` in `--selection` with ink-strong text.
-- `text-wrap` follows the wrapping rule above.
 
 ## Build structure
 
 The reader lives in `src/reader/`. It is built on `src/ui/` (the design system, documented in
-`src/ui/README.md`) and `src/manual/` (the manual's store, which reads from the API, and the
-markdown renderer, documented in `src/manual/README.md`). The reader styles the renderer's output rather than
-forking it.
+`src/ui/README.md`) and `src/manual/` (the manual's store and the markdown renderer, documented in
+`src/manual/README.md`). The reader styles the renderer's output rather than forking it.
 
-- One component per file; each one that has styles imports its own stylesheet, after its import
-  from `src/ui`, so the shared styles come first in the cascade. `tokens.css` holds the reader's
-  sizes (on `.reader`); `shell.css` the column grid.
-  - `index.tsx` (the route: `StartPage` or `SectionPage`) · `Shell` (the `ui reader` root, skip
-    link, layout, TOC column, outline column) · `CompactBar` (compact header, and the contents
-    sheet as a `Sheet` whose focus scope includes the header) · `Toc` · `StatusLegend` ·
-    `SectionPage` · `ArticleHead` · `Prose` (renderer components; `prose.css` holds the
-    reader-only markdown treatment and its write-head adjustments) · `CodeBlock` · `SectionLink`
-    (and its preview) · `TailLine` (and Follow) · `FailureNotice` · `ManualErrorBoundary` (the
-    reader when the manual can't be loaded) · `Pager` · `Outline` (the outline, "Referenced
-    here" and "In this manual") · `StartPage` · `HiddenStatusWord` (a ring's status in words, for
-    screen readers).
-  - Helpers: `markdownScan.ts` (headings with unique ids, source lines and clause numbers; linked
-    sections; word count), `manualParts.ts` (chapter names, paths and chapter anchors; reading
-    order comes from `src/manual`), `statusWords.ts` (the status and failure words),
-    `streamedThisLoad.ts`, `useActiveHeading.ts`, `useArrival.ts`, `useManualId.ts`,
-    `usePrevNextKeys.ts`.
+- One component per file. Each one that has styles imports its own stylesheet, after its import
+  from `src/ui`, so the shared styles come first in the cascade; `tokens.css` holds the reader's
+  sizes and `shell.css` the column grid.
 - `Shell` stays mounted while moving between sections (only the article is keyed by section id),
   so the TOC keeps its scroll position. Moving to another manual remounts the whole reader (it is
   keyed by manual id), so nothing on the page carries over between manuals.
 - **Every link within the manual carries the manual id** (only `Library` leaves the manual, for
-  `/`), which the reader takes from the route (`useManualId.ts`): the TOC, the start page, the
-  pager, the eyebrow, the compact bar, "Referenced here", the cross-references and the arrow keys. The store keeps each manual's state apart (see
-  `src/manual/README.md`).
-- Heading ids come from one scan of the text: `Prose` looks each heading's id up by its source
-  line, so the outline and the page always agree, and duplicates get `-2`, `-3`.
+  `/`), which the reader takes from the route: the TOC, the start page, the pager, the eyebrow, the
+  compact bar, "Referenced here", the cross-references and the arrow keys.
+- Heading ids come from one scan of the text (`markdownScan.ts`): `Prose` looks each heading's id
+  up by its source line, so the outline and the page always agree, and duplicates get `-2`, `-3`.
 - The contents sheet locks page scroll with CSS only (`html:has(.reader .sheet[data-open])`, below
   1024px, in `compact-bar.css`), so widening the window releases it.
-- `useSection` is called only by the section page. The TOC, outline, previews and pager read
-  `useManual(manualId)` and `findSection()`, so they never open a section.
-- `SectionLink` and the renderer `components` are defined at module level, so focus and hover
-  survive each streamed chunk.
-- The control that opens the TOC at narrow widths carries `data-shot="toc-toggle"`, so
-  `npm run shot` can open it. It is hidden at 1024px and up, and the script only clicks a visible
-  toggle.
+- Only the section page opens a section (`useSection`); the TOC, outline, previews and pager read
+  the manual, so they never start the writing.
+- `npm run shot` opens the contents sheet through `data-shot="toc-toggle"`, and clicks it only
+  when it is visible (below 1024px).
 
 # The landing page
 
@@ -880,7 +816,8 @@ the library.
 
 ### 1024–1279px
 
-The panel narrows to **384px** and the library gutter to **32px**. The ledger keeps its columns.
+The panel and the library gutter narrow (`--panel-width`, `--gutter`). The ledger keeps its
+columns.
 
 ### Below 1024px, designed at 375
 
@@ -891,32 +828,21 @@ is the dock's height plus 24px, so the last row clears the dock. At 768–1023px
 
 ### Landing page sizes
 
-In `src/home/tokens.css`, on `.home`:
-
-| Size | Value | Use |
-| --- | --- | --- |
-| `--panel-width` | 440px (384px below 1280) | The docked panel |
-| `--gutter` | 64px (32px below 1280, 16px below 768) | Library side space; the dock's side padding |
-| `--ledger-max` | 960px | The ledger's widest |
-| `--written-col` | 136px | The progress column (the reader's `--status-col`) |
-| `--action-col` | 72px | The Delete column |
-| `--panel-pad` | 24px (16px below 768) | Panel side padding |
-| `--panel-gutter` | 40px (28px below 768) | Panel left padding: room for the write head |
-| `--write-head-offset` | 16px (12px below 768) | The write head's distance left of the reply text |
-| `--tick` / `--tick-pitch` / `--tick-height` | 2px / 4px / 8px | The section strip |
-| `--mark` | 2px | The "named in the conversation" mark on a row |
-| `--said-rule` | 2px | The rule beside your messages |
-| `--field-border` | 1px | The field's border |
-| `--dock-field-pad` | `(--tap − one reply line − 2 borders) / 2` | The dock field's vertical padding, so one line fills 44px |
-| `--meta-nudge` | `(body line − micro line) / 2` | Drops the ledger's readouts to sit on the title's first line |
-| `--dock-height` | 112px | The phone dock's resting height: the library's bottom clearance and the rows' scroll margin |
-| `--dock-max` | 720px | The dock's content width at 768–1023 |
+The landing page's own sizes are tokens in `src/home/tokens.css`, on `.home`: the panel's width
+and padding (its left padding, `--panel-gutter`, is wider than its right, to leave room for the
+write head) and the library's gutter (stepping down below 1280px and 768px), the ledger's widest
+and its column widths (`--written-col` is the reader's `--status-col`), the section strip's ticks,
+the shelf mark and the rule beside your messages, the field's border, and the dock's height and
+content width. Two are derived: `--dock-field-pad` makes one line of the dock's field fill a touch
+target, and `--meta-nudge` drops the ledger's readouts onto the title's first line.
+`--dock-height` is the phone dock's resting height, used for the library's bottom clearance and
+the rows' scroll margin.
 
 ## The library
 
 ### Head (in the library area, left-aligned)
 
-1. **Title** `Library`, `<h1>`, `--text-title` (35/40, phone 29/36) 600 `--ink-strong`, 12px below.
+1. **Title** `Library`, `<h1>`, `--text-title` 600 `--ink-strong`, 12px below.
 2. **Meta**, `--text-micro` mono `--ink-faint`, tabular, live: `7 manuals · 7 of 117 sections
    written` (`1 manual · …`; empty: `No manuals`). 24px below.
 3. **Start a new manual ›**, a `<button>` in the plain `.link` style: `--text-body` 400 `--ink`
@@ -935,23 +861,24 @@ console's channel list.
 - **Column header** (`aria-hidden`; each cell carries its own words for screen readers):
   `--text-micro` Sans 600 `--ink-muted`, sentence case: `Manual` · `Written`. 8px below, a 1px
   `--rule-strong` line across the ledger.
-- **Order:** by title, as the server sends them (`localeCompare` in English, so *The Haunt That
-  Listens* sorts under T). It is the only order, so the header carries no sort arrow.
+- **Order:** by title, as the server sends them. It is the only order, so the header carries no
+  sort arrow.
 - **Row** (`<li>`), grid `1fr | --written-col | --action-col`, 24px column gap,
   padding 12px, `--radius-m`, 4px between rows; 8px of space above the first row and below the
   last, then a closing 1px `--rule` line.
-  - **Manual cell:** title `--text-body` (17/28) 500 `--ink-strong`, `text-wrap: balance`; the
+  - **Manual cell:** title `--text-body` 500 `--ink-strong`, `text-wrap: balance`; the
     title is the row's link to `/read/<its id>`, stretched over the whole row with an `::after`, so
-    the row is one click target. Subtitle `--text-ui` (14/20) `--ink-muted`, `text-wrap: pretty`.
-  - **Written cell:** the readout `3 of 14`, `--text-micro` mono, tabular, `--ink-muted` (`--ink-faint`
-    at 0), with a visually hidden ` sections written`; 4px below, the **section strip**.
+    the row is one click target. Subtitle `--text-ui` `--ink-muted`, `text-wrap: pretty`.
+  - **Written cell:** the readout `3 of 14`, `--text-micro` mono, tabular, `--ink-muted`
+    (`--ink-faint` at 0), with a visually hidden ` sections written`; 4px below, the **section
+    strip**.
   - **Delete cell:** a `.text-button` `Delete` (`--text-ui`, wdth 85), `--ink-faint`, aligned to
     the first line of the title, pulled right by `--space-2` so its text, not its padded box, ends
-  on the row's text edge.
-    Accessible name `Delete The Birthday Party Field Manual`. `data-shot="delete"`. It sits above
-    the stretched link (`position: relative; z-index: 1`).
+    on the row's text edge. Accessible name `Delete The Birthday Party Field Manual`.
+    `data-shot="delete"`. It sits above the stretched link (`position: relative; z-index: 1`).
 - **Hover:** the row takes `--ground-hover`, the title turns `--cue` (`--dur-quick`). Hovering
-  Delete gives the button its own `--ground-tint` and `--ink-strong`, and the title stays `--ink-strong`.
+  Delete gives the button its own `--ground-tint` and `--ink-strong`, and the title stays
+  `--ink-strong`.
 - **Focus:** the title link shows the focus ring around the whole row (the `::after` takes the
   outline, `--radius-m`); Delete has its own ring.
 
@@ -971,7 +898,7 @@ From 768 to 1279 the ledger is the same, in the narrower library area.
 
 - No column header. Rows are full width (padding 12px 0 4px), separated by 1px `--rule` lines (a
   job: the rows have no hover tint to separate them on touch).
-- Title `--text-body` (16/24 on phone) 500 `--ink-strong`; subtitle `--text-ui` `--ink-muted`.
+- Title `--text-body` 500 `--ink-strong`; subtitle `--text-ui` `--ink-muted`.
 - 8px below, one meta line: the section strip, `3 of 14` (`--text-micro` mono, tabular), and
   **Delete** at the right end: `--text-ui`, `--ink-faint`, a 44 × 44 hit area (`--tap`).
 
@@ -982,49 +909,16 @@ From 768 to 1279 the ledger is the same, in the narrower library area.
   Birthday Party Field Manual* as you type, and the mark stays after you send. A draft is matched
   against the library as it is now; a sent message is matched once, when it is sent (see the
   named-manual line).
-- **The mark:** a `--mark` (2px) `--ink-strong` bar on the row's own left edge, the row's full
+- **The mark:** a `--mark` `--ink-strong` bar on the row's own left edge, the row's full
   height: the reader's current-item bar. The library has no "current" row, so it stays unique.
   On phone, where rows have no side padding, it sits in the gutter, 8px left of the text. A
   visually hidden ` — named in the conversation` is added to the title link. It fades in and
   out over `--dur-base`. No tint, so "hover" stays unique, and never `--cue`.
-- **Matching** (`references.ts`, with a unit test on a small inline list of manuals):
-  - Lower-case, split on anything that isn't a letter (so `’` and `'` both split), drop stop
-    words (function words such as `the`, `one`, `through`, and request words such as `open`,
-    `delete`, `manual`), and reduce each word to a base form: `-ies` → `y`, `-ed` dropped from
-    words of 6+ letters, one trailing `s` dropped (not `ss`).
-  - **A message that asks for a new manual names none**: its words describe a manual that
-    doesn't exist yet. It asks for one when it has a create phrase and none of the words `open`,
-    `read`, `delete` or `remove`. A create phrase is `create`, `start`, `make`, `write`, `draft`,
-    `generate`, `build`, `plan`, `like` or `want`, then an optional `me`, an optional `a`, `an`
-    or `another`, an optional `new`, then `manual`, `one` or `guide` (“start a new manual”,
-    “build me one”, “I’d like a manual”); or `new manual`, `new one` or `new guide` anywhere.
-    A create word alone isn’t one: “What’s new in the sourdough manual?”, “make the sourdough one
-    shorter” and “where should I start with the geese one?” still name their manuals.
-  - Message and title words count from 3 letters (`cat`), subtitle words from 4.
-  - Title words ending in `-ing` are ignored: they name an activity (`Building a…`, `Moving
-    House…`), not the topic.
-  - A manual is named when the message shares **at least one title word, or at least two
-    subtitle words** with it. The best match wins (most title words, then most subtitle words),
-    ties included.
-  - The test pins these (and their opposites):
-
-  | Message | Named |
-  | --- | --- |
-  | Delete the manual about birthday parties | The Birthday Party Field Manual |
-  | delete the one about parties | The Birthday Party Field Manual |
-  | Open the one about haunted houses | The Haunt That Listens (title and subtitle beat Moving House’s title alone) |
-  | Open The Haunt That Listens | The Haunt That Listens |
-  | Open the cat one / Open the cat’s manual | Moving House Without Losing the Cat |
-  | Can you translate the sourdough manual into Klingon? | Keeping a Sourdough Starter Alive |
-  | Sing me a sea shanty about geese | Negotiating With Geese |
-  | Open the new sourdough manual | Keeping a Sourdough Starter Alive |
-  | Delete the sourdough one and start a new one about bonsai | Keeping a Sourdough Starter Alive |
-  | Let’s start a new manual about building a treehouse | nothing |
-  | What’s new in the sourdough manual? · Can you make the sourdough one shorter? · How do I make a sourdough starter? | Keeping a Sourdough Starter Alive |
-  | I want to start reading the geese manual · Where should I start with the geese one? | Negotiating With Geese |
-  | Start a new manual about keeping a bonsai tree alive | nothing (not *Keeping a Sourdough Starter Alive*, for “alive”) |
-  | I’d like / Generate / Build me a manual about keeping bonsai alive | nothing |
-  | Which one should I read first? · Can you walk me through it? · How long will this take? · Tell me about your rescue dog · Start a manual about planning a wedding · What do I have? | nothing |
+- **Matching** (`references.ts`; its cases are pinned in `references.test.ts`): words are
+  lower-cased, stop words dropped and each reduced to a base form. A manual is named when the
+  message shares a title word (from 3 letters, not an `-ing` activity word) or two subtitle words
+  (from 4) with it; the best match wins. A message that asks for a new manual (“start a new manual
+  about…”) names none, since it describes a manual that doesn't exist.
 
 ## The librarian panel (1024px and up)
 
@@ -1057,8 +951,8 @@ about 53 characters of 16px Plex (the line-length floor is 45).
   default, which would read every streamed chunk). A separate visually hidden polite region
   announces the activity (`Thinking`, `Searching the shelves`), then the whole reply once it's
   complete, or what went wrong.
-- **Your message:** plain text (`white-space: pre-wrap`), `--text-reply` (16/24) `--ink-strong`,
-  set like the reader's spoken-line blockquote: a `--said-rule` (2px) `--rule-strong` rule on its
+- **Your message:** plain text (`white-space: pre-wrap`), `--text-reply` `--ink-strong`,
+  set like the reader's spoken-line blockquote: a `--said-rule` `--rule-strong` rule on its
   left, 12px padding. A visually hidden `You:` starts it.
 - **The librarian's reply:** `ReplyMarkdown` with `className="reply"`, flush with the conversation's
   text edge, in `--ink`. No box, no fill, no name; a visually hidden `Librarian:` starts it. The
@@ -1086,19 +980,19 @@ text edge.
   line tall (24px), a `.write-head-line` with `data-live`: the cue bar with its breathing lamp,
   and beside them the activity, `--text-micro` mono `--cue`. It fades in over `--dur-base`.
   - **The activity** starts as `Thinking…`. While the librarian runs a tool, it is that tool's
-    line, and stays until the next words arrive: `Checking the shelves…` (listing),
-    `Searching the shelves…` (finding), `Opening the manual…`, `Preparing the delete…`,
-    `Planning a manual…` (asked for a new one). The words change in place, with no motion.
-  - **Planning a manual** takes about half a minute, so its line moves on as the plan does: about
-    a second in, once the planned title has arrived, `Planning “Restoring a Vintage Pinball
-    Machine”…`; if the first plan fails its checks, `Revising the plan…`, then `Revising “…”…`.
+    status line (`Searching the shelves…`; `ARCHITECTURE.md` › The librarian lists them all), and
+    stays until the next words arrive. The words change in place, with no motion.
+  - **Planning a manual** takes many seconds (`ARCHITECTURE.md` › Configuration has the measured
+    time), so its line moves on as the plan does: about a second in, once the planned title has
+    arrived, `Planning “Restoring a Vintage Pinball Machine”…`; if the first plan fails its
+    checks, `Revising the plan…`, then `Revising “…”…`.
   - The activity is one line, here and in the header: a line too long for the panel ends in an
     ellipsis (`text-overflow`), and the live region still says it whole.
-  - **Words before a tool are taken back.** The librarian sometimes starts writing before it
-    calls a tool (“Let me check…”), saying what the activity line is about to say. When the call
-    starts, those words go: the reply so far is removed at once, with no motion, and the thinking
-    line takes its place, fading in as usual, with `Thinking…`, then the tool's line. The reply you keep is what the
-    librarian wrote after its last tool.
+  - **Words before a tool are taken back.** The librarian sometimes starts writing before it calls a
+    tool (“Let me check…”), saying what the activity line is about to say. When the call starts,
+    those words go: the reply so far is removed at once, with no motion, and the thinking line takes
+    its place, fading in as usual, with `Thinking…`, then the tool's line. The reply you keep is
+    what the librarian wrote after its last tool.
 - **Streaming:** the first chunk replaces the thinking line in the same place, so the first words
   land where the lamp was. The reply is a `.write-head`, and only the last message gets
   `data-live`, so the bar sits on the reply's live block, growing with the paragraph or list as it
@@ -1131,16 +1025,16 @@ in the reader's terms:
 
 ### Opening, proposing a delete, and a new manual
 
-The librarian's tools hand the page an action. The page carries out an open or a proposed delete
-**when the reply is done**, so you read what the librarian said first; a reply that fails carries
-nothing out. While a confirmation is open, those actions do nothing.
+The librarian's tools hand the page an action (when each is handed over is in
+`src/agent/README.md`). The page carries out an open or a proposed delete **when the reply is
+done**, so you read what the librarian said first; a reply that fails carries nothing out. While a
+confirmation is open, those actions do nothing.
 
 - **A new manual:** the server has already saved it, so the page loads the library again **as
   soon as it hears**, before the reply has finished and even if the reply then fails. The new row
   appears in title order, as any row would, with no flash, scroll or focus change: you are still
   talking to the librarian, whose reply names the manual and offers to open it. The named-manual
   line under your message stays as it was when you sent it, before the manual existed.
-
 - **Open:** the page goes to `/read/<its id>`, as clicking the row would. The conversation stays
   for when you come back.
 - **Propose a delete:** the page opens [the delete confirmation](#the-delete-confirmation) for
@@ -1155,12 +1049,11 @@ nothing out. While a confirmation is open, those actions do nothing.
   - **Delete manual** deletes it through the same steps as the row's Delete.
   - **Focus returns to the field**, not the row, because you were talking to the librarian:
     after **Keep it**, Escape or the scrim, and after the manual is deleted.
-  - **The librarian hears how it ended.** Nothing is said on the page, but the reply that proposed
-    the delete is marked kept (Keep it, Escape or the scrim, before any delete was tried) or
-    deleted (once the server has deleted it), and your next message carries that to the
-    librarian. So asking again after Keep it opens the confirmation again. After a failed delete,
-    Keep it marks nothing, since the delete may still have happened on the server
-    (`deleteOutcome.ts`).
+  - **The librarian hears how it ended** (`reportDeleteOutcome` in `src/agent/README.md`):
+    nothing is said on the page, but your next message tells the librarian whether you kept the
+    manual or deleted it, so asking again after Keep it opens the confirmation again. After a
+    failed delete, Keep it reports nothing, since the delete may still have happened on the
+    server.
 
 ### Scrolling: newest in view, never pulled down
 
@@ -1176,8 +1069,8 @@ nothing out. While a confirmation is open, those actions do nothing.
   chunk never counts as scrolling away.
 - **Newest ↓.** While you're more than 24px from the bottom, the composer's readout slot (below)
   becomes a `.text-button` `Newest ↓`, or `Replying ↓` with a breathing lamp (`.write-head-lamp`)
-  while a reply is in progress (thinking or streaming). It jumps to the bottom (instant) and resumes following. It lives in a
-  fixed slot, never floating over the text.
+  while a reply is in progress (thinking or streaming). It jumps to the bottom (instant) and resumes
+  following. It lives in a fixed slot, never floating over the text.
 
 ### The composer: the most prominent control
 
@@ -1304,9 +1197,9 @@ Every one is a single click, tap or keystroke, at every width.
 
 ### The delete confirmation
 
-A true modal, anchored to the row it deletes, so you see exactly what's going. The row's
-**Delete** opens it, and so does the librarian when it proposes a delete ([Opening, proposing a
-delete, and a new manual](#opening-proposing-a-delete-and-a-new-manual)): the same dialog, the same steps.
+A true modal, anchored to the row it deletes, so you see exactly what's going. The row's **Delete**
+opens it, and so does the librarian when it proposes a delete ([Opening, proposing a delete, and a
+new manual](#opening-proposing-a-delete-and-a-new-manual)): the same dialog, the same steps.
 
 - **The modal:** a `Sheet` with `role="alertdialog"`, `aria-modal="true"`, `aria-labelledby` on
   its title and `aria-describedby` on its text. The page wrapper (skip link, library, and panel or
@@ -1344,7 +1237,7 @@ delete, and a new manual](#opening-proposing-a-delete-and-a-new-manual)): the sa
 - **After Delete manual:** the confirmation stays open while the server deletes the manual
   (`deleteManual(id)`). Its button reads `Deleting…`, and both buttons are `aria-disabled`,
   `--ink-muted` with no hover; Escape, the scrim and Keep it do nothing until the server answers.
-  The request gives up after 10 seconds. A local server answers in a few milliseconds, so this is rarely seen.
+  The request gives up after 10 seconds.
 - **Once it's deleted** (or the server says it was already gone, a 404): the confirmation closes,
   the row collapses (height, padding, margin and opacity to 0 with the Web Animations API, timed
   by `--dur-base` and `--ease-in-out` read from the tokens, so reduced motion makes it instant),
@@ -1379,16 +1272,15 @@ so in place, in its own style (re-measured, so it still clears the row):
 
 ## Loading the library
 
-- **The first load suspends.** The landing page renders nothing until `GET /api/manuals` answers
-  (the lazy route's `Suspense`, as in the reader), so the ledger and the cues never appear
-  half-filled. A local server answers in a few milliseconds.
-- **Coming back** to `/` in the same page load (from the reader, say) shows the list already
-  loaded at once and fetches it again in the background, so counts written in the meantime
-  appear; nothing blanks or jumps. If that fetch fails, the list already shown stays. In
-  development, StrictMode's double mount makes the first visit fetch twice, which is harmless.
+How the list is loaded and refreshed is in `src/library/README.md`. On the page:
+
+- **The first load** shows nothing until the list arrives, so the ledger and the cues never
+  appear half-filled.
+- **Coming back** to `/` in the same page load (from the reader, say) shows the list at once, and
+  counts written in the meantime appear when the background refresh lands; nothing blanks or
+  jumps.
 - **Where it opens:** a link to `/` (the reader's Library) opens it at the top, not at the
   reader's scroll position. Back leaves the scroll to the browser, which restores where you were.
-- **`?library=empty`** is passed on to the server, whose preview answers with no manuals.
 
 ### The library can’t be reached
 
@@ -1412,7 +1304,7 @@ notice instead of a blank page, like the reader's `Couldn’t open this manual`:
 The page keeps its structure; the empty shelf becomes an invitation.
 
 - Head: `Library`, meta `No manuals`, **Start a new manual ›** in its usual place.
-- No column header: a sort arrow over nothing is noise. Between a 1px `--rule-strong` line and the
+- No column header, since there are no rows to label. Between a 1px `--rule-strong` line and the
   closing `--rule` line, one sentence, `--text-lead` `--ink-muted`, capped at `--measure`: `Your
   library is empty. Start a new manual, or ask the librarian.`
   - Both phrases are `.link` buttons in `--ink-strong`. **Start a new manual** uses the head's
@@ -1516,37 +1408,16 @@ Hooks: `agent-input` on the field (one is visible at every width), `delete` on e
 
 ## Build structure
 
-The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/library/` (the manuals:
-`useLibrary()`, `refreshLibrary()`, `deleteManual()`, `removeFromLibrary()`) and `src/agent/` (the
-librarian: `useAgent()`, `useAgentActions()`, `LIBRARIAN_LIMITS`).
+The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/library/` (the manuals)
+and `src/agent/` (the librarian), each documented in its README.
 
-- `index.tsx`: `Home` wraps `HomePage` in `LibraryErrorBoundary` (its own file, styled by
-  `library-error.css`), which shows the unreachable notice. `HomePage` is the `ui home` root. It
-  owns what the library and the librarian share (the draft, the named manuals, the hovered row,
-  the jump, the rows) and the two live regions, and starts at the top after a link.
-  `useDeleteFlow.ts` holds the delete flow: the manual being confirmed, the stage, the notice,
-  Keep it and Delete manual, telling the librarian how its delete ended, and focus return.
-  `page.css` holds the two-column page, the narrow-width padding and the touch overrides for
-  shared hovers; `tokens.css` the sizes above.
-- One component per file, each importing its own stylesheet: `LibraryHead`, `Ledger`, `LedgerRow`
-  (styled by `ledger.css`), `SectionStrip`, `DeleteConfirmation` (with the scrim),
-  `LibrarianPanel` (desktop), `PhoneAgent` (the dock and the conversation sheet),
-  `LibrarianHead` (with `StatusDetail`, which the dock's toggle uses too), `NewestButton`,
-  `Conversation` (the log, the cues when empty, and the thinking line), `Turn` (one message, the
-  named-manual line under yours, and a failed reply's note), `Cues`, `Composer`.
-- Page actions: `HomePage` carries them out (`act`: load the library again, navigate, or open the
-  confirmation);
-  `LibrarianPanel` and `PhoneAgent` receive them with `useAgentActions`, and `PhoneAgent` closes
-  its sheet before a proposed delete.
-- Helpers: `references.ts` (the matcher and `namedWhenSent`), `cuePrompts.ts` (the cues and the
-  starter prompt), `replyFailure.ts` (a failed reply's words), `manualCount.ts` (`7 manuals` for
-  the head and the dock), `agentSide.ts` (the props the panel and the phone dock share),
-  `motion.ts` (the target flash and the row collapse), `useStickToBottom.ts`,
-  `useFocusShortcut.ts`, `useMediaQuery.ts`.
-- Tests: `references.test.ts` (the matcher), `Turn.test.tsx` (the named-manual line after a
-  delete, and a failed reply's note), `DeleteConfirmation.test.tsx` (its words in each stage,
-  and its placement at each width, including crossing 768px while open),
-  `useStickToBottom.test.tsx` (following, and never pulling you down) and `HomePage.test.tsx`
-  (the librarian's actions, focus after a delete or Keep it, where the page opens, and the
-  sheet's open on load). The DOM tests run in happy-dom; `fakeWidth.ts` stands in for
-  `matchMedia` at a page width.
+- One component per file. Each one that has styles imports its own stylesheet, except a part that
+  only its parent renders, which its parent's stylesheet styles (`LedgerRow` by `ledger.css`,
+  `Turn` by `conversation.css`); `tokens.css` holds the page's sizes and `page.css` the two-column
+  page.
+- `HomePage` owns what the library and the librarian share (the draft, the named manuals, the
+  hovered row, the jump, the rows) and the two live regions; `useDeleteFlow.ts` holds the delete
+  flow, `LibraryErrorBoundary` the unreachable notice.
+- Page actions are carried out by `HomePage` (load the library again, navigate, or open the
+  confirmation). Whichever of `LibrarianPanel` and `PhoneAgent` is showing receives them with
+  `useAgentActions`, and `PhoneAgent` closes its sheet before a proposed delete.

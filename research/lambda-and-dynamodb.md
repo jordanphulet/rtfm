@@ -3,8 +3,8 @@
 Research only, written 2026-10-11 from the design of the local server in `ARCHITECTURE.md`. No AWS
 calls were made.
 
-**Status:** nothing here is adopted. The app runs locally, on one Node server that keeps the
-manuals and the usage ledger as files in `.data/`.
+**Status (2026-10-11):** nothing here is adopted. The app runs locally, on one Node server that
+keeps the manuals and the usage ledger as files in `.data/`.
 
 ## What the local server already gives
 

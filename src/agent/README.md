@@ -79,8 +79,8 @@ Every component that calls `useAgent()` sees the same conversation.
   `src/ui/README.md`).
 - Every other message is complete, or has a `failure`.
 
-The text is the markdown `ReplyMarkdown` renders: paragraphs, **bold**, *italics* (manual titles)
-and bulleted or numbered lists. It is what the librarian wrote after its last tool.
+The text is markdown for `ReplyMarkdown` (`src/ui/README.md`), and only what the librarian wrote
+after its last tool.
 
 ## `useAgentActions(handler)`
 
@@ -123,14 +123,14 @@ after a `propose-delete` is handed over counts; any other call does nothing.
 
 These set up the conversation when the page loads, so a single page load shows each screenshot
 state. They combine. Their replies come from the server's preview (`?freeze=` on the librarian
-route), which always plays the **scripted fake model**, whatever models the server runs, sends
-no page actions and costs nothing.
+route, `ARCHITECTURE.md` › The librarian), which always plays the **scripted fake model**,
+whatever models the server runs, sends no page actions and costs nothing.
 
 | Option                  | Starting conversation | `status` |
 | ----------------------- | --------------------- | -------- |
 | *(none)*                | Empty | `"idle"` |
 | `?conversation=demo`    | Three finished exchanges, asked for in turn with `?freeze=1`: "What do I have?" (a list of the manuals), "Open the one about haunted houses" ("Opening *The Haunt That Listens*."), "Can you translate the sourdough manual into Klingon?" (the fake model's "I can’t do that…") | `"idle"` |
-| `?agentFreeze=thinking` | Adds the user message "Let’s start a new manual about building a treehouse", and asks for no reply | `"thinking"`, forever |
+| `?agentFreeze=thinking` | Adds the user message "Let’s start a new manual about building a treehouse", and makes no request | `"thinking"`, forever |
 | `?agentFreeze=<0–1>`    | Adds the same user message and its reply (the fake model's “*Building a Treehouse* is on your shelf…”, which the preview never saves), cut at the last chunk at or before that fraction, repaired. At 0 only the statuses show, ending with the planner's (`activity` `"Planning “Building a Treehouse”…"`); at 1 the reply is whole | `"thinking"` at 0, `"streaming"` above, `"idle"` at 1; frozen ones forever |
 
 - `agentFreeze` takes `thinking` or any number from 0 to 1. Any other value is ignored.

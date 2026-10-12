@@ -88,9 +88,8 @@ The stream:
 - **At most 3 streams are open at once** across all manuals (`MAX_OPEN_STREAMS`, the server's
   `maxConcurrentRuns`, which also counts every manual). Sections opened beyond that wait as
   `writing` with `text` `""`, and their streams open in the order they were opened as others end.
-- A section streams once per page load and keeps streaming if the reader navigates away. The
-  pace is the writer's (the fake writer: about 1.2s of waiting, then about 20 characters every
-  85ms, split at word boundaries).
+- A section streams once per page load and keeps streaming if the reader navigates away, at the
+  writer's pace (`README.md` › The models).
 
 ### `retrySection(manualId: string, id: string): void`
 

@@ -16,7 +16,7 @@ through Claude Platform on AWS. The agent loop is our own, built on the gateway 
 | Web search / fetch | Yes, Anthropic's server tools | Only through an AgentCore Gateway connector, in `us-east-1` only |
 | Our gateway in the loop | Yes: one client file changes | No: the harness calls the model itself |
 | Works offline in tests | Yes, through a fake `ModelClient`, as with Bedrock | No: `agentcore dev` deploys to AWS first |
-| Recommendation | **Try it.** It is the likeliest way past the Bedrock block, and it changes one file | **Don't adopt it.** Build the RL.5 loop on our gateway |
+| Recommendation | **Try it.** It is the likeliest way past the Bedrock block, and it changes one file | **Don't adopt it.** It takes model calls out of our gateway |
 
 ## Claude Platform on AWS
 
@@ -316,7 +316,7 @@ The closest substitutes are all partial:
   to AWS first, then serves a local inspector. Every turn runs in AWS and calls a real model.
 - **The tests could only fake our side of the API** (`@aws-sdk/client-bedrock-agentcore` has an
   `InvokeHarnessCommand`, which can be faked). The loop itself can't run against a fake model the
-  way RL.4's prototypes do.
+  way our own agent loop does.
 
 ### Models, and the Bedrock block
 
@@ -340,7 +340,7 @@ The closest substitutes are all partial:
 - **It works, but it doubles the hosting.**
   - It adds a second compute bill (a microVM per conversation, idle for up to 15 minutes).
   - It adds a second store of conversation state: the harness session and managed memory, while
-    RL.6 keeps the conversation in the browser.
+    the app keeps the conversation in the browser.
 - **The limits are not the obstacle.** The Runtime quotas (60-minute streams, 25 new sessions a
   second, 2 vCPU / 8 GB) are far above RTFM's needs.
 
@@ -357,7 +357,7 @@ The closest substitutes are all partial:
 - **Leave out web tools**, which keeps web access out of scope. Adding them needs the
   reservation changes listed above.
 
-### AgentCore harness: don't adopt it; build RL.5's loop on our gateway
+### AgentCore harness: don't adopt it
 
 - **Every spending rule rests on the gateway.** The harness takes model calls out of it, so
   the per-call reservations, the ledger and the kill switch would no longer cover agent runs.
@@ -368,23 +368,6 @@ The closest substitutes are all partial:
   are what our own loop does already.
 - **Revisit it** if the app needs a sandbox (shell, code execution, browser) per
   conversation.
-
-### How this relates to the RL.4 prototypes
-
-- **Neither prototype moves to the harness automatically.**
-  - Export runs only from a harness to Python Strands.
-  - The harness runs Python Strands internally, not the TypeScript SDK.
-  - So choosing Strands for TypeScript buys no path to the harness. Weigh RL.4 on code size and
-    gateway fit alone.
-- **What would carry over is the tool definitions:** a name, a description, a JSON schema and a
-  handler map directly onto `inline_function`. Whichever loop wins, keep tools in that shape.
-- **Claude Platform on AWS sits below both prototypes**, at `ModelClient`. Two things to check
-  before choosing:
-  - **Web tools:** the loop must pass Anthropic content blocks through untouched
-    (`server_tool_use`, `web_search_tool_result` with `encrypted_content`) and handle
-    `pause_turn`. Our own loop does that by keeping the SDK's content blocks.
-  - **Strands with a custom provider:** whether Strands carries those blocks is unconfirmed. Check
-    it in the prototype before choosing Strands.
 
 ## Your steps
 
@@ -506,4 +489,4 @@ All read 2026-10-11.
   https://yomotherboard.com/question/why-cant-my-account-access-newer-anthropic-and-openai-models-through-bedrock/
   and https://yomotherboard.com/?p=487231
 - RTFM: `CLAUDE.md`, `README.md`, `ARCHITECTURE.md` (gateway, `bedrock-client.ts`, credentials),
-  `research/bedrock-models.md`, `WORKLIST.md` › A real librarian
+  `research/bedrock-models.md`

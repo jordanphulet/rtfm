@@ -7,6 +7,9 @@ turns, with a scripted fake model or with Claude Haiku 4.5. Asked for a new manu
 request to a planner, which has the model plan the manual and saves it. Every Bedrock call,
 including each turn of the loop and each plan, goes through one gateway that caps spending.
 
+`README.md` covers running the app, the data folder and its kill switch, resetting the manuals, and
+what the models cost; this doc covers how the server works.
+
 ```
 browser (Vite, :5173)                        server (node:http, :8787)
   src/library store ┐
@@ -20,9 +23,10 @@ browser (Vite, :5173)                        server (node:http, :8787)
 
 ## 1. The server
 
-The server lives in the top-level `server/` folder, next to `src/` and `scripts/`. It runs as TypeScript directly on
-Node 22.18+, as `scripts/` does, with its own `tsconfig.server.json` (`module: nodenext`,
-`allowImportingTsExtensions`, `noEmit`, the same strict flags), referenced from `tsconfig.json`.
+The server lives in the top-level `server/` folder, next to `src/` and `scripts/`. It runs as
+TypeScript directly on Node 22.18+, as `scripts/` does, with its own `tsconfig.server.json`
+(`module: nodenext`, `allowImportingTsExtensions`, `noEmit`, the same strict flags), referenced from
+`tsconfig.json`.
 
 ```
 server/
@@ -96,7 +100,10 @@ server/
     sdk-boundary.test.ts  fails if anything else imports the SDK or the client
 ```
 
-Tests sit next to the code (`*.test.ts`). Any test that starts a server binds port 0.
+Tests sit next to the code (`*.test.ts`) and never call Bedrock. Any test that starts a server
+binds port 0. Tests that race a timer against real time leave wide margins (a pause meant to stay
+inside a timeout is at most a quarter of it, one meant to outlast it at least twice as long), so
+they hold when several test runs share the machine.
 
 **Running it**
 
@@ -106,36 +113,32 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
     itself.
   - If one child exits or fails to start, it sends the other SIGTERM, so nothing is left holding
     port 5173.
-  - It is a separate process rather than a Vite plugin, so the server runs the same way in
-    development as it does alone (`npm run server`).
-- The server listens on `127.0.0.1` only, so nothing else on the network can reach it, and the
-  Node adapter answers only this machine's own pages (section 2).
+  - It is a separate process, not a Vite plugin, so the server runs the same way in development
+    as it does alone (`npm run server`).
+- The server listens on `127.0.0.1` only and answers only this machine's own pages (section 2).
 - `vite.config.ts` adds `server.proxy` and `preview.proxy`, sending `/api` to
   `http://127.0.0.1:8787` (not `localhost`, which can resolve to `::1`, where nothing listens).
-  It sets `changeOrigin: false`, so the proxy passes the browser's `Host` (`localhost:5173`) and
-  `Origin` through unchanged and the server checks the browser's own headers. With
-  `changeOrigin: true` every proxied request would arrive with `Host: 127.0.0.1:8787`, and the
-  server couldn't tell a DNS-rebound page from the app. Vite's own `allowedHosts` check also
-  refuses other hosts before the proxy runs.
+  - `changeOrigin: false` passes the browser's `Host` (`localhost:5173`) and `Origin` through
+    unchanged, so the server checks the browser's own headers and can tell a DNS-rebound page
+    from the app. Vite's own `allowedHosts` check also refuses other hosts before the proxy runs.
+  - When the API server's response closes before it is complete (the server stopped or restarted
+    mid-section), the proxy's `configure` hook destroys the browser's response too, so the
+    reader's stream fails with "couldn't write this section" instead of hanging.
 - `vite.config.ts` imports `API_PORT` from `server/ports.ts`, so the port is written down once.
   That module holds only constants, because Vite restarts and reloads the page whenever a file
-  its config imports changes; importing `server/config.ts` would reload the page on every edit to it. For the
-  same reason it sets `envDir: false` (the browser code reads no `import.meta.env`, so a `.env*`
-  change, `.env.local` included, means nothing to it) and `server.watch.ignored: ["**/.data/**"]`,
-  so the data folder's writes never reach Vite's watcher. When the API
-  server's response closes before it is complete (the server stopped or restarted mid-section),
-  the proxy's `configure` hook destroys the browser's response too, so the reader's stream fails with "couldn't
-  write this section" instead of hanging.
+  its config imports changes; importing `server/config.ts` would reload the page on every edit to
+  it. For the same reason it sets `envDir: false` (the browser code reads no `import.meta.env`, so
+  a `.env*` change, `.env.local` included, means nothing to it) and
+  `server.watch.ignored: ["**/.data/**"]`, so the data folder's writes never reach Vite's watcher.
 - `npm run server` runs the server alone, for `curl` and `npm run preview`. `RTFM_DATA_DIR` and
-  `RTFM_PORT` (section 8) run it on another data folder or port; `main.test.ts` uses them.
+  `RTFM_PORT` (section 8) run it on another data folder or port.
 - `main.ts` prints `API server on http://127.0.0.1:<port>` and the model source. On SIGINT and
   SIGTERM it closes the server and then exits. `close()` closes every connection, which aborts the
-  sections being written and the librarian's replies; waits until the gateway is idle, so each
-  aborted call's settle is in the ledger (section 5); then releases the data folder's lock
-  (section 3). Under `npm run dev` the signal comes from Ctrl-C, `dev.ts` forwarding one, or
-  `node --watch` restarting the server after an edit. If the folder is in use, `main.ts`
-  prints the refusal and exits with code 1; under `npm run dev`, `node --watch` then waits for a
-  file change and Vite keeps running without an API server.
+  sections being written and the librarian's replies; waits until the gateway is idle (section 5);
+  then releases the data folder's lock (section 3). Under `npm run dev` the signal comes from
+  Ctrl-C, `dev.ts` forwarding one, or `node --watch` restarting the server after an edit. If the
+  folder is in use, `main.ts` prints the refusal and exits with code 1; under `npm run dev`, `node
+  --watch` then waits for a file change and Vite keeps running without an API server.
 - `.claude/launch.json` runs `npm run dev`.
 - `npm run shot` starts the server in process with `startServer({ ...config, port: 0,
   dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it
@@ -143,36 +146,15 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   the seed and never touches `.data/` or Bedrock.
 
 **Plain handlers.** Handlers import only `api/route.ts`, never `node:http` or the Node adapter,
-so they don't depend on how they are served.
+so they don't depend on how they are served. A `Route` has a `method`, a `pattern` and a
+`handle(request)` that gets the route's `params`, the `query`, the parsed JSON `body` (undefined
+when there is none) and a `signal` that aborts when the client disconnects. It answers with a JSON
+response or an event stream, a function given an `EventSink` that ends the stream when it
+resolves; the choice is made inside `handle`, so a stream route can still answer `404`.
 
-```ts
-// server/api/route.ts
-export interface ApiRequest {
-  params: Record<string, string>;   // from the route pattern
-  query: URLSearchParams;
-  body: unknown;                    // the parsed JSON body, or undefined when there is none
-  signal: AbortSignal;              // aborts when the client disconnects
-}
-export interface JsonResponse { status: number; body: unknown }
-export interface EventSink {
-  send(event: string, data: unknown): void;   // `event: …\ndata: <json>\n\n`
-}
-export type EventStream = (sink: EventSink) => Promise<void>;   // the stream ends when it resolves
-export interface Route {
-  method: "GET" | "POST" | "DELETE";
-  pattern: string;
-  handle(request: ApiRequest): Promise<JsonResponse | EventStream>;   // so a stream route can 404
-}
-```
-
-The Node adapter, in this order, before any route is matched:
-
-- refuses a request from anywhere but this machine's own pages (section 2): `403` for a `Host` or
-  `Origin` that isn't local;
-- reads the body, up to 262,144 characters. A body sent without `content-type: application/json`
-  gets `415`; one that is too long or isn't JSON gets `400 { error: "Bad request" }`;
-
-Then it:
+Before any route is matched, the Node adapter refuses a request from anywhere but this machine's
+own pages (section 2), then reads the body, up to 262,144 characters: one that is too long or
+isn't JSON gets `400 { error: "Bad request" }`. Then it:
 
 - matches `method` exactly, and `pattern` by splitting the path on `/`;
 - turns `res.on("close")` into the `AbortSignal`;
@@ -187,37 +169,16 @@ The wire types live in `server/api/types.ts`. The browser imports them with `imp
 `LIBRARIAN_LIMITS`, which the file defines with no imports, so nothing else from `server/` reaches
 the bundle.
 
-```ts
-interface ManualSummary { id; title; subtitle; chapterCount; sectionCount; writtenCount }
-interface Manual  { id; title; subtitle; chapters: Chapter[]; appendices: Chapter[] }   // no voice
-interface Chapter { id; label; title; sections: Section[] }
-interface Section { id; label; title; summary; status: "unwritten" | "writing" | "written" }  // no body
-
-type SectionEvent =
-  | { event: "append";  data: { at: number; text: string; progress: number } }
-  | { event: "written"; data: {} }
-  | { event: "frozen";  data: {} }
-  | { event: "failed";  data: { reason: "budget" | "error" } };
-
-interface LibrarianMessage {
-  role: "user" | "agent";
-  text: string;
-  deleteOutcome?: "kept" | "deleted";   // agent only: how the delete confirmation it proposed ended
-}
-const LIBRARIAN_LIMITS = { earlierExchanges: 10, messageCharacters: 4000 };
-type PageAction =
-  | { type: "open"; manualId: string }
-  | { type: "propose-delete"; manualId: string }
-  | { type: "created"; manualId: string };   // already saved: the page loads the library again
-type LibrarianEvent =
-  | { event: "status"; data: { text: string } }   // a tool is running: "Searching the shelves…"
-  | { event: "text";   data: { text: string } }   // the next piece of the reply
-  | { event: "withdraw"; data: {} }               // drop the reply so far: it came before a tool call
-  | { event: "action"; data: PageAction }
-  | { event: "done";   data: {} }
-  | { event: "frozen"; data: {} }                 // previews only
-  | { event: "failed"; data: { reason: "budget" | "error" } };
-```
+- **A `Manual`** is its id, title, subtitle, chapters and appendices, each chapter a list of
+  sections with a label, title, summary and status (`unwritten`, `writing` or `written`). It has
+  no voice and no bodies. **A `ManualSummary`** is what the library lists: the id, title,
+  subtitle, and the chapter, section and written counts.
+- **A section stream** sends `append` (`at`, `text`, `progress`), then `written`, `frozen` or
+  `failed` (`reason`: `"budget"` or `"error"`).
+- **The librarian** takes `LibrarianMessage`s (`user` or `agent`, their text, and on an `agent`
+  message an optional `deleteOutcome`) and streams `LibrarianEvent`s: `status`, `text`,
+  `withdraw`, `action` (a `PageAction`: `open`, `propose-delete` or `created`), `done`, `frozen`
+  (previews only) and `failed` (section 7).
 
 | Route | Response |
 | --- | --- |
@@ -247,7 +208,7 @@ A request with no `Host` at all is refused by Node itself, with `400`.
   sends its own name as `Host`.
 - **The `Origin` check** stops another site's page. Its POST, its DELETE, and its `fetch` or
   `EventSource` on a section stream all carry its `Origin`, so the stream is refused before a run
-  starts, rather than after CORS has already let it start a paid run. A missing `Origin` is
+  starts, not after CORS has let it start a paid run. A missing `Origin` is
   allowed: the browser leaves it off same-origin GETs, the reader's `EventSource` included, and
   `curl` sends none.
 - **The content type** backs up the `Origin` check. Another site's page can send a form or a
@@ -309,12 +270,8 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
   - `"error"`: **couldn't write this section**. Bedrock failed, the stream stalled, the output
     failed validation, `stop_reason` was `max_tokens` or `refusal`, or too many sections were
     already being written.
-- **No auto-reconnect.** After `written`, `frozen` or `failed`, and on any `error` event, the
-  client closes the `EventSource`. An `error` counts as `failure: "error"`. Reconnecting would pay
-  for a second run.
-- **Retrying** is the reader's **Try again**, in place with no reload: the store opens the stream
-  again, which starts a new run because the server kept the section unwritten. Until then a
-  failure sticks for the page load. A reload would also abort this tab's other running sections.
+- **The client never reconnects**, because reconnecting would pay for a second run, and it retries
+  only when the reader asks. How the browser reads the stream is in `src/manual/README.md`.
 - **Preview options**, for screenshots: `?freeze=<0–1>` and `?fail=budget|error` on a stream,
   `?library=empty` on `GET /api/manuals`, and `?freeze=<0–1>` on `POST /api/librarian` (section 7).
   - `api/preview.ts` handles them before any run, writer or storage write is touched, so they cost
@@ -343,28 +300,13 @@ data: {}
 
 ## 3. Storage
 
-Two narrow interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledger.
-`StoredManual` is the manual as it is stored: the `Manual` fields plus `voice`, with no statuses
-and no bodies.
+Two narrow interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledger:
 
-```ts
-interface ManualStore {
-  listManuals(): Promise<StoredManual[]>;
-  getManual(manualId: string): Promise<StoredManual | undefined>;
-  createManual(manual: StoredManual): Promise<"created" | "exists">;   // never replaces a manual
-  deleteManual(manualId: string): Promise<void>;    // the manual and its sections; nothing if missing
-  getBody(manualId: string, sectionId: string): Promise<string | undefined>;
-  saveBody(manualId: string, sectionId: string, body: string): Promise<"saved" | "already-written">;
-  writtenSectionIds(manualId: string): Promise<string[]>;
-  seededManualIds(): Promise<string[]>;             // the seeding record
-  markSeeded(manualId: string): Promise<void>;
-}
-
-interface UsageLedger {
-  append(entry: LedgerEntry): Promise<void>;   // into the file for the entry's reservedAt month
-  entriesForMonth(month: string): Promise<LedgerEntry[]>;   // "2026-10", UTC
-}
-```
+- **`ManualStore`** lists, gets, creates and deletes manuals, gets and saves section bodies, lists
+  a manual's written section ids, and keeps the seeding record. It stores `StoredManual`: the
+  `Manual` fields plus `voice`, with no statuses and no bodies.
+- **`UsageLedger`** appends an entry (into the file for its `reservedAt` month) and reads a
+  month's entries (`"2026-10"`, UTC).
 
 The local files live in `.data/` (gitignored). Tests and the shot script pass a temp `dataDir`.
 
@@ -391,9 +333,9 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
   - **A PID reused** by an unrelated process makes a stale lock look held; the message names the
     PID, and the lock file can be deleted once no server is using the folder.
   - **Released** when `close()` has closed the server and the gateway is idle, and when
-    `startServer` fails after taking it (a model not in the price table, a port in use). A process killed without a chance to
-    close (SIGKILL, a crash) leaves its lock, which the next start takes over.
-
+    `startServer` fails after taking it (a model not in the price table, a port in use). A process
+    killed without a chance to close (SIGKILL, a crash) leaves its lock, which the next start
+    takes over.
 - **Written sections:** a section is written when its `.md` file exists, so there is no status
   to keep in sync.
 - **`createManual`** makes the manual's folder with a plain `mkdir`, which fails if the folder
@@ -403,14 +345,14 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
   create manuals through it, and seeding throws if a seed manual's id turns out to be taken.
 - **`saveBody`** creates the section's file with `createExclusively`, as the lock is created: a temp
   file, then a `link` into place. `link` fails if the file already exists, so a section can't be
-  written twice. It throws if the manual doesn't exist, rather than
-  creating its folder, so a late write can't leave a deleted manual's sections behind.
+  written twice (it answers `"already-written"`). It throws if the manual doesn't exist, rather
+  than creating its folder, so a late write can't leave a deleted manual's sections behind.
 - **`listManuals`** reads every folder in `manuals/` whose name is a slug and has a
   `manual.json`.
 - **`deleteManual`** renames the manual's folder to `<manualId>.<uuid>.deleting`, which isn't a
-  slug and so is never listed, then removes it. The manual disappears in that one step. If the
-  removal fails part-way, the failure is logged and the delete still succeeds: the manual is
-  already gone, and the leftover folder is ignored.
+  slug and so is never listed, then removes it; a missing manual is nothing to do. The manual
+  disappears in that one step. If the removal fails part-way, the failure is logged and the delete
+  still succeeds: the manual is already gone, and the leftover folder is ignored.
 - **`markSeeded`** rewrites `seeded.json` through a temp file and a `rename`.
 - **A line cut off by a crash.** A crash mid-append can leave a last line with no newline.
   - Reading skips any line that doesn't parse, wherever it is, with a warning naming the file and
@@ -419,43 +361,31 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
     `reserve` means no call was made. A cut-off `settle` leaves its `reserve` unsettled, counted at
     its worst case.
   - `append` writes a newline first when the file doesn't end in one, so the next entry starts its
-    own line rather than gluing onto the cut-off one.
+    own line.
 - **Seeding:** on start, `seedStore` seeds each manual in `server/seed/` once. The store keeps a
   record of the seed manuals it has seeded (`seededManualIds`), and for each seed manual not in
   it:
   - if the store has no manual with that id, it puts the TOC, then saves the bodies of the
     sections the seed marks written (the sample's 7 of 18; none for the others);
-  - if the store already has it (a data folder from before the record existed), it leaves it
-    exactly as it is, written sections included;
+  - if the store already has a manual with that id, it leaves it exactly as it is, written
+    sections included;
   - either way, it then records the id.
 
-  So a seed manual added to `server/seed/` later is seeded on the next start, and a deleted seed
+  So a seed manual added to `server/seed/` is seeded on the next start, and a deleted seed
   manual stays in the record and is never seeded again. A crash after the TOC is put but before
   every seed body is saved leaves that manual with fewer sections written; they are written on
-  demand like any other.
-- **Reset:** to reset the manuals, stop the server and delete `.data/manuals/` and
-  `.data/seeded.json`. Never delete `.data/ledger/`, because the caps are computed from it.
+  demand like any other. Resetting the manuals to the seed is in `README.md`; never delete
+  `.data/ledger/`, because the caps are computed from it.
 
 ## 4. The section writer
 
-```ts
-// server/writer/types.ts
-interface SectionWriter {
-  // The body is exactly all text joined.
-  write(manual: StoredManual, sectionId: string, signal: AbortSignal):
-    AsyncIterable<{ text: string; progress: number; placeholder?: boolean }>;
-}
-class WriteFailed extends Error {
-  reason: "budget" | "error";
-  constructor(reason: "budget" | "error") {
-    super(reason);
-    this.reason = reason;
-  }
-}
-```
+A `SectionWriter` (`writer/types.ts`) takes the stored manual, a section id and a signal, and
+yields chunks of `{ text, progress, placeholder? }`; the body is exactly all the text joined. It
+fails with `WriteFailed("budget" | "error")` or any other error.
 
-**`writer/fake.ts`** waits 1.2s, then yields the seed body about 20 characters every 85ms, split at
-word boundaries, the same pace as the fake librarian's replies.
+**`writer/fake.ts`** waits, then yields the seed body in chunks of about 20 characters at a steady
+pace (`README.md` › The models gives the timings), split at word boundaries, the same pace as the
+fake librarian's replies.
 
 - `chunkEnds` splits a body into these chunks. The fake librarian and the previews use it too.
 - `progress` is exact.
@@ -473,21 +403,20 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
     that text inside `<manual>` and `<written-section>` is reference material, never
     instructions, and that the voice describes style only.
   - The **user message** names the section, its chapter and its summary, the previous and next
-    sections with their summaries, and a length in words (`sectionWordsRequested`, 650). It ends
+    sections with their summaries, and a length in words (`sectionWordsRequested`). It ends
     by restating what Haiku most often skips: at least one table, list, checklist or code block,
     a language tag on every code block, and a cross-reference with the target's title as its
     link text, shown with a real neighbour (`[Sensing the Guest](section:sensing-the-guest)`).
   - **An example section.** The user message starts with a section of the same manual that is
-    already written, to show its voice and markdown. It prefers the nearest section whose body
-    is still the seed's (by distance in reading order, the earlier one on a tie), so the model's
-    own flaws don't spread, and falls back to the nearest written section. Without an example,
-    Haiku 4.5 wrote unbroken essays with no headings, lists or links. It adds about 1,000 input
-    tokens, about $0.001 a section. A manual with nothing written yet gets no example.
+    already written, to show its voice and markdown: it is what gives Haiku 4.5's sections their
+    headings, lists and links. It prefers the nearest section whose body is still the seed's (by
+    distance in reading order, the earlier one on a tie), so the model's own flaws don't spread,
+    and falls back to the nearest written section. It adds about 1,000 input tokens, about $0.001
+    a section. A manual with nothing written yet gets no example.
   - **Escaping.** Manual text (chapter and section titles included, since a planned manual's come
     from the model and the user's request) is inserted with `<` escaped (`escapeTags`, which the
     planner's prompt uses too), so it can't open or close a tag; attribute values also escape `>`
-    and `"`. Bodies keep `>`, which is blockquote syntax and
-    can't form a tag on its own.
+    and `"`. Bodies keep `>`, which is blockquote syntax and can't form a tag on its own.
 - **The opening is held back** (`writer/section-text.ts`). Nothing is yielded until the first
   line that is not clutter is whole, so the cheap fixes happen before the reader sees anything.
   Clutter is a blank line, an H1, a line that repeats the section's title (with or without its
@@ -498,34 +427,18 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   is the door." is kept. The first line is usually the first paragraph, so the first chunk is
   that whole paragraph. After that, nothing is dropped, and text already shown never changes.
 - **Typographic quotes** (`writer/typographic-quotes.ts`). Straight quotes and apostrophes in
-  the body become “ ” ‘ ’, as the seed manuals are written, wherever the prompt's punctuation
-  rule slipped. The body (after the opening, before whole words are cut) is typeset as a whole
-  each time text arrives. Each quote is decided by the text before it and the rest of its word,
-  and whole-word yielding shows a word only once the whitespace after it has arrived, so a quote
-  is final before it is shown: nothing extra is held back, and the stored body is exactly the
-  streamed text. The seed bodies, with their quotes made straight, come back exactly.
-  - **Opening or closing.** A quote opens when it follows whitespace, the start of a line or one
-    of `( [ { > “ ‘ — – - / |` (looking past `*`, `_` and `~`) and is followed by a non-space;
-    otherwise it closes. A single quote that would open is an apostrophe instead before a digit
-    (’90s) or in ’em, ’tis, ’twas, ’til, ’cause and ’n’. Every other single quote is ’:
-    contractions, possessives (after a closing quote too: “The Raven”’s) and closing quotes.
-  - **Measurements.** After a digit, `'` and `"` become primes (5′ 10″, a 12″ step), unless a
-    quote of that kind is open on the line (“Room 101”, ‘Take 2’) or `'` is followed by a letter
-    (1990’s). Open quotes are tracked per line.
-  - **Left alone:** fenced code blocks (the same fence rules as validation); indented code blocks
-    (four spaces or a tab after a blank line, unless the last line before it was a list item or
-    indented, which makes it list content); inline code with any number of backticks (an
-    unclosed run leaves the rest of its line alone); link and image targets with their titles
-    (`](…)`, `section:` links included); the destination and title of a reference definition
-    (its label is typeset like the links that use it, so they still match); autolinks and
-    HTML-like tags (`<` then a letter, `/`, `!` or `?`, up to `>`); bare URLs (`http://`,
-    `https://` or `www.` up to whitespace, since GFM keeps a straight trailing quote out of the
-    link but a curly one in it, so `"https://…"` keeps its straight closing quote); and
-    backslash escapes.
-  - A quote that opens with a digit (‘5 o’clock’) gets an apostrophe.
+  the body become “ ” ‘ ’ (and primes after a digit: 5′ 10″), as the seed manuals are written,
+  wherever the prompt's punctuation rule slipped. Code blocks, inline code, link and image
+  targets, reference definitions, autolinks, HTML-like tags, bare URLs and backslash escapes are
+  left alone. The body (after the opening, before whole words are cut) is typeset as a whole each
+  time text arrives. Each quote is decided by the text before it and the rest of its word, and
+  whole-word yielding shows a word only once the whitespace after it has arrived, so a quote is
+  final before it is shown: nothing extra is held back, and the stored body is exactly the
+  streamed text. The rules are in the module and its tests, which also check that the seed
+  bodies, with their quotes made straight, come back exactly.
 - **Whole words only.** It yields only up to the last whitespace and holds back the rest until
   more arrives or the stream ends. Chunks therefore end on whole words, like the fake's. Bedrock
-  sends small deltas, so a section arrives as about 400 `append` events over 12–15 seconds.
+  sends small deltas, so a section arrives as a few hundred `append` events.
 - **Late failures.** Problems found at the end (`writer/validate.ts`, which ignores code) throw
   `SectionRejected`, a plain `Error` that names them, so `runs.ts` logs it and sends `failed:
   "error"`. The streamed text is discarded, and the unshown tail is never sent:
@@ -545,22 +458,24 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   `"error"`.
 - **Progress** is `min(0.99, characters shown / config.sectionExpectedCharacters)`. It is a
   separate setting from the words requested because Haiku 4.5 writes past the length it is asked
-  for: asked for 650 words, it wrote 760–800 words, 4,200–5,000 characters. At 4,800 characters,
-  progress usually ends a little short of 100% and then jumps to written, rather than waiting at
-  99%.
+  for (section 8's measurements). Set near what it writes, progress usually ends a little short
+  of 100% and then jumps to written, rather than waiting at 99%.
 
 **Choosing the models:** `config.models`, which defaults to `"fake"` (used by tests and
 screenshots), chooses both the section writer and the librarian's model, which also plans new
-manuals (`createModels` in `app.ts`); `RTFM_MODELS=bedrock` selects Claude for both. With
-`"bedrock"`, `startServer` builds one gateway on the file ledger, and the writer on it, all before
-it seeds or listens. `createGateway` checks every job's model against the price table
-(`ModelNotPriced`), and only then calls the client factory it is given, which reads the
-credentials (`CredentialsMissing`) and builds the Bedrock client. The librarian and its planner
-use the same gateway, so one set of caps covers every job. Either problem therefore stops the
-server from starting, and an unpriced model is reported without reading any secret. `createModels` also returns `idle`: the gateway's
-`idle()` with Bedrock, and one that resolves at once with the fakes, which record nothing. Tests
-replace either model with `startServer(config, { writer, librarian })`, and a test that passes
-its own gateway passes its `idle` too, so `close()` waits for it.
+manuals (`createModels` in `app.ts`); `RTFM_MODELS=bedrock` selects Claude for both.
+
+- With `"bedrock"`, `startServer` builds one gateway on the file ledger, and the writer on it,
+  all before it seeds or listens. The librarian and its planner use the same gateway, so one set
+  of caps covers every job.
+- `createGateway` checks every job's model against the price table (`ModelNotPriced`), and only
+  then calls the client factory it is given, which reads the credentials (`CredentialsMissing`)
+  and builds the Bedrock client. Either problem stops the server from starting, and an unpriced
+  model is reported without reading any secret.
+- `createModels` also returns `idle`: the gateway's `idle()` with Bedrock, and one that resolves
+  at once with the fakes, which record nothing.
+- Tests replace either model with `startServer(config, { writer, librarian })`, and a test that
+  passes its own gateway passes its `idle` too, so `close()` waits for it.
 
 **One writer per section** (`writer/runs.ts`): an in-memory `Map` keyed by `manualId/sectionId`.
 
@@ -592,63 +507,30 @@ its own gateway passes its `idle` too, so `close()` waits for it.
 ## 5. The model gateway
 
 `server/gateway/` is the only route to a model. The section writer and the agent loop pass a job
-name, a prompt and a signal. They never see a model ID, a price or the SDK.
+name (`write-section`, `librarian` or `plan-manual`), a prompt and a signal. They never see a model
+ID, a price or the SDK.
 
-```ts
-// server/gateway/types.ts
-type Job = "write-section" | "librarian" | "plan-manual";
-
-interface ModelPrompt {
-  system: string;
-  tools?: ToolDefinition[];              // { name, description, input_schema }
-  messages: { role: "user" | "assistant"; content: string | ContentBlock[] }[];
-}
-interface Prompt extends ModelPrompt {   // plain text, as the section writer builds it
-  messages: { role: "user" | "assistant"; content: string }[];
-}
-type ContentBlock =
-  | { type: "text"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
-
-interface ModelClient {                  // bedrock-client.ts, and fakes for tests
-  stream(request: { model: string; maxTokens: number; prompt: ModelPrompt; signal: AbortSignal }):
-    AsyncIterable<ModelEvent>;
-}
-type ModelEvent =
-  | { type: "text"; text: string }
-  | { type: "tool-use"; id: string; name: string; input: unknown }   // one per whole tool_use block
-  | { type: "tool-input"; json: string }   // each fragment of a tool_use block's input, as it arrives
-  | { type: "usage"; inputTokens?: number; outputTokens?: number;
-      cacheWriteTokens?: number; cacheReadTokens?: number }
-  | { type: "stop"; reason: string };    // end_turn, tool_use, max_tokens, refusal, …
-
-// server/gateway/gateway.ts
-async function createGateway(deps: {
-  createClient: () => ModelClient;       // called once the prices check passes
-  ledger: UsageLedger; config: GatewayConfig;
-  prices: PriceTable; dataDir: string; now?: () => Date;
-}): Promise<RunningGateway>;
-
-interface Gateway {                      // what the section writer and the agent loop see
-  stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncIterable<ModelEvent>;
-}
-interface RunningGateway extends Gateway {
-  idle(): Promise<void>;                 // resolves once no call is running and every settle is written
-}
-// the stream's first step throws SpendingRefused ("daily-cap" | "monthly-cap" | "kill-switch")
-// or GatewayBusy; a stalled call throws ModelStalled, and a stream that ends without a stop
-// reason throws ModelStreamIncomplete
-```
-
-Content blocks and tool definitions use Anthropic's field names, so `bedrock-client.ts` passes them
-to the SDK as they are.
+- **A prompt** (`ModelPrompt`, `gateway/types.ts`) is a system prompt, optional tool definitions
+  and messages whose content is a string or a list of `text`, `tool_use` and `tool_result` blocks.
+  Blocks and tool definitions use Anthropic's field names, so `bedrock-client.ts` passes them to
+  the SDK as they are. `Prompt` is the plain-text form the section writer builds.
+- **A `ModelClient`** (`bedrock-client.ts`, and fakes for tests) streams `ModelEvent`s: `text`;
+  `tool-input`, each fragment of a tool's input as it arrives; `tool-use`, one per whole
+  `tool_use` block; `usage`, with input, output and cache token counts; and `stop`, with the stop
+  reason.
+- **`createGateway`** takes a `createClient` factory, the ledger, the `GatewayConfig`, the price
+  table and the data folder. It returns a `RunningGateway`: the `Gateway` that the writer and the
+  loop see (`stream(job, prompt, signal)`), plus `idle()`.
+- **Errors:** the stream's first step throws `SpendingRefused` (`"daily-cap"`, `"monthly-cap"` or
+  `"kill-switch"`) or `GatewayBusy`; a stalled call throws `ModelStalled`, and a stream that ends
+  without a stop reason throws `ModelStreamIncomplete`.
 
 `createGateway` rejects with `ModelNotPriced` if any job's model is missing from the price table,
 so the server refuses to start. It checks before it calls `createClient`, so with Bedrock an
-unpriced model is reported without reading any secret. This is the only price-table check. It is async because it replays the ledger before it returns. The
-stream is an async generator, so a refusal surfaces on the first `next()`, before any event. A
-signal that is already aborted is refused without a reservation.
+unpriced model is reported without reading any secret. This is the only price-table check. It is
+async because it replays the ledger before it returns. The stream is an async generator, so a
+refusal surfaces on the first `next()`, before any event. A signal that is already aborted is
+refused without a reservation.
 
 **Callers must read the stream with `for await`**, which calls `return()` when they stop early,
 so the call is aborted and settled. An iterator that is abandoned without `return()` never
@@ -661,9 +543,9 @@ Then, for each call:
 1. **Kill switch.** If `.data/STOP` exists (`existsSync`, so steps 1–5 up to the ledger write are
    one synchronous step), refuse. Creating the file stops new calls at once, with no restart, and
    deleting it resumes them. A call already running finishes; it is bounded by `max_tokens`.
-2. **Concurrency.** If `maxConcurrentCalls` (5) calls are running, throw `GatewayBusy`. That is
-   the 3 section runs plus 2 (section 8), so three sections being written leave room for the
-   librarian and the planner.
+2. **Concurrency.** If `maxConcurrentCalls` calls are running, throw `GatewayBusy`. That is the 3
+   section runs plus 2 (section 8), so five calls can run at once, and three sections being
+   written leave room for the librarian and the planner.
 3. **Worst case.** `(inputBound × highest input price) + (max_tokens × output price)`.
    - `inputBound` adds up:
      - the UTF-8 bytes of the system prompt, of each message's text or, for block content, its
@@ -692,11 +574,11 @@ Then, for each call:
      reading early, the gateway aborts the call itself.
    - **Idle timeout:** 30s with no event (`config.idleTimeoutMs`, or the job's own
      `idleTimeoutMs` where it has one: 60s for `plan-manual`) aborts the call, with outcome
-     `failed`, and the stream throws `ModelStalled`. The timer starts before the request is sent, so it also covers a
-     request that never answers.
-   - The timer also runs while the caller holds an event. This is deliberate: a caller that
-     stops pulling for 30s is as stuck as a model that stops sending, and the HTTP call should
-     not stay open for it. The section writer only hands each chunk on, so it never comes close.
+     `failed`, and the stream throws `ModelStalled`. The timer starts before the request is sent,
+     so it also covers a request that never answers.
+   - The timer also runs while the caller holds an event: a caller that stops pulling for 30s is
+     as stuck as a model that stops sending, and the HTTP call should not stay open for it. The
+     section writer only hands each chunk on, so it never comes close.
    - **The SDK's `timeout` does not cover the stream body** (checked in 0.34.4): its timer wraps
      only the `fetch` call and is cleared once the response headers arrive. The idle timeout is
      therefore the only protection against a stalled body. The SDK `timeout` is still set
@@ -732,9 +614,9 @@ Then, for each call:
      and `idle()` counts it as running.
 
 **Stopping.** `idle()` resolves once no call is running, at once if none is. A call ends after its
-settle append, whether the append succeeds or fails. The server's `close()` awaits it after
-closing every connection (section 1), so the process never exits between a call's abort and its
-settle, which would leave the call unsettled and counted at its worst case.
+settle append, whether the append succeeds or fails. The server's `close()` awaits it (section 1),
+so the process never exits between a call's abort and its settle, which would leave the call
+unsettled and counted at its worst case.
 
 **The ledger is the durable record.** On start, the gateway replays this month's file into its
 totals. A `reserve` with no `settle` (the server died mid-call) counts at its worst case, and
@@ -750,31 +632,20 @@ totals. A `reserve` with no `settle` (the server died mid-call) counts at its wo
   `npm run usage` both use it, so they count spend the same way. `monthOf` comes from
   `storage/file-ledger.ts`, which files entries by it.
 
-**`bedrock-client.ts`** is the only importer of `@anthropic-ai/bedrock-sdk`:
+**`bedrock-client.ts`** is the only importer of `@anthropic-ai/bedrock-sdk`. It builds the client
+with every option that would otherwise fall back to the environment set explicitly:
 
-```ts
-import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
+- the keys from `.env.local` as `awsAccessKey` and `awsSecretKey` (never `process.env`), and
+  `awsRegion`, so `AWS_REGION` is never read;
+- `baseURL`, the region's endpoint, so `ANTHROPIC_BEDROCK_BASE_URL` is never read;
+- `apiKey: null`, so `AWS_BEARER_TOKEN_BEDROCK` can't replace SigV4 signing;
+- a `providerChainResolver` that throws, so the default AWS credential chain never runs;
+- `maxRetries: 0`, one reservation for one HTTP call;
+- `timeout`, the idle timeout (step 6).
 
-export function createBedrockClient(
-  credentials: AwsCredentials,
-  { timeoutMs, baseURL = regionalURL(credentials.region) }: { timeoutMs: number; baseURL?: string },
-): ModelClient {
-  const client = new AnthropicBedrock({
-    awsAccessKey: credentials.accessKeyId,       // from .env.local, never process.env
-    awsSecretKey: credentials.secretAccessKey,   // not awsSecretAccessKey, which the SDK ignores
-    awsRegion: credentials.region,               // explicit, so AWS_REGION is never read
-    baseURL,                                     // explicit, so ANTHROPIC_BEDROCK_BASE_URL is never read
-    apiKey: null as unknown as undefined,        // see below
-    providerChainResolver: async () => { throw new Error(CREDENTIAL_CHAIN_REFUSED); },
-    maxRetries: 0,                               // one reservation, one HTTP call
-    timeout: timeoutMs,                          // config.idleTimeoutMs
-  });
-  // client.messages.stream({ model, max_tokens, system, messages, tools }, { signal }), mapped to
-  // ModelEvent: message_start and message_delta → usage, text_delta → text, each input_json_delta
-  // → tool-input, a tool_use block's content_block_start, input_json_delta and content_block_stop
-  // → one tool-use, message_delta's stop_reason → stop
-}
-```
+It maps `message_start` and `message_delta` to `usage`, `text_delta` to `text`, each
+`input_json_delta` to `tool-input`, a `tool_use` block (its start, input fragments and stop) to
+one `tool-use`, and `message_delta`'s `stop_reason` to `stop`.
 
 **Tool calls.** `tools` is sent only when the prompt has some. A `tool_use` block's input arrives
 as `input_json_delta` fragments; the client joins them and parses the JSON once, at
@@ -787,15 +658,12 @@ what happens: the agent loop then stops with `AgentStopped`.
 **Long tool inputs and the idle timeout.** The API buffers a tool's input one top-level parameter
 at a time: nothing of a parameter is sent until the model has written all of it, then its
 fragments arrive at once. Each fragment is passed on as a `tool-input` event, so the gateway's
-idle timer restarts whenever a parameter arrives, rather than only once the whole block is done.
-The longest silence is then the time to write the largest parameter. For the planner (section 7)
-that is the chapters: measured on 2026-10-12, a 23-section plan of 2,481 output tokens took 21.3s
-in all, and its longest silence, while the chapters were written, was 11.2s (about 116 tokens a
-second). At about 95 tokens a section, the largest chapters the size limits allow (32 sections)
-are about 3,000 tokens, about 26s at that rate: too close to the shared 30s, and over it if
-Bedrock is slower. So `plan-manual` has its own idle timeout of 60s. Without the `tool-input`
-events the gateway saw nothing for the whole 21.3s. The SDK drops `ping` events, so they never
-reach the gateway.
+idle timer restarts whenever a parameter arrives, not only once the whole block is done. The
+longest silence is then the time to write the largest parameter. For the planner (section 7)
+that is the chapters. At the measured rate (section 8), the largest chapters the size limits allow
+(32 sections, about 3,000 tokens) take about 26s: too close to the shared 30s, and over it if
+Bedrock is slower. So `plan-manual` has its own idle timeout of 60s. The SDK drops `ping` events,
+so they never reach the gateway.
 
 **Checked in the installed SDK** (`@anthropic-ai/bedrock-sdk` 0.34.4, on `@anthropic-ai/sdk`
 0.133.0):
@@ -813,7 +681,7 @@ reach the gateway.
   SDK itself passes `apiKey: null` to the base client and turns off its default-credential
   lookup, so `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are never read either.
 - **`maxRetries`** defaults to 2, which would mean up to three billed attempts under one
-  reservation. It is set to 0.
+  reservation.
 - **`timeout`** defaults to 10 minutes and covers only the wait for response headers (step 6).
 - **Streaming abort:** the signal passed in the request options stays attached until the body is
   settled, so aborting it mid-stream closes the HTTP connection. But `MessageStream`'s iterator
@@ -822,11 +690,11 @@ reach the gateway.
 - **Response framing:** Bedrock answers with `application/vnd.amazon.eventstream`, which the SDK
   transcodes to server-sent events in `core/streaming.js`. Exception frames become SSE `error`
   events, which the stream throws.
-- **The model ID** goes into the path unencoded: `/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke-with-response-stream`.
+- **The model ID** goes into the path unencoded:
+  `/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke-with-response-stream`.
 
 Haiku 4.5 has thinking off unless asked. No `cache_control` is sent: Haiku 4.5 caches only a
-prefix of at least 4,096 tokens, and every call's whole input is shorter than that (about 3,000
-tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
+prefix of at least 4,096 tokens, and every call's whole input is shorter than that (section 8).
 
 **`credentials.ts`** reads the file at the repo root:
 `util.parseEnv(readFileSync(new URL("../../.env.local", import.meta.url), "utf8"))`.
@@ -839,79 +707,23 @@ tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
   value, so the server refuses to start with the Bedrock models. `app.ts` calls it when
   `config.models` is `"bedrock"`.
 
-**Tests, all offline**
-
-- **SDK boundary.** `sdk-boundary.test.ts` scans the text of every source file (`.ts`, `.tsx`,
-  `.js`, `.jsx` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`, and of the root source
-  files. It fails if any file other than `bedrock-client.ts` has a quoted or backticked string
-  starting with `@anthropic-ai/` or `@aws-sdk/`, which covers every form of import. It also fails
-  if anything outside `server/gateway/` and `server/app.ts` imports `bedrock-client`, so nothing
-  can call the client without going through the caps.
-- **Credentials.** `bedrock-client.test.ts` points the client at a local `node:http` server on
-  port 0 that answers with real `application/vnd.amazon.eventstream` frames (built with
-  `@smithy/eventstream-codec`, a dev dependency), with fake keys. `AWS_PROFILE`,
-  `AWS_BEARER_TOKEN_BEDROCK`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`,
-  `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BEDROCK_BASE_URL` are all set to
-  decoys.
-  - The request is SigV4-signed with the fake key id for `us-west-2/bedrock`, and carries no
-    bearer token, no `x-api-key` and no decoy value. This proves the `apiKey: null` cast works at
-    runtime.
-  - With an empty key, the call fails with the resolver's error and the server receives nothing.
-    This proves the default chain never runs: it would otherwise sign with the decoy env keys.
-  - Removing either guard makes these tests fail.
-  - The events are mapped, the stream's HTTP request closes when the signal aborts, and a 503
-    gets exactly one attempt.
-  - A prompt with tools and block content is sent with `tools` and the blocks as they are, and
-    no `eager_input_streaming`; a prompt without tools sends no `tools`. Streamed `tool_use`
-    blocks, one with its input in fragments and one with none, become a `tool-input` event per
-    fragment and one `tool-use` event each.
-    A block whose input is cut off at `max_tokens` is left out, and the `max_tokens` stop still
-    arrives.
-  - Through the real gateway: a complete stream settles at the reported usage, and so does a
-    librarian turn that ends in tool calls; a mid-stream
-    exception frame, a body cut off mid-frame, and a body that ends between frames without a
-    stop each settle as `failed` at the full reserved output.
-  - Through the real gateway with a 1s idle timeout: a `plan-manual` tool input sent in 6
-    fragments 250ms apart (1.5s in all) completes and settles as `complete`, because each
-    fragment restarts the timer (without the `tool-input` events it would stall); a
-    stream silent for 2s before its input still stops with `ModelStalled`.
-  - `credentials.test.ts` covers reading the three keys from a temp file without touching
-    `process.env`, and refusing a missing or empty key, or a missing file, with a message that
-    names the models that need them.
-- **Timing.** Tests that race the idle timer against real time leave wide margins: a pause meant
-  to stay inside a timeout is at most a quarter of it, and one meant to outlast it is at least
-  twice as long. So they hold when several test runs share the machine.
-- **Gateway.** A fake `ModelClient` covers:
-  - each cap, including a call refused on its worst case, running calls and unsettled
-    reservations counting at their worst case, and last month's spend not counting;
-  - the input bound of a prompt with tools and blocks;
-  - settling, and a settle that crosses midnight;
-  - an unpriced model at start-up, refused before the client is created;
-  - the concurrency limit, the kill switch, and the idle timeout, including a call that never
-    sends its first event, a caller that holds an event too long, and a job with its own longer
-    timeout beside one that uses the shared one;
-  - an aborted stream, recorded at its full reserved output, and a failed one;
-  - a client that ends without a `stop`, and one that ends quietly after the signal aborts;
-  - a failed reserve append, which releases the reservation;
-  - replaying a ledger with a line cut off by a crash, still counting the lines around it;
-  - `idle()`: at once with no call running, and otherwise only once every running call's settle
-    is written.
-- **Ledger.** `file-ledger.test.ts` covers a cut-off last line, an entry appended after one
-  (written on its own line, and both read back), and a line that doesn't parse in the middle of
-  the file, each skipped with a warning. `usage-report.test.ts` runs `npm run usage` on a ledger
-  with a cut-off line followed by more entries.
-- **Shutdown and concurrency.** `app.test.ts` stops a server while a librarian call is running
-  on a ledger that is slow to settle, and checks that the settle is written and the lock
-  released by the time `close()` resolves. `config.test.ts` checks that, with the committed
-  config, a librarian turn and a plan both get through while every section run is writing.
-  `main.test.ts` spawns `main.ts` with the fake models on a temp folder and port 0: SIGTERM
-  releases the lock and exits with code 0, and a second instance on the same folder prints the
-  refusal and exits with code 1.
+**Tests, all offline.** They guard two boundaries. `sdk-boundary.test.ts` scans every source
+file (`.ts`, `.tsx`, `.js`, `.jsx` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`,
+and the root source files, and fails if any file but `bedrock-client.ts` names a module starting
+with `@anthropic-ai/` or `@aws-sdk/`, or anything outside `server/gateway/` and `server/app.ts`
+imports `bedrock-client`, so nothing can call the client without going through the caps.
+`bedrock-client.test.ts` runs the client against a local server that answers with real Bedrock
+event-stream frames, with fake keys and `AWS_PROFILE`, `AWS_BEARER_TOKEN_BEDROCK`,
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BEDROCK_BASE_URL` set to decoys: the request is signed with
+the fake key and carries no decoy, and with an empty key nothing is sent. Removing either guard
+fails it. The other tests next to the gateway, the ledger, `app.ts`, `config.ts` and `main.ts`
+cover each rule in this section, the shutdown order in section 1 and the committed config's room
+for the librarian.
 
 **`npm run usage`** (`server/usage.ts`, with the formatting in `gateway/usage-report.ts`) prints
-today's and this month's spend (UTC) against the caps, by model and by job. It also shows call
-counts, aborted, failed and estimated calls, unsettled reservations, and whether the kill switch
-is on. `npm run usage -- <dataDir>` reads another data folder; the tests use this.
+today's and this month's spend (UTC) against the caps, as `README.md` describes. It reads another
+data folder when given one; the tests use this.
 
 ## 6. The agent loop
 
@@ -920,31 +732,12 @@ the results back, and repeats until the model ends its turn. Every turn is one g
 each one is reserved, capped, settled and written to the ledger like any other, under the job the
 caller names.
 
-```ts
-// server/agent/tool.ts
-function defineTool<Shape extends z.core.$ZodShape>(tool: {
-  name: string;
-  description: string;
-  input: Shape;                          // the input's fields: { topic: z.string().min(1) }
-  status: string;                        // shown while it runs: "Looking through the library…"
-  run(input: z.infer<z.ZodObject<Shape, z.core.$strict>>, signal: AbortSignal): Promise<string>;
-}): AgentTool;
-
-interface AgentTool {
-  definition: ToolDefinition;            // what the model sees: name, description, input_schema
-  status: string;
-  run(input: unknown, signal: AbortSignal): Promise<{ content: string; isError?: boolean }>;
-}
-
-// server/agent/loop.ts
-type AgentEvent = { type: "status"; text: string } | { type: "text"; text: string };
-
-function runAgent(run: {
-  gateway: Gateway; job: Job; system: string; tools: AgentTool[];
-  messages: PromptMessage[];             // the conversation so far, ending with the user's message
-  signal: AbortSignal;
-}): AsyncGenerator<AgentEvent, PromptMessage[]>;   // returns the whole conversation
-```
+- **`runAgent`** (`agent/loop.ts`) takes the gateway, the job, the system prompt, the tools, the
+  conversation so far (ending with the user's message) and a signal. It is an async generator of
+  `status` and `text` events that returns the whole conversation.
+- **`defineTool`** (`agent/tool.ts`) makes an `AgentTool` from a name, a description, the input's
+  zod fields, a status line (shown while it runs: "Looking through the library…") and
+  `run(input, signal)`, which returns the result's text.
 
 **A run, turn by turn:**
 
@@ -957,8 +750,8 @@ function runAgent(run: {
 4. If the stop reason is `end_turn`, return the conversation. If it is anything but `tool_use`
    (`max_tokens`, `refusal`, …), throw `AgentStopped`.
 5. For each `tool_use` block, in order: stop if the signal has aborted, yield the tool's
-   `status` (when the tool exists), then run it. Then append all the results as one user message of `tool_result`
-   blocks, and go back to step 1.
+   `status` (when the tool exists), then run it. Then append all the results as one user message
+   of `tool_result` blocks, and go back to step 1.
 
 **Tools.**
 
@@ -968,9 +761,9 @@ function runAgent(run: {
 - **Input is checked before a tool runs.** Input that fails the schema never reaches `run`: the
   model gets an error result (`is_error: true`) that starts "Invalid input:" and names each
   problem, so it can try again.
-- **Other failures** also become error results rather than ending the run: a tool that throws
-  (the result is `String(error)`, such as `Error: …`) and a call to a tool that doesn't exist. `runTool` makes
-  those results, with two exceptions that end the run instead: a tool that throws
+- **Other failures** also become error results, and the run carries on: a tool that throws
+  (the result is `String(error)`, such as `Error: …`) and a call to a tool that doesn't exist.
+  `runTool` makes those results, with two exceptions that end the run instead: a tool that throws
   `SpendingRefused` (its own model call was refused by the caps, so the reply can report the
   budget) and a tool that throws once the run's signal has aborted.
 - **Tools run one after another**, even when the model asks for several at once, and all their
@@ -996,39 +789,15 @@ function runAgent(run: {
 server-sent event as it is (section 7). Text from different turns arrives in order, with the
 statuses of the tools run between them.
 
-**Tests** (`loop.test.ts`) drive `runAgent` through the real gateway, with a temp data folder,
-the seed manuals and a file ledger. `scripted-client.ts` is the fake model: `scriptedClient(turns)`
-plays one list of `ModelEvent`s per call and records each prompt, and `textTurn(...)` and
-`toolUseTurn(toolUses, text?)` build the turns. They cover:
-
-- a run of three turns with two tool calls: the events in order, the tools and schemas sent, the
-  conversation sent and returned, one complete `librarian` call in the ledger per turn, and a
-  reservation that grows with the conversation;
-- input that fails a tool's schema (wrong type, missing field), and an unknown tool: error
-  results, the tool never run, and the run carrying on;
-- a tool that throws; a tool that throws `SpendingRefused`, and one that throws on an abort,
-  each ending the run with no further model call;
-- a cap set to the first turn's reservation, which refuses the second turn: `SpendingRefused`,
-  after the first turn settled;
-- an abort mid-stream, settled as `aborted`;
-- an abort by the first of two tools in a turn: the second never runs, and there is no further
-  model call;
-- a turn that stops at `max_tokens`, one that ends with nothing in it, and one that stops for a
-  tool without calling one: `AgentStopped`.
+**Tests.** `loop.test.ts` drives `runAgent` through the real gateway and a file ledger, with the
+scripted fake model in `scripted-client.ts`, and covers each rule above.
 
 ## 7. The librarian
 
 The librarian on the landing page is the agent loop (section 6) with the library's tools, behind
 one route. The browser keeps the conversation and sends it whole with each message; the reply
-streams back.
-
-```ts
-// server/agent/librarian/reply.ts
-async function sendReply(reply: {
-  gateway: Gateway; store: ManualStore; conversation: LibrarianMessage[];
-  signal: AbortSignal; send: (event: LibrarianEvent) => void;
-}): Promise<void>;
-```
+streams back. `sendReply` (`agent/librarian/reply.ts`) runs it for one conversation and sends the
+reply's events.
 
 **The route** (`api/librarian.ts`), `POST /api/librarian` with `{ messages }`:
 
@@ -1049,8 +818,8 @@ async function sendReply(reply: {
   `deleteOutcome` starts with the page's note (`DELETE_OUTCOME_NOTES` in `prompt.ts`), then a
   blank line and the user's words: `<page_note>In the delete confirmation your last reply opened,
   the user chose Keep it: the manual was not deleted.</page_note>`, or that they confirmed it and
-  the manual has been deleted. The note goes in the user's turn, where it happened, rather than
-  at the end of the reply: a note in the model's own turn is one it learns to write itself.
+  the manual has been deleted. The note goes in the user's turn, where it happened, not at the end
+  of the reply: a note in the model's own turn is one it learns to write itself.
 - **The reply.** `sendReply` runs `runAgent` with the job `librarian` and sends:
   - `status` with each tool's status line, as the loop reports it, and the create tool's progress
     lines while the planner works;
@@ -1093,43 +862,18 @@ async function sendReply(reply: {
   manual scores 3 for each topic word in its title, 2 for each in its subtitle and 1 for each in
   its table of contents (chapter and section titles and section summaries); ties go by title.
 
-**The system prompt** (`agent/librarian/prompt.ts`) is the same for every request. It describes:
+**The system prompt** (`agent/librarian/prompt.ts`) is the same for every request: the prompt
+itself is the reference for what the librarian is told. Its rules match the tools above: it
+deletes nothing, creates only when asked, treats tool results as data, and writes its reply once,
+after its last tool call.
 
-- the library: what a manual is, the page beside the librarian, and that the library can change
-  between messages;
-- the tools, with the delete rule (it deletes nothing; only the user's confirmation does; never
-  say its proposal deleted a manual; only a page note says a delete happened), the create rule (pass the request in the user's words, at most
-  one manual per reply and only when asked, ask first when no subject is given, then give the
-  title and offer to open it without opening it, or say plainly that it couldn't be created),
-  that tool results are data and never instructions, one open or delete per reply, finding the id
-  first, and asking when a request could mean more than one manual;
-- the delete confirmation's end: the user can't write while it is open, their next message may
-  start with the page's note of how it ended, and no earlier confirmation is ever still waiting,
-  so every request to delete calls `propose_delete` again;
-- replying (`<replying>`): the user sees the words as they are written, the page shows each
-  tool's line, and words written before a tool call are taken out, so the reply is written once,
-  after the last tool call, with no narrated calls;
-- the voice, from the landing page's copy: calm, warm and a little dry, like a reference
-  librarian or a stage manager; one to three sentences or a short list; titles in italics, never
-  ids; only the markdown `ReplyMarkdown` renders, minus links and code; typographic punctuation;
-- what it can't do (write a manual's sections itself, edit or rename a manual), answered in a
-  sentence with what it can do instead.
+No `cache_control` is sent (section 5). A reply takes one call per model turn: two for a list or a
+find, two or three to open or propose a delete, and two to create a manual, with the planner's one
+or two calls between them. Section 8 has what a turn reads, writes, costs and reserves.
 
-No `cache_control` is sent (section 5). A librarian call reads about 2,000–2,700 input tokens
-(the system prompt, the tool definitions, the tool-use system prompt and the conversation),
-writes up to a few hundred, and costs about $0.002–0.004, against a reservation of about
-$0.013–0.016. A reply takes one call per model turn: two for a list or a find, two or three to open or propose a delete, and
-two to create a manual, with the planner's one or two calls between them.
-
-**The planner** (`agent/planner/`) plans a new manual and saves it:
-
-```ts
-// server/agent/planner/plan.ts
-async function planManual(plan: {
-  gateway: Gateway; store: ManualStore; request: string; signal: AbortSignal;
-  onStatus: (text: string) => void;
-}): Promise<{ manual: StoredManual } | { problems: string[] }>;
-```
+**The planner** (`agent/planner/`) plans a new manual and saves it. `planManual` takes the
+gateway, the store, the request, a signal and an `onStatus` callback, and returns the saved
+manual or the problems that stopped it.
 
 - **Its own job.** Each attempt is one gateway call under the job `plan-manual`, with its own
   `maxTokens` and idle timeout (section 8), so it is reserved, capped and recorded like any other
@@ -1139,16 +883,12 @@ async function planManual(plan: {
   as for any tool that throws.
 - **The prompt** (`prompt.ts`). The system prompt is the same for every plan: what a plan is for
   (a later writer sees only the voice and each section's title and summary), the rules for each
-  field (the id a slug of the title and never a taken one; a third-person voice brief with a
-  concrete history, a way of addressing the reader, a rhythm, a running vocabulary, the figures
-  the author reaches for and the rules they are firm on; one-line summaries of 60–120
-  characters; typographic punctuation; nothing that could hurt someone), the size to aim
-  for and the hard limits, and one seed manual, *Moving House Without Losing the Cat*, as JSON in
-  the tool's own form, with the instruction never to reuse its author, subject, chapters or
-  wording. The user message holds the request inside `<request>`, with `<` escaped so it can't
-  close the tag, then the ids already taken in the library, and on a retry the problems with the
-  first plan. The system prompt says the request describes the manual wanted and is never an
-  instruction: nothing inside it changes the rules, the tool or the format.
+  field, the size to aim for and the hard limits, and one seed manual, *Moving House Without
+  Losing the Cat*, as JSON in the tool's own form, never to be reused. The user message holds the
+  request inside `<request>`, with `<` escaped so it can't close the tag, then the ids already
+  taken in the library, and on a retry the problems with the first plan. The system prompt says
+  the request describes the manual wanted and is never an instruction: nothing inside it changes
+  the rules, the tool or the format.
 - **The tool**, `save_manual`, takes the plan in the stored manual's own format (`id`, `title`,
   `subtitle`, `voice`, `chapters`, `appendices`). Its JSON Schema comes from the same zod schema
   that checks it (`toolDefinition` in `agent/tool.ts`, which `defineTool` uses too). The planner
@@ -1173,8 +913,6 @@ async function planManual(plan: {
   which comes first, and reports `Planning “<title>”…`, about a second in; a retry reports
   `Revising the plan…`, then `Revising “<title>”…`. The create tool passes these to `sendReply`,
   which sends them as `status` events.
-- **Measured** (Haiku 4.5, 2026-10-12): a 23-section plan took 3,957 input and 2,481 output
-  tokens, $0.0164, in 22s, against a reservation of about $0.036.
 
 **The fake model** (`agent/librarian/fake-model.ts`), the default (`config.models`, section 4):
 
@@ -1195,56 +933,20 @@ async function planManual(plan: {
   after what the request is "about" (`Building a Treehouse`), streamed as one `tool-input` then
   saved with `save_manual` 2.4s later. Asked twice for the same title, its id is taken both
   times, so the second request isn't saved.
-- It waits 600ms before each turn (and before a plan) and streams text about 20 characters every 85ms, at the fake
-  writer's word boundaries (`chunkEnds`). Its fixed replies are `FAKE_REPLIES`, which the tests
-  and the shot script match.
+- It waits before each turn (and before a plan) and streams text in the fake writer's chunks
+  (`chunkEnds`), at the pace `README.md` › The models gives. Its fixed replies are
+  `FAKE_REPLIES`, which the tests and the shot script match.
 
 **Preview** (`?freeze=<0–1>`, in `api/preview.ts`). Whatever models are configured, it runs
 `sendReply` with the fake model at once (no waits) and collects the events. It then sends the
 statuses and the text up to the last chunk end at or before that fraction of the reply's text,
 then `frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never sent, and its store
 saves no manual (`createManual` only answers `"created"`), so a preview costs nothing and changes
-nothing. The browser uses it for
-`?conversation=demo` and `?agentFreeze=` (`src/agent/README.md`).
+nothing. The browser uses it for `?conversation=demo` and `?agentFreeze=` (`src/agent/README.md`).
 
-**Tests**, all offline:
-
-- `api/librarian.test.ts`, with the fake model: a list, a find-and-open with its `open` action,
-  a proposed delete that leaves the manual in place until `DELETE`, a delete proposed again
-  after a kept one (and a list after it, read without the note), a delete that names no manual,
-  a new manual planned, saved, announced with `created` and listed, the same request again
-  refused plainly, a fallback with no tool, and the requests refused with `400` (bad bodies, a
-  message over the limit, too many exchanges, an unknown key, a `deleteOutcome` on a user message
-  or with another value; the limit itself and both outcomes are accepted); the previews at 1,
-  0.5 (which saves nothing it plans) and 0 through a configured model that throws if called,
-  and the invalid `?freeze` values.
-  - Through the real gateway with `scriptedClient`: a three-turn reply with its events in order,
-    the text before its first tool call withdrawn, the plain-text conversation, the rules on
-    narrating and the five tools sent, and one settled `librarian` call per turn; a kept
-    delete's note at the start of the next user message, and the delete proposed again; a
-    confirmed delete's note; a manual created through the planner's own job between two
-    librarian turns (`librarian`, `plan-manual`, `librarian` in the ledger), with the request in
-    the planner's prompt and the counts in the tool result; a second `create_manual` in the same
-    reply refused with no planner call; `failed: "budget"` when the caps refuse the planner's
-    call.
-  - Withdrawing: one `withdraw` per turn that wrote text before its tool calls (two turns, the
-    first with two tools, send exactly two), one before a call to an unknown tool, and none when
-    a tool call comes first.
-  - An unknown id; `failed: "budget"` for a cap and for the kill switch; `failed: "error"` after
-    text for a call stopped at `max_tokens`.
-- `agent/librarian/find.test.ts`: which manual comes first for a topic, matching by the table of
-  contents, title over subtitle, and nothing for request words alone.
-- `agent/planner/plan.test.ts`, through the real gateway with `scriptedClient`: a good plan saved
-  in one `plan-manual` call, with the request as data and the taken ids in the prompt; a request
-  that tries to close its own tag; a bad plan (a repeated id) retried once with its problem, the
-  title progress and the retry's statuses, then saved; a plan that fails twice, with nothing
-  saved and no third call; an id another manual has, refused then saved under a new one; an id
-  taken after the check, never replaced; a reply with no plan and a plan cut off at `max_tokens`,
-  each counted as an attempt.
-- `agent/planner/check.test.ts`: every seed manual and the fake plan pass; labels are assigned
-  by place whatever the model wrote; a taken id, a repeated id, too few or too many chapters and
-  sections, a blank or missing summary, a short voice, an id that isn't a slug and an unknown key
-  are each named.
+**Tests**, all offline, cover the route, the tools, the page notes and withdrawn narration with
+the fake model and with scripted turns through the real gateway, the planner's one retry and its
+checks, and finding; previews call no model and save nothing.
 
 ## 8. Configuration
 
@@ -1256,27 +958,6 @@ nothing. The browser uses it for
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
-```ts
-// server/config.ts
-import { API_PORT } from "./ports.ts";   // 8787
-export const config: ServerConfig = {
-  port: portFromEnv(process.env.RTFM_PORT),            // API_PORT unless set; 0 takes any free port
-  dataDir: dataDirFromEnv(process.env.RTFM_DATA_DIR),  // <repo>/.data (whatever the cwd) unless set
-  models: modelsFromEnv(process.env.RTFM_MODELS),   // "fake" (default) or "bedrock"; anything else throws
-  maxConcurrentRuns: MAX_CONCURRENT_RUNS,   // 3
-  sectionWordsRequested: 650,
-  sectionExpectedCharacters: 4800,
-  caps: { dailyUsd: 2, monthlyUsd: 20 },
-  maxConcurrentCalls: MAX_CONCURRENT_RUNS + CALLS_BESIDE_RUNS,   // 3 + 2
-  idleTimeoutMs: 30_000,
-  jobs: {
-    "write-section": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 2048 },
-    librarian: { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 1024 },
-    "plan-manual": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 4096, idleTimeoutMs: 60_000 },
-  },
-};
-```
-
 - **Types.** `config` is a `ServerConfig`, which extends `GatewayConfig` (`caps`,
   `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) with the port, data dir,
   models, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
@@ -1284,108 +965,64 @@ export const config: ServerConfig = {
   and override what they need.
 - **`RTFM_DATA_DIR` and `RTFM_PORT`** run the server on another data folder (resolved against
   the working directory) or port, with nothing edited; `main.test.ts` runs `main.ts` on a temp
-  folder and port 0 this way. An empty `RTFM_DATA_DIR` means `.data/`; a `RTFM_PORT` that isn't
-  a whole number from 0 to 65535 stops the server from starting. Vite's proxy always points at
-  `API_PORT`, so `RTFM_PORT` is for `npm run server` alone.
+  folder and port 0 this way. An empty `RTFM_DATA_DIR` means `<repo>/.data`, whatever the
+  working directory; a `RTFM_PORT` that isn't a whole number from 0 to 65535 stops the server from
+  starting, and 0 takes any free port. Vite's proxy always points at `API_PORT`, so `RTFM_PORT`
+  is for `npm run server` alone.
 - **`maxConcurrentCalls` is `maxConcurrentRuns + 2`**, both from one constant. The section runs
   can use at most 3 calls between them, so 2 are always left for the librarian's turns and the
-  planner's plans, one each or two of either. With equal limits, three sections being written
-  would refuse every librarian reply with `GatewayBusy`.
-- **The `global.` model ID.** Every job uses the `global.` inference profile rather than `us.`,
-  which costs 10% more; nothing here needs routing that stays in the US.
-- **`maxTokens: 2048`.** The sample sections are 460–660 words (about 650–950 tokens), so this
-  leaves room. Its output costs at most about $0.01 (2,048 × $5 per million), and with the input
-  bound a call's worst-case reservation is about $0.025.
+  planner's plans, one each or two of either. Three sections being written can therefore never
+  refuse a librarian reply with `GatewayBusy`.
+- **The `global.` model ID.** Every job uses Claude Haiku 4.5 through the `global.` inference
+  profile rather than `us.`, which costs 10% more; nothing here needs routing that stays in the US.
+- **`write-section: maxTokens 2048`.** The sample sections are 460–660 words (about 650–950
+  tokens), so this leaves room. Its output costs at most about $0.01 (2,048 × $5 per million).
 - **`librarian: maxTokens 1024`** is sized for a few short paragraphs and short JSON tool inputs.
-  Its output costs at most about $0.005 a turn. With
-  the tool definitions, the conversation and the 588-token tool-use system prompt in the input
-  bound, a first turn reserves about $0.014, and each later turn of the reply more.
+  Its output costs at most about $0.005 a turn. The input bound includes the tool definitions,
+  the conversation and the tool-use system prompt, so each later turn of a reply reserves more
+  than the first.
+- **`plan-manual: maxTokens 4096`.** The measured plan used about 95 output tokens a section plus
+  the voice; the prompt aims for 12–24 sections, and the hard limit of 32 comes to about 3,300
+  tokens for the whole plan. 4096 leaves 65% headroom over the measured plan and room for the
+  largest allowed one. Its output costs at most about $0.02, and the input bound adds a 9 KB
+  system prompt with the example, the 2 KB tool and the tool-use system prompt. A retry reserves
+  the same again.
 - **`plan-manual: idleTimeoutMs 60_000`**, a job's own idle timeout in place of the shared 30s,
   because its largest tool parameter can take that long to arrive (section 5). A stalled plan is
   charged its full `max_tokens` either way, so the longer wait costs nothing more; the SDK's own
   `timeout`, for the response headers, stays at the shared 30s.
-- **`plan-manual: maxTokens 4096`.** A measured 23-section plan took 2,481 output tokens (about 95
-  a section plus the voice); the prompt aims for 12–24 sections, and the hard limit of 32 comes to
-  about 3,300. 4096 leaves 65% headroom over the measured plan and room for the largest allowed
-  one. Its output costs at most about $0.02, and with the input bound (a 9 KB system prompt with
-  the example, the 2 KB tool and the 588-token tool-use system prompt) a plan reserves about
-  $0.036. A retry reserves the same again.
 - **`sectionWordsRequested: 650`** is the length the prompt asks for, about the sample's own
   sections (460–660 words). **`sectionExpectedCharacters: 4800`** is the length the Bedrock
-  writer's progress counts to, set from what Haiku actually writes (see section 4).
-- **Trying another setting** (a tiny cap, say) needs no edit here: a scratch script calls
-  `startServer({ ...config, caps: { dailyUsd: 0.001, monthlyUsd: 20 } })`.
-- **`BEDROCK_MODEL_ID` in `.env.local`** is ignored: `credentials.ts` takes only the three names
-  above, and `.env.local` never reaches `process.env`.
+  writer's progress counts to, set from what Haiku actually writes (the measurements below).
 
-```ts
-// server/gateway/prices.ts — USD per million tokens
-export const prices = {
-  checkedOn: "2026-10-11",
-  models: {
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0":
-      { input: 1.00, output: 5.00, cacheWrite: 1.25, cacheRead: 0.10, toolUseSystemPromptTokens: 588 },
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0":
-      { input: 1.10, output: 5.50, cacheWrite: 1.375, cacheRead: 0.11, toolUseSystemPromptTokens: 588 },
-  },
-};
-```
+**Prices** (`gateway/prices.ts`) are USD per million tokens, dated by `checkedOn`, for the
+`global.` and `us.` Haiku 4.5 profiles: input, output, cache write, cache read, and
+`toolUseSystemPromptTokens`.
 
 - **`toolUseSystemPromptTokens`** is the size of the system prompt the API adds whenever a request
   has tools. It is per model, so it sits with the model's prices. Haiku 4.5's is 496 tokens with
   `tool_choice` `auto` or `none` and 588 with `any` or `tool` (Anthropic's tool-use pricing table,
   checked 2026-10-11). The table holds the larger, so the bound holds whatever `tool_choice` is
   sent.
-
 - **Sources:**
   - Anthropic's Haiku 4.5 list price, $1 / $5 (the `claude-api` skill, cached 2026-10-06).
   - Anthropic's Bedrock guide, checked 2026-10-11: regional endpoints cost 10% more for Sonnet 4.5
     and later models.
   - Cache prices use the standard 1.25× and 0.1× multipliers.
   - **Not from AWS's pricing page**, whose Claude tables don't render.
-- **Measured cost:** $0.007–0.010 per section (about 2,900–3,200 input and 970–1,410 output
-  tokens), with a worst-case reservation of about $0.025. A call aborted mid-section is charged
-  its full `max_tokens`, about $0.013. Both are computed from the reported tokens and this
-  table, as the ledger records them, not read from AWS's bill.
 
-## 9. The reader's store (`src/manual/`)
+**Measured** with Haiku 4.5 (`global.`): the sections and librarian turns on 2026-10-11, the plan
+on 2026-10-12. Costs are computed from the reported tokens and the price table, as the ledger
+records them, not read from AWS's bill.
 
-**How it reads the API**
+| Call | Input tokens | Output tokens | Time | Cost | Reserved |
+| --- | --- | --- | --- | --- | --- |
+| A section (asked for 650 words; wrote 760–800 words, 4,200–5,000 characters) | 2,900–3,200 | 970–1,410 | 12–15s, about 400 `append` events | $0.007–0.010 | about $0.025 |
+| A section aborted mid-stream | as above | charged at 2,048 | — | about $0.013 | about $0.025 |
+| A librarian turn | 2,000–2,700 | up to a few hundred | — | $0.002–0.004 | $0.013–0.016 (about $0.014 for a first turn) |
+| A plan of 23 sections | 3,957 | 2,481 | 21.3s, the longest silence 11.2s (the chapters, about 116 tokens a second) | $0.0164 | about $0.036 |
 
-- **State per manual.** The store keeps one state per manual id (`stateOf(manualId)`): the manual,
-  its cached requests, section texts, opened sections and open streams. Moving between manuals
-  never mixes their sections or streams.
-- **`useManual(manualId)`** fetches `GET /api/manuals/<manualId>` once per manual per page load,
-  from a promise cached in that manual's state, and suspends on it with `use()`. The lazy route's
-  `Suspense` covers the wait. After that it is a `useSyncExternalStore` store. A failed fetch (no
-  server, or an unknown manual) throws to the reader's `ManualErrorBoundary`.
-- **`useSection(manualId, id)`** suspends with `use()` on a cached promise for the JSON section
-  route.
-  - **Written sections** render straight away, with no stream.
-  - **Unwritten sections** open an `EventSource`, once per section per page load and held at
-    module level, so a section keeps writing while the reader is elsewhere.
-  - **Events:** `append` sets the text at `at`. `written` marks the section written, keeping its
-    text. `frozen` keeps it writing. `failed` and `error` record a failure.
-  - **Closing:** the source is closed on `written`, `frozen`, `failed` and `error`.
-  - **Repair stays in the browser:** `text` is still `repairPartialMarkdown(raw)`.
-  - **Failures:** `UseSectionResult` has `failure?: "budget" | "error"`. The TOC shows the
-    section as `unwritten`.
-- **At most 3 streams are open at once on the page**, across all manuals (`MAX_OPEN_STREAMS`,
-  matching `maxConcurrentRuns`, which also counts every manual). The queue of streams waiting for
-  a slot is the only state the manuals share. Sections opened beyond the limit wait in the writing
-  state and open in order as others end.
-- **`?freeze=` and `?fail=`** pass from the page URL to the stream URL.
+## 9. The reader's store
 
-**What the browser doesn't have**
-
-- The manuals live only on the server; the seed manuals are in `server/seed/`.
-- The browser's types have no `body` or `voice`.
-- The browser never splits text into chunks: it shows what each stream sends.
-
-**Tests and scripts that read the sample**
-
-- Tests that need sample bodies read `server/seed/the-haunt-that-listens/`: `repair.test.tsx`
-  with Vite's `import.meta.glob`, cutting each body at word ends about 20 characters apart, as a
-  stream would; the server's tests with `node:fs`.
-- `SHOT_MANUAL` and `SHOT_SECTIONS` are in `scripts/shot.ts`. `Markdown.test.tsx` uses its own
-  literal section ids.
+The browser's side of the API (`src/manual/`: reading a manual, streaming its sections, at most
+three streams at once, and the preview options) is documented in `src/manual/README.md`.
