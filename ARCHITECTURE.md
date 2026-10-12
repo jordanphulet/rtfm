@@ -36,7 +36,7 @@ server/
   api/
     types.ts              the API contract shared with the browser (section 2)
     route.ts              Route, ApiRequest, EventSink: what handlers see
-    node-adapter.ts       node:http ⇄ ApiRequest, JSON responses, the event stream
+    node-adapter.ts       node:http ⇄ ApiRequest, the local-only checks, JSON responses, the event stream
     lookup.ts             finds a manual that has a given section
     library.ts            GET /api/manuals
     manual.ts             GET /api/manuals/:manualId
@@ -105,10 +105,18 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
     port 5173.
   - It is a separate process rather than a Vite plugin, so the server runs the same way in
     development as it does alone (`npm run server`).
-- `vite.config.ts` adds `server.proxy` and `preview.proxy`, sending `/api` to `http://localhost:8787`.
-  It imports `API_PORT` from `server/ports.ts`, so the port is written down once. That module
-  holds only constants, because Vite restarts and reloads the page whenever a file its config
-  imports changes; importing `server/config.ts` would reload the page on every edit to it. For the
+- The server listens on `127.0.0.1` only, so nothing else on the network can reach it, and the
+  Node adapter answers only this machine's own pages (section 2).
+- `vite.config.ts` adds `server.proxy` and `preview.proxy`, sending `/api` to
+  `http://127.0.0.1:8787` (not `localhost`, which can resolve to `::1`, where nothing listens).
+  It sets `changeOrigin: false`, so the proxy passes the browser's `Host` (`localhost:5173`) and
+  `Origin` through unchanged and the server checks the browser's own headers. With
+  `changeOrigin: true` every proxied request would arrive with `Host: 127.0.0.1:8787`, and the
+  server couldn't tell a DNS-rebound page from the app. Vite's own `allowedHosts` check also
+  refuses other hosts before the proxy runs.
+- `vite.config.ts` imports `API_PORT` from `server/ports.ts`, so the port is written down once.
+  That module holds only constants, because Vite restarts and reloads the page whenever a file
+  its config imports changes; importing `server/config.ts` would reload the page on every edit to it. For the
   same reason it sets `envDir: false` (the browser code reads no `import.meta.env`, so a `.env*`
   change, `.env.local` included, means nothing to it) and `server.watch.ignored: ["**/.data/**"]`,
   so the data folder's writes never reach Vite's watcher. When the API
@@ -123,7 +131,8 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   file change and Vite keeps running without an API server.
 - `.claude/launch.json` runs `npm run dev`.
 - `npm run shot` starts the server in process with `startServer({ ...config, port: 0,
-  dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it. Every run starts from
+  dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it
+  (`http://127.0.0.1:<port>`, also with `changeOrigin: false`). Every run starts from
   the seed and never touches `.data/` or Bedrock.
 
 **Plain handlers.** Handlers import only `api/route.ts`, never `node:http` or the Node adapter,
@@ -149,11 +158,16 @@ export interface Route {
 }
 ```
 
-The Node adapter:
+The Node adapter, in this order, before any route is matched:
+
+- refuses a request from anywhere but this machine's own pages (section 2): `403` for a `Host` or
+  `Origin` that isn't local;
+- reads the body, up to 262,144 characters. A body sent without `content-type: application/json`
+  gets `415`; one that is too long or isn't JSON gets `400 { error: "Bad request" }`;
+
+Then it:
 
 - matches `method` exactly, and `pattern` by splitting the path on `/`;
-- reads the body as JSON, up to 262,144 characters; a body that is too long or isn't JSON gets `400 { error:
-  "Bad request" }` before any handler runs;
 - turns `res.on("close")` into the `AbortSignal`;
 - writes the SSE headers (`content-type: text/event-stream`, `cache-control: no-cache`);
 - writes a response whose `body` is `undefined` with no body and no content type (`noContent`, 204).
@@ -209,6 +223,33 @@ type LibrarianEvent =
 
 Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
 `500 { error: "Internal error" }` (or, once a stream has started, the stream just ends).
+
+**Only this machine's own pages.** The API deletes manuals and spends the model caps, so it
+answers nobody but the app's pages on this machine. The server listens on `127.0.0.1` only, and
+the Node adapter refuses, before matching any route:
+
+| Request | Response |
+| --- | --- |
+| `Host` isn't `localhost`, `127.0.0.1` or `[::1]` (any port) | `403 { error: "Host not allowed" }` |
+| `Origin` is sent and isn't `http://localhost`, `http://127.0.0.1` or `http://[::1]` (any port) | `403 { error: "Origin not allowed" }` |
+| A body without `content-type: application/json` (a `charset` is fine) | `415 { error: "Body must be application/json" }` |
+
+A request with no `Host` at all is refused by Node itself, with `400`.
+
+- **The `Host` check** stops DNS rebinding: a site whose name is pointed at `127.0.0.1` still
+  sends its own name as `Host`.
+- **The `Origin` check** stops another site's page. Its POST, its DELETE, and its `fetch` or
+  `EventSource` on a section stream all carry its `Origin`, so the stream is refused before a run
+  starts, rather than after CORS has already let it start a paid run. A missing `Origin` is
+  allowed: the browser leaves it off same-origin GETs, the reader's `EventSource` included, and
+  `curl` sends none.
+- **The content type** backs up the `Origin` check. Another site's page can send a form or a
+  `text/plain` POST without a CORS preflight, but not `application/json`, so no body from another
+  site reaches a route even if its `Origin` were missing. (Its preflight `OPTIONS` carries its
+  `Origin` and gets `403`.)
+- **The app's own requests pass.** Through Vite's proxy they arrive with the page's `Host`
+  (`localhost:5173`) and, on the librarian's POST, its `Origin` (`http://localhost:5173`); the
+  library's DELETE has no body.
 
 **The library** (`api/library.ts`). A summary's counts come from storage, never from the seed:
 

@@ -73,7 +73,7 @@ async function serve(config: ServerConfig, replaced: Partial<Models>): Promise<S
   const server = createServer(createRequestHandler(routes));
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(config.port, resolve);
+    server.listen(config.port, "127.0.0.1", resolve);
   });
   return server;
 }

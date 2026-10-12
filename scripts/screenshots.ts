@@ -26,7 +26,7 @@ export async function startViteServer(port: number, apiPort: number): Promise<Vi
       port,
       strictPort: true,
       forwardConsole: false,
-      proxy: { "/api": `http://localhost:${apiPort}` },
+      proxy: { "/api": { target: `http://127.0.0.1:${apiPort}`, changeOrigin: false } },
     },
     clearScreen: false,
     customLogger: createLoggerWithoutRepeatedErrors(),

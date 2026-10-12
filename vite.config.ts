@@ -5,7 +5,8 @@ import { API_PORT } from "./server/ports.ts";
 
 const apiProxy: Record<string, ProxyOptions> = {
   "/api": {
-    target: `http://localhost:${API_PORT}`,
+    target: `http://127.0.0.1:${API_PORT}`,
+    changeOrigin: false,
     configure(proxy) {
       proxy.on("proxyRes", (apiResponse, _request, browserResponse) => {
         apiResponse.on("close", () => {

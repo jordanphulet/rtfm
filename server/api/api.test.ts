@@ -24,7 +24,7 @@ async function start(writer: SectionWriter = recordingWriter(), dataDir?: string
   };
   const server = await startServer(config, { writer });
   servers.push(server);
-  const library = `http://localhost:${server.port}/api/manuals`;
+  const library = `http://127.0.0.1:${server.port}/api/manuals`;
   const base = `${library}/${SAMPLE_ID}`;
   return { server, config, library, base };
 }
@@ -80,12 +80,12 @@ describe("the API", () => {
   it("answers 404 for unknown manuals, sections and paths", async () => {
     const { server, base } = await start();
     const urls = [
-      `http://localhost:${server.port}/api/manuals/no-such-manual`,
-      `http://localhost:${server.port}/api/manuals/..%2F..`,
-      `http://localhost:${server.port}/api/manuals/%E0%A4%A`,
+      `http://127.0.0.1:${server.port}/api/manuals/no-such-manual`,
+      `http://127.0.0.1:${server.port}/api/manuals/..%2F..`,
+      `http://127.0.0.1:${server.port}/api/manuals/%E0%A4%A`,
       `${base}/sections/no-such-section`,
       `${base}/sections/no-such-section/stream`,
-      `http://localhost:${server.port}/api/elsewhere`,
+      `http://127.0.0.1:${server.port}/api/elsewhere`,
     ];
     for (const url of urls) expect((await fetch(url)).status, url).toBe(404);
   });

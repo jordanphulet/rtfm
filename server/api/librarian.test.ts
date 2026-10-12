@@ -34,7 +34,7 @@ async function start(librarian: Gateway = fakeLibrarianModel(INSTANT_PACE), data
   dataDir ??= await tempDataDir();
   const server = await startServer({ ...committedConfig, port: 0, dataDir, models: "fake" }, { librarian });
   servers.push(server);
-  const base = `http://localhost:${server.port}/api`;
+  const base = `http://127.0.0.1:${server.port}/api`;
 
   function post(body: unknown, query = "") {
     return fetch(`${base}/librarian${query}`, {
