@@ -558,7 +558,7 @@ When this phase is done:
   pass with separate output folders; the shots are unchanged apart from the size name.
 
 ### OH.10 — Docs: one owner per fact, shorter design and architecture docs (all audits)
-- **Status:** todo
+- **Status:** doing (agent: aaaaac5353b3c4d68)
 - **Depends on:** OH.5, OH.6, OH.7, OH.8, OH.9
 - **Files:** `ARCHITECTURE.md`, `DESIGN.md`, `src/*/README.md`, `research/**`, comments in
   `server/**` and `src/**` (not `README.md`, `CLAUDE.md` or `PROCESS.md`)
