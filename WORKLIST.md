@@ -428,7 +428,7 @@ When this phase is done:
   not worth fixing, with a reason, in the orchestrator's summary to the user.
 
 ### OH.4 — The API answers only this machine's own pages
-- **Status:** todo
+- **Status:** doing (agent: a51790ed7f01b8c01)
 - **Depends on:** OH.3 (the server audit)
 - **Files:** `server/app.ts`, `server/api/node-adapter.ts`, `server/api/*.test.ts`,
   `vite.config.ts`, `scripts/screenshots.ts`, `ARCHITECTURE.md`
