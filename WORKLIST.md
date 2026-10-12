@@ -604,7 +604,7 @@ When this phase is done:
 - **Done when:** README.md matches the code.
 
 ### OH.12 — The delete confirmation in a short window
-- **Status:** todo
+- **Status:** doing (agent: ad1e21285ce081578)
 - **Depends on:** OH.10 (both change `DESIGN.md`)
 - **Files:** `src/home/DeleteConfirmation.tsx`, `src/home/delete-confirmation.css`, its test,
   `DESIGN.md`
