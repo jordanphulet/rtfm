@@ -3,9 +3,15 @@
 Research only, checked 2026-10-10. Region us-west-2. Prices are USD per million tokens and change
 often. Recheck them before you rely on them.
 
+**Status (2026-10-11):** adopted Claude Haiku 4.5 (`global.anthropic.claude-haiku-4-5-20251001-v1:0`)
+for every job: writing sections, the librarian and planning manuals. This doc recommends the 5.5
+models, but this account's Bedrock access block refuses the newer models, and Haiku 4.5 is open to
+all Bedrock customers. No other model here is wired up, and the bake-off below was not run. The
+choice lives in `server/config.ts` and `ARCHITECTURE.md`.
+
 ## Summary
 
-| Job | Primary | Cheaper alternative | Works today, before Anthropic access |
+| Job | Primary | Cheaper alternative | Works without Anthropic access |
 | --- | --- | --- | --- |
 | Section writing | Claude Sonnet 5.5 | Claude Haiku 5.5 | GPT-6 Luna, then gpt-oss-120b |
 | Table of contents | Claude Sonnet 5.5 (Opus 5.5 if the bake-off shows better arcs) | Claude Haiku 5.5 | GPT-6 Luna (has real JSON-schema output) |
@@ -14,10 +20,10 @@ often. Recheck them before you rely on them.
 
 - **Price is not the deciding factor.** A whole 30-section manual costs about **$1.02** on Sonnet
   5.5 with caching and about **$0.05** on Haiku 5.5. The sample manual's sections are shorter than
-  the brief assumes (about 550 words, roughly 0.8k tokens), so real costs will be about a third of
+  the brief assumes (about 550 words, roughly 0.8k tokens), so real costs are about a third of
   these. At single-user volume the choice should follow prose quality.
 - **Why Sonnet for sections.** Claude models lead both published creative-writing boards. No
-  board has scored the 5.5 models yet, so the bake-off has to settle Sonnet against Haiku.
+  board has scored the 5.5 models, so the bake-off has to settle Sonnet against Haiku.
 - **Why Haiku is the cheaper option, not gpt-oss.** Haiku 5.5 costs $0.10 / $0.50, which is less
   than gpt-oss-120b's output price. gpt-oss sits in the lower half of EQ-Bench Creative Writing v3.
 - **Check this first: the endpoint.** AWS's model cards list Sonnet 5.5 and Haiku 5.5 on the mantle
@@ -26,7 +32,7 @@ often. Recheck them before you rely on them.
   sources disagree, so make the base URL and model ID configuration.
 - **Check this too: access.** The pending Anthropic "first time use" form applies only to
   `bedrock-runtime`. AWS says it does not apply to Anthropic models called through
-  `bedrock-mantle`. If mantle in us-west-2 does serve Claude, Claude may already work there.
+  `bedrock-mantle`. If mantle in us-west-2 does serve Claude, Claude may work there without the form.
 - **Bake-off:** Sonnet 5.5, Haiku 5.5, Opus 5.5 (as the quality ceiling) and GPT-6 Luna (as the
   non-Anthropic fallback). Plan in [Bake-off](#bake-off).
 
@@ -50,14 +56,14 @@ All of them stream and support client-side tool calls.
 
 | Model | Evidence for long-form writing | Speed (Artificial Analysis, Anthropic API) | Notes |
 | --- | --- | --- | --- |
-| Sonnet 5.5 | Not yet on EQ-Bench or Arena. Its predecessor Sonnet 5 scored 1787.6 on EQ-Bench v3, below Sonnet 4.6. Vendor GDPval-AA Elo 1840. | 109 tok/s, 1.9 s to first token at medium effort | Thinking on by default (effort high). Turn it off with `thinking: {type: "between_tools"}`. Forced `tool_choice` returns 400. Launched 2026-09-28. Cache read cut to $0.10 on 2026-10-07. |
-| Haiku 5.5 | No writing benchmark yet. Vendor GDPval-AA Elo 1620, against 1437 for GPT-6 Luna. | 137–184 tok/s; first answer token 6.3 s at low, 12.6 s at medium, 22.8 s at high effort | Thinking on by default (effort medium). Can be disabled at effort high or below. Prompts over 100K tokens cost 5×. Launched 2026-10-07. |
+| Sonnet 5.5 | Not on EQ-Bench or Arena. Its predecessor Sonnet 5 scored 1787.6 on EQ-Bench v3, below Sonnet 4.6. Vendor GDPval-AA Elo 1840. | 109 tok/s, 1.9 s to first token at medium effort | Thinking on by default (effort high). Turn it off with `thinking: {type: "between_tools"}`. Forced `tool_choice` returns 400. Launched 2026-09-28. Cache read cut to $0.10 on 2026-10-07. |
+| Haiku 5.5 | No writing benchmark. Vendor GDPval-AA Elo 1620, against 1437 for GPT-6 Luna. | 137–184 tok/s; first answer token 6.3 s at low, 12.6 s at medium, 22.8 s at high effort | Thinking on by default (effort medium). Can be disabled at effort high or below. Prompts over 100K tokens cost 5×. Launched 2026-10-07. |
 | Opus 5.5 | The Opus line leads EQ-Bench v3 (Opus 5 is #1, 2116). Opus 5.5 itself is not scored. | Not measured here | Thinking can't be disabled. Use effort `low` to limit time to first token and cost. |
 | Fable 5.1 | Fable 5 is #1 on Arena creative writing and #6 on EQ-Bench v3. | Not measured here | Five times Sonnet's price. Open access on Bedrock. |
 | GPT-6 Luna | No writing benchmark. AWS positions it for "summarize, extract, answer focused questions". | Not measured here | Has real JSON-schema structured output. On mantle only in us-east-1. Reasoning effort can be `none`. Output burns 10× quota on runtime. |
 | GPT-6.1 Sol | GPT-5.6 Sol is #4 on EQ-Bench v3. 6.1 Sol is not scored. | Not measured here | Same price as Sonnet 5.5. Only worth testing if Claude access stays blocked. |
-| gpt-oss-120b | About 1056 Elo on EQ-Bench v3 (snapshot 2026-05-28): lower half. | Not measured here | Already working. AWS's "EOL no sooner than" date (2025-08-05 + 1 year) has passed. |
-| gpt-oss-20b | Weaker than 120b. | Not measured here | Already working. Fine for classification and titles. |
+| gpt-oss-120b | About 1056 Elo on EQ-Bench v3 (snapshot 2026-05-28): lower half. | Not measured here | Needs no access form. AWS's "EOL no sooner than" date (2025-08-05 + 1 year) has passed. |
+| gpt-oss-20b | Weaker than 120b. | Not measured here | Needs no access form. Fine for classification and titles. |
 | Nova 2 Lite | Hemingway-bench says Nova "lacked a deeper spark". | Not measured here | A third API shape (Converse), and it costs more than Haiku 5.5. Not recommended. |
 
 ### Dropped quickly
@@ -141,7 +147,7 @@ What changes these numbers:
 - Sonnet's measured time to first token at medium effort is 1.9 s, which suits text that streams
   into the reader.
 - About $0.03–0.04 per section.
-- **Gap:** no published evaluation covers Sonnet 5.5's prose yet. Sonnet 5 scored *below* Sonnet
+- **Gap:** no published evaluation covers Sonnet 5.5's prose. Sonnet 5 scored *below* Sonnet
   4.6 on EQ-Bench, so don't assume each new Sonnet writes better. The bake-off decides.
 
 **Cheaper: Claude Haiku 5.5**, with thinking disabled.
@@ -154,10 +160,10 @@ What changes these numbers:
 - With thinking on, its first answer token takes 6–23 s depending on effort. Disable thinking for
   streaming sections.
 
-**Works today: GPT-6 Luna**, with reasoning effort `none` or `low`.
+**Without Anthropic access: GPT-6 Luna**, with reasoning effort `none` or `low`.
 
 - Same price as Haiku, through `bedrock-runtime` Chat Completions with no Anthropic form.
-- Last resort: gpt-oss-120b, which is already wired up but scores in the lower half on creative
+- Last resort: gpt-oss-120b, which needs no access form but scores in the lower half on creative
   writing.
 
 ### Table of contents
@@ -194,7 +200,7 @@ What changes these numbers:
 - **Gap:** Anthropic published no tau-bench or MCP-Atlas score for it, so tool-call reliability
   needs testing.
 
-**Cheaper: gpt-oss-20b**, which already works on mantle. Use gpt-oss-120b if 20b misfires on
+**Cheaper: gpt-oss-20b**, which needs no access form on mantle. Use gpt-oss-120b if 20b misfires on
 tools. gpt-oss-120b is not cheaper than Haiku on output ($0.60 against $0.50).
 
 ### Small jobs (titles, summaries, classification)
@@ -210,7 +216,7 @@ tools. gpt-oss-120b is not cheaper than Haiku on output ($0.60 against $0.50).
 | Claude Sonnet 5.5 | `between_tools`, then effort `low` | Expected primary |
 | Claude Haiku 5.5 | thinking disabled | Cheap challenger |
 | Claude Opus 5.5 | effort `low` | Quality ceiling; is 2× Sonnet's price worth it? |
-| GPT-6 Luna | reasoning `none` and `low` | Works-today fallback; the only non-Claude model at Haiku's price |
+| GPT-6 Luna | reasoning `none` and `low` | Fallback without Anthropic access; the only non-Claude model at Haiku's price |
 
 Add gpt-oss-120b as a floor only if it costs nothing extra to wire in.
 

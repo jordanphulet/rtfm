@@ -180,7 +180,10 @@ never touches `.data/` or Bedrock. It clears `shots/`, then writes:
 - `server/`: the API server, storage, the section writers, the librarian agent and the model
   gateway. The seven seed manuals are in `server/seed/`. `ARCHITECTURE.md` documents it.
 - `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`).
-- `research/`: research for the back-end (`bedrock-models.md`: which Bedrock models to use).
+- `research/`: dated research for the back-end, each opening with what was adopted:
+  `bedrock-models.md` (which Bedrock models to use), `aws-hosting.md` (Claude Platform on AWS and
+  the AgentCore harness) and `lambda-and-dynamodb.md` (running the server on Lambda and
+  DynamoDB).
 - `ARCHITECTURE.md`: the server, the API, storage, the writers, the gateway, the librarian and
   configuration.
 - `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.

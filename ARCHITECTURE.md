@@ -100,7 +100,7 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
     itself.
   - If one child exits, it stops the other the same way, so nothing is left holding port 5173.
   - It is a separate process rather than a Vite plugin, so the server runs the same way in
-    development as it would deployed.
+    development as it does alone (`npm run server`).
 - `vite.config.ts` adds `server.proxy` and `preview.proxy`: `{ "/api": "http://localhost:8787" }`.
   It imports `API_PORT` from `server/ports.ts`, so the port is written down once. That module
   holds only constants, because Vite restarts and reloads the page whenever a file its config
@@ -117,8 +117,8 @@ Tests sit next to the code (`*.test.ts`). Any test that starts a server binds po
   dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it. Every run starts from
   the seed and never touches `.data/` or Bedrock.
 
-**Plain handlers, ready for Lambda.** Handlers import only `api/route.ts`, never `node:http` or
-the Node adapter.
+**Plain handlers.** Handlers import only `api/route.ts`, never `node:http` or the Node adapter,
+so they don't depend on how they are served.
 
 ```ts
 // server/api/route.ts
@@ -371,8 +371,8 @@ word boundaries, the same pace as the fake librarian's replies.
 gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCharacters`.
 
 - **The prompt** (`writer/prompt.ts`):
-  - The **system prompt** is the same for every section of a manual, so it can be cached later:
-    the instructions, the markdown that `DESIGN.md` › Markdown allows, the shape of a section
+  - The **system prompt** is the same for every section of a manual. It holds the
+    instructions, the markdown that `DESIGN.md` › Markdown allows, the shape of a section
     (including the sample's punctuation: spaced em dashes and curly quotes), then the manual's
     title, subtitle, voice and contents (each section's label, title, id and summary). It says
     that text inside `<manual>` and `<written-section>` is reference material, never
@@ -587,8 +587,7 @@ Then, for each call:
        an `output_tokens`, but it is a placeholder (1), so the client doesn't map it.
      - **Any call that doesn't complete (aborted, stalled or failed) is charged its full reserved
        output (`max_tokens`)** and marked `estimated: true`. The stream doesn't tell us what
-       Bedrock billed after the cut. Compare this against Cost Explorer before anything less
-       conservative is used; that has not been done yet.
+       Bedrock billed after the cut, so the gateway assumes the most it can be.
      - `estimated` is also set if a complete call never reported its input or output tokens.
 
 **The ledger is the durable record.** On start, the gateway replays this month's file into its
@@ -599,8 +598,7 @@ totals. A `reserve` with no `settle` (the server died mid-call) counts at its wo
   Reserving adds the worst case to the reservation's day and month; settling adds `usd − worst
   case` to the same two periods.
 - **One server process per data folder.** The totals live in one process's memory, so two
-  servers on the same `.data/` would each allow the full caps. The DynamoDB version (Later)
-  moves the check into the database.
+  servers on the same `.data/` would each allow the full caps.
 - **`gateway/ledger-calls.ts`** pairs `reserve` and `settle` entries into calls. The replay and
   `npm run usage` both use it, so they count spend the same way. `monthOf` comes from
   `storage/file-ledger.ts`, which files entries by it.
@@ -679,8 +677,9 @@ reach the gateway.
   events, which the stream throws.
 - **The model ID** goes into the path unencoded: `/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke-with-response-stream`.
 
-Haiku 4.5 has thinking off unless asked, and no `cache_control` is sent, because the shared
-prefix is too short to cache.
+Haiku 4.5 has thinking off unless asked. No `cache_control` is sent: Haiku 4.5 caches only a
+prefix of at least 4,096 tokens, and every call's whole input is shorter than that (about 3,000
+tokens for a section, 2,000 for a librarian turn and 4,000 for a plan).
 
 **`credentials.ts`** reads the file at the repo root:
 `util.parseEnv(readFileSync(new URL("../../.env.local", import.meta.url), "utf8"))`.
@@ -934,8 +933,8 @@ async function sendReply(reply: {
 - what it can't do (write a manual's sections itself, edit or rename a manual), answered in a
   sentence with what it can do instead.
 
-No `cache_control` is sent. A librarian call reads about 1,800–2,300 input tokens (the system
-prompt, the tool definitions, the tool-use system prompt and the conversation), writes up to a
+No `cache_control` is sent (section 5). A librarian call reads about 1,800–2,300 input tokens
+(the system prompt, the tool definitions, the tool-use system prompt and the conversation), writes up to a
 few hundred, and costs about $0.002–0.003, against a reservation of about $0.013. A reply takes
 one call per model turn: two for a list or a find, two or three to open or propose a delete, and
 two to create a manual, with the planner's one or two calls between them.
@@ -1142,10 +1141,12 @@ export const prices = {
   - Anthropic's Bedrock guide, checked 2026-10-11: regional endpoints cost 10% more for Sonnet 4.5
     and later models.
   - Cache prices use the standard 1.25× and 0.1× multipliers.
-  - **Unconfirmed on AWS's pricing page.** Check real calls against Cost Explorer.
+  - **Not from AWS's pricing page**, whose Claude tables don't render, and not compared with
+    Cost Explorer.
 - **Measured cost:** $0.007–0.010 per section (about 2,900–3,200 input and 970–1,410 output
   tokens), with a worst-case reservation of about $0.025. A call aborted mid-section is charged
-  its full `max_tokens`, about $0.013. Not yet checked against Cost Explorer.
+  its full `max_tokens`, about $0.013. Both are computed from the reported tokens and this
+  table, as the ledger records them, not read from AWS's bill.
 
 ## 9. The reader's store (`src/manual/`)
 
@@ -1188,32 +1189,3 @@ export const prices = {
   stream would; the server's tests with `node:fs`.
 - `SHOT_MANUAL` and `SHOT_SECTIONS` are in `scripts/shot.ts`. `Markdown.test.tsx` uses its own
   literal section ids.
-
-## Later: Lambda and DynamoDB
-
-- **Lambda:** `server/lambda.ts` wraps the same routes with `awslambda.streamifyResponse` behind a
-  Function URL (`InvokeMode: RESPONSE_STREAM`). Lambda may not report a client disconnect, so a
-  call may run to `max_tokens`. That cost is bounded and recorded.
-- **Storage:** `server/storage/dynamo-*.ts` implements the same two interfaces.
-
-  | Piece | DynamoDB version |
-  | --- | --- |
-  | Manual | Table `manuals`, key `manualId`: one item with the TOC and voice. `listManuals` is a `Scan` of the table. |
-  | Section body | Table `sections`, key `manualId` + `sectionId`. `saveBody` is a `TransactWriteItems`: a `Put` with `attribute_not_exists(body)`, plus a `ConditionCheck` that the manual item exists, so a deleted manual gets no sections. `writtenSectionIds` is a `Query` on the manual's sections with `attribute_exists(body)`, because a lease item may have no body yet. |
-  | Deleting a manual | Delete the manual item first, which plays the part of the rename, then `Query` its sections and remove them with `BatchWriteItem`. This isn't atomic, so the order matters: once the manual item is gone, the manual is deleted and no section can be saved into it. |
-  | Seeding record | One config item holding a string set of seeded ids. `markSeeded` is an `UpdateItem` with `ADD`. |
-  | Ledger entries | Table `ledger`, key `month` + `reservedAt#callId`, so `entriesForMonth` is one `Query`. |
-  | Spending totals | Counter items `day#2026-10-11` and `month#2026-10`. Reserving is an `UpdateItem` that adds the worst case on the condition that the total stays under the cap: one atomic step across instances. |
-  | Kill switch | An SSM parameter or a config item, read before each call. |
-- **One writer per section across instances:** a lease on the section item (`writer`,
-  `leaseExpiresAt`, taken with a conditional update). Joiners on other instances poll partial
-  text that the writer saves about once a second. `runs.isWriting` then has to read the
-  manual's section leases, because another instance may hold one.
-- **Concurrency:** Lambda reserved concurrency caps calls across all instances.
-- **Credentials:** an IAM role replaces `.env.local`. Only `bedrock-client.ts` changes.
-- **The passphrase:** it must travel as a cookie or a query parameter, because `EventSource`
-  can't send headers.
-- **Jobs:** planning a manual is already its own `Job` through the same gateway, and creating one
-  is `createManual`, a conditional put in DynamoDB.
-- **Bedrock Mantle:** moving to the Mantle endpoint (`AnthropicBedrockMantle`) changes only
-  `bedrock-client.ts` and the price table.

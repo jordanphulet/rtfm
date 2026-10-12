@@ -3,6 +3,10 @@
 Research only. Every source was read on **2026-10-11**. No AWS calls were made, and nothing was
 signed up for or created. "Unconfirmed" marks anything the official docs don't settle.
 
+**Status (2026-10-11):** nothing here is adopted. The app calls Claude Haiku 4.5 on Bedrock, not
+through Claude Platform on AWS. The agent loop is our own, built on the gateway (`ARCHITECTURE.md`
+› The agent loop), not on the AgentCore harness.
+
 ## Summary
 
 | | Claude Platform on AWS | AgentCore harness |
@@ -11,7 +15,7 @@ signed up for or created. "Unconfirmed" marks anything the official docs don't s
 | Newer Claude models | All of them, same day as Anthropic's API | Through Bedrock, so this account's block applies |
 | Web search / fetch | Yes, Anthropic's server tools | Only through an AgentCore Gateway connector, in `us-east-1` only |
 | Our gateway in the loop | Yes: one client file changes | No: the harness calls the model itself |
-| Works offline in tests | Yes, through a fake `ModelClient` as today | No: `agentcore dev` deploys to AWS first |
+| Works offline in tests | Yes, through a fake `ModelClient`, as with Bedrock | No: `agentcore dev` deploys to AWS first |
 | Recommendation | **Try it.** It is the likeliest way past the Bedrock block, and it changes one file | **Don't adopt it.** Build the RL.5 loop on our gateway |
 
 ## Claude Platform on AWS
@@ -120,7 +124,7 @@ signed up for or created. "Unconfirmed" marks anything the official docs don't s
     `providerChainResolver`, `apiKey` and `awsProfile`.
   - With both static keys set, it signs with them and never calls the provider chain.
     `providerChainResolver` runs only when either key is missing, so ours can throw as it does
-    today.
+    with the Bedrock SDK.
   - It reads the `ANTHROPIC_AWS_API_KEY` environment variable only when no static keys or profile
     are given.
   - It reads `AWS_REGION`, `ANTHROPIC_AWS_BASE_URL` and `ANTHROPIC_AWS_WORKSPACE_ID` only as
@@ -163,7 +167,7 @@ the idle timeout and the kill switch.
 6. **Anthropic's own spend-limit errors.** These return 400 `invalid_request_error`, or 429 with
    `error.details.error_code: "enforced_spend_limit_reached"`. Nothing is charged, so the writer
    could report them as `"budget"` rather than `"error"`.
-7. **Later, for web tools:**
+7. **For web tools:**
    - `inputTokenBound` must count the tool definitions.
    - The worst case needs a web allowance: `max_uses` × $0.01 for search, plus room for the
      results. A fetch is bounded by `max_content_tokens` × the input price, but search results
@@ -191,12 +195,12 @@ the idle timeout and the kill switch.
   - you can set a monthly limit for the organization and for each workspace;
   - they are monthly only, with no daily limit;
   - spend "can take about 2 hours to reflect recent usage", and any overshoot is billed.
-- **Usage arrives as it does today.** `message_start` and `message_delta` carry input, output and
+- **Usage arrives as it does from Bedrock.** `message_start` and `message_delta` carry input, output and
   cache tokens, so settling doesn't change. Web tools add `server_tool_use` counts.
 - **Reconciliation is by hand.** The Admin API's usage and cost reports aren't available here.
   - The Claude Console's Usage and Cost pages break spend down by model and workspace.
   - AWS Cost Explorer shows one combined CCU line.
-  - This replaces the planned check against Cost Explorer for Bedrock.
+  - So Cost Explorer can't break Claude spend down by model.
 - **Audit logs:** CloudTrail logs inference as data events, which are off by default and cost
   extra.
 
@@ -328,9 +332,10 @@ The closest substitutes are all partial:
   - Whether LiteLLM can reach Claude Platform on AWS (custom `apiBase`, plus the workspace header
     through `additionalParams`) is unconfirmed. No source shows it.
 
-### How it would fit the move to Lambda
+### How it would fit a Lambda deployment
 
-- **Lambda would act as a client.** A Lambda would call `InvokeHarness`, relay the stream, run
+- **Lambda would act as a client** (`research/lambda-and-dynamodb.md` weighs running RTFM on
+  Lambda). A Lambda would call `InvokeHarness`, relay the stream, run
   inline tools against DynamoDB, and call again on each handoff.
 - **It works, but it doubles the hosting.**
   - It adds a second compute bill (a microVM per conversation, idle for up to 15 minutes).
@@ -345,23 +350,23 @@ The closest substitutes are all partial:
 
 - **It is the most direct way past the Bedrock block** that is still billed to this AWS account.
 - **It is a one-file change under the gateway.** The caps, ledger and credential rules hold.
-- **Token prices match Bedrock**, and it adds web search and web fetch for later phases.
+- **Token prices match Bedrock**, and it adds web search and web fetch, which Bedrock lacks.
 - **Keep Bedrock working** until a real call succeeds. If the Marketplace sign-up fails the same
   way, the cause is account-level billing or eligibility, and the AWS Support case is needed
   either way.
-- **Leave out web tools in this phase**, which rules web access out of scope. Adding them later
-  needs the reservation changes listed above.
+- **Leave out web tools**, which keeps web access out of scope. Adding them needs the
+  reservation changes listed above.
 
 ### AgentCore harness: don't adopt it; build RL.5's loop on our gateway
 
-- **Every rule in this phase rests on the gateway.** The harness takes model calls out of it, so
+- **Every spending rule rests on the gateway.** The harness takes model calls out of it, so
   the per-call reservations, the ledger and the kill switch would no longer cover agent runs.
 - **It can't be tested against a fake model locally.**
 - **It adds costs outside the ledger:** the microVM, managed memory and CloudWatch.
 - **It doesn't help with the Bedrock block.**
 - **Its one useful mechanism needs no harness.** Inline functions, with tools staying in our code,
   are what our own loop does already.
-- **Revisit it** if the app later needs a sandbox (shell, code execution, browser) per
+- **Revisit it** if the app needs a sandbox (shell, code execution, browser) per
   conversation.
 
 ### How this relates to the RL.4 prototypes
@@ -375,7 +380,7 @@ The closest substitutes are all partial:
   handler map directly onto `inline_function`. Whichever loop wins, keep tools in that shape.
 - **Claude Platform on AWS sits below both prototypes**, at `ModelClient`. Two things to check
   before choosing:
-  - **Web tools later:** the loop must pass Anthropic content blocks through untouched
+  - **Web tools:** the loop must pass Anthropic content blocks through untouched
     (`server_tool_use`, `web_search_tool_result` with `encrypted_content`) and handle
     `pause_turn`. Our own loop does that by keeping the SDK's content blocks.
   - **Strands with a custom provider:** whether Strands carries those blocks is unconfirmed. Check
@@ -444,7 +449,7 @@ The closest substitutes are all partial:
 
 ### B. AgentCore harness
 
-Nothing to enable. If you want to try it later anyway, this is what it would need:
+Nothing to enable. Trying it anyway would need:
 
 - the execution role and policy in [IAM](#iam);
 - `InvokeHarness` and `InvokeAgentRuntime` for the caller;
