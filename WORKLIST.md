@@ -471,7 +471,7 @@ When this phase is done:
   matches.
 
 ### OH.6 — Server cleanups and test gaps (server and tests audits)
-- **Status:** doing (agent: a6bd058edb8899903)
+- **Status:** done
 - **Depends on:** OH.5
 - **Files:** `server/**`, `ARCHITECTURE.md`
 - **Do:**
@@ -588,5 +588,10 @@ When this phase is done:
     list and what a second `npm run dev` on the same folder prints;
   - `npm run shot` runs its own dev server on a free port, clears only its own output folder,
     takes `npm run shot -- <folder>`, and names the phone size `phone` in both shot sets;
+  - `RTFM_DATA_DIR` and `RTFM_PORT` (from OH.6): run the server on another data folder or port
+    without editing anything; port 0 takes any free port; Vite's proxy always points at 8787, so
+    `RTFM_PORT` is for `npm run server` alone; an invalid port stops the server starting; the
+    `server/config.ts` bullet says `RTFM_DATA_DIR` overrides the data folder;
+  - `npm test` runs some browser tests in happy-dom (from OH.7);
   - anything else OH.5–OH.10 changed that README describes.
 - **Done when:** README.md matches the code.
