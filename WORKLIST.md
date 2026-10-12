@@ -128,7 +128,9 @@ Out of scope: web access for any model, the passphrase, and deploying.
 - **Depends on:** RL.5
 - **Files:** `server/agent/**`, `server/api/**`, `server/app.ts`, `server/config.ts`,
   `src/agent/**`, `src/home/**`, `DESIGN.md`, `scripts/**`, `ARCHITECTURE.md`, the READMEs for
-  `src/agent` and `src/library`, and `README.md`'s lines about the librarian and configuration
+  `src/agent` and `src/library`, and `README.md`'s lines about the librarian and configuration;
+  `server/main.ts`, `server/app.test.ts`, and in `src/manual/` the streamer, its README and the
+  tests that use it (to remove what only the canned replies used)
 - **Do:**
   - Replace the canned replies with the librarian agent. Its tools: list the manuals, find
     manuals by topic, open a manual (the page navigates to it), delete a manual, and create a
