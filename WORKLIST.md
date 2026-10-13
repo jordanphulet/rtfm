@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.9 — Put the app at rtfm.moonfetus.com
-- **Status:** doing (agent aa0e2649282ebf078)
+- **Status:** doing (agent aa0e2649282ebf078; reviewed; waiting for the user: the live `AWS::Lambda::ResourcePolicy` schema from `describe-type`, and approval of the `PROCESS.md` change)
 - **Depends on:** IN.8
 - **Files:** `infra/edge-*.ts` and their tests, `infra/app.ts`, `infra/README.md`, `PROCESS.md`
   (with the user's approval)
