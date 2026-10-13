@@ -107,6 +107,9 @@ aren't RTFM's.
   - With `npm run cdk`, deploy an `RtfmApp` stack holding one log group, then show that it can't
     change `RtfmAccess`, create a role without the boundary, or touch a resource not named for
     RTFM.
+  - Check from Cost Explorer (through `npm run aws`) whether the `project=rtfm` tag catches
+    Bedrock calls made with `rtfm-local`'s key. If it doesn't, say so: the budget then needs
+    another filter, or the server's calls a tagged application inference profile.
   - Check the server still calls Bedrock with `rtfm-local`'s key (`npm run dev` with
     `RTFM_MODELS=bedrock`, one section, under $0.01).
   - `PROCESS.md` › Review loop: after merging a change to an app stack, the orchestrator runs
