@@ -37,7 +37,7 @@ aren't RTFM's.
 - **Status:** doing (agent aa0e2649282ebf078; reviewed; on 2026-10-13 the user approved its `PROCESS.md` change; waiting for the live `AWS::Lambda::ResourcePolicy` schema, which the orchestrator reads with `rtfm-read` once IN.16 is deployed)
 - **Depends on:** IN.8
 - **Files:** `infra/edge-*.ts` and their tests, `infra/app.ts`, `infra/README.md`, `PROCESS.md`
-  (with the user's approval)
+  (with the user's approval), `ARCHITECTURE.md` (its `infra/` file list)
 - **Do:**
   - Stacks the user approves and deploys from CloudShell, like `RtfmAccess`:
     - **`RtfmEdgeCertificate`** (us-east-1): the ACM certificate for `rtfm.moonfetus.com`,
