@@ -44,6 +44,57 @@ aren't RTFM's.
 - **Done when:** each check above passed and is recorded in `infra/README.md`, and the user has
   approved the `PROCESS.md` change.
 
+### IN.3 — Keep the development loop local
+- **Status:** todo
+- **Depends on:** IN.2
+- **Files:** `ARCHITECTURE.md`, `PROCESS.md`
+- **Do:**
+  - `PROCESS.md`, next to IN.2's deploy step in › Review loop: "Only the orchestrator deploys an
+    app stack, and only from `main` after a merge. A task agent reaches AWS only when its task's
+    **Do** says so."
+  - `ARCHITECTURE.md` › Everything runs on one machine, two more bullets:
+    - "No task's **Done when** needs the deployed app; a smoke check after each deploy covers what
+      local can't show."
+    - "Agents try out stored-data changes on throwaway data. Deployed data changes only when a
+      change merges, and that change carries its migration or reads the old form."
+- **Done when:** both changes are in, and the user has approved the `PROCESS.md` diff.
+
+### IN.4 — Settle the AWS design
+- **Status:** todo
+- **Depends on:** IN.3
+- **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
+  `ARCHITECTURE.md`, `infra/**`
+- **Do:**
+  - From the local server, list what the deployed app must do: each route and its stream (the
+    section SSE stream, the librarian POST stream), one writer per section with joiners, abort on
+    the last disconnect, the caps across instances, the passcode, the kill switch, idle cost.
+  - Weigh, against that list:
+    - CloudFront and a streaming Lambda Function URL behind origin access control (OAC): one
+      domain keeps the Origin checks, the passcode cookie and `EventSource` working;
+    - API Gateway REST with response streaming (check that it exists and how it behaves);
+    - one always-on Node instance running the server unchanged;
+    - rule out API Gateway HTTP API (no streaming) and AppSync (it would replace the REST and SSE
+      contract), with the reasons;
+    - for storage, DynamoDB alone against DynamoDB plus S3 for section bodies. Bodies are under
+      about 10 KB at `max_tokens` 2048, and saving one needs a conditional write and a check
+      that the manual exists.
+  - Weigh each option by how much of it runs outside AWS: the AWS-only code should be thin
+    adapters, with the logic in shared code that runs locally. Say where the design changes a
+    shared interface and how its local implementation keeps up (`ARCHITECTURE.md` › Everything
+    runs on one machine).
+  - Spike in throwaway `RtfmSpike…` stacks, under a boundary change the user approves and
+    deploys first (from CloudShell, as in `infra/README.md` › Your steps), for under $1 in all:
+    - SSE through the front door;
+    - a POST with a body through it (OAC needs a body-hash header);
+    - whether Lambda sees a client disconnect;
+    - the cold-start time to open a section.
+  - Give the exact boundary diff the chosen design needs, the cost at idle and at the $20 cap,
+    the local and AWS interface pairs to build, and the build tasks that follow.
+- **Done when:** the doc recommends one design with the spikes' results, every spike stack is
+  destroyed and any spike-only boundary change is withdrawn, and the user has decided. The
+  decision then goes into `ARCHITECTURE.md`, the two older research docs' status lines say what
+  was adopted, and the orchestrator adds the build tasks.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
