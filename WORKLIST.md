@@ -111,6 +111,8 @@ aren't RTFM's.
     and deploys); the Web Function's role, the same.
   - `ARCHITECTURE.md` and `README.md` say `RTFM_MODELS` chooses the ledger, and that with Bedrock
     the data folder's lock no longer guards money.
+  - Share IN.11's DynamoDB client builder (`dynamoDbClient` in `server/storage/`, pinned, with no
+    credential chain) rather than writing a second one.
 - **Done when:** both implementations pass one shared suite, two servers with Bedrock share the
   caps in a test against DynamoDB Local, and the docs say so.
 
@@ -122,6 +124,9 @@ aren't RTFM's.
 - **Do:** section leases behind an interface in `runs.ts`, in memory locally and on the section
   item in `rtfm-app`; a reader on another environment waits for the stored body, then gets it as
   one `append` and `written`, or `failed`.
+  - `deleteManual` deletes only the ids in the manual's `written` set, so a section item holding only
+    a lease would be left behind and block a recreated manual's section: delete those too (for
+    example by querying `pk = MANUAL#<id>`).
 - **Done when:** the shared suite covers two runs racing for one section on both implementations.
 
 ### IN.14 — `rtfm-ops` and the ops tools
@@ -155,6 +160,18 @@ aren't RTFM's.
 - **Done when:** the tests show the digest compared in constant time, a rotated digest refusing
   the old cookie, and the set command refusing to run without a terminal; no file or log an agent
   can read holds the passcode.
+
+### IN.16 — Let `rtfm-read` check schemas and tables
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
+- **Do:** `rtfm-read` gains `cloudformation:DescribeType` on resource types (to check a live
+  resource schema, such as `AWS::Lambda::ResourcePolicy`'s), and `dynamodb:DescribeTable` and
+  `DescribeContinuousBackups` on `table/rtfm-*`, so the smoke check can confirm the table's
+  point-in-time recovery and deletion protection. Read-only; `RtfmAccess`, which the user approves
+  and deploys.
+- **Done when:** the tests show `rtfm-read` gains exactly those reads and changes nothing, and the
+  user has deployed `RtfmAccess`.
 
 ## Waiting on AWS
 
