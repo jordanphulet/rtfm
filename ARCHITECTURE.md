@@ -148,7 +148,8 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 - **One server per data folder.** The caps are totalled in one process's memory, so the server
   locks its data folder before it starts (`server/storage/README.md` › The data folder's lock).
 - **Configuration** is committed, apart from the AWS keys in `.env.local`, which only
-  `gateway/credentials.ts` reads (`server/README.md` › Configuration).
+  `gateway/credentials.ts` reads, from the main checkout's root even in a linked worktree
+  (`server/README.md` › Configuration).
 - **Only this machine's own pages.** The server listens on `127.0.0.1`, and the Node adapter
   refuses any other `Host` or `Origin`, and any body that isn't JSON, before a route runs
   (`server/api/README.md` › Only this machine's own pages).
