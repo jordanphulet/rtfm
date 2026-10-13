@@ -39,57 +39,6 @@ user says its step is done.
 
 ---
 
-## Rule audit
-
-A repeatable audit of which written rules agents actually break, and what each break costs, so
-the rules that matter most can be turned into code. An auditor session ran it once by hand on
-2026-10-12, at the user's request; this phase makes it a skill any session can run. When this
-phase is done:
-
-- `npm run audit` reads this repo's Claude Code transcripts and writes candidate rule breaks to a
-  folder outside the repo;
-- the `rule-audit` skill turns those candidates into a ranking by frequency and consequence, with
-  proposed tasks, and changes no files.
-
-### Rules for this phase
-
-- **Transcripts are the user's private record.** Read them only; never copy their content into the
-  repo. Test fixtures are small synthetic transcripts written for the tests.
-- **Never print a credential value.** Anything key- or secret-shaped is shown redacted, in output,
-  logs and reports alike.
-- **The audit writes nothing inside the repo.** Its output goes to a folder outside it.
-- **The skill file needs the user's approval.** It instructs sessions, like `CLAUDE.md`; the
-  orchestrator shows it to the user before committing it. If the sandbox refuses writes under
-  `.claude/skills/`, the agent reports that and doesn't work around it.
-
-### RA.2 — The rule-audit skill
-- **Status:** needs-human (the user approves `SKILL.md`; the fresh-session run matched the first audit's top two, and ranked stale rules fourth, below docs drift)
-- **Depends on:** RA.1, BA.3 (both change `README.md`)
-- **Files:** `.claude/skills/rule-audit/SKILL.md` (new, the user approves), `README.md`
-- **Do:** a project skill that a session runs when asked to "run the rule audit". The session
-  acts as an auditor: it changes no files and proposes tasks. The method:
-  1. **Collect the rules** from everywhere they live: the history of the rule files (when each
-     rule appeared and what prompted it), the phase rules in `WORKLIST.md`, the "Rules" blocks in
-     agent prompts, the user's corrections, and review findings.
-  2. **Run `npm run audit`** and read every candidate in its context, dropping false positives.
-  3. **Judge each break** by the rule in force at the time, and by whether the agent could have
-     known it (an agent already running never sees a rule added after it started).
-  4. **Weigh consequence:** what each break cost (the user's tools, money, security, data,
-     rework); the incident that prompted the rule; whether it recurred; whether code already
-     enforces it (the gateway, `sdk-boundary.test.ts`, the server lock) and whether breaks stopped
-     after that.
-  5. **Rank** by frequency and consequence, and recommend which written rules to turn into code
-     first. Prefer the repo's own scripts and tests, which make the right way the easy way, over
-     harness hooks. Prefer rules that actually break over ones that only could. Name rules that
-     contradict each other.
-  6. **Report** in the session, with proposed tasks in this file's format for the orchestrator.
-  - `README.md` lists the skill alongside the scripts.
-- **Done when:** reviewed and approved by the user; a fresh session told only "run the rule audit" produces a ranking whose
-  top three match the first audit's (review before commit, stopping processes the agent didn't
-  start, sessions working from stale rules) without being shown them.
-
----
-
 ## Rules into code
 
 The first rule audit (2026-10-12) ranked the written rules agents break by how often and what it
@@ -109,12 +58,12 @@ makes the right way the easy way. When this phase is done:
   `.claude/settings.json`, `CLAUDE.md` and `PROCESS.md`. Each task stops at `needs-human` with
   the exact text to approve.
 - **A session-start hook never blocks work.** If it fails, it prints nothing and exits 0.
-- **One at a time.** These tasks, RA.1, RA.2 and BA.3 share `README.md`, `package.json`,
-  `ARCHITECTURE.md` or `PROCESS.md`, so they run in a chain: RA.1, BA.3, RA.2, RC.1, RC.2, RC.3.
+- **One at a time.** These tasks share `README.md`, `package.json`, `ARCHITECTURE.md` or
+  `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.1 — Commit task work through one script
 - **Status:** todo
-- **Depends on:** RA.2
+- **Depends on:** —
 - **Files:** `scripts/commit-task.ts` and its test (new), `.githooks/commit-msg` (new, the user
   approves), `package.json`, `PROCESS.md` (the review loop's commit step; the user approves),
   `ARCHITECTURE.md` (the `scripts/` codemap entry), `README.md`
@@ -125,10 +74,15 @@ makes the right way the easy way. When this phase is done:
     - stages exactly the changed and new files they match, never a whole folder, and lists the
       other changed files it left alone;
     - refuses if nothing matches;
+    - refuses `--no-review` for a change of more than 40 changed lines, not counting pure
+      renames: the second audit found 27 task commits made without a review, mostly by an
+      orchestrator that had read the change alone;
     - commits as `<ID>: <summary>` with a `Reviewed-by:` trailer holding the review agent's id or
       `none (<reason>)`, and the co-author line.
   - `.githooks/commit-msg` refuses a commit whose subject starts with a task ID and has no
-    `Reviewed-by:` trailer, and names the script. Other commits pass (work list statuses, the
+    `Reviewed-by:` trailer, and names the script. It also refuses a commit with Claude's co-author
+    line that changes any file but `WORKLIST.md` and has no `Reviewed-by:` trailer, so the
+    orchestrator's own work is reviewed the same way. Other commits pass (work list statuses, the
     user's own). `README.md` says how `core.hooksPath` is set to `.githooks`.
   - The review loop in `PROCESS.md` commits with the script.
   - Tests:
@@ -136,8 +90,9 @@ makes the right way the easy way. When this phase is done:
       such as "for pointers to moved headings only:";
     - only matching files are staged;
     - both trailer forms;
-    - a refusal when nothing matches;
-    - the hook passing and refusing.
+    - a refusal when nothing matches, and of `--no-review` over the size limit;
+    - the hook passing and refusing, including Claude's own commit without a trailer and a
+      `WORKLIST.md`-only commit.
 - **Done when:** `npm run build` and `npm test` pass; a reviewed commit and a `--no-review`
   commit each carry their trailer; a hand-written `git commit -m "XX.1: …"` without one is
   refused; the user has approved the hook and the `PROCESS.md` change.
@@ -200,7 +155,9 @@ makes the right way the easy way. When this phase is done:
     `--keep` is given.
   - Agents run it in the background and stop it with the handle or the printed PID.
   - The line in `CLAUDE.md` about stopping processes names the script as the way to run a
-    server for a check.
+    server for a check, and says that a PID looked up by port or name (`lsof`, `ps`, `pgrep`) or
+    a `pkill -f` pattern never counts as a process you started: the second audit found 10 of 16
+    breaks were lookups like these.
   - Tests:
     - it starts on free ports and never on `.data/`;
     - stopping it frees its ports and removes its folder;
@@ -208,3 +165,97 @@ makes the right way the easy way. When this phase is done:
 - **Done when:** `npm run build` and `npm test` pass; two copies run side by side while the
   user's dev server runs; stopping one by its PID leaves nothing of it running; the user has
   approved the `CLAUDE.md` line.
+
+---
+
+## Docs and prompts that hold
+
+The second rule audit (2026-10-12, the first run of the `rule-audit` skill) found two more rules
+breaking often enough to turn into code: docs that fall out of step with the code, and agent
+prompts missing the standing rules. It also found that half its candidates were false positives.
+When this phase is done:
+
+- `npm test` fails when a doc names a file, script, setting or route that doesn't exist;
+- an agent prompt starts from `npm run task-prompt`, which carries the task block and the standing
+  rules;
+- the audit's candidates come closer to its confirmed breaks.
+
+### Rules for this phase
+
+- **The user approves `PROCESS.md` changes before they are committed.** The task stops at
+  `needs-human` with the exact text to approve.
+- **No real Bedrock calls.** Tests use the fake models.
+- **Transcripts are the user's private record.** Read them only; never copy their content into the
+  repo. Audit fixtures are small synthetic transcripts written for the tests.
+- **Never print a credential value.** Anything key- or secret-shaped is shown redacted, in output,
+  logs and reports alike.
+- **The audit writes nothing inside the repo.** Its output goes to a folder outside it.
+- **One at a time where files overlap:** DC.1 and AP.1 change `README.md`, so they run after RC.3,
+  in that order. DC.1 may also fix `scripts/audit/README.md`, so it waits for RA.3 too.
+
+### RA.3 — Sharper audit detectors
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `scripts/audit/**`
+- **Do:**
+  - **Task commit reviews:**
+    - match a review agent by the task's title words or a design letter, or by its prompt
+      naming the ID, not only its description;
+    - add each commit's changed-line count;
+    - also list the orchestrator's own commits other than `WORKLIST.md`-only ones.
+  - **Process stops:**
+    - treat `kill $(cat <file>)` as the agent's own when the same agent wrote that file from `$!`;
+    - treat a literal PID as its own when it appeared earlier in that agent's own launch output;
+    - mark PIDs that came from `lsof`/`ps`/`pgrep`, and `pkill -f`, as found by port or pattern.
+  - **Sensitive paths:** split reads from writes; ignore `--exclude-dir=.data` and
+    `--exclude .env.local`; treat a script given the `.env.local` path as runtime loading.
+  - **Rule file edits:** count only paths inside this repo or its worktrees; for `cp` count only
+    the destination.
+  - **New detectors:**
+    - zsh `=` and "no matches found" errors after the zsh rule;
+    - each orchestrator loop pass, and whether it re-read `CLAUDE.md` and `PROCESS.md`;
+    - agent prompts missing the standing rules;
+    - a task agent's Edit/Write outside the task's Files (from the task block in `WORKLIST.md`'s
+      history at that time);
+    - a reviewer or auditor session writing files.
+- **Done when:** `npm run build` and `npm test` pass; synthetic fixtures cover each new case and
+  each dropped false positive; on the real transcripts, unreviewed task commits fall from 55 to
+  close to the 27 confirmed, and process stops no longer list kills of the agent's own PID.
+
+### DC.1 — A test that docs name only what exists
+- **Status:** todo
+- **Depends on:** RC.3 (both change `README.md` and `ARCHITECTURE.md`), RA.3 (`scripts/audit/README.md`)
+- **Files:** `scripts/doc-references.test.ts` (new); `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
+  `src/**/README.md`, `src/**/DESIGN.md`, `server/**/README.md`, `scripts/audit/README.md` (only
+  to fix references the test flags)
+- **Do:**
+  - A test that reads every doc in README's docs index and every folder README and design doc,
+    and checks each code span that names something checkable:
+    - a repo path (`server/…`, `src/…`, `scripts/…`, globs allowed) exists;
+    - `npm run <name>` is a script in `package.json`;
+    - an `RTFM_*` setting is read by `server/config.ts` or a script;
+    - an API route is one the server defines.
+  - Placeholders such as `<manual>` are allowed. `research/` and `WORKLIST.md` are skipped:
+    they describe what might be and what is planned.
+  - Fix whatever it finds.
+- **Done when:** `npm run build` and `npm test` pass; renaming a file or setting that a doc names
+  makes `npm test` fail with the doc and line; the docs pass as they stand.
+
+### AP.1 — Agent prompts from the task block
+- **Status:** todo
+- **Depends on:** DC.1 (both change `README.md`)
+- **Files:** `scripts/task-prompt.ts` and its test (new), `package.json`, `PROCESS.md` (its rules
+  for agent prompts; the user approves), `README.md` (the scripts table)
+- **Do:**
+  - `npm run task-prompt -- <ID>` prints a prompt with:
+    - the task's full block from `WORKLIST.md` and its phase's "Rules for this phase";
+    - the standing rules: stay inside Files; no git command that changes anything; stop only
+      processes you started, by handle or PID; docs describe what exists; report the files
+      changed, the checks run and anything unresolved;
+    - pointers to `CLAUDE.md` and README's docs index, replacing the fixed
+      `src/manual/README.md` pointer.
+  - `--review` prints the reviewer's version: read-only, report findings.
+  - `PROCESS.md` says agent prompts start from its output. It reuses RC.1's Files parsing.
+- **Done when:** `npm run build` and `npm test` pass; tests cover a task block in each form
+  `WORKLIST.md` uses, an unknown ID refused, phase rules included, and the review version; the
+  user has approved the `PROCESS.md` change.
