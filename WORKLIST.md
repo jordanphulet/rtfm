@@ -60,11 +60,11 @@ makes the right way the easy way. When this phase is done:
 - **A session-start hook never blocks work.** If it fails, it prints nothing and exits 0.
 
 ### RC.4 — Vite helpers out of the screenshot script
-- **Status:** doing (agent a144aee7060143c88)
+- **Status:** doing (agent a144aee7060143c88; in review)
 - **Depends on:** —
 - **Files:** `scripts/screenshots.ts`, `scripts/shot.ts`, `scripts/serve-temp.ts`,
   `scripts/vite-server.ts` (new), `server/main.ts`, `server/exit.ts` (new), `ARCHITECTURE.md` (the
-  `scripts/` codemap entry and the `server/` entry for `exit.ts`)
+  `scripts/` codemap entry and the `server/` entry for `exit.ts`), `server/README.md` (› Files)
 - **Do:**
   - Move `startViteServer`, `localUrl` and the logger they use from `scripts/screenshots.ts` into
     `scripts/vite-server.ts`, so `serve-temp` no longer loads Playwright when it starts.
