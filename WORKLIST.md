@@ -109,24 +109,6 @@ Make the repo quicker to find your way around, for agents and people. When this 
 - **No real Bedrock calls**, and never start a server on `.data/`.
 - **No task changes `CLAUDE.md`.** Only the user approves changes to it.
 
-### RS.4 — Split `DESIGN.md` by page
-- **Status:** doing (agent: a8f84826494518847)
-- **Depends on:** RS.1, RS.2, RS.3 (both change `README.md` and the folder READMEs)
-- **Files:** `DESIGN.md`, `src/home/DESIGN.md` (new), `src/reader/DESIGN.md` (new), `README.md`;
-  for links to moved headings only: `src/*/README.md`, `ARCHITECTURE.md`, `server/**/README.md`,
-  `research/*.md`
-- **Do:**
-  - `DESIGN.md` (now over 1,400 lines) keeps only what both pages share: what RTFM is, the data
-    model, the craft bar, the banned list, the concept, the tokens, and any rule that applies to
-    both pages. It opens by linking to each page's design doc and saying that its rules bind both
-    pages.
-  - The `# The reader` part moves to `src/reader/DESIGN.md`, and `# The landing page` to
-    `src/home/DESIGN.md`. Each page's behavior section in the shared part ("Reader behavior",
-    "Landing page behavior") moves with its page.
-  - Update every link to a moved heading.
-- **Done when:** every fact in the old `DESIGN.md` is in exactly one new place (the review
-  compares the old and new text); `DESIGN.md` holds only what both pages share; links resolve.
-
 ### RS.5 — Write the repo map down once
 - **Status:** todo
 - **Depends on:** RS.2, RS.3, RS.4
