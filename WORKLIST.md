@@ -62,8 +62,8 @@ makes the right way the easy way. When this phase is done:
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.1 — Commit task work through one script
-- **Status:** doing (the user approved the hook and the `PROCESS.md` change on 2026-10-13; waiting for
-  the round-2 re-review by a767bec8702a2a1bb, and for `scripts/audit/**` to build again)
+- **Status:** doing (the user approved the hook and the `PROCESS.md` change on 2026-10-13; review round 3
+  with agent abbd8bf3721f7eda2; then waiting for `scripts/audit/**` to build again)
 - **Depends on:** —
 - **Files:** `scripts/commit-task.ts` and its test (new), `.githooks/commit-msg` (new, the user
   approves), `package.json`, `PROCESS.md` (the review loop's commit step, how the orchestrator commits
