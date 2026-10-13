@@ -121,7 +121,7 @@ can't fall out of step when a rule changes.
   exact text to approve.
 
 ### AP.2 — Agent prompts point to the rules instead of restating them
-- **Status:** todo
+- **Status:** doing (agent ab901906648c18913, in its own worktree)
 - **Depends on:** —
 - **Files:** `scripts/task-prompt.ts` and its test, `PROCESS.md`
 - **Do:**
