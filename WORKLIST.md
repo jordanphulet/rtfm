@@ -116,7 +116,7 @@ When this phase is done:
   makes `npm test` fail with the doc and line; the docs pass as they stand.
 
 ### AP.1 — Agent prompts from the task block
-- **Status:** doing (agent a437a723c5776a271, in its own worktree; in review)
+- **Status:** doing (agent a437a723c5776a271, in its own worktree; review round 2)
 - **Depends on:** —
 - **Files:** `scripts/task-prompt.ts` and its test (new), `package.json`, `PROCESS.md` (its rules
   for agent prompts; the user approves), `README.md` (the scripts table), `scripts/commit-task.ts`
