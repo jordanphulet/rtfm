@@ -9,6 +9,7 @@ import { ACCOUNT } from "./rtfm.ts";
 import { awsEnvironment, cdkConfigProblem, identityProblem, profileFor, refusal } from "./run-aws.ts";
 
 const SCRIPT = fileURLToPath(new URL("./run-aws.ts", import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CDK_CONFIG = fileURLToPath(new URL("./cdk.json", import.meta.url));
 
 /** Stands in for the AWS CLI: answers the identity check, then records itself and waits. */
@@ -17,7 +18,8 @@ const args = process.argv.slice(2);
 if (args[0] === "sts") {
   console.log(JSON.stringify({ Arn: process.env.FAKE_ARN }));
 } else {
-  require("node:fs").writeFileSync(process.env.FAKE_STARTED, JSON.stringify({ pid: process.pid, home: process.env.HOME }));
+  const started = { pid: process.pid, home: process.env.HOME, args };
+  require("node:fs").writeFileSync(process.env.FAKE_STARTED, JSON.stringify(started));
   setInterval(() => {}, 1000);
 }
 `;
@@ -144,7 +146,7 @@ describe("npm run aws and npm run cdk", () => {
       rmSync(folder, { recursive: true, force: true });
     });
 
-    function startWrapper(arn: string) {
+    function startWrapper(arn: string, command: string[] = [process.execPath, SCRIPT, "aws", "s3", "ls"]) {
       folder = mkdtempSync(path.join(os.tmpdir(), "rtfm-run-aws-test-"));
       const bin = path.join(folder, "bin");
       const tmp = path.join(folder, "tmp");
@@ -153,7 +155,8 @@ describe("npm run aws and npm run cdk", () => {
       writeFileSync(path.join(bin, "aws"), FAKE_AWS, { mode: 0o755 });
       const started = path.join(folder, "started.json");
       const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, TMPDIR: tmp, FAKE_ARN: arn, FAKE_STARTED: started };
-      const wrapper = spawn(process.execPath, [SCRIPT, "aws", "s3", "ls"], { env, stdio: "ignore" });
+      const [file, ...args] = command;
+      const wrapper = spawn(file, args, { env, stdio: "ignore", cwd: REPO_ROOT });
       return { wrapper, tmp, started };
     }
 
@@ -185,6 +188,42 @@ describe("npm run aws and npm run cdk", () => {
       await exited;
       await until(() => !isRunning(pid));
       expect(existsSync(home)).toBe(false);
+    });
+
+    it("passes every argument after npm run's -- to the command exactly as given, and a signal too", async () => {
+      const given = [
+        "cloudformation",
+        "describe-stacks",
+        "--query",
+        "Stacks[0].{Status:StackStatus,Protected:EnableTerminationProtection}",
+        "x{1..3}",
+        "a b",
+        `"double" 'single' it's`,
+        "$HOME ${PATH} $(id)",
+        "*",
+        "package.jso[n]",
+        "!",
+        "=x",
+        "a=b",
+        "",
+      ];
+      const { wrapper, started } = startWrapper(`arn:aws:sts::${ACCOUNT}:assumed-role/rtfm-read/session`, [
+        "npm",
+        "run",
+        "--silent",
+        "aws",
+        "--",
+        ...given,
+      ]);
+      await until(() => existsSync(started));
+      const { pid, args } = JSON.parse(readFileSync(started, "utf8"));
+      fakePid = pid;
+      expect(args).toEqual(given);
+
+      const exited = once(wrapper, "exit");
+      wrapper.kill("SIGTERM");
+      await exited;
+      await until(() => !isRunning(pid));
     });
 
     it("removes its HOME when it refuses the identity", async () => {
