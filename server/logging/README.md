@@ -76,7 +76,7 @@ message and stack, since a signature error from AWS quotes the access key ID.
 subject to the local-only checks and the passcode like any route (so a browser that hasn't
 entered the passcode reports nothing):
 
-- `startReportingErrors()`, called in `main.tsx`, listens for `error` (an uncaught error) and
+- `startReportingErrors()`, called in `src/main.tsx`, listens for `error` (an uncaught error) and
   `unhandledrejection` on `window`. `apiFetch`, which the library, manual and librarian stores
   use in place of `fetch`, reports a request that gets no answer or a 5xx. A 4xx is the server's
   own answer and already in its `request` line; a 401 shows the passcode screen instead
