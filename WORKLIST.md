@@ -63,7 +63,7 @@ phase is done:
   `.claude/skills/`, the agent reports that and doesn't work around it.
 
 ### RA.2 — The rule-audit skill
-- **Status:** doing (agent a29b1e232287de45c)
+- **Status:** needs-human (the user approves `SKILL.md`; the fresh-session run matched the first audit's top two, and ranked stale rules fourth, below docs drift)
 - **Depends on:** RA.1, BA.3 (both change `README.md`)
 - **Files:** `.claude/skills/rule-audit/SKILL.md` (new, the user approves), `README.md`
 - **Do:** a project skill that a session runs when asked to "run the rule audit". The session
