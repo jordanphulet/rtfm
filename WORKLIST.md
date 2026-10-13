@@ -62,7 +62,8 @@ makes the right way the easy way. When this phase is done:
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.3 — A throwaway server that agents stop by its PID
-- **Status:** doing (agent ad4fbd1d743526385; review round 2)
+- **Status:** needs-human (the user approves the `CLAUDE.md` change; agent ad4fbd1d743526385,
+  reviewed by a86937862322b8b10)
 - **Depends on:** —
 - **Files:** `scripts/serve-temp.ts` and its test (new), `package.json`, `CLAUDE.md` (the line
   about stopping processes; the user approves), `ARCHITECTURE.md` (the `scripts/` codemap entry),
