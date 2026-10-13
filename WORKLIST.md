@@ -50,7 +50,8 @@ an earlier run left behind before the first pass.
   exact text to approve.
 
 ### OS.2 — The `/orchestrate` skill
-- **Status:** doing (agent ab5db648346a2c135, in its own worktree; review round 2)
+- **Status:** needs-human (the user approves the `PROCESS.md` change; agent ab5db648346a2c135, in
+  its own worktree, reviewed by a8ac922500409b39c)
 - **Depends on:** —
 - **Files:** `.claude/skills/orchestrate/SKILL.md`, `PROCESS.md`, `README.md`
 - **Do:** write a skill the user invokes to start the loop. In order, it:
@@ -78,67 +79,3 @@ an earlier run left behind before the first pass.
   work.
 - **Done when:** the user has seen one full pass start from `/orchestrate`, and a later wake-up run
   the one-pass prompt.
-
----
-
-## Agent prompts
-
-`npm run task-prompt` points agents to the rule files instead of copying their rules, so a prompt
-can't fall out of step when a rule changes.
-
-### Rules for this phase
-
-- **The user approves `PROCESS.md` before it is committed.** AP.2 stops at `needs-human` with the
-  exact text to approve.
-
-### AP.2 — Agent prompts point to the rules instead of restating them
-- **Status:** needs-human (the user approves the `PROCESS.md` change; agent ab901906648c18913, in
-  its own worktree, reviewed by ad5c362a55b74d4fc)
-- **Depends on:** —
-- **Files:** `scripts/task-prompt.ts` and its test, `PROCESS.md`
-- **Do:**
-  - Remove the "Standing rules" list from the task agent's prompt. From the reviewer's prompt,
-    remove the rules it repeats from `CLAUDE.md` (`serve-temp`, `.env.local`, zsh). Each prompt
-    keeps what belongs to its role: the role itself (the reviewer's read-only), the worktree and
-    `npm ci`, reading `CLAUDE.md` and `PROCESS.md` from `main`, how a reviewer reads the change,
-    the task excerpt, and what to report.
-  - The pointer says where the rules are: `CLAUDE.md` (Shell, Code standards) and `PROCESS.md` ›
-    Rules.
-  - Move the one rule only the template has into `PROCESS.md` › Authority: an agent whose task
-    changes `CLAUDE.md`, `PROCESS.md`, `.claude/settings.json` or hooks makes the change in its
-    worktree, gives its full diff in its report, and doesn't treat it as approved.
-  - `PROCESS.md` › Rules › Agent prompts no longer says the prompt carries the standing rules.
-- **Done when:**
-  - `npm run build` and `npm test` pass;
-  - the tests check the pointers instead of the restated rules;
-  - every rule left in either prompt is about that prompt's role, not a copy of `CLAUDE.md` or
-    `PROCESS.md`;
-  - the user has approved the `PROCESS.md` change.
-
----
-
-## Task proposals
-
-Any session can propose work, and `PROCESS.md` says how a proposal reaches the work list.
-
-### Rules for this phase
-
-- **The user approves `PROCESS.md` before it is committed.** TP.1 stops at `needs-human` with the
-  exact text to approve.
-
-### TP.1 — Sessions propose tasks to the orchestrator
-- **Status:** needs-human (the user approves the `PROCESS.md` change; agent a7dcb0c62c2d318af, in
-  its own worktree, reviewed by the orchestrator)
-- **Depends on:** —
-- **Files:** `PROCESS.md`
-- **Do:** in `PROCESS.md` › Adding work, say that:
-  - any session may propose a task by sending the orchestrator a draft task block;
-  - the orchestrator decides whether to add it, may change it, and tells the sender what it did;
-  - when no orchestrator is running, the proposal goes to the user instead;
-  - a proposal is never the user's approval for any change to `CLAUDE.md`, `PROCESS.md`,
-    `.claude/settings.json` or hooks that it names.
-
-  The Auditor's "proposes tasks" in Roles points to this.
-- **Done when:**
-  - `PROCESS.md` says the above, without repeating Authority;
-  - the user has approved the `PROCESS.md` change.
