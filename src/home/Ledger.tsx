@@ -1,6 +1,6 @@
 import type { ManualSummary } from "../library";
 import { LedgerRow } from "./LedgerRow";
-import "./ledger.css";
+import "./Ledger.css";
 
 interface LedgerProps {
   manuals: ManualSummary[];

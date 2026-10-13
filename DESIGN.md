@@ -592,7 +592,7 @@ which the landing page uses for the librarian's replies too.
 1. **Gutter bar.** The prose is a `.write-head`, with `data-live` while writing. Its last block,
    not counting footnotes, carries the cue bar, set far enough left of the text edge
    (`--write-head-offset`) to clear a code block's bleed, so it grows with the paragraph, list or
-   table as it fills. In `prose.css` the reader shifts it for a code block (which bleeds into the
+   table as it fills. In `Prose.css` the reader shifts it for a code block (which bleeds into the
    gutter), and gives an `hr` as the live block a bar 12px past its top and bottom, so the bar
    never collapses. Each new block's bar draws in from the top. Solid fill: no glow, no shadow.
 2. **The lamp.** At the foot of that bar, level with the line being written, sits a square cue
@@ -650,7 +650,7 @@ to text that streams:
 Every element the sample manual uses has a deliberate treatment, all under `.prose-root`.
 Paragraphs, bold, inline code and lists come from the shared `.markdown` treatment in
 `src/ui/markdown.css`, which the librarian's replies use too (at `--text-reply`); the rest is the
-reader's own, in `prose.css`.
+reader's own, in `Prose.css`.
 
 - **Paragraphs:** `--text-body` ink, 16px below, ragged right, no automatic hyphens.
 - **Headings:** H2 `--text-h2` 600 ink-strong, 48px above, 12px below. H3 `--text-h3` 600, 32 / 8.
@@ -749,9 +749,10 @@ The reader lives in `src/reader/`. It is built on `src/ui/` (the design system, 
 `src/ui/README.md`) and `src/manual/` (the manual's store and the markdown renderer, documented in
 `src/manual/README.md`). The reader styles the renderer's output rather than forking it.
 
-- One component per file. Each one that has styles imports its own stylesheet, after its import
-  from `src/ui`, so the shared styles come first in the cascade; `tokens.css` holds the reader's
-  sizes and `shell.css` the column grid.
+- One component per file. Each one that has styles imports its own stylesheet, named after it
+  (`Toc.css` for `Toc`), after its import from `src/ui`, so the shared styles come first in the
+  cascade. A shared stylesheet, which no one component owns, has a lowercase name: `tokens.css`
+  holds the reader's sizes. `Shell.css` holds the column grid.
 - `Shell` stays mounted while moving between sections (only the article is keyed by section id),
   so the TOC keeps its scroll position. Moving to another manual remounts the whole reader (it is
   keyed by manual id), so nothing on the page carries over between manuals.
@@ -761,7 +762,7 @@ The reader lives in `src/reader/`. It is built on `src/ui/` (the design system, 
 - Heading ids come from one scan of the text (`markdownScan.ts`): `Prose` looks each heading's id
   up by its source line, so the outline and the page always agree, and duplicates get `-2`, `-3`.
 - The contents sheet locks page scroll with CSS only (`html:has(.reader .sheet[data-open])`, below
-  1024px, in `compact-bar.css`), so widening the window releases it.
+  1024px, in `CompactBar.css`), so widening the window releases it.
 - Only the section page opens a section (`useSection`); the TOC, outline, previews and pager read
   the manual, so they never start the writing.
 - `npm run shot` opens the contents sheet through `data-shot="toc-toggle"`, and clicks it only
@@ -1420,10 +1421,13 @@ Hooks: `agent-input` on the field (one is visible at every width), `delete` on e
 The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/library/` (the manuals)
 and `src/agent/` (the librarian), each documented in its README.
 
-- One component per file. Each one that has styles imports its own stylesheet, except a part that
-  only its parent renders, which its parent's stylesheet styles (`LedgerRow` by `ledger.css`,
-  `Turn` by `conversation.css`); `tokens.css` holds the page's sizes and `page.css` the two-column
-  page.
+- One component per file. Each one that has styles imports its own stylesheet, named after it
+  (`Composer.css` for `Composer`), except a part that only its parent renders, which its parent's
+  stylesheet styles (`LedgerRow` by `Ledger.css`, `Turn` by `Conversation.css`). A shared
+  stylesheet, which no one component owns, has a lowercase name: `tokens.css` holds the page's
+  sizes and `page.css` the two-column page. `LibraryErrorBoundary` draws its notice with the
+  library's own classes, so it imports `page.css`, `LibraryHead.css` and `Ledger.css` before its
+  own `LibraryErrorBoundary.css`.
 - `HomePage` owns what the library and the librarian share (the draft, the named manuals, the
   hovered row, the jump, the rows) and the two live regions; `useDeleteFlow.ts` holds the delete
   flow, `LibraryErrorBoundary` the unreachable notice.

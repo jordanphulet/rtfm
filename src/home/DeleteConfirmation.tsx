@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { DeleteResult, ManualSummary } from "../library";
 import { Sheet } from "../ui";
 import { useMediaQuery } from "./useMediaQuery";
-import "./delete-confirmation.css";
+import "./DeleteConfirmation.css";
 
 const GAP_PX = 8;
 const EDGE_PX = 16;

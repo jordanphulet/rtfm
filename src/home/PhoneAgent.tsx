@@ -8,7 +8,7 @@ import { manualCount } from "./manualCount";
 import { NewestButton } from "./NewestButton";
 import type { AgentSideProps } from "./agentSide";
 import { useStickToBottom } from "./useStickToBottom";
-import "./phone-agent.css";
+import "./PhoneAgent.css";
 
 type OpenedBy = "load" | "send" | "toggle";
 

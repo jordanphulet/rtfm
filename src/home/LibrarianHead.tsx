@@ -1,6 +1,6 @@
 import type { AgentStatus } from "../agent";
 import { StatusRing } from "../ui";
-import "./librarian-head.css";
+import "./LibrarianHead.css";
 
 interface LibrarianStatusProps {
   messageCount: number;

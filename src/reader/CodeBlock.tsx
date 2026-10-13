@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import "../ui";
-import "./code-block.css";
+import "./CodeBlock.css";
 
 const COPY_RESULT_SHOWN_MS = 1500;
 

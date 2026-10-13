@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ComponentProps, type RefObject } from "react";
-import "./sheet.css";
+import "./Sheet.css";
 
 const FOCUSABLE = [
   "a[href]",

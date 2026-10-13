@@ -5,7 +5,7 @@ import { StatusRing } from "../ui";
 import { chapterName, sectionPath } from "./manualParts";
 import { STATUS_WORDS } from "./statusWords";
 import { useManualId } from "./useManualId";
-import "./section-link.css";
+import "./SectionLink.css";
 
 const OPENING_NOTE = " — opening it starts the writing.";
 

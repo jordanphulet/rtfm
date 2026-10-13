@@ -6,7 +6,7 @@ import { HiddenStatusWord } from "./HiddenStatusWord";
 import { contentsPath, sectionPath } from "./manualParts";
 import { StatusLegend } from "./StatusLegend";
 import { useManualId } from "./useManualId";
-import "./toc.css";
+import "./Toc.css";
 
 interface TocProps {
   currentId?: string;

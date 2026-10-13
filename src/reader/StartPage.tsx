@@ -7,7 +7,7 @@ import { Shell } from "./Shell";
 import { STATUS_WORDS } from "./statusWords";
 import { useArrival } from "./useArrival";
 import { useManualId } from "./useManualId";
-import "./start-page.css";
+import "./StartPage.css";
 
 const START_TITLE_ID = "start-title";
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import "../ui";
-import "./failure-notice.css";
+import "./FailureNotice.css";
 
 interface FailureNoticeProps {
   title: string;

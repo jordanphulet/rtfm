@@ -40,8 +40,8 @@ export default function Home() {
 | `controls.css` | `.text-button`, `.link`, `.external-link` |
 | `markdown.css` | `.markdown` (shared by the reader's prose and `ReplyMarkdown`) and `.reply-markdown` |
 | `write-head.css` | The write head: `.write-head`, `.write-head-line`, `.write-head-lamp` |
-| `StatusRing.tsx`, `status-ring.css` | The state ring |
-| `Sheet.tsx`, `sheet.css` | A panel with a focus trap |
+| `StatusRing.tsx`, `StatusRing.css` | The state ring |
+| `Sheet.tsx`, `Sheet.css` | A panel with a focus trap |
 | `ExternalLink.tsx` | A link that leaves the app |
 | `MarkdownLink.tsx` | The link for rendered markdown: an `ExternalLink` for a web URL, else a plain `<a>` |
 | `ReplyMarkdown.tsx` | Short markdown for the agent's replies |

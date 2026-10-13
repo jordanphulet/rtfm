@@ -4,7 +4,7 @@ import { Conversation } from "./Conversation";
 import { LibrarianHead } from "./LibrarianHead";
 import type { AgentSideProps } from "./agentSide";
 import { useStickToBottom } from "./useStickToBottom";
-import "./librarian-panel.css";
+import "./LibrarianPanel.css";
 
 export function LibrarianPanel({ agent, manuals, composer, onJump, onHover, onCue, onAction }: AgentSideProps) {
   const stick = useStickToBottom();

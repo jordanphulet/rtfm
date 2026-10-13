@@ -3,7 +3,7 @@ import type { ManualSummary } from "../library";
 import { Cues } from "./Cues";
 import { Turn } from "./Turn";
 import type { StickToBottom } from "./useStickToBottom";
-import "./conversation.css";
+import "./Conversation.css";
 
 interface ConversationProps {
   messages: AgentMessage[];

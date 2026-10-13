@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "../ui";
-import "./tail-line.css";
+import "./TailLine.css";
 
 const FOLLOW_MARGIN = 24;
 const KEYS_THAT_SCROLL_UP = ["ArrowUp", "PageUp", "Home"];

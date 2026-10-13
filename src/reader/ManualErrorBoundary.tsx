@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import "../ui";
 import { FailureNotice } from "./FailureNotice";
 import "./tokens.css";
-import "./manual-error-boundary.css";
+import "./ManualErrorBoundary.css";
 
 interface ManualErrorBoundaryProps {
   resetKey: string;

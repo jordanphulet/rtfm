@@ -6,7 +6,7 @@ import { CodeBlock } from "./CodeBlock";
 import type { Heading } from "./markdownScan";
 import { SectionLink } from "./SectionLink";
 import { useManualId } from "./useManualId";
-import "./prose.css";
+import "./Prose.css";
 
 type HastElement = NonNullable<ExtraProps["node"]>;
 type HastNode = HastElement | HastElement["children"][number];

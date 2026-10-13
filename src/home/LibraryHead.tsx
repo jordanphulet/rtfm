@@ -1,7 +1,7 @@
 import type { Ref } from "react";
 import type { ManualSummary } from "../library";
 import { manualCount } from "./manualCount";
-import "./library-head.css";
+import "./LibraryHead.css";
 
 interface LibraryHeadProps {
   manuals: ManualSummary[];

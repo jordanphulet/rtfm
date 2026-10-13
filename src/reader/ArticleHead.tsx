@@ -3,7 +3,7 @@ import type { Chapter, Section } from "../manual";
 import { StatusRing, type RingStatus } from "../ui";
 import { chapterPath, sectionPath } from "./manualParts";
 import { useManualId } from "./useManualId";
-import "./article-head.css";
+import "./ArticleHead.css";
 
 export const TITLE_ID = "section-title";
 

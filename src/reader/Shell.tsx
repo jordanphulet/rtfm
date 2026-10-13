@@ -6,7 +6,7 @@ import { rememberStreamingSections } from "./streamedThisLoad";
 import { Toc } from "./Toc";
 import { useManualId } from "./useManualId";
 import "./tokens.css";
-import "./shell.css";
+import "./Shell.css";
 
 interface ShellProps {
   current?: Section;

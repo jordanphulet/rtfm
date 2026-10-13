@@ -2,9 +2,9 @@ import { Component, type ReactNode } from "react";
 import "../ui";
 import "./tokens.css";
 import "./page.css";
-import "./library-head.css";
-import "./ledger.css";
-import "./library-error.css";
+import "./LibraryHead.css";
+import "./Ledger.css";
+import "./LibraryErrorBoundary.css";
 
 export class LibraryErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };

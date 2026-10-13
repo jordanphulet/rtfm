@@ -1,4 +1,4 @@
-import "./status-ring.css";
+import "./StatusRing.css";
 
 export type RingStatus = "unwritten" | "writing" | "written";
 

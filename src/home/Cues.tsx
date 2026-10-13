@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { ManualSummary } from "../library";
 import { cuesFor } from "./cuePrompts";
-import "./cues.css";
+import "./Cues.css";
 
 interface CuesProps {
   manuals: ManualSummary[];

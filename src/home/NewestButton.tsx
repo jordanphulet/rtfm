@@ -1,4 +1,4 @@
-import "./newest-button.css";
+import "./NewestButton.css";
 
 interface NewestButtonProps {
   replying: boolean;

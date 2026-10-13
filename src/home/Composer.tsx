@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type KeyboardEvent, type RefObject } from "react";
 import { LIBRARIAN_LIMITS } from "../agent";
 import { NewestButton } from "./NewestButton";
-import "./composer.css";
+import "./Composer.css";
 
 interface NewestJump {
   replying: boolean;

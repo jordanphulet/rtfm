@@ -6,7 +6,7 @@ import { HiddenStatusWord } from "./HiddenStatusWord";
 import { sectionPath } from "./manualParts";
 import { Toc } from "./Toc";
 import { useManualId } from "./useManualId";
-import "./compact-bar.css";
+import "./CompactBar.css";
 
 interface CompactBarProps {
   current?: Section;

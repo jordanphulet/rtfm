@@ -1,4 +1,4 @@
-import "./section-strip.css";
+import "./SectionStrip.css";
 
 export function SectionStrip({ written, total }: { written: number; total: number }) {
   return (

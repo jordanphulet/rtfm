@@ -6,7 +6,7 @@ import { HiddenStatusWord } from "./HiddenStatusWord";
 import type { Heading } from "./markdownScan";
 import { chapterAnchor, sectionPath } from "./manualParts";
 import { useManualId } from "./useManualId";
-import "./outline.css";
+import "./Outline.css";
 
 interface OutlineListProps {
   sectionLabel: string;

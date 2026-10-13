@@ -4,7 +4,7 @@ import { StatusRing } from "../ui";
 import { HiddenStatusWord } from "./HiddenStatusWord";
 import { chapterName, contentsPath, sectionPath } from "./manualParts";
 import { useManualId } from "./useManualId";
-import "./pager.css";
+import "./Pager.css";
 
 interface PagerProps {
   chapter: Chapter;

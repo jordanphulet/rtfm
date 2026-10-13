@@ -1,6 +1,6 @@
 import type { Section } from "../manual";
 import { StatusRing } from "../ui";
-import "./status-legend.css";
+import "./StatusLegend.css";
 
 const LEGEND_WORDS: Record<Section["status"], string> = {
   written: "Written",
