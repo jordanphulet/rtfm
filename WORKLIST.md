@@ -92,39 +92,6 @@ phase is done:
 
 ---
 
-## Model output
-
-Manuals come out in American English. When this phase is done, a new manual and every section
-written from now on use US spelling, vocabulary and dollars, whatever voice the manual has.
-
-### Rules for this phase
-
-- **No real Bedrock calls.** Tests use the fake models.
-
-### MO.1 — Name the locale in the planner and writer prompts
-- **Status:** doing (agent: a78861ede4dcd1d91)
-- **Depends on:** BA.1, LB.1 (both change `server/**` or `ARCHITECTURE.md`)
-- **Files:** `server/agent/planner/prompt.ts`, `server/writer/prompt.ts`,
-  `server/writer/prompt.test.ts`, `server/agent/planner/plan.test.ts`,
-  `server/seed/moving-house-without-losing-the-cat/manual.json`, `ARCHITECTURE.md`
-- **Do:**
-  - Nothing in the prompts names a locale, so the model follows the British cues it is given:
-    the planner's example plan is the seed `moving-house-without-losing-the-cat`, whose voice is
-    British, and the writer puts each manual's voice into every section's system prompt.
-  - Add one rule to the planner's and the writer's instructions: manuals are written in American
-    English, with US spelling and vocabulary, prices in US dollars, and US customary units except
-    where the subject itself works in metric (astronomy, baking by weight). In the writer, the
-    rule outranks the manual's voice, so stored manuals with British voices come out American
-    too.
-  - In the planner's instructions, change "a full stop" to "a period".
-  - Rewrite the example seed's voice in American English, keeping its author and character.
-  - Add a test that each system prompt carries the locale rule.
-  - Update ARCHITECTURE.md where it describes the prompts' rules.
-- **Done when:** `npm run build` and `npm test` pass; both system prompts name the locale; the
-  planner's example voice has no British spelling or vocabulary.
-
----
-
 ## Repo structure
 
 Make the repo quicker to find your way around, for agents and people. When this phase is done:
@@ -140,6 +107,27 @@ Make the repo quicker to find your way around, for agents and people. When this 
 
 - **No real Bedrock calls**, and never start a server on `.data/`.
 - **No task changes `CLAUDE.md`.** Only the user approves changes to it.
+
+### RS.6 — Screenshot comparison with a tolerance
+- **Status:** doing (agent: ad40d53e4e6a8edf0)
+- **Depends on:** —
+- **Files:** `scripts/**`, `README.md` (its "Screenshots" section), `package.json` and
+  `package-lock.json` (a comparison dependency, if one is needed)
+- **Do:**
+  - Add a comparison mode to the shot script, for example
+    `npm run shot -- --compare <baseline folder>`. It compares each PNG with the baseline's under
+    a small tolerance (a per-pixel color threshold and a small count of differing pixels), using
+    Playwright's own comparator if it is reachable from the `playwright` package, or
+    `pixelmatch`. It prints only the shots over the tolerance, saves a diff image for each, and
+    exits non-zero when any shot differs or is missing.
+  - Exact pixel equality trips on rendering noise: the same commit flips between two renderings
+    of the writing ring's edge (a few pixels, one color step). Where it is cheap and inside
+    `scripts/`, make captures render the same on every run, so the tolerance can stay tight.
+  - Document the mode in README's "Screenshots" section.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; `--compare` against a fresh
+  baseline of the same commit reports no differences on two runs in a row; a deliberate one-line
+  CSS change (made in a scratch copy or reverted before reporting) is reported, with its diff
+  image.
 
 ### RS.1 — Name each stylesheet after its component
 - **Status:** doing (agent: aaa4767337b69b029)
@@ -163,7 +151,7 @@ Make the repo quicker to find your way around, for agents and people. When this 
 
 ### RS.2 — Rename `src/agent/` to `src/librarian/`
 - **Status:** todo
-- **Depends on:** BA.1, RS.0, RS.1
+- **Depends on:** RS.1, RS.6 (it changes `README.md`)
 - **Files:** `src/agent/**` (moving to `src/librarian/**`), `src/home/**`, `src/manual/README.md`,
   `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
 - **Do:**
