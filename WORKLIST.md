@@ -8,17 +8,6 @@ The work still to do, with each task's status. **This file is the source of trut
 The app is moving into AWS, and agents must still be able to run, test and check all of it on one
 machine.
 
-### LF.3 — The loopback guard in child processes
-- **Status:** doing (agent abd8d3259005c72c9)
-- **Depends on:** LF.1
-- **Files:** `vitest.setup.ts` and its test, `loopback-only.ts` and its test, `vite.config.ts`,
-  `tsconfig.node.json`, `server/README.md`
-- **Do:** move the blocking itself into `loopback-only.ts`, which `vitest.setup.ts` uses and which
-  a Node process can preload (`--import`). Tests' child processes (such as `main.test.ts`'s server)
-  get it through `NODE_OPTIONS`, and a blocked connection there fails the process loudly.
-- **Done when:** `npm test` passes, a test shows a child Node process refused a non-loopback
-  connection, and `server/README.md` › Tests no longer lists child processes as uncovered.
-
 ### LF.4 — The fake models behind the real gateway
 - **Status:** doing (agent af334ef91305601dd)
 - **Depends on:** —
