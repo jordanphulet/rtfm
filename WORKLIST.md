@@ -161,18 +161,6 @@ aren't RTFM's.
   the old cookie, and the set command refusing to run without a terminal; no file or log an agent
   can read holds the passcode.
 
-### IN.16 — Let `rtfm-read` check schemas and tables
-- **Status:** doing (agent a6feaf98718c97c0c; reviewed; on 2026-10-13 the user approved the `access-stack.ts` change as is, `DescribeType` on `*`; waiting for the user to deploy `RtfmAccess` from the worktree's template)
-- **Depends on:** —
-- **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
-- **Do:** `rtfm-read` gains `cloudformation:DescribeType` on resource types (to check a live
-  resource schema, such as `AWS::Lambda::ResourcePolicy`'s), and `dynamodb:DescribeTable` and
-  `DescribeContinuousBackups` on `table/rtfm-*`, so the smoke check can confirm the table's
-  point-in-time recovery and deletion protection. Read-only; `RtfmAccess`, which the user approves
-  and deploys.
-- **Done when:** the tests show `rtfm-read` gains exactly those reads and changes nothing, and the
-  user has deployed `RtfmAccess`.
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
