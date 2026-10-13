@@ -29,7 +29,7 @@ machine.
   the caps and kill switch apply only to Bedrock.
 
 ### LF.5 — The loopback guard and a custom `lookup`
-- **Status:** todo
+- **Status:** doing (agent a231ed7599933c366)
 - **Depends on:** LF.3
 - **Files:** `loopback-only.ts` and its test, `server/README.md`
 - **Do:** block a connection whose own `lookup` (the `lookup` option of `net` and `tls`, or
