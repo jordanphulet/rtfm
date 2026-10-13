@@ -107,3 +107,38 @@ an earlier run left behind before the first pass.
   work.
 - **Done when:** the user has seen one full pass start from `/orchestrate`, and a later wake-up run
   the one-pass prompt.
+
+---
+
+## Agent prompts
+
+`npm run task-prompt` points agents to the rule files instead of copying their rules, so a prompt
+can't fall out of step when a rule changes.
+
+### Rules for this phase
+
+- **The user approves `PROCESS.md` before it is committed.** AP.2 stops at `needs-human` with the
+  exact text to approve.
+
+### AP.2 — Agent prompts point to the rules instead of restating them
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `scripts/task-prompt.ts` and its test, `PROCESS.md`
+- **Do:**
+  - Remove the "Standing rules" list from the task agent's prompt. From the reviewer's prompt,
+    remove the rules it repeats from `CLAUDE.md` (`serve-temp`, `.env.local`, zsh). Each prompt
+    keeps what belongs to its role: the role itself (the reviewer's read-only), the worktree and
+    `npm ci`, reading `CLAUDE.md` and `PROCESS.md` from `main`, how a reviewer reads the change,
+    the task excerpt, and what to report.
+  - The pointer says where the rules are: `CLAUDE.md` (Shell, Code standards) and `PROCESS.md` ›
+    Rules.
+  - Move the one rule only the template has into `PROCESS.md` › Authority: an agent whose task
+    changes `CLAUDE.md`, `PROCESS.md`, `.claude/settings.json` or hooks makes the change in its
+    worktree, gives its full diff in its report, and doesn't treat it as approved.
+  - `PROCESS.md` › Rules › Agent prompts no longer says the prompt carries the standing rules.
+- **Done when:**
+  - `npm run build` and `npm test` pass;
+  - the tests check the pointers instead of the restated rules;
+  - every rule left in either prompt is about that prompt's role, not a copy of `CLAUDE.md` or
+    `PROCESS.md`;
+  - the user has approved the `PROCESS.md` change.
