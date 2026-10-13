@@ -60,7 +60,7 @@ phase is done:
 - **Logs never hold secrets:** no credentials, no passphrase, no session tokens, no cookies.
 
 ### BA.2 — The passphrase: design
-- **Status:** doing (agent: a45d3aa24426d132f)
+- **Status:** doing (agent: a45d3aa24426d132f; in review)
 - **Depends on:** —
 - **Files:** `research/passphrase.md` (new)
 - **Do:** write the design for the user's approval in `research/passphrase.md`, dated and opening
@@ -121,7 +121,7 @@ phase is done:
   `.claude/skills/`, the agent reports that and doesn't work around it.
 
 ### RA.1 — Read the transcripts
-- **Status:** todo
+- **Status:** doing (agent: af2aa30f1e3fb1187)
 - **Depends on:** —
 - **Files:** `scripts/audit/**` (new), `package.json`, `ARCHITECTURE.md` (the `scripts/` codemap
   entry), `README.md`
