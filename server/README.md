@@ -160,11 +160,21 @@ records them, not read from AWS's bill.
 
 ## Tests
 
-Tests sit next to the code (`*.test.ts`) and never call Bedrock. Any test that starts a server
-binds port 0 and sets its own `passcode` (`undefined` unless it tests the gate), so a
-`RTFM_PASSCODE` in the environment changes nothing. Tests that race a timer against real time
-leave wide margins (a pause meant to stay inside a timeout is at most a quarter of it, one meant to
-outlast it at least twice as long), so they hold when several test runs share the machine.
+Tests sit next to the code (`*.test.ts`) and never call Bedrock. They reach only loopback:
+`vitest.setup.ts`, which Vitest runs before every test file, fails any test that connects to
+anything but `127.0.0.1`, `::1` or `localhost`, through `fetch` (Node's or happy-dom's),
+`node:http`, `node:https`, `node:net` or `node:tls`, or that uses DNS for anything but a `lookup`
+or `lookupService` of those (the `resolve*` and `reverse` functions ask a nameserver, so they are
+blocked for every name). A blocked connection fails with the code `ECONNREFUSED` and a blocked DNS
+call with `ENOTFOUND`, and the test fails even when the code under test catches the error. The
+guard doesn't cover a child process a test starts (such as `main.test.ts`'s server), a
+`worker_threads` worker, or UDP (`node:dgram`).
+
+Any test that starts a server binds port 0 and sets its own `passcode` (`undefined` unless it
+tests the gate), so a `RTFM_PASSCODE` in the environment changes nothing. Tests that race a timer
+against real time leave wide margins (a pause meant to stay inside a timeout is at most a quarter
+of it, one meant to outlast it at least twice as long), so they hold when several test runs share
+the machine.
 
 ## Files
 

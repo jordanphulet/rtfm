@@ -54,7 +54,7 @@ has the checks it makes.
 | ---------------------------- | ---------------------------------------------------------------------------- |
 | `npm run dev`                | Starts Vite (5173) and the API server (8787) together.                       |
 | `npm run server`             | Starts the API server alone, for `curl` or `npm run preview`.                |
-| `npm test`                   | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock.   |
+| `npm test`                   | Tests (Vitest; page and component tests in happy-dom). Loopback only.        |
 | `npm run build`              | Type-checks everything and builds the app.                                   |
 | `npm run preview`            | Serves the built app, passing `/api` to `npm run server` on 8787.            |
 | `npm run shot`               | Screenshots both pages in every state; `--compare` diffs against a baseline. |

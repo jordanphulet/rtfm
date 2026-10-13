@@ -7,7 +7,7 @@ const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const SCANNED_FOLDERS = ["src", "server", "scripts"];
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const SDK_IMPORT = /["'`]@(?:anthropic-ai|aws-sdk)\//;
-const ONLY_IMPORTER = "server/gateway/bedrock-client.ts";
+const SDK_ADAPTERS = ["server/gateway/bedrock-client.ts"];
 const CLIENT_IMPORT = /["'`][^"'`\n]*\bbedrock-client(?:\.[cm]?[jt]s)?["'`]/;
 
 function mayImportClient(file: string): boolean {
@@ -37,8 +37,8 @@ async function filesMatching(pattern: RegExp): Promise<string[]> {
 }
 
 describe("SDK boundary", () => {
-  it(`lets only ${ONLY_IMPORTER} name the Anthropic or AWS SDKs`, async () => {
-    expect(await filesMatching(SDK_IMPORT)).toEqual([ONLY_IMPORTER]);
+  it(`lets only the SDK adapters (${SDK_ADAPTERS.join(", ")}) name the Anthropic or AWS SDKs`, async () => {
+    expect((await filesMatching(SDK_IMPORT)).sort()).toEqual([...SDK_ADAPTERS].sort());
   });
 
   it("lets only the gateway and app.ts import the Bedrock client, so every call goes through the caps", async () => {

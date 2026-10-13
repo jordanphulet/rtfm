@@ -146,11 +146,11 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 
 ## Cross-cutting rules
 
-- **The gateway is the only way to reach Bedrock.** Nothing but `gateway/bedrock-client.ts`
-  imports an Anthropic or AWS SDK, and nothing outside `server/gateway/` and `server/app.ts`
-  imports that client; `gateway/sdk-boundary.test.ts` enforces both. So every model call is
-  reserved against the caps, checked against the kill switch and written to the ledger
-  (`server/gateway/README.md`).
+- **The gateway is the only way to reach Bedrock.** Nothing but the SDK adapters that
+  `gateway/sdk-boundary.test.ts` lists (`gateway/bedrock-client.ts` alone) imports an Anthropic or
+  AWS SDK, and nothing outside `server/gateway/` and `server/app.ts` imports that client; the test
+  enforces both. So every model call is reserved against the caps, checked against the kill
+  switch and written to the ledger (`server/gateway/README.md`).
 - **One server per data folder.** The caps are totalled in one process's memory, so the server
   locks its data folder before it starts (`server/storage/README.md` › The data folder's lock).
 - **Configuration** is committed, apart from the AWS keys in `.env.local`, which only
@@ -166,3 +166,19 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 - **One logger**, passed to whatever logs, never logs a manual's text, a prompt, a conversation
   or the passcode (`server/logging/README.md`).
 - **Tests never call Bedrock** (`server/README.md` › Tests).
+- **Everything runs on one machine.** An agent can run, test and check the whole app on one
+  machine:
+  - Every AWS service the app uses, whether Bedrock, DynamoDB, an IAM role, SSM, a Lambda handler
+    or static hosting, sits behind an interface with a local implementation. The local one is the
+    default, and config chooses the AWS one through an environment variable, as `RTFM_MODELS`
+    chooses Bedrock over the fake models.
+  - `npm test`, `npm run serve-temp` and `npm run shot` need no network beyond this machine and no
+    AWS credentials. `vitest.setup.ts` fails any test that connects to anything but loopback
+    (`server/README.md` › Tests).
+  - Each such interface has one shared test suite that runs against every implementation, so the
+    local one stays as strict as the AWS one.
+  - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
+    adapters on purpose, or the test fails.
+  - A feature that works only in AWS needs the user's approval.
+  - Local can't show IAM permissions, Lambda response streaming and its disconnects, or cold
+    starts. A smoke check against the deployed app covers those.

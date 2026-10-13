@@ -22,5 +22,5 @@ export default defineConfig({
   envDir: false,
   server: { port: 5173, strictPort: true, proxy: apiProxy, watch: { ignored: ["**/.data/**"] } },
   preview: { proxy: apiProxy },
-  test: { exclude: [...configDefaults.exclude, ".claude/**"] },
+  test: { exclude: [...configDefaults.exclude, ".claude/**"], setupFiles: ["./vitest.setup.ts"] },
 });

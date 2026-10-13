@@ -219,9 +219,10 @@ Configuration).
 
 The tests are all offline. They guard two boundaries. `sdk-boundary.test.ts` scans every source file
 (`.ts`, `.tsx`, `.js`, `.jsx` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`, and
-the root source files, and fails if any file but `bedrock-client.ts` names a module starting with
-`@anthropic-ai/` or `@aws-sdk/`, or anything outside `server/gateway/` and `server/app.ts` imports
-`bedrock-client`, so nothing can call the client without going through the caps.
+the root source files, and fails if any file but the SDK adapters it lists (`bedrock-client.ts`
+alone) names a module starting with `@anthropic-ai/` or `@aws-sdk/`, or a listed adapter names
+none, or anything outside `server/gateway/` and `server/app.ts` imports `bedrock-client`, so
+nothing can call the client without going through the caps.
 `bedrock-client.test.ts` runs the client against a local server that answers with real Bedrock
 event-stream frames, with fake keys and `AWS_PROFILE`, `AWS_BEARER_TOKEN_BEDROCK`,
 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `ANTHROPIC_API_KEY`,
