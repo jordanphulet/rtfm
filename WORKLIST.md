@@ -138,10 +138,12 @@ edits and stops only where two tasks changed the same lines. When this phase is 
   finds the credentials, checked without printing any value.
 
 ### WT.2 — Task agents in their own worktrees
-- **Status:** doing (agent a60214f124cbcf535; in review)
+- **Status:** doing (agent a60214f124cbcf535; review round 2)
 - **Depends on:** —
 - **Files:** `PROCESS.md` (the loop, the review loop and Rules; the user approves),
-  `scripts/commit-task.ts` and its test
+  `scripts/commit-task.ts` and its test; after RC.3 is committed: `CLAUDE.md` (the task agent's
+  line; the user approves), `.claude/settings.json` (`worktree.baseRef`; the user approves),
+  `README.md` (› Committing task work)
 - **Do:**
   - `npm run commit-task -- <ID> --worktree <path> …` reads the task from this checkout's
     `WORKLIST.md` and stages and commits in the given worktree. Without `--worktree` it works as
@@ -220,9 +222,10 @@ When this phase is done:
 - **Do:**
   - `npm run task-prompt -- <ID>` prints a prompt with:
     - the task's full block from `WORKLIST.md` and its phase's "Rules for this phase";
-    - the standing rules: stay inside Files; no git command that changes anything; stop only
-      processes you started, by handle or PID; docs describe what exists; report the files
-      changed, the checks run and anything unresolved;
+    - the standing rules: change the task's Files, and list any other file changed under
+      "Outside Files" with the reason; no git command that changes anything; stop only processes
+      you started, by handle or PID; docs describe what exists; report the worktree's path and
+      branch, the files changed, the checks run and anything unresolved;
     - pointers to `CLAUDE.md` and README's docs index, replacing the fixed
       `src/manual/README.md` pointer.
   - `--review` prints the reviewer's version: read-only, report findings.
