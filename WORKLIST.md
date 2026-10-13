@@ -20,43 +20,40 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.4 — Settle the AWS design
-- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1 done; waiting for the user to approve the spike boundary change and redeploy `RtfmToolkit` from the worktree's template)
+- **Status:** doing (agent a67c46fb4f3ef74f8; stage 2: writing up the design the user decided on 2026-10-13, with no spikes)
 - **Depends on:** IN.3
 - **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
   `ARCHITECTURE.md`, `infra/**`
 - **Do:**
-  - From the local server, list what the deployed app must do: each route and its stream (the
-    section SSE stream, the librarian POST stream), one writer per section with joiners, abort on
-    the last disconnect, the caps across instances, the passcode, the kill switch, idle cost.
-  - Weigh, against that list:
-    - CloudFront and a streaming Lambda Function URL behind origin access control (OAC): one
-      domain keeps the Origin checks, the passcode cookie and `EventSource` working;
-    - API Gateway REST with response streaming (check that it exists and how it behaves);
-    - one always-on Node instance running the server unchanged;
-    - rule out API Gateway HTTP API (no streaming) and AppSync (it would replace the REST and SSE
-      contract), with the reasons;
-    - for storage, DynamoDB alone against DynamoDB plus S3 for section bodies. Bodies are under
-      about 10 KB at `max_tokens` 2048, and saving one needs a conditional write and a check
-      that the manual exists.
-  - Weigh each option by how much of it runs outside AWS: the AWS-only code should be thin
-    adapters, with the logic in shared code that runs locally. Say where the design changes a
-    shared interface and how its local implementation keeps up (`ARCHITECTURE.md` › Everything
-    runs on one machine).
-  - Spike in throwaway `RtfmSpike…` stacks, under a boundary change the user approves and
-    deploys first (from CloudShell, as in `infra/README.md` › Your steps), for under $1 in all:
-    - SSE through the front door;
-    - a POST with a body through it (OAC needs a body-hash header);
-    - whether Lambda sees a client disconnect;
-    - the cold-start time to open a section.
-  - Deny `lambda:PutResourcePolicy` in the boundary, for good: on `main` it lets a stack attach a
-    resource policy that gets around `NoFunctionPermissions`. A CloudFront distribution, which
-    can't be scoped by name or safely by tag, lives in a stack the user deploys.
-  - Give the exact boundary diff the chosen design needs, the cost at idle and at the $20 cap,
-    the local and AWS interface pairs to build, and the build tasks that follow.
-- **Done when:** the doc recommends one design with the spikes' results, every spike stack is
-  destroyed and any spike-only boundary change is withdrawn, and the user has decided. The
-  decision then goes into `ARCHITECTURE.md`, the two older research docs' status lines say what
-  was adopted, and the orchestrator adds the build tasks.
+  - Record in `research/aws-design.md` the design the user decided on 2026-10-13, in place of the
+    spike plan:
+    - the front door: CloudFront in front of a Lambda Web Function, with no spikes; if the Web
+      Function's idle cost passes $10 a month, move to a streaming function URL run through the
+      AWS Lambda Web Adapter;
+    - one spending ledger in AWS: `RTFM_MODELS=bedrock` always uses the central ledger, totals
+      and kill switch in DynamoDB, from a laptop or deployed; `fake` keeps the local ones;
+    - two DynamoDB tables, single-table within each: `rtfm-app` (manuals, sections, the passcode
+      digest) and `rtfm-usage` (ledger, totals, kill switch);
+    - the passcode stored only as its SHA-256 digest in `rtfm-app`; the cookie holds the digest;
+      the user sets it from a terminal, so no agent sees it; agents build a cookie from the
+      digest for smoke checks; `RTFM_PASSCODE` locally, hashed the same way;
+    - an `rtfm-ops` role in `RtfmAccess`, assumable by `rtfm-agent`, that writes only the
+      passcode and kill-switch items and grows with the ops tools;
+    - the ops tools, built for agents: rotate the passcode (the user's), the kill switch, usage,
+      logs, status;
+    - the domain `rtfm.moonfetus.com` (a Route 53 zone in this account): its certificate, DNS
+      record and distribution in stacks the user deploys, so RTFM's roles get no Route 53 or ACM
+      permission; the app answers only on that origin.
+  - Turn the boundary change into its permanent form: `rtfm-*` Web Functions instead of
+    `rtfm-spike-*`, the `PutResourcePolicy` deny and the Web Function auth-type denials, and the
+    user's edge stacks among those RTFM's roles may only read. Delete the spike code.
+  - Write the build tasks that follow, the first deploying the app on a Web Function behind
+    CloudFront with the fake models and throwaway storage, measuring streaming, disconnects,
+    cold starts and idle cost.
+- **Done when:** the doc records the decided design and its build tasks, the spike code is gone,
+  the user has approved the boundary change and redeployed `RtfmToolkit` with it, the decision is
+  in `ARCHITECTURE.md`, and the two older research docs' status lines say what was adopted. The
+  orchestrator then adds the build tasks.
 
 ### IN.5 — Check the budget counts Bedrock
 - **Status:** blocked (the user activates the `project` cost allocation tag, both the user-defined
