@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.1 — The `infra/` app and the access stack
-- **Status:** doing (agent a1e12c678639005f4; in review; on 2026-10-13 the user approved its `CLAUDE.md` and `PROCESS.md` diffs and its custom `RtfmToolkit` bootstrap)
+- **Status:** doing (agent a1e12c678639005f4; reviewed, waiting for the user's go-ahead to commit; on 2026-10-13 the user approved its `CLAUDE.md` and `PROCESS.md` diffs and its custom `RtfmToolkit` bootstrap)
 - **Depends on:** LF.1
 - **Files:** `infra/**`, `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`,
   `ARCHITECTURE.md`, `README.md`, `server/README.md`, `CLAUDE.md`, `PROCESS.md`
