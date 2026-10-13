@@ -62,14 +62,15 @@ makes the right way the easy way. When this phase is done:
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.3 — A throwaway server that agents stop by its PID
-- **Status:** doing (agent ad4fbd1d743526385)
+- **Status:** doing (agent ad4fbd1d743526385; in review)
 - **Depends on:** —
 - **Files:** `scripts/serve-temp.ts` and its test (new), `package.json`, `CLAUDE.md` (the line
   about stopping processes; the user approves), `ARCHITECTURE.md` (the `scripts/` codemap entry),
   `README.md`
 - **Do:**
-  - `npm run serve-temp -- [--models fake|bedrock] [--keep]` starts the API and Vite on free
-    ports, with a new temporary data folder and fake models unless told otherwise. It reuses
+  - `npm run serve-temp -- [--keep]` starts the API and Vite on free ports, with a new temporary
+    data folder and the fake models. It has no Bedrock option: each copy's fresh ledger would
+    start the spending caps from zero. It reuses
     `startServer` and `startViteServer` as `scripts/shot.ts` does, and never uses `.data/`.
   - It prints the page's URL, the API's URL, the data folder and its own PID, then runs until
     stopped. On `SIGINT` or `SIGTERM` it stops both servers and deletes the data folder, unless
