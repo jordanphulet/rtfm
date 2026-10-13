@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.4 — Settle the AWS design
-- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1: research and the spike plan, then the user approves the spike boundary)
+- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1 done; its spike boundary change is in security review, then goes to the user to approve and deploy)
 - **Depends on:** IN.3
 - **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
   `ARCHITECTURE.md`, `infra/**`
