@@ -78,10 +78,11 @@ aren't RTFM's.
 - **Files:** `infra/**`, `README.md`, `PROCESS.md`
 - **Do:**
   - With `npm run aws`, read `RtfmAccess`'s stack and its outputs, and show that a work profile
-    in the user's own `~/.aws/config` isn't reachable from it.
-  - With `npm run cdk`, deploy an `RtfmApp` stack holding one log group, then show that it can't
-    change `RtfmAccess`, create a role without the boundary, or touch a resource not named for
-    RTFM.
+    in the user's own `~/.aws/config`, and the user's own CLI aliases, aren't reachable from it.
+  - With `npm run cdk`, deploy an `RtfmApp` stack holding one log group and one `rtfm-` bucket with
+    default props (no `blockPublicAccess`, which the boundary refuses to set), then show that it can't
+    change `RtfmAccess`, create a role without the boundary, touch a resource not named for
+    RTFM, create a Function URL with `AuthType NONE`, or lift the bucket's Block Public Access.
   - Check from Cost Explorer (through `npm run aws`) whether the `project=rtfm` tag catches
     Bedrock calls made with `rtfm-local`'s key. If it doesn't, say so: the budget then needs
     another filter, or the server's calls a tagged application inference profile.
