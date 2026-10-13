@@ -1,0 +1,9 @@
+{
+  "app": "node app.ts",
+  "toolkitStackName": "RtfmToolkit",
+  "notices": false,
+  "versionReporting": false,
+  "context": {
+    "cli-telemetry": false
+  }
+}

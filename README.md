@@ -25,6 +25,8 @@ writes each section only when a reader opens it. The app has two pages:
 - `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
   the orchestrator's protocol.
 - `WORKLIST.md`: the phases and tasks, with each task's status.
+- `infra/README.md`: RTFM's AWS setup: the CDK app, its IAM identities and permissions boundary,
+  the only way commands reach AWS, and the user's steps to set it up.
 - `research/`: dated research write-ups, each opening with what was adopted.
 - `CLAUDE.md`: the session roles, the shell and credentials rules, and the code standards.
 
@@ -65,6 +67,8 @@ has the checks it makes.
 | `npm run orchestrator-check` | Checks the orchestrator can start here, and lists leftovers. See below.      |
 | `npm run commit-task`        | Commits a task's work with its review trailer. See below.                    |
 | `npm run task-prompt`        | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
+| `npm run aws`                | The AWS CLI as RTFM's own role, the only way to it. See `infra/README.md`.   |
+| `npm run cdk`                | The CDK CLI in `infra/`, as RTFM's own role. See `infra/README.md`.          |
 
 The `rule-audit` skill (`.claude/skills/rule-audit/SKILL.md`) builds on `npm run audit`: told to
 "run the rule audit", a session ranks the written rules agents break by how often and what each
@@ -238,8 +242,9 @@ To switch to Claude:
 
 1. The AWS account needs Amazon Bedrock access to Claude Haiku 4.5 through its `global.`
    inference profile (`global.anthropic.claude-haiku-4-5-20251001-v1:0`).
-2. Put its keys in `.env.local` at the main checkout's root (gitignored). A server started in a
-   linked worktree reads the main checkout's file too, so there is only ever one copy:
+2. Put the keys of the IAM user `rtfm-local` (`infra/README.md` › Your steps) in `.env.local` at
+   the main checkout's root (gitignored). A server started in a linked worktree reads the main
+   checkout's file too, so there is only ever one copy:
 
    ```sh
    AWS_ACCESS_KEY_ID=…

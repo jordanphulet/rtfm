@@ -9,10 +9,10 @@ including each turn of the loop and each plan, goes through one gateway that cap
 
 This doc is a map: what each folder holds, which folders may import which, and the rules that cut
 across them. The detail sits next to the code, in each folder's README: `server/README.md`, each
-`server/*/README.md` and each `src/*/README.md`. `README.md` covers running the app, its routes,
-the data folder and its kill switch, resetting the manuals, and what the models cost. `DESIGN.md`
-covers the design both pages share, and each page's own design is in its `src/<page>/DESIGN.md`:
-`src/home/DESIGN.md` and `src/reader/DESIGN.md`.
+`server/*/README.md`, each `src/*/README.md` and `infra/README.md`. `README.md` covers running the
+app, its routes, the data folder and its kill switch, resetting the manuals, and what the models
+cost. `DESIGN.md` covers the design both pages share, and each page's own design is in its
+`src/<page>/DESIGN.md`: `src/home/DESIGN.md` and `src/reader/DESIGN.md`.
 
 ```
 browser (Vite, :5173)                           server (node:http, :8787)
@@ -101,6 +101,18 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `task-prompt.ts`: `npm run task-prompt`, which prints the prompt that starts a task's agent or
   its reviewer, from the task's block in `WORKLIST.md`, using `commit-task.ts`'s parsing.
 
+### `infra/`
+
+RTFM's AWS setup, a CDK app (`app.ts`) in account `438180219169`, which also holds things that
+aren't RTFM's. See `infra/README.md`.
+
+- `toolkit-stack.ts`: `RtfmToolkit`, RTFM's own CDK bootstrap (qualifier `rtfm`), with the
+  permissions boundary (`boundary.ts`) and execution policy every RTFM stack deploys under.
+- `access-stack.ts`: `RtfmAccess`, RTFM's IAM users and roles and its budget alarm. The user
+  deploys it and the bootstrap.
+- `run-aws.ts`: `npm run aws` and `npm run cdk`, which run the AWS and CDK CLIs as RTFM's own
+  roles from `~/.aws/rtfm/`.
+
 ## Boundaries
 
 **The contract between browser and server is `server/api/types.ts`.** The browser imports its
@@ -166,6 +178,11 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 - **One logger**, passed to whatever logs, never logs a manual's text, a prompt, a conversation
   or the passcode (`server/logging/README.md`).
 - **Tests never call Bedrock** (`server/README.md` › Tests).
+- **AWS only as RTFM.** Commands reach AWS only through `npm run aws` and `npm run cdk`, as the
+  roles `rtfm-read` and `rtfm-deploy`, which reach only resources named for RTFM; every role an
+  RTFM stack creates carries the permissions boundary (`infra/README.md`). The CDK packages are
+  imported only in `infra/` (`infra/cdk-imports.test.ts`), so they reach neither the browser
+  bundle nor the server.
 - **Everything runs on one machine.** An agent can run, test and check the whole app on one
   machine:
   - Every AWS service the app uses, whether Bedrock, DynamoDB, an IAM role, SSM, a Lambda handler

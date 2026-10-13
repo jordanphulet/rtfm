@@ -81,7 +81,7 @@ section writer and the librarian's model, which also plans new manuals (`createM
 
 | Setting | Where | Secret |
 | --- | --- | --- |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the IAM user `rtfm-local`'s, `infra/README.md`), `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
 | Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
