@@ -45,25 +45,6 @@ aren't RTFM's.
 - **Done when:** the measurements are in this doc, and the idle cost is under $10 a month or the
   orchestrator has a task to move to B.
 
-### IN.11 — Store the library in DynamoDB
-- **Status:** doing (agent a31e9f93c83c3faa0; review round 1: credentials, retries, delete condition)
-- **Depends on:** IN.8, IN.16 and the user's deploy of it (the smoke check reads the table with `rtfm-read`)
-- **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts` and its test, `server/README.md`,
-  `infra/app-stack.ts` and its test, `package.json`, `package-lock.json`, `scripts/**`,
-  `vite.config.ts`, `vitest.setup.ts`, `ARCHITECTURE.md`, and for the Web Function on the table and
-  the new SDK adapter: `server/web-function.ts` and its test, `server/gateway/sdk-boundary.test.ts`,
-  `server/gateway/README.md`, `server/logging/README.md`, `infra/README.md`, `README.md`,
-  `.gitignore`
-- **Do:**
-  - `ManualStore` on the table `rtfm-app`, with its shared suite run against the file store and
-    against DynamoDB Local; the table in `RtfmApp`; the Web Function on it, seeding once.
-  - DynamoDB Local for `npm test`: a script fetches one pinned release of AWS's jar once, checks
-    its checksum, and keeps it in a gitignored folder; the tests' global setup starts it with
-    `java` on 127.0.0.1 on a free port and stops it after. No network during `npm test` once the
-    jar is there; without it, the suite says how to fetch it.
-  - `ARCHITECTURE.md` gains the table and the store pair.
-- **Done when:** both stores pass the shared suite, and `npm test` stays loopback-only.
-
 ### IN.12 — One ledger for real spend
 - **Status:** todo
 - **Depends on:** IN.11
