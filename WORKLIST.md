@@ -50,7 +50,7 @@ an earlier run left behind before the first pass.
   exact text to approve.
 
 ### OS.1 — Orchestrator preflight
-- **Status:** doing (agent a7ad0ab787ca0789a, in its own worktree)
+- **Status:** doing (agent a7ad0ab787ca0789a, in its own worktree; in review)
 - **Depends on:** —
 - **Files:** `scripts/orchestrator-check.ts` and its test, `scripts/commit-task.ts` and its test,
   `package.json`, `README.md`, `ARCHITECTURE.md`
