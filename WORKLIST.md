@@ -110,9 +110,9 @@ Make the repo quicker to find your way around, for agents and people. When this 
 - **No task changes `CLAUDE.md`.** Only the user approves changes to it.
 
 ### RS.5 — Write the repo map down once
-- **Status:** todo
+- **Status:** doing (agent: ab7b3279ef896fe9b)
 - **Depends on:** RS.2, RS.3, RS.4
-- **Files:** `README.md`, `ARCHITECTURE.md`
+- **Files:** `README.md`, `ARCHITECTURE.md`, `DESIGN.md` (its pointer to the routes only)
 - **Do:**
   - Keep the folder map in one place, the codemap in `ARCHITECTURE.md`.
   - Cut the README's "Where things live" to what someone running the app needs, and point to
