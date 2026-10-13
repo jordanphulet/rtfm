@@ -124,7 +124,7 @@ edits and stops only where two tasks changed the same lines. When this phase is 
   finds the credentials, checked without printing any value.
 
 ### WT.2 — Task agents in their own worktrees
-- **Status:** doing (agent a60214f124cbcf535)
+- **Status:** doing (agent a60214f124cbcf535; in review)
 - **Depends on:** —
 - **Files:** `PROCESS.md` (the loop, the review loop and Rules; the user approves),
   `scripts/commit-task.ts` and its test
