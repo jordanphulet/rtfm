@@ -16,6 +16,7 @@ export type Task = { id: string; title: string; files: FilePatterns };
 type Review = { reviewedBy: string } | { noReviewReason: string };
 type CommitResult = { subject: string; committed: string[]; leftAlone: string[] };
 type StatusEntry = { code: string; file: string };
+type LineRange = { start: number; end: number };
 
 /**
  * Commits the changed files that task `id`'s **Files** match, with its review trailer, in
@@ -142,22 +143,43 @@ function commitMessage(subject: string, review: Review): string {
 /** Task `id`'s title and **Files**, from the text of `WORKLIST.md`. */
 export function findTask(worklist: string, id: string): Task | undefined {
   const lines = worklist.split("\n");
-  const heading = `### ${id} — `;
-  const start = lines.findIndex((line) => line.startsWith(heading));
+  const block = findTaskBlock(lines, id);
+  if (!block) return undefined;
+  const title = lines[block.start].slice(taskHeading(id).length).trim();
+  return { id, title, files: parseFiles(filesText(lines.slice(block.start + 1, block.end))) };
+}
+
+function taskHeading(id: string): string {
+  return `### ${id} — `;
+}
+
+/** Where task `id`'s block is in the lines of `WORKLIST.md`: its heading up to the next heading or rule. */
+export function findTaskBlock(lines: string[], id: string): LineRange | undefined {
+  const start = lines.findIndex((line) => line.startsWith(taskHeading(id)));
   if (start === -1) return undefined;
+  return { start, end: blockEnd(lines, start) };
+}
+
+/** The line that ends the block starting at `start`: the next heading or rule, or the end. */
+export function blockEnd(lines: string[], start: number): number {
   const end = lines.findIndex((line, index) => index > start && /^(#|---)/.test(line));
-  const block = lines.slice(start + 1, end === -1 ? undefined : end);
-  return { id, title: lines[start].slice(heading.length).trim(), files: parseFiles(filesText(block)) };
+  return end === -1 ? lines.length : end;
+}
+
+/** Where a task block's item starting with `label` is, with its continuation lines. */
+export function findItem(block: string[], label: string): LineRange | undefined {
+  const start = block.findIndex((line) => line.startsWith(label));
+  if (start === -1) return undefined;
+  const end = block.findIndex((line, index) => index > start && !/^\s+\S/.test(line));
+  return { start, end: end === -1 ? block.length : end };
 }
 
 /** The **Files** item of a task block, with its continuation lines joined. */
 function filesText(block: string[]): string {
   const label = "- **Files:**";
-  const start = block.findIndex((line) => line.startsWith(label));
-  if (start === -1) return "";
-  const rest = block.slice(start + 1);
-  const end = rest.findIndex((line) => !/^\s+\S/.test(line));
-  return [block[start].slice(label.length), ...rest.slice(0, end === -1 ? undefined : end)].join(" ");
+  const item = findItem(block, label);
+  if (!item) return "";
+  return block.slice(item.start, item.end).join(" ").slice(label.length);
 }
 
 /**

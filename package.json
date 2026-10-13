@@ -17,7 +17,8 @@
     "usage": "node server/usage.ts",
     "logs": "node server/logs.ts",
     "audit": "node scripts/audit/audit.ts",
-    "commit-task": "node scripts/commit-task.ts"
+    "commit-task": "node scripts/commit-task.ts",
+    "task-prompt": "node scripts/task-prompt.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "0.34.4",

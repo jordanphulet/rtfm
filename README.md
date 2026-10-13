@@ -63,6 +63,7 @@ has the checks it makes.
 | `npm run logs`        | The server's recent log entries, filtered or followed. See below.            |
 | `npm run audit`       | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
 | `npm run commit-task` | Commits a task's work with its review trailer. See below.                    |
+| `npm run task-prompt` | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
 
 The `rule-audit` skill (`.claude/skills/rule-audit/SKILL.md`) builds on `npm run audit`: told to
 "run the rule audit", a session ranks the written rules agents break by how often and what each

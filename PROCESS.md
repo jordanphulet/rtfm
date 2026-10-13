@@ -68,7 +68,8 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
    in its **Files** or listed under "Outside Files" with a reason (Rules › Files outside the list).
 2. **Read the full diff** in the agent's worktree against `CLAUDE.md` › Code standards and, for UI
    work, the design doc. For anything beyond a trivial change, also start a **review subagent**
-   on that worktree for an independent code review, then weigh its findings.
+   on that worktree (Rules › Agent prompts) for an independent code review, then weigh its
+   findings.
 3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
    keeps its context and its worktree), then wait for it to report back and repeat from step 1.
 4. **Approved:** from the main checkout, with the agent's worktree at `<path>` on `<branch>`:
@@ -138,15 +139,15 @@ folder READMEs", which matches nothing.
   At most 3 task agents run at once.
 - **Only the orchestrator commits.** Agents never run git commands that change anything.
 - **Agents never edit `WORKLIST.md`.** They report back, and the orchestrator updates it.
-- Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
-  `src/manual/README.md`. Its paths are relative to the repo root, never the main checkout's
-  absolute path, since the agent works in its worktree. It asks the agent to report back with its
-  worktree's path and branch, the files it changed (and any "Outside Files", with the reason), how
-  it checked its work, and anything left unresolved. The orchestrator's `SendMessage` notes to an
-  agent name its worktree's path.
-- Every agent prompt carries the rule that docs describe what exists (`CLAUDE.md` › Code
-  standards): no decision lists, plans or status in docs; a decision changes the doc, code or task
-  it governs, and planned work goes into `WORKLIST.md`.
+- **Agent prompts:** a task agent's prompt starts from the output of
+  `npm run -s task-prompt -- <ID>`, and a task reviewer's from
+  `npm run -s task-prompt -- <ID> --review`. It carries the task's block and its phase's rules
+  from `WORKLIST.md`, the standing rules from these Rules and `CLAUDE.md`, pointers to
+  `CLAUDE.md` and `README.md` › The docs, and what to report back. After it the orchestrator adds
+  the task's own notes, and for a reviewer the worktree's path and the agent's Outside Files.
+  Paths in a prompt are relative to the repo root, never the main checkout's absolute path, since
+  the agent works in its worktree. The orchestrator's `SendMessage` notes to an agent name its
+  worktree's path.
 
 **Statuses:** `todo` · `doing` · `blocked` · `needs-human`. A status may carry a short reason in
 parentheses, for example `blocked (waiting for the user's AWS sign-up)`.
