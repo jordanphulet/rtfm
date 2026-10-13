@@ -49,38 +49,9 @@ an earlier run left behind before the first pass.
 - **The user approves `PROCESS.md` before it is committed.** OS.2 stops at `needs-human` with the
   exact text to approve.
 
-### OS.1 — Orchestrator preflight
-- **Status:** doing (agent a7ad0ab787ca0789a, in its own worktree; review round 2)
-- **Depends on:** —
-- **Files:** `scripts/orchestrator-check.ts` and its test, `scripts/commit-task.ts` and its test,
-  `package.json`, `README.md`, `ARCHITECTURE.md`, `.gitignore` (`.claude/worktrees/`)
-- **Do:** add `npm run orchestrator-check`. It fails, naming what to fix, when:
-  - the current folder isn't the main checkout (`--git-dir` differs from `--git-common-dir`),
-    printing the main checkout's path;
-  - the main checkout isn't on `main`;
-  - the working tree has uncommitted changes, listing them;
-  - `core.hooksPath` doesn't resolve to the main checkout's `.githooks`.
-
-  When those pass, it reports what an earlier run may have left behind, without failing:
-  - each `doing` task in `WORKLIST.md`, with the agent recorded for it;
-  - each task worktree (branch `worktree-agent-*`), with its commits ahead of `main` and its
-    uncommitted files;
-  - pairs each `doing` task with the worktree whose branch carries its agent's ID, and lists
-    either side that has no match.
-
-  `npm run commit-task` refuses, with the same message, unless it runs in the main checkout with
-  `main` checked out.
-- **Done when:**
-  - tests cover each failing check;
-  - tests cover a `doing` task with and without a worktree, and a task worktree with no `doing`
-    task;
-  - a test shows `commit-task` refusing from a linked worktree and from a branch other than `main`;
-  - `npm run build` and `npm test` pass;
-  - `README.md` documents the command.
-
 ### OS.2 — The `/orchestrate` skill
-- **Status:** todo
-- **Depends on:** OS.1
+- **Status:** doing (agent pending)
+- **Depends on:** —
 - **Files:** `.claude/skills/orchestrate/SKILL.md`, `PROCESS.md`, `README.md`
 - **Do:** write a skill the user invokes to start the loop. In order, it:
   1. runs `npm run orchestrator-check`, and on failure reports the message and stops;
@@ -121,7 +92,8 @@ can't fall out of step when a rule changes.
   exact text to approve.
 
 ### AP.2 — Agent prompts point to the rules instead of restating them
-- **Status:** doing (agent ab901906648c18913, in its own worktree; review round 2)
+- **Status:** needs-human (the user approves the `PROCESS.md` change; agent ab901906648c18913, in
+  its own worktree, reviewed by ad5c362a55b74d4fc)
 - **Depends on:** —
 - **Files:** `scripts/task-prompt.ts` and its test, `PROCESS.md`
 - **Do:**
