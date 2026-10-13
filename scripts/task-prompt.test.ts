@@ -120,38 +120,36 @@ Report back with:`,
     expect(() => taskPrompt("### YY.10 — Ten\n- **Do:** it.", "YY.1", "task")).toThrow("There is no task YY.1");
   });
 
-  it("gives a task agent the standing rules and pointers to the rule files and docs index", () => {
+  const RESTATED_RULES = ["serve-temp", "npm run dev", "pkill", ".env.local", "zsh", "start with `=`", "Standing rules"];
+
+  it("gives a task agent its role, pointers to the rule files and docs index, and what to report", () => {
     const prompt = taskPrompt(WORKLIST, "YY.1", "task");
-    for (const rule of [
+    for (const part of [
       "**task agent**",
       "run `npm ci`",
-      "`CLAUDE.md`",
-      "`PROCESS.md`",
+      "`CLAUDE.md` and `PROCESS.md` as committed on `main` (`git show main:<file>`)",
       "`README.md` › The docs",
-      "as committed on `main` (`git show main:<file>`)",
-      "Planned work belongs in `WORKLIST.md`, which only the orchestrator edits: name it in your report.",
-      '"Outside Files" with the reason',
-      "Run no git command that changes anything",
-      "Don't edit `WORKLIST.md`",
-      "`npm run serve-temp`",
-      "never `npm run dev`",
-      "Stop only processes you started, by the handle or PID",
-      "never `pkill`",
-      "`.env.local`",
-      "Docs describe what exists",
-      "start with `=`",
+      "`CLAUDE.md` › Shell and Code standards",
+      "`PROCESS.md` › Roles (the task agent), Authority, and Rules (Starting a task agent, Files outside the list, Only the orchestrator commits, Agents never edit `WORKLIST.md`)",
+      "this prompt doesn't repeat them",
       "your worktree's path and branch",
+      '"Outside Files" with the reason',
+      "the full diff of any change to a file only the user approves (`PROCESS.md` › Authority)",
+      "any work you found that belongs in `WORKLIST.md`",
       "the checks you ran",
       "anything unresolved",
     ]) {
-      expect(prompt).toContain(rule);
+      expect(prompt).toContain(part);
+    }
+    for (const rule of RESTATED_RULES) {
+      expect(prompt).not.toContain(rule);
     }
     expect(prompt).not.toContain("src/manual/README.md");
   });
 
   it("gives a reviewer the read-only version, with the task and its phase's rules", () => {
     const prompt = taskPrompt(WORKLIST, "YY.1", "review");
-    for (const rule of [
+    for (const part of [
       "**reviewer**",
       "change no files, and run no git command that changes anything",
       "under the worktree's path (`<worktree>/scripts/x.ts`)",
@@ -160,12 +158,13 @@ Report back with:`,
       "**Done when**",
       "in the agent's Outside Files at the end",
       "Run the task's checks in the worktree (`npm ci` there first if `node_modules` is missing)",
-      "`npm run serve-temp`",
-      "`.env.local`",
-      "start with `=`",
+      "Your commands, and any server you start, follow `CLAUDE.md` › Shell",
       "a concrete failure and what to change; say which must be fixed before commit",
     ]) {
-      expect(prompt).toContain(rule);
+      expect(prompt).toContain(part);
+    }
+    for (const rule of RESTATED_RULES) {
+      expect(prompt).not.toContain(rule);
     }
     expect(prompt.endsWith("\n\n**Worktree:** <path>. **The agent's Outside Files:** <list, or none>.")).toBe(true);
     expect(prompt).toContain("- **Phase rule one.**");

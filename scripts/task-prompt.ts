@@ -46,23 +46,15 @@ function taskAgentPrompt(id: string, excerpt: string): string {
 
 **First step:** run \`npm ci\` in your worktree.
 
-Read first: \`CLAUDE.md\` (the rules, especially Code standards and Shell) and \`PROCESS.md\` (your role and its Rules) as committed on \`main\` (\`git show main:<file>\`), since your worktree's copy can go stale (\`PROCESS.md\` › How rules spread); then the docs in \`README.md\` › The docs that bear on the task.
+Read first: \`CLAUDE.md\` and \`PROCESS.md\` as committed on \`main\` (\`git show main:<file>\`), since your worktree's copy can go stale (\`PROCESS.md\` › How rules spread); then the docs in \`README.md\` › The docs that bear on the task.
 
-Standing rules (\`PROCESS.md\` › Rules and \`CLAUDE.md\` have them in full):
-- Change the files in the task's **Files**. If you need another file, change it and list it in your report under "Outside Files" with the reason. Working around a missing file (duplicating code, putting code in the wrong place, editing through the shell) is a failure.
-- Run no git command that changes anything; read-only ones are fine. Don't edit \`WORKLIST.md\`.
-- Any server you start is \`npm run serve-temp\`, in the background; never \`npm run dev\`.
-- Stop only processes you started, by the handle or PID you got when starting them: never a PID looked up by port or name, never \`pkill\`.
-- Never read, print, copy or edit \`.env.local\`.
-- A change to \`CLAUDE.md\`, \`PROCESS.md\`, \`.claude/settings.json\` or hooks needs the user's approval: make it in your worktree, give its full diff in your report, and don't treat it as approved.
-- Docs describe what exists: no decision lists, plans or status in docs. A decision changes the doc, code or task it governs. Planned work belongs in \`WORKLIST.md\`, which only the orchestrator edits: name it in your report.
-- zsh: quote arguments that start with \`=\`.
+The rules you work under are in those two files, and this prompt doesn't repeat them: \`CLAUDE.md\` › Shell and Code standards, and \`PROCESS.md\` › Roles (the task agent), Authority, and Rules (Starting a task agent, Files outside the list, Only the orchestrator commits, Agents never edit \`WORKLIST.md\`).
 
 **The task**, under its phase, from \`WORKLIST.md\`:
 
 ${excerpt}
 
-Report back with: your worktree's path and branch (\`git rev-parse --show-toplevel\`, \`git branch --show-current\`), the files you changed and any "Outside Files" with the reason, the checks you ran and what they showed, and anything unresolved.`;
+Report back with: your worktree's path and branch (\`git rev-parse --show-toplevel\`, \`git branch --show-current\`), the files you changed and any "Outside Files" with the reason, the full diff of any change to a file only the user approves (\`PROCESS.md\` › Authority), any work you found that belongs in \`WORKLIST.md\`, the checks you ran and what they showed, and anything unresolved.`;
 }
 
 function reviewerPrompt(id: string, excerpt: string): string {
@@ -77,7 +69,7 @@ Check the change against:
 - its **Files**: every changed file is in them, or is in the agent's Outside Files at the end with a reason that holds;
 - \`CLAUDE.md\` › Code standards, docs that describe what exists included.
 
-Run the task's checks in the worktree (\`npm ci\` there first if \`node_modules\` is missing). Any server you start for a check is \`npm run serve-temp\`, in the background, stopped by its handle or the PID it prints. Never read, print, copy or edit \`.env.local\`. zsh: quote arguments that start with \`=\`.
+Run the task's checks in the worktree (\`npm ci\` there first if \`node_modules\` is missing). Your commands, and any server you start, follow \`CLAUDE.md\` › Shell; this prompt doesn't repeat it.
 
 **The task**, under its phase, from \`WORKLIST.md\`:
 
