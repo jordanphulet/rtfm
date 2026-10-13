@@ -62,7 +62,7 @@ makes the right way the easy way. When this phase is done:
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.3 — A throwaway server that agents stop by its PID
-- **Status:** doing (agent ad4fbd1d743526385; in review)
+- **Status:** doing (agent ad4fbd1d743526385; review round 2)
 - **Depends on:** —
 - **Files:** `scripts/serve-temp.ts` and its test (new), `package.json`, `CLAUDE.md` (the line
   about stopping processes; the user approves), `ARCHITECTURE.md` (the `scripts/` codemap entry),
@@ -87,6 +87,19 @@ makes the right way the easy way. When this phase is done:
 - **Done when:** `npm run build` and `npm test` pass; two copies run side by side while the
   user's dev server runs; stopping one by its PID leaves nothing of it running; the user has
   approved the `CLAUDE.md` line.
+
+### RC.4 — Vite helpers out of the screenshot script
+- **Status:** todo
+- **Depends on:** RC.3
+- **Files:** `scripts/screenshots.ts`, `scripts/shot.ts`, `scripts/serve-temp.ts`,
+  `scripts/vite-server.ts` (new), `server/main.ts`, `ARCHITECTURE.md` (the `scripts/` codemap entry)
+- **Do:**
+  - Move `startViteServer`, `localUrl` and the logger they use from `scripts/screenshots.ts` into
+    `scripts/vite-server.ts`, so `serve-temp` no longer loads Playwright when it starts.
+    `shot.ts` and `serve-temp.ts` import them from there.
+  - `serve-temp.ts` and `server/main.ts` share one `exitOnceWritten` instead of two copies.
+- **Done when:** `npm run build` and `npm test` pass; `npm run shot` still captures every state;
+  `scripts/serve-temp.ts` imports nothing that loads Playwright.
 
 ---
 
