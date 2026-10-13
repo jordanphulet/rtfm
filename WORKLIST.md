@@ -61,10 +61,11 @@ phase is done:
 
 ### BA.2 — The passphrase: design
 - **Status:** todo
-- **Depends on:** BA.1, RS.3, RS.4 (so the design is written into the new doc layout)
-- **Files:** the docs that own what it designs, in RS.3's and RS.4's layout: `ARCHITECTURE.md`,
-  `server/README.md`, `server/*/README.md`, `DESIGN.md`, `src/*/DESIGN.md`
-- **Do:** add the design for user approval, short and concrete:
+- **Depends on:** —
+- **Files:** `research/passphrase.md` (new)
+- **Do:** write the design for the user's approval in `research/passphrase.md`, dated and opening
+  with a status line, since the docs describe only what exists; BA.3 writes the approved design
+  into the docs that own each part. Short and concrete:
   - where the passphrase is set (a setting loaded at runtime, never committed) and what the
     server does when it isn't set;
   - how the server checks it (a stored hash, a constant-time comparison) and slows guessing
@@ -81,45 +82,15 @@ phase is done:
 ### BA.3 — The passphrase: build
 - **Status:** todo
 - **Depends on:** BA.2 and the user's approval
-- **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
-  (`server/**` and `src/**` include the folder READMEs and page design docs)
+- **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
+  `research/passphrase.md` (`server/**` and `src/**` include the folder READMEs and page design
+  docs)
 - **Do:** build what BA.2's approved design says, with the sign-in page and signing out; the
   screenshot script signs in; logs record sign-ins and refusals without the passphrase or token.
+  Write the design into the docs that own each part (the server and folder READMEs,
+  `ARCHITECTURE.md`, the design docs), and set `research/passphrase.md`'s status line to what was
+  adopted.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover every route
   refusing without a session, signing in and out, a wrong passphrase, the attempt limit, a
   tampered or expired token, and streams working with the cookie; live, the whole app works
   after signing in and nothing works before.
-
-
----
-
-## Repo structure
-
-Make the repo quicker to find your way around, for agents and people. When this phase is done:
-
-- each component's stylesheet shares the component's name, so a search for `Foo*` finds the
-  component, its test and its styles together;
-- names say what things are: the browser's librarian conversation lives in `src/librarian/`;
-- `ARCHITECTURE.md` and `DESIGN.md` are short maps, and the detail sits next to the code it
-  describes, as the `src/*/README.md` files already do;
-- the folder map is written down once.
-
-### Rules for this phase
-
-- **No real Bedrock calls**, and never start a server on `.data/`.
-- **No task changes `CLAUDE.md`.** Only the user approves changes to it.
-
-### RS.5 — Write the repo map down once
-- **Status:** doing (agent: ab7b3279ef896fe9b)
-- **Depends on:** RS.2, RS.3, RS.4
-- **Files:** `README.md`, `ARCHITECTURE.md`, `DESIGN.md` (its pointer to the routes only)
-- **Do:**
-  - Keep the folder map in one place, the codemap in `ARCHITECTURE.md`.
-  - Cut the README's "Where things live" to what someone running the app needs, and point to
-    the codemap for the rest.
-  - `ARCHITECTURE.md`'s opening still says "`DESIGN.md` covers the design of both pages"; name
-    the shared `DESIGN.md` and each page's `src/<page>/DESIGN.md`.
-  - README's doc index stays one line per doc. It names the pattern (each folder's README, each
-    page's `DESIGN.md`) rather than restating what each folder holds.
-- **Done when:** no folder's description appears in more than one doc; every doc the index names
-  exists.
