@@ -97,7 +97,7 @@ When this phase is done:
 - **The audit writes nothing inside the repo.** Its output goes to a folder outside it.
 
 ### DC.1 — A test that docs name only what exists
-- **Status:** doing (agent acebb14dbc85b563c, in its own worktree)
+- **Status:** doing (agent acebb14dbc85b563c, in its own worktree; in review)
 - **Depends on:** —
 - **Files:** `scripts/doc-references.test.ts` (new); `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
   `src/**/README.md`, `src/**/DESIGN.md`, `server/**/README.md`, `scripts/audit/README.md` (only
