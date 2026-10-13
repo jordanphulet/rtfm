@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.9 — Put the app at rtfm.moonfetus.com
-- **Status:** doing (agent aa0e2649282ebf078; reviewed; waiting for the user: the live `AWS::Lambda::ResourcePolicy` schema from `describe-type`, and approval of the `PROCESS.md` change)
+- **Status:** doing (agent aa0e2649282ebf078; reviewed; on 2026-10-13 the user approved its `PROCESS.md` change; waiting for the live `AWS::Lambda::ResourcePolicy` schema, which the orchestrator reads with `rtfm-read` once IN.16 is deployed)
 - **Depends on:** IN.8
 - **Files:** `infra/edge-*.ts` and their tests, `infra/app.ts`, `infra/README.md`, `PROCESS.md`
   (with the user's approval)
@@ -79,8 +79,8 @@ aren't RTFM's.
   orchestrator has a task to move to B.
 
 ### IN.11 — Store the library in DynamoDB
-- **Status:** doing (agent a31e9f93c83c3faa0)
-- **Depends on:** IN.8 (storage is the same for A and its fallback, so it doesn't wait for IN.10)
+- **Status:** doing (agent a31e9f93c83c3faa0; review round 1: credentials, retries, delete condition)
+- **Depends on:** IN.8, IN.16 and the user's deploy of it (the smoke check reads the table with `rtfm-read`)
 - **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts`, `server/README.md`,
   `infra/app-stack.ts` and its test, `package.json`, `package-lock.json`, `scripts/**`,
   `vite.config.ts`, `vitest.setup.ts`, `ARCHITECTURE.md`
@@ -162,7 +162,7 @@ aren't RTFM's.
   can read holds the passcode.
 
 ### IN.16 — Let `rtfm-read` check schemas and tables
-- **Status:** todo
+- **Status:** doing (agent a6feaf98718c97c0c; reviewed; on 2026-10-13 the user approved the `access-stack.ts` change as is, `DescribeType` on `*`; waiting for the user to deploy `RtfmAccess` from the worktree's template)
 - **Depends on:** —
 - **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
 - **Do:** `rtfm-read` gains `cloudformation:DescribeType` on resource types (to check a live
