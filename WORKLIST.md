@@ -39,40 +39,6 @@ user says its step is done.
 
 ---
 
-## Agents in their own worktrees
-
-Every task agent works in its own git worktree on its own branch, and the orchestrator merges each
-approved task into `main`. Tasks that share a file can run at the same time: git merges their
-edits and stops only where two tasks changed the same lines. When this phase is done:
-
-- the orchestrator starts every task agent in its own worktree and merges approved work into
-  `main`;
-- an agent that needs a file outside its task's **Files** changes it and says why, and the
-  orchestrator adds it to the task before committing;
-- the server reads `.env.local` from the main checkout, so no worktree holds a copy.
-
-### Rules for this phase
-
-- **No copies of `.env.local`.** WT.1 changes where the code looks, not where the file is. Tests
-  never touch the real file.
-
-### WT.1 — Read `.env.local` from the main checkout
-- **Status:** doing (agent a499adf9d828fce4d, in its own worktree; review round 2)
-- **Depends on:** —
-- **Files:** `server/gateway/credentials.ts` and its test, `README.md` (the setup step that names
-  `.env.local`), `ARCHITECTURE.md` (the Configuration line), `server/gateway/README.md` (the
-  `credentials.ts` paragraph)
-- **Do:**
-  - `ENV_LOCAL_FILE` is `.env.local` in the main checkout's root: the parent of
-    `git rev-parse --path-format=absolute --git-common-dir`, resolved once. Where git isn't
-    available, it is the repo root as before.
-  - Tests build a throwaway repo and linked worktree in a temp folder: the worktree resolves to
-    the main checkout, the main checkout to itself, and no git to the repo root.
-- **Done when:** `npm run build` and `npm test` pass, and the server started in a linked worktree
-  finds the credentials, checked without printing any value.
-
----
-
 ## Docs and prompts that hold
 
 The second rule audit (2026-10-12, the first run of the `rule-audit` skill) found two more rules
