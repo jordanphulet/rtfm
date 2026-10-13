@@ -1,13 +1,23 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { silentLogger, type Logger } from "../logging/logger.ts";
-import { capturingLogger } from "../testing.ts";
-import { createRequestHandler } from "./node-adapter.ts";
+import { capturingLogger, tempDataDir } from "../testing.ts";
+import { createRequestHandler, LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./node-adapter.ts";
 import type { ApiRequest, Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
 const EMPTY_JSON_BODY = JSON.stringify({ text: "" });
+const LOOPBACK_ONLY: AdapterConfig = {
+  allowedHosts: LOOPBACK_HOSTS,
+  allowedOrigins: LOOPBACK_ORIGINS,
+  passcode: undefined,
+  appDir: undefined,
+  eventStreamHeartbeatMs: 15_000,
+};
 
 const servers: Server[] = [];
 
@@ -16,8 +26,8 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function serve(route: Route, logger: Logger = silentLogger): Promise<string> {
-  const server = createServer(createRequestHandler([route], logger));
+async function serve(route: Route, logger: Logger = silentLogger, config: Partial<AdapterConfig> = {}): Promise<string> {
+  const server = createServer(createRequestHandler([route], logger, { ...LOOPBACK_ONLY, ...config }));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -87,5 +97,102 @@ describe("the Node adapter", () => {
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     expect(await response.text()).toBe('event: append\ndata: {"at":0,"text":"Every room ","progress":0.1}\n\n');
     expect(entries.filter(({ event }) => event === "request.failed")).toHaveLength(1);
+  });
+});
+
+describe("an event stream", () => {
+  it("sends a comment every heartbeat while it is open, and none once it has ended", async () => {
+    const heartbeatMs = 20;
+    const base = await serve(
+      {
+        method: "GET",
+        pattern: "/api/stream",
+        handle: async () => async (sink) => {
+          await sleep(heartbeatMs * 6);
+          sink.send("written", {});
+        },
+      },
+      silentLogger,
+      { eventStreamHeartbeatMs: heartbeatMs },
+    );
+
+    const text = await (await fetch(`${base}/api/stream`)).text();
+    const [beforeEnd, afterEnd] = text.split("event: written\ndata: {}\n\n");
+    expect(beforeEnd).toMatch(/^(: heartbeat\n\n){2,}$/);
+    expect(afterEnd).toBe("");
+  });
+});
+
+describe("the built app, when the adapter serves one", () => {
+  const INDEX = "<!doctype html><title>RTFM</title>";
+  const SCRIPT = "console.log('rtfm');";
+  const listsManuals: Route = { method: "GET", pattern: "/api/manuals", handle: async () => ({ status: 200, body: [] }) };
+
+  async function serveApp(config: Partial<AdapterConfig> = {}) {
+    const parent = await tempDataDir();
+    const appDir = path.join(parent, "dist");
+    await mkdir(path.join(appDir, "assets"), { recursive: true });
+    await writeFile(path.join(appDir, "index.html"), INDEX);
+    await writeFile(path.join(appDir, "assets", "index-a1b2.js"), SCRIPT);
+    await writeFile(path.join(parent, "secret.txt"), "not the app's");
+    return serve(listsManuals, silentLogger, { appDir, ...config });
+  }
+
+  it("serves index.html for the root and every page route, never cached", async () => {
+    const base = await serveApp();
+    for (const page of ["/", "/read/the-haunt-that-listens", "/read/the-haunt-that-listens/sensing-the-guest"]) {
+      const response = await fetch(`${base}${page}`);
+      expect(response.status, page).toBe(200);
+      expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+      expect(response.headers.get("cache-control")).toBe("no-cache");
+      expect(await response.text()).toBe(INDEX);
+    }
+  });
+
+  it("serves an asset with its type, cached for good, and a missing one as 404", async () => {
+    const base = await serveApp();
+    const script = await fetch(`${base}/assets/index-a1b2.js`);
+    expect(script.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+    expect(script.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect(await script.text()).toBe(SCRIPT);
+    expect((await fetch(`${base}/assets/index-gone.js`)).status).toBe(404);
+  });
+
+  it("answers HEAD without a body, and any other method with 404", async () => {
+    const base = await serveApp();
+    const head = await fetch(`${base}/`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe("");
+    expect((await fetch(`${base}/`, { method: "POST" })).status).toBe(404);
+  });
+
+  it("never serves a file outside its folder", async () => {
+    const base = await serveApp();
+    const response = await fetch(`${base}/..%2fsecret.txt`);
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain("not the app's");
+  });
+
+  it("answers a path with a NUL in it with 404, not 500", async () => {
+    const { logger, entries } = capturingLogger();
+    const parent = await tempDataDir();
+    await writeFile(path.join(parent, "index.html"), INDEX);
+    const base = await serve(listsManuals, logger, { appDir: parent });
+    for (const nul of ["/%00", "/index.html%00", "/assets/%00.js"]) {
+      expect((await fetch(`${base}${nul}`)).status, nul).toBe(404);
+    }
+    expect(entries.filter(({ level }) => level === "ERROR")).toEqual([]);
+  });
+
+  it("leaves /api to the routes, and the passcode to /api alone", async () => {
+    const base = await serveApp({ passcode: "copper lantern tidal owl" });
+    expect((await fetch(`${base}/`)).status).toBe(200);
+    expect((await fetch(`${base}/api/manuals`)).status).toBe(401);
+    expect((await fetch(`${base}/api/elsewhere`)).status).toBe(401);
+  });
+
+  it("refuses another site's Origin, as the API does", async () => {
+    const base = await serveApp();
+    expect((await fetch(`${base}/`, { headers: { origin: "https://evil.example" } })).status).toBe(403);
   });
 });

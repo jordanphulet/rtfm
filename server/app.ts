@@ -11,6 +11,7 @@ import { passcodeRoute } from "./api/passcode.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
 import type { ServerConfig } from "./config.ts";
+import { exitOnceWritten } from "./exit.ts";
 import { createBedrockClient } from "./gateway/bedrock-client.ts";
 import { ENV_LOCAL_FILE, readAwsCredentials } from "./gateway/credentials.ts";
 import { createGateway, type Gateway, type RunningGateway } from "./gateway/gateway.ts";
@@ -47,8 +48,38 @@ export type Replaced = Partial<Models> & { logger?: Logger };
 const nothingToSettle = async () => {};
 
 /**
+ * Runs the server as this whole process, for `main.ts` and `web-function.ts`: it stops on SIGINT
+ * or SIGTERM and exits with 0, or exits with 1 if the server can't start or crashes, each time
+ * once standard output has taken every line.
+ */
+export async function runServerProcess(config: ServerConfig, logger: Logger): Promise<void> {
+  // A closed pipe on standard output (EPIPE) would otherwise be an unhandled error that stops the server.
+  process.stdout.on("error", () => {});
+  process.on("uncaughtException", (error) => crash(logger, "An uncaught exception stopped the server", error));
+  process.on("unhandledRejection", (reason) => crash(logger, "An unhandled rejection stopped the server", reason));
+  const started = startServer(config, { logger });
+  // Listening first, so a signal that comes while the server starts stops it once it has started.
+  for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => started.then(stop, () => {}));
+  try {
+    await started;
+  } catch {
+    exitOnceWritten(1);
+  }
+}
+
+async function stop(server: RunningServer) {
+  await server.close();
+  exitOnceWritten(0);
+}
+
+function crash(logger: Logger, message: string, error: unknown) {
+  logger.error("server.crashed", message, {}, error);
+  exitOnceWritten(1);
+}
+
+/**
  * Starts the server on the configured data folder and port. Without a logger of its own, it logs
- * to the data folder's log file only; `main.ts` also logs to standard output.
+ * to the data folder's log file only; `main.ts` and `web-function.ts` log to standard output.
  */
 export async function startServer(config: ServerConfig, replaced: Replaced = {}): Promise<RunningServer> {
   const logger = replaced.logger ?? createLogger([toLogFile(config.dataDir)]);
@@ -63,7 +94,8 @@ export async function startServer(config: ServerConfig, replaced: Replaced = {})
   }
   const { server, models } = served;
   const port = (server.address() as AddressInfo).port;
-  logger.info("server.started", `API server on http://127.0.0.1:${port} (${config.models} models)`, {
+  logger.info("server.started", `API server on http://${config.host}:${port} (${config.models} models)`, {
+    host: config.host,
     port,
     models: config.models,
     dataDir: config.dataDir,
@@ -114,10 +146,10 @@ async function serve(
   ];
   if (config.passcode !== undefined) routes.push(passcodeRoute(config.passcode, logger));
 
-  const server = createServer(createRequestHandler(routes, logger, config.passcode));
+  const server = createServer(createRequestHandler(routes, logger, config));
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(config.port, "127.0.0.1", resolve);
+    server.listen(config.port, config.host, resolve);
   });
   return { server, models };
 }

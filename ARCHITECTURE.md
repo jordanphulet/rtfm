@@ -56,14 +56,16 @@ browser (Vite, :5173)                           server (node:http, :8787)
 
 ### The server: `server/`
 
-- The top level: `main.ts` starts the server, `app.ts` wires it (`startServer`, `createModels`),
-  `config.ts` holds the committed `ServerConfig`, `ports.ts` the `API_PORT`, `exit.ts` the
-  `exitOnceWritten` that `main.ts` and `scripts/serve-temp.ts` share; `dev.ts`, `usage.ts` and
-  `logs.ts` are the `npm run` commands; `escape-tags.ts` escapes text for the prompts, and
-  `testing.ts` holds the tests' helpers. See `server/README.md`.
+- The top level: `main.ts` starts the server on this machine and `web-function.ts` on a Lambda Web
+  Function, `app.ts` wires it (`startServer`, `createModels`) and runs it as a process
+  (`runServerProcess`), `config.ts` holds the committed `ServerConfig`, `ports.ts` the
+  `API_PORT`, `exit.ts` the `exitOnceWritten` that `app.ts` and `scripts/serve-temp.ts` share;
+  `dev.ts`, `usage.ts` and `logs.ts` are the `npm run` commands; `escape-tags.ts` escapes text
+  for the prompts, and `testing.ts` holds the tests' helpers. See `server/README.md`.
 - `api/`: the routes (`Route`, `ApiRequest`, `EventSink` in `route.ts`), the Node adapter with the
-  local-only checks and the passcode gate (`node-adapter.ts`, with `passcode.ts`), the previews (`preview.ts`) and the wire types
-  (`types.ts`). See `server/api/README.md`.
+  `Host` and `Origin` checks, the passcode gate and the built app's files (`node-adapter.ts`, with
+  `passcode.ts` and `app-files.ts`), the previews (`preview.ts`) and the wire types (`types.ts`).
+  See `server/api/README.md`.
 - `storage/`: `ManualStore` and `UsageLedger` (`types.ts`) as files in the data folder
   (`file-manual-store.ts`, `file-ledger.ts`), the data folder's lock (`lock.ts`) and seeding
   (`seed.ts`). See `server/storage/README.md`.
@@ -104,6 +106,9 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `commit-task.ts`'s check of where it runs, and its parsing of `WORKLIST.md`.
 - `task-prompt.ts`: `npm run task-prompt`, which prints the prompt that starts a task's agent or
   its reviewer, from the task's block in `WORKLIST.md`, using `commit-task.ts`'s parsing.
+- `build-web-function.ts`: the Web Function's package: the built app, the server bundled into one
+  file with Rolldown, and the seed. `RtfmApp` runs it when it synthesizes (`infra/README.md` ›
+  The Web Function's package).
 
 ### `infra/`
 
@@ -114,6 +119,8 @@ aren't RTFM's. See `infra/README.md`.
   permissions boundary (`boundary.ts`) and execution policy every RTFM stack deploys under.
 - `access-stack.ts`: `RtfmAccess`, RTFM's IAM users and roles and its budget alarm. The user
   deploys it and the bootstrap.
+- `app-stack.ts`: `RtfmApp`, the app: the Web Function `rtfm-app`, its role, endpoint and log
+  groups, and the bucket. The orchestrator deploys it.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`, which run the AWS and CDK CLIs as RTFM's own
   roles from `~/.aws/rtfm/`.
 
@@ -174,10 +181,12 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 - **Configuration** is committed, apart from the AWS keys in `.env.local`, which only
   `gateway/credentials.ts` reads, from the main checkout's root even in a linked worktree
   (`server/README.md` › Configuration).
-- **Only this machine's own pages.** The server listens on `127.0.0.1`, and the Node adapter
-  refuses any other `Host` or `Origin`, and any body that isn't JSON, before a route runs
-  (`server/api/README.md` › Only this machine's own pages).
-- **The passcode gate.** With `RTFM_PASSCODE` set, the Node adapter answers every request but
+- **Only the app's own pages.** On this machine the server listens on `127.0.0.1` and answers only
+  this machine's `Host`s and `Origin`s; on the Web Function, only an endpoint's `Host` and the
+  origin `https://rtfm.moonfetus.com`. The Node adapter refuses any other `Host` or `Origin`, and
+  any body that isn't JSON, before a route runs (`server/api/README.md` › Only the app's own
+  pages).
+- **The passcode gate.** With `RTFM_PASSCODE` set, the Node adapter answers every API request but
   `POST /api/passcode` with `401` unless its `rtfm_passcode` cookie holds the passcode, so a
   public URL can't spend the model caps for anyone who finds it; the browser shows the passcode
   screen on any `401` (`server/api/README.md` › The passcode, `src/passcode/README.md`).
@@ -203,7 +212,10 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
   - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
     adapters on purpose, or the test fails.
   - An AWS deployment runs this same server, on a Lambda Web Function behind CloudFront
-    (`research/aws-design.md`), so its AWS code is only adapters behind these interfaces.
+    (`research/aws-design.md`), started by `server/web-function.ts`, which only configures it
+    (`server/README.md` › The Web Function), so its AWS code is only adapters behind these
+    interfaces. `server/web-function.test.ts` runs it on loopback, with a stand-in
+    `AWS_LAMBDA_HTTP_ENDPOINT`.
   - A feature that works only in AWS needs the user's approval.
   - No task's **Done when** needs the deployed app. Local can't show IAM permissions, Lambda
     response streaming and its disconnects, or cold starts; a smoke check after each deploy covers

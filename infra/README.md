@@ -112,18 +112,53 @@ the tests check.
 - **`RtfmAccess`** (`access-stack.ts`): the users, the two roles, `rtfm-bedrock`, and the budget
   alarm. It has termination protection.
 - **`RtfmApp`** (`app-stack.ts`): the app, deployed through the bootstrap with
-  `npm run cdk -- deploy RtfmApp` (Deploying the app stack, below). It holds the log group
-  `/rtfm/app`, kept 30 days and deleted with the stack, and the bucket
-  `rtfm-app-438180219169-us-west-2`, with S3's default Block Public Access. The bucket is kept
-  when it leaves the stack (`RemovalPolicy.RETAIN`), since it may hold data: deleting it is a
-  step you take yourself.
+  `npm run cdk -- deploy RtfmApp` (Deploying the app stack, below). Every role in it carries the
+  boundary (`PermissionsBoundary.of` the stack). It holds:
+  - **the Web Function `rtfm-app`**, running the server (`server/README.md` › The Web Function).
+    Its name never changes, since the edge's resource policy names it. One revision, made from
+    the package below on `nodejs24.x`, with `timeoutSeconds` 300 (a request, a whole stream
+    included, may run 5 minutes) and its logs in `/rtfm/app`. Its environment holds only
+    `AWS_LAMBDA_NODEJS_ENTRYPOINT` and `RTFM_PASSCODE`, a throwaway committed in `app-stack.ts`:
+    `rtfm-read` can read a revision (`GetWebFunctionRevision`), so nothing secret goes there.
+  - **its endpoint `main`**: `HomeRegion`, `IamAuth`, at most 2 environments (`maxEnvironments`)
+    and 100 requests a second (`rateLimit`). No role of RTFM's may invoke it; only the edge's
+    distribution may, through the resource policy in `RtfmEdge`. The stack's output
+    `EndpointDomain` is its domain, which stays as long as the endpoint does.
+  - **its role `rtfm-app-web-function`**, which Lambda assumes, and which may only write log
+    streams in `/rtfm/app` and `/rtfm/app.local`: no Bedrock, since the Web Function runs only the
+    fake models.
+  - **the log groups `/rtfm/app` and `/rtfm/app.local`**, kept 30 days and deleted with the stack.
+    Lambda writes a Web Function's logs to the `.local` group first, then copies them to the
+    other.
+  - **the bucket `rtfm-app-438180219169-us-west-2`**, with S3's default Block Public Access. The
+    bucket is kept when it leaves the stack (`RemovalPolicy.RETAIN`), since it may hold data:
+    deleting it is a step you take yourself.
+
+### The Web Function's package
+
+A revision's code is a zip in the staging bucket, which Lambda reads as its own service principal.
+`app-stack.ts` makes it a CDK asset that `scripts/build-web-function.ts` builds on this machine
+when the app synthesizes (`cdk synth`, `diff` and `deploy`), in about a second, with no Docker:
+
+- `dist/`: the built app (`vite build`);
+- `web-function.mjs`, in the package's `server/` folder: `server/web-function.ts` and all it
+  imports, `node_modules` included, bundled into one file by Rolldown, so the package needs no
+  `node_modules` and no TypeScript at run time. Its path is `AWS_LAMBDA_NODEJS_ENTRYPOINT`;
+- `seed/`: the seed manuals. Every module in the bundle resolves a path against the bundle's own
+  URL, so the storage's `../seed/` is this folder, and the config's `../dist` the built app.
+
+It comes to about 4 MB, 1.6 MB zipped. The asset is named by a hash of the package, so a deploy
+makes a new revision only when the package changes. The tests synthesize without building it:
+`vite.config.ts` gives them the CDK context `aws:cdk:bundling-stacks: []`.
+`scripts/build-web-function.test.ts` builds it and runs it on loopback.
 
 ## Deploying the app stack
 
-`npm run cdk -- deploy RtfmApp` deploys as `rtfm-deploy`, through the bootstrap's roles: the file
-publishing role uploads the template to the staging bucket, the deploy role makes and runs the
-change set, and CloudFormation acts as the execution role, under the boundary. A deploy that the
-boundary refuses fails on the refused resource and rolls back, leaving the stack as it was.
+`npm run cdk -- deploy RtfmApp` builds the Web Function's package, then deploys as `rtfm-deploy`,
+through the bootstrap's roles: the file publishing role uploads the template and the package,
+zipped, to the staging bucket, the deploy role makes and runs the change set, and CloudFormation
+acts as the execution role, under the boundary. A deploy that the boundary refuses fails on the
+refused resource and rolls back, leaving the stack as it was.
 
 Without a terminal, `cdk deploy` stops at a change that widens access, such as a new role or
 policy statement: it prints the IAM changes and exits ("terminal (TTY) is not attached") before
@@ -131,7 +166,8 @@ anything reaches CloudFormation. The orchestrator deploys with `--require-approv
 (`PROCESS.md` › Review loop): the boundary limits what such a change can reach, and the review
 reads its IAM changes in the diff.
 
-The smoke check after a deploy reads what was deployed, one command each:
+The smoke check after a deploy reads what was deployed, one command each. The `lambda-web`
+commands need AWS CLI 2.37.8 or later (Your steps):
 
 ```sh
 npm run aws -- cloudformation describe-stacks --stack-name RtfmApp \
@@ -141,16 +177,24 @@ npm run aws -- s3api get-public-access-block --bucket rtfm-app-438180219169-us-w
   --output text
 npm run aws -- logs describe-log-groups --log-group-name-prefix /rtfm/app \
   --query 'logGroups[].[logGroupName,retentionInDays]' --output text
+npm run aws -- lambda-web get-web-function --function-name rtfm-app \
+  --query state --output text
+npm run aws -- lambda-web get-web-function-endpoint --function-name rtfm-app --endpoint-name main \
+  --query '[authType,state]' --output text
 ```
 
 It passes when they print, in order:
 
 - `CREATE_COMPLETE` or `UPDATE_COMPLETE`. A deploy with no changes ("(no changes)") leaves the
-  status as it was, so after one `UPDATE_ROLLBACK_COMPLETE` passes too: the last update failed
-  and the stack is back as it was deployed before it. The Block Public Access probe (below) left
-  `RtfmApp` in that state.
+  status as it was.
 - `True` four times: the bucket's Block Public Access is all on.
-- `/rtfm/app` and `30`: the log group, kept 30 days.
+- `/rtfm/app` and `30`, then `/rtfm/app.local` and `30`: the Web Function's two log groups, kept
+  30 days.
+- `Active`: the Web Function.
+- `IamAuth` and `Active`: its endpoint takes only signed requests.
+
+These read the deployed resources' settings and send no request to the server, so they don't
+show that it starts: Lambda doesn't check that a revision's server listens.
 
 ## The boundary
 
@@ -266,6 +310,11 @@ You deploy `RtfmToolkit` and `RtfmAccess` with plain CloudFormation, from AWS Cl
 templates `cdk synth` writes are ordinary CloudFormation, both stacks deploy with your own
 sign-in rather than RTFM's roles, and CloudShell needs neither the CDK CLI nor an admin profile on
 the laptop.
+
+**First, update the AWS CLI on the laptop** to 2.37.8 or later (`aws --version`), the first with
+`lambda-web`, which the smoke check uses (Deploying the app stack, above); `npm run aws` runs the
+CLI on the `PATH`. The smoke check's `lambda-web` commands were checked with
+`npm run aws -- lambda-web <command> help` on 2.38.0.
 
 1. **Write the templates.** On the laptop, with no credentials:
 
@@ -456,7 +505,8 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
 - `rtfm.ts`: the account, region and qualifier, and the names and ARNs of the bootstrap's and
   `RtfmAccess`'s resources.
 - `toolkit-stack.ts`, `access-stack.ts`: the two stacks you deploy. `app-stack.ts`: `RtfmApp`,
-  with its resources' names.
+  with its resources' names, the throwaway passcode, and the asset that builds the Web Function's
+  package (`scripts/build-web-function.ts`).
 - `boundary.ts`: the boundary's statements. `bedrock.ts`: Claude's.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`.
 - `testing.ts`: the tests' policy evaluator: whether a role's or user's policies, and its
@@ -466,5 +516,7 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
   bundle or the server.
 
 The tests synthesize in process with `aws-cdk-lib/assertions`, never through the CLI, so they run
-offline. `npm run cdk -- synth` writes the templates, `RtfmToolkit.template.json`,
-`RtfmAccess.template.json` and `RtfmApp.template.json`, to `infra/cdk.out/` (gitignored).
+offline, and without building the Web Function's package (The Web Function's package, above).
+`npm run cdk -- synth` builds it and writes the templates, `RtfmToolkit.template.json`,
+`RtfmAccess.template.json` and `RtfmApp.template.json`, and the package's folder,
+`asset.<hash>/`, to `infra/cdk.out/` (gitignored).

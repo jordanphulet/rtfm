@@ -1,13 +1,29 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "../logging/logger.ts";
+import { readAppFile, type AppFile } from "./app-files.ts";
 import { isPasscode, PASSCODE_COOKIE, PASSCODE_PATH, passcodeRequired } from "./passcode.ts";
 import { badRequest, notFound, type EventStream, type JsonResponse, type Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
 const MAX_LOGGED_CHARACTERS = 300;
-const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
-const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+export const LOOPBACK_HOSTS = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+export const LOOPBACK_ORIGINS = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const EVENT_STREAM_HEARTBEAT = ": heartbeat\n\n";
+
+/** What the adapter checks and serves besides the routes. */
+export interface AdapterConfig {
+  /** The `Host`s the server answers: its own names (`server/api/README.md` › Only the app's own pages). */
+  allowedHosts: RegExp;
+  /** The `Origin`s the server answers when a request sends one: the app's own pages. */
+  allowedOrigins: RegExp;
+  /** What every API request must carry in its `rtfm_passcode` cookie; undefined means no gate. */
+  passcode: string | undefined;
+  /** The built app (`dist/`) to serve beside the API; undefined when Vite serves it. */
+  appDir: string | undefined;
+  /** How often an event stream sends a comment, so no proxy in front of the server sees it fall silent. */
+  eventStreamHeartbeatMs: number;
+}
 
 type RequestFields = { requestId: string; method: string | undefined; path: string };
 
@@ -24,8 +40,8 @@ class Refused extends Error {
   }
 }
 
-/** With a `passcode`, every request but `POST /api/passcode` must carry it in its cookie. */
-export function createRequestHandler(routes: Route[], logger: Logger, passcode?: string) {
+/** With a `passcode`, every API request but `POST /api/passcode` must carry it in its cookie. */
+export function createRequestHandler(routes: Route[], logger: Logger, config: AdapterConfig) {
   return async (request: IncomingMessage, response: ServerResponse) => {
     const startedAt = performance.now();
     const logged: RequestFields = { requestId: randomUUID(), method: request.method, path: pathOf(request) };
@@ -35,9 +51,12 @@ export function createRequestHandler(routes: Route[], logger: Logger, passcode?:
       logRequest(logger, response, logged, startedAt);
     });
     try {
-      refuseOtherSites(request);
+      refuseOtherSites(request, config);
       const url = new URL(request.url ?? "/", "http://localhost");
-      if (passcode !== undefined) refuseWithoutPasscode(request, url.pathname, passcode);
+      if (config.appDir !== undefined && !isApiPath(url.pathname)) {
+        return writeAppFile(response, request.method, await readAppFile(config.appDir, url.pathname));
+      }
+      if (config.passcode !== undefined) refuseWithoutPasscode(request, url.pathname, config.passcode);
       const body = await readJsonBody(request);
       const match = matchRoute(routes, request.method, url.pathname);
       if (!match) return writeJson(response, notFound);
@@ -48,7 +67,7 @@ export function createRequestHandler(routes: Route[], logger: Logger, passcode?:
         body,
         signal: controller.signal,
       });
-      if (typeof result === "function") await writeEvents(response, result);
+      if (typeof result === "function") await writeEvents(response, result, config.eventStreamHeartbeatMs);
       else writeJson(response, result, request.headers.host);
     } catch (error) {
       if (error instanceof Refused) {
@@ -87,13 +106,17 @@ function headersOf(request: IncomingMessage) {
 }
 
 /**
- * Only this machine's own pages may use the API: the Host must name this machine, which stops DNS
- * rebinding, and an Origin, when the browser sends one, must be a page served from this machine.
+ * Only the app's own pages may use the server: the Host must be one of the server's own names,
+ * which stops DNS rebinding, and an Origin, when the browser sends one, must be one of the app's.
  */
-function refuseOtherSites(request: IncomingMessage) {
+function refuseOtherSites(request: IncomingMessage, { allowedHosts, allowedOrigins }: AdapterConfig) {
   const { host, origin } = request.headers;
-  if (!host || !LOCAL_HOST.test(host)) throw new Refused(hostNotAllowed);
-  if (origin !== undefined && !LOCAL_ORIGIN.test(origin)) throw new Refused(originNotAllowed);
+  if (!host || !allowedHosts.test(host)) throw new Refused(hostNotAllowed);
+  if (origin !== undefined && !allowedOrigins.test(origin)) throw new Refused(originNotAllowed);
+}
+
+function isApiPath(pathname: string): boolean {
+  return pathname === "/api" || pathname.startsWith("/api/");
 }
 
 function refuseWithoutPasscode(request: IncomingMessage, pathname: string, passcode: string) {
@@ -113,7 +136,7 @@ function cookieValue(header: string | undefined, name: string): string | undefin
 
 /** The API's one cookie: script can't read it, other sites never send it, and only `/api` gets it. */
 export function setCookieHeader({ name, value }: { name: string; value: string }, host: string | undefined): string {
-  const secure = LOCAL_HOST.test(host ?? "") ? "" : "; Secure";
+  const secure = LOOPBACK_HOSTS.test(host ?? "") ? "" : "; Secure";
   return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/api${secure}`;
 }
 
@@ -178,11 +201,23 @@ function writeJson(response: ServerResponse, { status, body, cookie }: JsonRespo
   response.end(JSON.stringify(body));
 }
 
-async function writeEvents(response: ServerResponse, stream: EventStream) {
+async function writeEvents(response: ServerResponse, stream: EventStream, heartbeatMs: number) {
   response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   response.flushHeaders();
-  await stream({
-    send: (event, data) => response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
-  });
+  const heartbeat = setInterval(() => response.write(EVENT_STREAM_HEARTBEAT), heartbeatMs);
+  try {
+    await stream({
+      send: (event, data) => response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+    });
+  } finally {
+    clearInterval(heartbeat);
+  }
   response.end();
+}
+
+/** A file of the built app, to `GET` or `HEAD` only; anything else gets `404`. */
+function writeAppFile(response: ServerResponse, method: string | undefined, file: AppFile | undefined) {
+  if (!file || (method !== "GET" && method !== "HEAD")) return writeJson(response, notFound);
+  response.writeHead(200, { "content-type": file.contentType, "cache-control": file.cacheControl });
+  response.end(method === "HEAD" ? undefined : file.body);
 }

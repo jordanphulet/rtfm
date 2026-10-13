@@ -4,9 +4,10 @@ One logger (`server/logging/`) writes every log line. It is created with its sin
 whatever logs, as the gateway and the store are: `createRequestHandler`, `createRuns`,
 `createGateway`, `runAgent`, `sendReply`, the file store and the file ledger, and the client-error
 route all take a `Logger`. `main.ts` creates it with two sinks, standard output and the data
-folder's log file; `startServer` without a logger of its own (the shot script) logs to the log
-file alone. Tests pass `silentLogger`, or `capturingLogger()` (`testing.ts`) to read the entries,
-so nothing reaches the test runner's output.
+folder's log file; `web-function.ts` with standard output alone, which Lambda sends to CloudWatch
+(`server/README.md` › The Web Function); `startServer` without a logger of its own (the shot
+script) logs to the log file alone. Tests pass `silentLogger`, or `capturingLogger()`
+(`testing.ts`) to read the entries, so nothing reaches the test runner's output.
 
 ## A line
 
@@ -24,8 +25,8 @@ the same lines unchanged:
   and the fields. Only the `error` nests: `{ name, message, stack }`, or the thrown value's type
   and text when it isn't an `Error`.
 - **Standard output** is written with `process.stdout.write`, not `console.log`, which Lambda's
-  text format would prefix. `main.ts` ignores errors on standard output, so a closed pipe
-  (`EPIPE`) can't stop the server.
+  text format would prefix. `runServerProcess` (`app.ts`) ignores errors on standard output, so a
+  closed pipe (`EPIPE`) can't stop the server.
 - **The log file** is the only local part: `toLogFile(dataDir)` appends each line to
   `<dataDir>/logs/<UTC date>.jsonl`.
   - The first line written each UTC day creates the folder if needed, then removes the log files
@@ -49,11 +50,11 @@ message and stack, since a signature error from AWS quotes the access key ID.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
-| `server.started`, `server.stopped` | INFO | `startServer` listening (`port`, `models`, `dataDir`, and `passcodeGate`: whether a passcode is set), and `close()` done |
+| `server.started`, `server.stopped` | INFO | `startServer` listening (`host`, `port`, `models`, `dataDir`, and `passcodeGate`: whether a passcode is set), and `close()` done |
 | `server.refused` | WARN | The data folder's lock is held by another server (`pid`, `dataDir`) |
-| `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use); an uncaught exception or unhandled rejection in `main.ts` |
-| `request` | INFO, WARN for 5xx | Each request, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
-| `request.refused` | WARN | The local-only checks refused it, it didn't carry the passcode (`401`), or its body was too long or not JSON (`status`, `host`, `origin`) |
+| `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use; on the Web Function, Bedrock models or no `AWS_LAMBDA_HTTP_ENDPOINT`); an uncaught exception or unhandled rejection in `runServerProcess` |
+| `request` | INFO, WARN for 5xx | Each request, the built app's files included, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
+| `request.refused` | WARN | The `Host` and `Origin` checks refused it, it didn't carry the passcode (`401`), or its body was too long or not JSON (`status`, `host`, `origin`) |
 | `passcode.wrong`, `passcode.accepted` | WARN, INFO | `POST /api/passcode` with a wrong passcode, or the right one (no fields: never the passcode) |
 | `request.failed` | ERROR | A handler threw (the 500 in `server/api/README.md` › Routes) |
 | `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
@@ -73,7 +74,7 @@ message and stack, since a signature error from AWS quotes the access key ID.
 ## Browser errors
 
 `src/reportErrors.ts` reports what goes wrong in the page to `POST /api/client-errors`, which is
-subject to the local-only checks and the passcode like any route (so a browser that hasn't
+subject to the `Host` and `Origin` checks and the passcode like any route (so a browser that hasn't
 entered the passcode reports nothing):
 
 - `startReportingErrors()`, called in `src/main.tsx`, listens for `error` (an uncaught error) and
@@ -123,8 +124,9 @@ Tests next to each module check: the line's shape and levels; the daily files, r
 daily budget, and a failed write and the recovery after it; reading, filtering, formatting with
 control characters escaped, and reading whole lines from an offset (the follow loop itself is
 not tested); the request, refusal, model-call, run and reply entries; the client-error route
-(its fields, the local-only checks, truncation and the hourly limit); `main.ts` writing the same
-lines to standard output and the file; and that no cookie, query, conversation or section text
+(its fields, the `Host` and `Origin` checks, truncation and the hourly limit); `main.ts` writing
+the same lines to standard output and the file, and `web-function.ts` writing them to standard
+output; and that no cookie, query, conversation or section text
 reaches the log file (`api/logging.test.ts`), nor the passcode, entered or in a cookie
 (`api/passcode.test.ts`), nor an AWS key from a Bedrock error
 (`gateway/bedrock-client.test.ts`, since only `server/gateway/` may use the Bedrock client).

@@ -112,7 +112,7 @@ export async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
   return collected;
 }
 
-/** The server-sent events of a response, each as it arrives. */
+/** The server-sent events of a response, each as it arrives, passing over comments such as the heartbeat. */
 export async function* readEvents<Event>(response: Response): AsyncGenerator<Event> {
   expect(response.status).toBe(200);
   expect(response.headers.get("content-type")).toBe("text/event-stream");
@@ -123,7 +123,8 @@ export async function* readEvents<Event>(response: Response): AsyncGenerator<Eve
     while ((end = buffer.indexOf("\n\n")) !== -1) {
       const block = buffer.slice(0, end);
       buffer = buffer.slice(end + 2);
-      const [, event] = block.match(/^event: (.*)$/m)!;
+      const event = block.match(/^event: (.*)$/m)?.[1];
+      if (event === undefined) continue;
       const [, data] = block.match(/^data: (.*)$/m)!;
       yield { event, data: JSON.parse(data) } as Event;
     }

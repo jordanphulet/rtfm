@@ -50,8 +50,12 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
   start and `node --watch` waits for a file change, while Vite keeps running. Stop the other
   server, then save a server file or restart `npm run dev`.
 
-The API server listens on `127.0.0.1` only; `server/api/README.md` › Only this machine's own pages
-has the checks it makes.
+The API server listens on `127.0.0.1` only; `server/api/README.md` › Only the app's own pages has
+the checks it makes.
+
+The same server runs in AWS on a Lambda Web Function, `rtfm-app`, with the fake models and a
+throwaway passcode, serving the built app beside the API (`server/README.md` › The Web Function).
+`npm run cdk -- deploy RtfmApp` builds and deploys it (`infra/README.md`).
 
 | Script                       | What it does                                                                 |
 | ---------------------------- | ---------------------------------------------------------------------------- |

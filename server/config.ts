@@ -1,16 +1,17 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./api/node-adapter.ts";
 import type { GatewayConfig } from "./gateway/types.ts";
 import { API_PORT } from "./ports.ts";
 
 export type ModelSource = "fake" | "bedrock";
 
-export interface ServerConfig extends GatewayConfig {
+export interface ServerConfig extends GatewayConfig, AdapterConfig {
+  /** The address the server listens on. */
+  host: string;
   port: number;
   dataDir: string;
   models: ModelSource;
-  /** What every API request must carry in its `rtfm_passcode` cookie; undefined means no gate. */
-  passcode: string | undefined;
   maxConcurrentRuns: number;
   sectionWordsRequested: number;
   sectionExpectedCharacters: number;
@@ -23,10 +24,15 @@ const CALLS_BESIDE_RUNS = 2;
 export const LIBRARIAN_MAX_TURNS = 8;
 
 export const config: ServerConfig = {
+  host: "127.0.0.1",
   port: portFromEnv(process.env.RTFM_PORT),
   dataDir: dataDirFromEnv(process.env.RTFM_DATA_DIR),
   models: modelsFromEnv(process.env.RTFM_MODELS),
   passcode: process.env.RTFM_PASSCODE || undefined,
+  allowedHosts: LOOPBACK_HOSTS,
+  allowedOrigins: LOOPBACK_ORIGINS,
+  appDir: undefined,
+  eventStreamHeartbeatMs: 15_000,
   maxConcurrentRuns: MAX_CONCURRENT_RUNS,
   sectionWordsRequested: 650,
   sectionExpectedCharacters: 4800,
@@ -52,6 +58,24 @@ function dataDirFromEnv(value = ""): string {
 
 function portFromEnv(value = String(API_PORT)): number {
   const port = Number(value);
-  if (value.trim() !== "" && Number.isInteger(port) && port >= 0 && port <= 65_535) return port;
+  if (isPort(value, port)) return port;
   throw new Error(`RTFM_PORT must be a port number from 0 to 65535, not "${value}"`);
+}
+
+/** The built app the Web Function serves: the folder `RTFM_APP_DIR` names, or else `<repo>/dist`. */
+export function builtAppDirFromEnv(value = process.env.RTFM_APP_DIR ?? ""): string {
+  return value === "" ? fileURLToPath(new URL("../dist", import.meta.url)) : path.resolve(value);
+}
+
+/** The `host:port` a Web Function listens on, from `AWS_LAMBDA_HTTP_ENDPOINT`, which Lambda sets. */
+export function httpEndpointFromEnv(value = ""): { host: string; port: number } {
+  const separator = value.lastIndexOf(":");
+  const host = value.slice(0, separator);
+  const port = Number(value.slice(separator + 1));
+  if (separator > 0 && isPort(value.slice(separator + 1), port)) return { host, port };
+  throw new Error(`AWS_LAMBDA_HTTP_ENDPOINT must be "host:port", not "${value}"`);
+}
+
+function isPort(text: string, port: number): boolean {
+  return text.trim() !== "" && Number.isInteger(port) && port >= 0 && port <= 65_535;
 }

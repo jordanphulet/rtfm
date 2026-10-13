@@ -19,6 +19,8 @@ const apiProxy: Record<string, ProxyOptions> = {
 
 const preloadLoopbackOnly = `--import=${new URL("./loopback-only.ts", import.meta.url).href}`;
 const testNodeOptions = [process.env.NODE_OPTIONS, preloadLoopbackOnly].filter(Boolean).join(" ");
+/** The tests synthesize the CDK app without building the Web Function's package (`infra/README.md`). */
+const skipCdkBundling = JSON.stringify({ "aws:cdk:bundling-stacks": [] });
 
 export default defineConfig({
   plugins: [react()],
@@ -28,6 +30,6 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, ".claude/**"],
     setupFiles: ["./vitest.setup.ts"],
-    env: { NODE_OPTIONS: testNodeOptions },
+    env: { NODE_OPTIONS: testNodeOptions, CDK_CONTEXT_JSON: skipCdkBundling },
   },
 });

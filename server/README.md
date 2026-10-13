@@ -20,7 +20,7 @@ TypeScript directly on Node 22.18+, as `scripts/` does, with its own `tsconfig.s
   - It is a separate process, not a Vite plugin, so the server runs the same way in development
     as it does alone (`npm run server`).
 - The server listens on `127.0.0.1` only and answers only this machine's own pages
-  (`server/api/README.md` › Only this machine's own pages).
+  (`server/api/README.md` › Only the app's own pages).
 - `vite.config.ts` adds `server.proxy` and `preview.proxy`, sending `/api` to
   `http://127.0.0.1:8787` (not `localhost`, which can resolve to `::1`, where nothing listens).
   - `changeOrigin: false` passes the browser's `Host` (`localhost:5173`) and `Origin` through
@@ -37,9 +37,10 @@ TypeScript directly on Node 22.18+, as `scripts/` does, with its own `tsconfig.s
   `server.watch.ignored: ["**/.data/**"]`, so the data folder's writes never reach Vite's watcher.
 - `npm run server` runs the server alone, for `curl` and `npm run preview`. `RTFM_DATA_DIR` and
   `RTFM_PORT` (Configuration, below) run it on another data folder or port.
-- `main.ts` logs to standard output and to the data folder's log file (`server/logging/README.md`).
-  Its first line, `server.started`, says `API server on http://127.0.0.1:<port>` and the model
-  source.
+- `main.ts` logs to standard output and to the data folder's log file (`server/logging/README.md`),
+  and runs the server as the whole process with `runServerProcess` (`app.ts`), as
+  `web-function.ts` does (The Web Function, below). Its first line, `server.started`, says
+  `API server on http://127.0.0.1:<port>` and the model source.
   - On SIGINT and SIGTERM it closes the server and then exits. `close()` closes every connection,
     which aborts the sections being written and the librarian's replies; waits until the gateway is
     idle (`server/gateway/README.md` › Stopping); then releases the data folder's lock
@@ -58,6 +59,48 @@ TypeScript directly on Node 22.18+, as `scripts/` does, with its own `tsconfig.s
   (`http://127.0.0.1:<port>`, also with `changeOrigin: false`), then does the same with a passcode
   set, on a second temp dir, for the passcode screen. Every run starts from the seed and never
   touches `.data/` or Bedrock, and a `RTFM_PASSCODE` in the environment changes nothing.
+
+## The Web Function
+
+The deployed app is this same server on a Lambda Web Function, `rtfm-app` (`infra/README.md` ›
+The stacks), started by `web-function.ts`. It differs from `main.ts` only in its configuration:
+
+- **It listens on `AWS_LAMBDA_HTTP_ENDPOINT`**, the `host:port` Lambda sets
+  (`httpEndpointFromEnv` in `config.ts`). Without it, or with no port in it, it doesn't start.
+- **The fake models only.** With `RTFM_MODELS=bedrock` it refuses to start: Bedrock's spend needs
+  one ledger shared by every environment, which a data folder can't be. Its role has no Bedrock
+  permission either.
+- **A throwaway data folder**, `rtfm-data-<random>` in the system's temporary folder (`/tmp` on
+  Lambda), made and seeded when each environment starts. `RTFM_DATA_DIR` is ignored, and nothing
+  written there outlives the environment: two environments have two libraries.
+- **Logs to standard output only**, which Lambda sends to CloudWatch (`/rtfm/app`), and no log
+  file.
+- **It serves the built app** from `dist/` beside the API (`server/api/README.md` › The built
+  app), or from the folder `RTFM_APP_DIR` names, as its test does.
+- **It answers only the app's origin**, `https://rtfm.moonfetus.com`, and an endpoint's domain as
+  the `Host` (`server/api/README.md` › Only the app's own pages).
+- **`RTFM_PASSCODE`** is set in the revision's environment, which `rtfm-read` can read, so it is a
+  throwaway, `THROWAWAY_PASSCODE` in `infra/app-stack.ts`, never the user's own. Through the
+  edge, an agent keeps the cookie with `curl -c` and sends it with `-b`:
+
+  ```sh
+  curl -c /tmp/rtfm-cookies -H 'content-type: application/json' \
+    -d '{"passcode":"<THROWAWAY_PASSCODE>"}' https://rtfm.moonfetus.com/api/passcode
+  curl -b /tmp/rtfm-cookies https://rtfm.moonfetus.com/api/manuals
+  ```
+- On SIGTERM, which Lambda sends when it removes an environment, with 1 second to exit, it closes
+  the server as `main.ts` does.
+
+`scripts/build-web-function.ts` builds its package (`infra/README.md` › The Web Function's
+package). To run it on this machine as Lambda would, on any free port:
+
+```sh
+AWS_LAMBDA_HTTP_ENDPOINT=127.0.0.1:0 RTFM_PASSCODE=try node server/web-function.ts
+```
+
+It answers only a request whose `Host` is an endpoint's domain, so `curl` must send one:
+`curl -H 'Host: x.lambda-web.us-west-2.on.aws' http://127.0.0.1:<port>/`. `npm run build` first
+puts the app in `dist/`.
 
 ## Choosing the models
 
@@ -87,17 +130,24 @@ section writer and the librarian's model, which also plans new manuals (`createM
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the IAM user `rtfm-local`'s, `infra/README.md`), `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit | `server/config.ts` | no |
+| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | The passcode: `RTFM_PASSCODE` | the environment, read by `server/config.ts` | yes |
+| The Web Function's address and built app: `AWS_LAMBDA_HTTP_ENDPOINT`, `RTFM_APP_DIR` | the environment, read by `server/config.ts` for `server/web-function.ts` (The Web Function, above) | no |
+| The Web Function's own `Host`s and `Origin` | `server/web-function.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
 - **Types.** `config` is a `ServerConfig`, which extends `GatewayConfig` (`caps`,
-  `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) with the port, data dir,
-  models, passcode, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
-  `startServer` and the gateway take it as it is, so tests and the shot script spread `config` and
-  override what they need.
+  `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) and the Node adapter's
+  `AdapterConfig` (`allowedHosts`, `allowedOrigins`, `passcode`, `appDir`,
+  `eventStreamHeartbeatMs`, in `api/node-adapter.ts`) with the address it listens on (`host`,
+  `127.0.0.1`), the port, data dir, models, `maxConcurrentRuns`, `sectionWordsRequested` and
+  `sectionExpectedCharacters`. `startServer`, the gateway and the Node adapter take it as it is, so
+  tests, the shot script and `web-function.ts` spread `config` and override what they need.
+- **`allowedHosts` and `allowedOrigins`** are this machine's own names and pages
+  (`LOOPBACK_HOSTS`, `LOOPBACK_ORIGINS`); `appDir` is unset, since Vite serves the app; and
+  `eventStreamHeartbeatMs` is 15s (`server/api/README.md` › Handlers).
 - **`RTFM_DATA_DIR` and `RTFM_PORT`** run the server on another data folder (resolved against
   the working directory) or port, with nothing edited; `main.test.ts` runs `main.ts` on a temp
   folder and port 0 this way. An empty `RTFM_DATA_DIR` means `<repo>/.data`, whatever the
@@ -201,12 +251,16 @@ the machine.
 ## Files
 
 - `main.ts`: starts the server from `config.ts` (`npm run server`).
-- `exit.ts`: `exitOnceWritten`, which `main.ts` and `scripts/serve-temp.ts` exit through.
+- `web-function.ts`: starts the server on a Lambda Web Function (The Web Function, above).
+- `exit.ts`: `exitOnceWritten`, which `app.ts`'s `runServerProcess` and `scripts/serve-temp.ts`
+  exit through.
 - `dev.ts`: `npm run dev`: Vite plus `node --watch server/main.ts`.
-- `config.ts`: committed settings (Configuration, above).
+- `config.ts`: committed settings (Configuration, above), and the Web Function's
+  (`httpEndpointFromEnv`, `builtAppDirFromEnv`).
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
 - `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, models, gateway,
-  routes; `close()` waits for model calls to settle.
+  routes; `close()` waits for model calls to settle. `runServerProcess(config, logger)`: the
+  server as the whole process, for `main.ts` and `web-function.ts`.
 - `testing.ts`: helpers shared by the tests: temp folders, the fake model's `FAST_PACE` and a
   fast fake writer that calls it directly, the price table with the test model (`TEST_PRICES`)
   and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`

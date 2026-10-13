@@ -21,14 +21,17 @@ export async function* streamReply(messages: LibrarianMessage[], freeze?: number
     buffer += chunk;
     let end: number;
     while ((end = buffer.indexOf("\n\n")) !== -1) {
-      yield parseEvent(buffer.slice(0, end));
+      const event = parseEvent(buffer.slice(0, end));
       buffer = buffer.slice(end + 2);
+      if (event) yield event;
     }
   }
 }
 
-function parseEvent(block: string): LibrarianEvent {
+/** The block's event, or undefined for a block with none, such as the server's heartbeat comment. */
+function parseEvent(block: string): LibrarianEvent | undefined {
   const event = block.match(/^event: (.*)$/m)?.[1];
+  if (event === undefined) return undefined;
   const data = block.match(/^data: (.*)$/m)?.[1] ?? "{}";
   return { event, data: JSON.parse(data) } as LibrarianEvent;
 }
