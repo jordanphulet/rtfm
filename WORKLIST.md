@@ -50,10 +50,10 @@ an earlier run left behind before the first pass.
   exact text to approve.
 
 ### OS.1 — Orchestrator preflight
-- **Status:** doing (agent a7ad0ab787ca0789a, in its own worktree; in review)
+- **Status:** doing (agent a7ad0ab787ca0789a, in its own worktree; review round 2)
 - **Depends on:** —
 - **Files:** `scripts/orchestrator-check.ts` and its test, `scripts/commit-task.ts` and its test,
-  `package.json`, `README.md`, `ARCHITECTURE.md`
+  `package.json`, `README.md`, `ARCHITECTURE.md`, `.gitignore` (`.claude/worktrees/`)
 - **Do:** add `npm run orchestrator-check`. It fails, naming what to fix, when:
   - the current folder isn't the main checkout (`--git-dir` differs from `--git-common-dir`),
     printing the main checkout's path;
