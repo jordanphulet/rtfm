@@ -34,10 +34,10 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.9 — Put the app at rtfm.moonfetus.com
-- **Status:** todo
+- **Status:** doing (agent aa0e2649282ebf078; reviewed; on 2026-10-13 the user approved its `PROCESS.md` change; waiting for the live `AWS::Lambda::ResourcePolicy` schema, which the orchestrator reads with `rtfm-read` once IN.16 is deployed)
 - **Depends on:** IN.8
 - **Files:** `infra/edge-*.ts` and their tests, `infra/app.ts`, `infra/README.md`, `PROCESS.md`
-  (with the user's approval)
+  (with the user's approval), `ARCHITECTURE.md` (its `infra/` file list)
 - **Do:**
   - Stacks the user approves and deploys from CloudShell, like `RtfmAccess`:
     - **`RtfmEdgeCertificate`** (us-east-1): the ACM certificate for `rtfm.moonfetus.com`,
@@ -79,8 +79,8 @@ aren't RTFM's.
   orchestrator has a task to move to B.
 
 ### IN.11 — Store the library in DynamoDB
-- **Status:** todo
-- **Depends on:** IN.8 (storage is the same for A and its fallback, so it doesn't wait for IN.10)
+- **Status:** doing (agent a31e9f93c83c3faa0; review round 1: credentials, retries, delete condition)
+- **Depends on:** IN.8, IN.16 and the user's deploy of it (the smoke check reads the table with `rtfm-read`)
 - **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts`, `server/README.md`,
   `infra/app-stack.ts` and its test, `package.json`, `package-lock.json`, `scripts/**`,
   `vite.config.ts`, `vitest.setup.ts`, `ARCHITECTURE.md`
@@ -111,6 +111,8 @@ aren't RTFM's.
     and deploys); the Web Function's role, the same.
   - `ARCHITECTURE.md` and `README.md` say `RTFM_MODELS` chooses the ledger, and that with Bedrock
     the data folder's lock no longer guards money.
+  - Share IN.11's DynamoDB client builder (`dynamoDbClient` in `server/storage/`, pinned, with no
+    credential chain) rather than writing a second one.
 - **Done when:** both implementations pass one shared suite, two servers with Bedrock share the
   caps in a test against DynamoDB Local, and the docs say so.
 
@@ -122,6 +124,9 @@ aren't RTFM's.
 - **Do:** section leases behind an interface in `runs.ts`, in memory locally and on the section
   item in `rtfm-app`; a reader on another environment waits for the stored body, then gets it as
   one `append` and `written`, or `failed`.
+  - `deleteManual` deletes only the ids in the manual's `written` set, so a section item holding only
+    a lease would be left behind and block a recreated manual's section: delete those too (for
+    example by querying `pk = MANUAL#<id>`).
 - **Done when:** the shared suite covers two runs racing for one section on both implementations.
 
 ### IN.14 — `rtfm-ops` and the ops tools

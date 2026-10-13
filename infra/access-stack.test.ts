@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { MONTHLY_BUDGET_USD } from "./access-stack.ts";
 import { createApp } from "./app.ts";
 import { ACCESS_STACK, ACCOUNT, AGENT_USER, BOOTSTRAP_ROLES, DEPLOY_ROLE, LOCAL_USER, READ_ROLE, roleArn } from "./rtfm.ts";
-import { INLINE_TEMPLATE_BUDGET, logicalIdNamed, reachOf, resourcesOf, trustOf } from "./testing.ts";
+import { INLINE_TEMPLATE_BUDGET, logicalIdNamed, reachOf, resourcesOf, trustOf, type Statement } from "./testing.ts";
 
 const app = createApp();
 const resources = resourcesOf(app.node.findChild(ACCESS_STACK) as Stack);
@@ -15,6 +15,16 @@ const logGroup = (name: string) => `arn:aws:logs:us-west-2:${ACCOUNT}:log-group:
 const stackNamed = (name: string, region = "us-west-2") =>
   `arn:aws:cloudformation:${region}:${ACCOUNT}:stack/${name}/0a1b2c`;
 const webFunction = (path: string) => `arn:aws:lambda:us-west-2:${ACCOUNT}:web-function/${path}`;
+const table = (path: string, region = "us-west-2", account = ACCOUNT) => `arn:aws:dynamodb:${region}:${account}:table/${path}`;
+const resourceType = (name: string) => `arn:aws:cloudformation:us-west-2::type/resource/${name}`;
+
+function readRoleStatements(): Statement[] {
+  const role = resources[logicalIdNamed(resources, "AWS::IAM::Role", "RoleName", READ_ROLE)];
+  const { Policies } = role.Properties as { Policies: { PolicyDocument: { Statement: Statement[] } }[] };
+  return Policies.flatMap((policy) => policy.PolicyDocument.Statement);
+}
+
+const actionsOf = (statements: Statement[]) => statements.flatMap((statement) => [statement.Action ?? []].flat()).sort();
 
 describe("the RtfmAccess stack", () => {
   it("is deployed with the user's own sign-in and an inline template, never through the bootstrap", () => {
@@ -112,6 +122,74 @@ describe("the RtfmAccess stack", () => {
       ["lambda:DeleteResourcePolicy", webFunction("rtfm-app")],
     ];
     for (const [action, resource] of writes) expect(can(action, resource), action).toBe(false);
+  });
+
+  it("lets rtfm-read describe RTFM's tables and their point-in-time recovery, and no other table", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    expect(can("dynamodb:DescribeTable", table("rtfm-app"))).toBe(true);
+    expect(can("dynamodb:DescribeContinuousBackups", table("rtfm-app"))).toBe(true);
+    expect(can("dynamodb:DescribeTable", table("rtfm-usage"))).toBe(true);
+
+    expect(can("dynamodb:DescribeTable", table("work-orders"))).toBe(false);
+    expect(can("dynamodb:DescribeContinuousBackups", table("work-orders"))).toBe(false);
+    expect(can("dynamodb:DescribeTable", table("rtfm-app", "us-east-1"))).toBe(false);
+    expect(can("dynamodb:DescribeTable", table("rtfm-app", "us-west-2", "111122223333"))).toBe(false);
+    expect(can("dynamodb:ListTables", "*")).toBe(false);
+    expect(actionsOf(readRoleStatements()).filter((action) => action.startsWith("dynamodb:"))).toEqual([
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:DescribeTable",
+    ]);
+  });
+
+  it("lets rtfm-read change no table or its backups, and read none of its items", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    const denied: [string, string][] = [
+      ["dynamodb:UpdateTable", table("rtfm-app")],
+      ["dynamodb:UpdateContinuousBackups", table("rtfm-app")],
+      ["dynamodb:DeleteTable", table("rtfm-app")],
+      ["dynamodb:CreateBackup", table("rtfm-app")],
+      ["dynamodb:DeleteBackup", table("rtfm-app/backup/01700000000000-a1b2c3d4")],
+      ["dynamodb:RestoreTableToPointInTime", table("rtfm-app")],
+      ["dynamodb:UpdateTimeToLive", table("rtfm-app")],
+      ["dynamodb:PutResourcePolicy", table("rtfm-app")],
+      ["dynamodb:PutItem", table("rtfm-app")],
+      ["dynamodb:DeleteItem", table("rtfm-app")],
+      ["dynamodb:GetItem", table("rtfm-app")],
+      ["dynamodb:Query", table("rtfm-app")],
+      ["dynamodb:Scan", table("rtfm-app")],
+    ];
+    for (const [action, resource] of denied) expect(can(action, resource), action).toBe(false);
+  });
+
+  it("lets rtfm-read describe a resource type's schema, and register, deregister or activate none", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    expect(can("cloudformation:DescribeType", "*")).toBe(true);
+
+    const writes = [
+      "RegisterType",
+      "DeregisterType",
+      "ActivateType",
+      "DeactivateType",
+      "SetTypeDefaultVersion",
+      "SetTypeConfiguration",
+      "PublishType",
+      "TestType",
+    ];
+    for (const action of writes) {
+      expect(can(`cloudformation:${action}`, "*"), action).toBe(false);
+      expect(can(`cloudformation:${action}`, resourceType("AWS-Lambda-ResourcePolicy")), action).toBe(false);
+    }
+  });
+
+  it("gives rtfm-read on every resource only reads that take no narrower one", () => {
+    expect(actionsOf(readRoleStatements().filter((statement) => statement.Resource === "*"))).toEqual([
+      "ce:Describe*",
+      "ce:Get*",
+      "ce:List*",
+      "cloudformation:DescribeType",
+      "logs:DescribeLogGroups",
+      "logs:GetQueryResults",
+    ]);
   });
 
   it("lets rtfm-read describe the edge stacks in us-east-1, and change none of them", () => {

@@ -137,6 +137,16 @@ function readStatements(): PolicyStatement[] {
       resources: RTFM_RESOURCES.webFunctions,
     }),
     new PolicyStatement({
+      sid: "DescribeRtfmTables",
+      actions: ["dynamodb:DescribeTable", "dynamodb:DescribeContinuousBackups"],
+      resources: RTFM_RESOURCES.tables,
+    }),
+    new PolicyStatement({
+      sid: "DescribeResourceTypes",
+      actions: ["cloudformation:DescribeType"],
+      resources: ["*"],
+    }),
+    new PolicyStatement({
       sid: "ReadRtfmBuckets",
       actions: ["s3:Get*", "s3:List*"],
       resources: [...RTFM_RESOURCES.buckets, ...bucketArns(STAGING_BUCKET)],
