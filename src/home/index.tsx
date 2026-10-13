@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate, useNavigationType } from "react-router";
-import { useAgent, type AgentAction, type AgentMessage, type UseAgentResult } from "../agent";
+import { useLibrarian, type ConversationMessage, type LibrarianAction, type UseLibrarianResult } from "../librarian";
 import { refreshLibrary, useLibrary, type ManualSummary } from "../library";
 import "../ui";
-import type { AgentSideProps } from "./agentSide";
 import { STARTER_PROMPT } from "./cuePrompts";
 import { DeleteConfirmation } from "./DeleteConfirmation";
 import { Ledger } from "./Ledger";
 import { LibrarianPanel } from "./LibrarianPanel";
+import type { LibrarianSideProps } from "./librarianSide";
 import { LibraryErrorBoundary } from "./LibraryErrorBoundary";
 import { LibraryHead } from "./LibraryHead";
 import { flash } from "./motion";
-import { PhoneAgent } from "./PhoneAgent";
+import { PhoneLibrarian } from "./PhoneLibrarian";
 import { namedManuals, namedWhenSent } from "./references";
 import { replyFailureWords } from "./replyFailure";
 import { useDeleteFlow } from "./useDeleteFlow";
@@ -37,11 +37,11 @@ export default function Home() {
 
 function HomePage() {
   const manuals = useLibrary();
-  const agent = useAgent();
+  const librarian = useLibrarian();
   const navigate = useNavigate();
   const arrivedBy = useNavigationType();
   const wide = useMediaQuery(WIDE);
-  const [sheetOpensOnLoad, setSheetOpensOnLoad] = useState(() => !homeHasMounted && !wide && agent.messages.length > 0);
+  const [sheetOpensOnLoad, setSheetOpensOnLoad] = useState(() => !homeHasMounted && !wide && librarian.messages.length > 0);
   if (wide && sheetOpensOnLoad) setSheetOpensOnLoad(false);
   const [draft, setDraft] = useState("");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -61,7 +61,7 @@ function HomePage() {
     findRow,
     fieldRef,
     startRef,
-    reportDeleteOutcome: agent.reportDeleteOutcome,
+    reportDeleteOutcome: librarian.reportDeleteOutcome,
   });
 
   useFocusShortcut(fieldRef);
@@ -80,14 +80,14 @@ function HomePage() {
     }
   }, []);
 
-  const lastSent = agent.messages.findLast((message) => message.role === "user");
+  const lastSent = librarian.messages.findLast((message) => message.role === "user");
   const namedIds = new Set(markedManuals(draft, lastSent, manuals).map((manual) => manual.id));
 
-  const canSend = agent.status === "idle" && draft.trim() !== "";
+  const canSend = librarian.status === "idle" && draft.trim() !== "";
 
   function sendDraft(): boolean {
     if (!canSend) return false;
-    agent.send(draft);
+    librarian.send(draft);
     setDraft("");
     return true;
   }
@@ -124,7 +124,7 @@ function HomePage() {
    * doesn't list reloads the library once; if it still isn't there, nothing opens, and the
    * librarian's reply has already said what it did.
    */
-  async function act(action: AgentAction, showLibrary?: () => Promise<void>) {
+  async function act(action: LibrarianAction, showLibrary?: () => Promise<void>) {
     if (action.type === "created") {
       void refreshLibrary();
       return;
@@ -147,8 +147,8 @@ function HomePage() {
     fieldRef.current?.focus();
   }
 
-  const side: AgentSideProps = {
-    agent,
+  const side: LibrarianSideProps = {
+    librarian,
     manuals,
     composer: { draft, onDraftChange: setDraft, onSend: sendDraft, canSend, fieldRef },
     onJump: jumpToManual,
@@ -163,7 +163,7 @@ function HomePage() {
         {deletion.notice}
       </p>
       <p className="visually-hidden" aria-live="polite">
-        {agentNotice(agent)}
+        {librarianNotice(librarian)}
       </p>
       <div className="page" inert={deletion.toDelete !== null}>
         <a className="skip-link" href="#librarian-field" onClick={skipToLibrarian}>
@@ -187,7 +187,7 @@ function HomePage() {
         {wide ? (
           <LibrarianPanel {...side} />
         ) : (
-          <PhoneAgent {...side} openOnMount={sheetOpensOnLoad} />
+          <PhoneLibrarian {...side} openOnMount={sheetOpensOnLoad} />
         )}
       </div>
       <DeleteConfirmation
@@ -204,7 +204,7 @@ function HomePage() {
 /** The manuals named by the draft, or else by the latest message sent. */
 function markedManuals(
   draft: string,
-  lastSent: AgentMessage | undefined,
+  lastSent: ConversationMessage | undefined,
   manuals: ManualSummary[],
 ): ManualSummary[] {
   if (draft.trim()) return namedManuals(draft, manuals);
@@ -212,7 +212,7 @@ function markedManuals(
   return [];
 }
 
-function agentNotice({ messages, status, activity }: UseAgentResult): string {
+function librarianNotice({ messages, status, activity }: UseLibrarianResult): string {
   if (status === "thinking") return activity.replace(/…$/, "");
   if (status === "streaming") return "";
   const last = messages.at(-1);

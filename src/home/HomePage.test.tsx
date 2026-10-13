@@ -2,8 +2,8 @@
 import { act, Suspense } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentAction, AgentMessage } from "../agent";
-import type { LibrarianEvent } from "../agent/types";
+import type { ConversationMessage, LibrarianAction } from "../librarian";
+import type { LibrarianEvent } from "../librarian/types";
 import type { DeleteResult, ManualSummary } from "../library";
 import { click, press, render } from "../testing";
 import { fakeWidth } from "./fakeWidth";
@@ -12,10 +12,10 @@ const fake = vi.hoisted(() => ({
   library: [] as ManualSummary[],
   fetches: 0,
   deleting: undefined as Promise<DeleteResult> | undefined,
-  messages: [] as AgentMessage[],
+  messages: [] as ConversationMessage[],
   outcomes: [] as string[],
-  onAction: undefined as ((action: AgentAction) => Promise<void> | void) | undefined,
-  realAgent: false,
+  onAction: undefined as ((action: LibrarianAction) => Promise<void> | void) | undefined,
+  realLibrarian: false,
   replyEvents: [] as LibrarianEvent[],
 }));
 
@@ -27,20 +27,20 @@ vi.mock("../library/api", () => ({
   deleteManual: () => fake.deleting ?? Promise.resolve("deleted"),
 }));
 
-vi.mock("../agent/api", () => ({
+vi.mock("../librarian/api", () => ({
   streamReply: async function* () {
     yield* fake.replyEvents;
   },
 }));
 
-/** A stand-in conversation, or with `fake.realAgent` the real store replying with `fake.replyEvents`. */
-vi.mock("../agent", async (importActual) => {
-  const actual = await importActual<typeof import("../agent")>();
+/** A stand-in conversation, or with `fake.realLibrarian` the real store replying with `fake.replyEvents`. */
+vi.mock("../librarian", async (importActual) => {
+  const actual = await importActual<typeof import("../librarian")>();
   return {
     ...actual,
-    useAgent: () =>
-      fake.realAgent
-        ? actual.useAgent()
+    useLibrarian: () =>
+      fake.realLibrarian
+        ? actual.useLibrarian()
         : {
             messages: fake.messages,
             status: "idle",
@@ -48,8 +48,8 @@ vi.mock("../agent", async (importActual) => {
             send: () => {},
             reportDeleteOutcome: (outcome: string) => fake.outcomes.push(outcome),
           },
-    useAgentActions: (handler: (action: AgentAction) => Promise<void> | void) => {
-      if (fake.realAgent) actual.useAgentActions(handler);
+    useLibrarianActions: (handler: (action: LibrarianAction) => Promise<void> | void) => {
+      if (fake.realLibrarian) actual.useLibrarianActions(handler);
       else fake.onAction = handler;
     },
   };
@@ -63,7 +63,7 @@ const ALPHA = summary("alpha", "Alpha");
 const BETA = summary("beta", "Beta");
 const GAMMA = summary("gamma", "Gamma");
 
-const CONVERSATION: AgentMessage[] = [
+const CONVERSATION: ConversationMessage[] = [
   { id: "message-1", role: "user", text: "What do I have?" },
   { id: "message-2", role: "agent", text: "Two manuals." },
 ];
@@ -79,7 +79,7 @@ beforeEach(() => {
   fake.deleting = undefined;
   fake.messages = [];
   fake.outcomes = [];
-  fake.realAgent = false;
+  fake.realLibrarian = false;
   fake.replyEvents = [];
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   vi.spyOn(window, "scrollBy").mockImplementation(() => {});
@@ -123,7 +123,7 @@ async function go(to: string | number) {
   await settle();
 }
 
-async function librarian(action: AgentAction) {
+async function librarian(action: LibrarianAction) {
   await act(async () => {
     await fake.onAction!(action);
   });
@@ -240,7 +240,7 @@ describe("a reply that proposes a delete", () => {
   }
 
   beforeEach(() => {
-    fake.realAgent = true;
+    fake.realLibrarian = true;
   });
 
   it("opens the confirmation and shows no empty reply when the reply has no text", async () => {

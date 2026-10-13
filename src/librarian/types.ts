@@ -3,7 +3,7 @@ import type { DeleteOutcome, FailureReason, PageAction } from "../../server/api/
 export type { DeleteOutcome, FailureReason, LibrarianEvent, LibrarianMessage } from "../../server/api/types";
 export { LIBRARIAN_LIMITS } from "../../server/api/types";
 
-export interface AgentMessage {
+export interface ConversationMessage {
   id: string;
   role: "user" | "agent";
   text: string;
@@ -11,6 +11,6 @@ export interface AgentMessage {
   deleteOutcome?: DeleteOutcome;
 }
 
-export type AgentStatus = "idle" | "thinking" | "streaming";
+export type LibrarianStatus = "idle" | "thinking" | "streaming";
 
-export type AgentAction = PageAction;
+export type LibrarianAction = PageAction;

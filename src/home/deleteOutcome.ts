@@ -1,4 +1,4 @@
-import type { DeleteOutcome } from "../agent";
+import type { DeleteOutcome } from "../librarian";
 import type { DeleteStage } from "./DeleteConfirmation";
 
 /**

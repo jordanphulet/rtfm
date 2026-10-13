@@ -1,12 +1,12 @@
 import { Fragment } from "react";
-import type { AgentMessage, FailureReason } from "../agent";
+import type { ConversationMessage, FailureReason } from "../librarian";
 import type { ManualSummary } from "../library";
 import { ReplyMarkdown } from "../ui";
 import { namedWhenSent } from "./references";
 import { replyFailureWords } from "./replyFailure";
 
 interface TurnProps {
-  message: AgentMessage;
+  message: ConversationMessage;
   live: boolean;
   manuals: ManualSummary[];
   onJump: (id: string) => void;

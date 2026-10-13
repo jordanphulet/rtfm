@@ -1,4 +1,4 @@
-import type { FailureReason } from "../agent";
+import type { FailureReason } from "../librarian";
 
 /** What a failed reply says, in the conversation and to screen readers. */
 export function replyFailureWords(reason: FailureReason): { title: string; text: string } {

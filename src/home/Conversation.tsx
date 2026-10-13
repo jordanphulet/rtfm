@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentStatus } from "../agent";
+import type { ConversationMessage, LibrarianStatus } from "../librarian";
 import type { ManualSummary } from "../library";
 import { Cues } from "./Cues";
 import { Turn } from "./Turn";
@@ -6,8 +6,8 @@ import type { StickToBottom } from "./useStickToBottom";
 import "./Conversation.css";
 
 interface ConversationProps {
-  messages: AgentMessage[];
-  status: AgentStatus;
+  messages: ConversationMessage[];
+  status: LibrarianStatus;
   activity: string;
   manuals: ManualSummary[];
   stick: StickToBottom;

@@ -1,30 +1,30 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { useAgentActions } from "../agent";
+import { useLibrarianActions } from "../librarian";
 import { Sheet } from "../ui";
 import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
 import { LibrarianHead, Separator, StatusDetail } from "./LibrarianHead";
+import type { LibrarianSideProps } from "./librarianSide";
 import { manualCount } from "./manualCount";
 import { NewestButton } from "./NewestButton";
-import type { AgentSideProps } from "./agentSide";
 import { useStickToBottom } from "./useStickToBottom";
-import "./PhoneAgent.css";
+import "./PhoneLibrarian.css";
 
 type OpenedBy = "load" | "send" | "toggle";
 
-interface PhoneAgentProps extends AgentSideProps {
+interface PhoneLibrarianProps extends LibrarianSideProps {
   openOnMount: boolean;
 }
 
-export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, onAction, openOnMount }: PhoneAgentProps) {
+export function PhoneLibrarian({ librarian, manuals, composer, onJump, onHover, onCue, onAction, openOnMount }: PhoneLibrarianProps) {
   const stick = useStickToBottom();
   const scopeRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(openOnMount);
   const openedBy = useRef<OpenedBy>("load");
   const libraryScroll = useRef<number | null>(null);
-  const busy = agent.status !== "idle";
-  useAgentActions((action) => onAction(action, closeForConfirmation));
+  const busy = librarian.status !== "idle";
+  useLibrarianActions((action) => onAction(action, closeForConfirmation));
 
   useLayoutEffect(() => {
     if (open || libraryScroll.current === null) return;
@@ -67,7 +67,7 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
   }
 
   return (
-    <div className="phone-agent" ref={scopeRef}>
+    <div className="phone-librarian" ref={scopeRef}>
       <Sheet
         id="conversation-sheet"
         className="conversation-sheet"
@@ -79,15 +79,15 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
         focusOnOpen={focusOnOpen}
       >
         <LibrarianHead
-          messageCount={agent.messages.length}
-          status={agent.status}
-          activity={agent.activity}
+          messageCount={librarian.messages.length}
+          status={librarian.status}
+          activity={librarian.activity}
           edge={stick.scrolledFromTop}
         />
         <Conversation
-          messages={agent.messages}
-          status={agent.status}
-          activity={agent.activity}
+          messages={librarian.messages}
+          status={librarian.status}
+          activity={librarian.activity}
           manuals={manuals}
           stick={stick}
           onJump={jump}
@@ -116,7 +116,7 @@ export function PhoneAgent({ agent, manuals, composer, onJump, onHover, onCue, o
           ) : (
             <span className="dock-label">
               <span className="dock-name">Librarian</span>
-              <StatusDetail messageCount={agent.messages.length} status={agent.status} activity={agent.activity} />
+              <StatusDetail messageCount={librarian.messages.length} status={librarian.status} activity={librarian.activity} />
             </span>
           )}
           <span className="dock-action">{open ? "Hide ↓" : "Show ↑"}</span>

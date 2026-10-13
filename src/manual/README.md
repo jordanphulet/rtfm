@@ -2,7 +2,7 @@
 
 Everything the app needs to read a manual: the data model, a live store that reads the manual from
 the API server and streams unwritten sections from it, and the markdown renderer. The reader in
-`src/reader/` is built on it. The librarian in `src/agent/` repairs its streamed replies with
+`src/reader/` is built on it. The librarian in `src/librarian/` repairs its streamed replies with
 `repair.ts`, imported straight from that file (it isn't part of the API below).
 
 ```ts

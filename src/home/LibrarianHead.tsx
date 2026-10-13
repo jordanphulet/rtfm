@@ -1,10 +1,10 @@
-import type { AgentStatus } from "../agent";
+import type { LibrarianStatus } from "../librarian";
 import { StatusRing } from "../ui";
 import "./LibrarianHead.css";
 
 interface LibrarianStatusProps {
   messageCount: number;
-  status: AgentStatus;
+  status: LibrarianStatus;
   activity: string;
 }
 

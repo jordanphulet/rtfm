@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { AgentMessage } from "../agent";
+import type { ConversationMessage } from "../librarian";
 import type { ManualSummary } from "../library";
 import { namedManuals } from "./references";
 import { Turn } from "./Turn";
@@ -20,7 +20,7 @@ function libraryManual(id: string, title: string, subtitle: string): ManualSumma
   return { id, title, subtitle, chapterCount: 1, sectionCount: 1, writtenCount: 0 };
 }
 
-function render(message: AgentMessage, manuals: ManualSummary[]) {
+function render(message: ConversationMessage, manuals: ManualSummary[]) {
   return renderToStaticMarkup(
     <Turn message={message} live={false} manuals={manuals} onJump={() => {}} onHover={() => {}} />,
   );
@@ -28,7 +28,7 @@ function render(message: AgentMessage, manuals: ManualSummary[]) {
 
 describe("Turn", () => {
   it("keeps naming the manual a message named when it was sent, after that manual is deleted", () => {
-    const message: AgentMessage = {
+    const message: ConversationMessage = {
       id: "haunted-houses",
       role: "user",
       text: "Open the one about haunted houses",
@@ -47,7 +47,7 @@ describe("Turn", () => {
   });
 
   it("keeps linking the named manuals that are left when one of them is deleted", () => {
-    const message: AgentMessage = {
+    const message: ConversationMessage = {
       id: "listens-and-cat",
       role: "user",
       text: "Open Listens or the Cat",

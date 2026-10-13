@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { DeleteOutcome } from "../agent";
+import type { DeleteOutcome } from "../librarian";
 import { deleteManual, removeFromLibrary, type ManualSummary } from "../library";
 import { failureText, type DeleteStage } from "./DeleteConfirmation";
 import { deleteOutcomeForLibrarian } from "./deleteOutcome";

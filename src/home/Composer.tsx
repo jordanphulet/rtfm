@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type KeyboardEvent, type RefObject } from "react";
-import { LIBRARIAN_LIMITS } from "../agent";
+import { LIBRARIAN_LIMITS } from "../librarian";
 import { NewestButton } from "./NewestButton";
 import "./Composer.css";
 
@@ -48,7 +48,7 @@ export function Composer({
         ref={fieldRef}
         id="librarian-field"
         className="field"
-        data-shot="agent-input"
+        data-shot="librarian-input"
         aria-label="Ask the librarian"
         placeholder="Ask the librarian…"
         rows={layout === "panel" ? 2 : 1}

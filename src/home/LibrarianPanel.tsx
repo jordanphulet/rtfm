@@ -1,15 +1,15 @@
-import { useAgentActions } from "../agent";
+import { useLibrarianActions } from "../librarian";
 import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
 import { LibrarianHead } from "./LibrarianHead";
-import type { AgentSideProps } from "./agentSide";
+import type { LibrarianSideProps } from "./librarianSide";
 import { useStickToBottom } from "./useStickToBottom";
 import "./LibrarianPanel.css";
 
-export function LibrarianPanel({ agent, manuals, composer, onJump, onHover, onCue, onAction }: AgentSideProps) {
+export function LibrarianPanel({ librarian, manuals, composer, onJump, onHover, onCue, onAction }: LibrarianSideProps) {
   const stick = useStickToBottom();
-  const busy = agent.status !== "idle";
-  useAgentActions(onAction);
+  const busy = librarian.status !== "idle";
+  useLibrarianActions(onAction);
 
   function send() {
     if (composer.onSend()) stick.scrollToBottom();
@@ -18,15 +18,15 @@ export function LibrarianPanel({ agent, manuals, composer, onJump, onHover, onCu
   return (
     <aside className="panel" aria-labelledby="librarian-title">
       <LibrarianHead
-        messageCount={agent.messages.length}
-        status={agent.status}
-        activity={agent.activity}
+        messageCount={librarian.messages.length}
+        status={librarian.status}
+        activity={librarian.activity}
         edge={stick.scrolledFromTop}
       />
       <Conversation
-        messages={agent.messages}
-        status={agent.status}
-        activity={agent.activity}
+        messages={librarian.messages}
+        status={librarian.status}
+        activity={librarian.activity}
         manuals={manuals}
         stick={stick}
         onJump={onJump}

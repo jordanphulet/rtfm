@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import type { AgentAction, UseAgentResult } from "../agent";
+import type { LibrarianAction, UseLibrarianResult } from "../librarian";
 import type { ManualSummary } from "../library";
 
 interface ComposerState {
@@ -12,13 +12,13 @@ interface ComposerState {
 }
 
 /** What the librarian's side of the page needs, whether it is the docked panel or the phone dock. */
-export interface AgentSideProps {
-  agent: UseAgentResult;
+export interface LibrarianSideProps {
+  librarian: UseLibrarianResult;
   manuals: ManualSummary[];
   composer: ComposerState;
   onJump: (id: string) => void;
   onHover: (id: string | null) => void;
   onCue: (prompt: string) => void;
   /** `showLibrary` makes the library visible before a confirmation opens over it. */
-  onAction: (action: AgentAction, showLibrary?: () => Promise<void>) => void;
+  onAction: (action: LibrarianAction, showLibrary?: () => Promise<void>) => void;
 }

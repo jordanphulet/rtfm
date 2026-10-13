@@ -1,4 +1,4 @@
-# src/agent
+# src/librarian
 
 The librarian's conversation on the landing page (`src/home/`). You send a message; the store
 sends the conversation to the server's librarian (`POST /api/librarian`, `ARCHITECTURE.md` › The
@@ -8,28 +8,28 @@ to the page, and a reply that creates a manual tells the page so as soon as it i
 conversation lives in memory for the life of the page (it survives route changes, not reloads),
 and only the browser keeps it.
 
-Import everything from `src/agent`:
+Import everything from `src/librarian`:
 
 ```ts
 import {
-  LIBRARIAN_LIMITS, useAgent, useAgentActions,
-  type AgentAction, type AgentMessage, type AgentStatus, type DeleteOutcome, type FailureReason,
-  type UseAgentResult,
-} from "../agent";
+  LIBRARIAN_LIMITS, useLibrarian, useLibrarianActions,
+  type ConversationMessage, type DeleteOutcome, type FailureReason, type LibrarianAction,
+  type LibrarianStatus, type UseLibrarianResult,
+} from "../librarian";
 ```
 
-## `useAgent(): UseAgentResult`
+## `useLibrarian(): UseLibrarianResult`
 
 ```ts
-interface UseAgentResult {
-  messages: AgentMessage[];
-  status: AgentStatus;
+interface UseLibrarianResult {
+  messages: ConversationMessage[];
+  status: LibrarianStatus;
   activity: string;       // while thinking: "Thinking…", or the running tool's line
   send: (text: string) => void;
   reportDeleteOutcome: (outcome: DeleteOutcome) => void;
 }
 
-interface AgentMessage {
+interface ConversationMessage {
   id: string;             // unique and stable; use it as the React key
   role: "user" | "agent";
   text: string;           // markdown, always safe to render as-is; "" for a reply that failed first
@@ -37,10 +37,10 @@ interface AgentMessage {
   deleteOutcome?: DeleteOutcome;  // "kept" | "deleted": on a reply whose proposed delete has ended
 }
 
-type AgentStatus = "idle" | "thinking" | "streaming";
+type LibrarianStatus = "idle" | "thinking" | "streaming";
 ```
 
-Every component that calls `useAgent()` sees the same conversation.
+Every component that calls `useLibrarian()` sees the same conversation.
 
 ### `send(text)`
 
@@ -54,17 +54,18 @@ Every component that calls `useAgent()` sees the same conversation.
    on your field's `maxLength`. A reply's `deleteOutcome` is sent with it, so the librarian knows
    how the delete it proposed ended.
 3. As the reply streams:
-   - text appends to the agent message (created with the first text) and sets `status` to
-     `"streaming"`;
+   - text appends to the librarian's message (created with the first text, with the role
+     `"agent"`) and sets `status` to `"streaming"`;
    - a running tool sets `status` to `"thinking"` and `activity` to its line, such as
-     `"Searching the shelves…"`. Text the librarian wrote before calling it stays in the agent
-     message meanwhile;
+     `"Searching the shelves…"`. Text the librarian wrote before calling it stays in its message
+     meanwhile;
    - when the librarian writes more text after a tool, that text replaces what it wrote before
-     the tool, in the same agent message (same `id`). If it writes nothing more, the earlier text
-     is the reply.
+     the tool, in the same message (same `id`). If it writes nothing more, the earlier text is
+     the reply.
 4. When the reply is done, sets `status` back to `"idle"` and hands its page action, if any, to
-   the handler (below). A reply that ends with no text at all adds no agent message. A `created` action is handed over as soon as it arrives instead.
-5. If the reply fails, sets `failure` on the agent message (keeping any text that arrived) and
+   the handler (below). A reply that ends with no text at all adds no message. A `created`
+   action is handed over as soon as it arrives instead.
+5. If the reply fails, sets `failure` on the librarian's message (keeping any text that arrived) and
    `status` to `"idle"`:
    - `"budget"`: a spending cap would be crossed, or the kill switch is on;
    - `"error"`: anything else, including a stream that ends early and a server that can't be
@@ -84,15 +85,15 @@ Every component that calls `useAgent()` sees the same conversation.
 The text is markdown for `ReplyMarkdown` (`src/ui/README.md`), and only the last text the
 librarian wrote: what it wrote after its last tool, or before it when nothing followed.
 
-## `useAgentActions(handler)`
+## `useLibrarianActions(handler)`
 
 ```ts
-type AgentAction =
+type LibrarianAction =
   | { type: "open"; manualId: string }
   | { type: "propose-delete"; manualId: string }
   | { type: "created"; manualId: string };
 
-useAgentActions((action) => { /* navigate, or open the delete confirmation */ });
+useLibrarianActions((action) => { /* navigate, or open the delete confirmation */ });
 ```
 
 Hands each `open` or `propose-delete` action to `handler` once its reply is **done**, while the
@@ -128,36 +129,36 @@ state. They combine. Their replies come from the server's preview (`?freeze=` on
 route, `ARCHITECTURE.md` › The librarian), which always plays the **scripted fake model**,
 whatever models the server runs, sends no page actions and costs nothing.
 
-| Option                  | Starting conversation | `status` |
-| ----------------------- | --------------------- | -------- |
-| *(none)*                | Empty | `"idle"` |
-| `?conversation=demo`    | Three finished exchanges, asked for in turn with `?freeze=1`: "What do I have?" (a list of the manuals), "Open the one about haunted houses" ("Opening *The Haunt That Listens*."), "Can you translate the sourdough manual into Klingon?" (the fake model's "I can’t do that…") | `"idle"` |
-| `?agentFreeze=thinking` | Adds the user message "Let’s start a new manual about building a treehouse", and makes no request | `"thinking"`, forever |
-| `?agentFreeze=<0–1>`    | Adds the same user message and its reply (the fake model's “*Building a Treehouse* is on your shelf…”, which the preview never saves), cut at the last chunk at or before that fraction, repaired. At 0 only the statuses show, ending with the planner's (`activity` `"Planning “Building a Treehouse”…"`); at 1 the reply is whole | `"thinking"` at 0, `"streaming"` above, `"idle"` at 1; frozen ones forever |
+| Option                      | Starting conversation | `status` |
+| --------------------------- | --------------------- | -------- |
+| *(none)*                    | Empty | `"idle"` |
+| `?conversation=demo`        | Three finished exchanges, asked for in turn with `?freeze=1`: "What do I have?" (a list of the manuals), "Open the one about haunted houses" ("Opening *The Haunt That Listens*."), "Can you translate the sourdough manual into Klingon?" (the fake model's "I can’t do that…") | `"idle"` |
+| `?librarianFreeze=thinking` | Adds the user message "Let’s start a new manual about building a treehouse", and makes no request | `"thinking"`, forever |
+| `?librarianFreeze=<0–1>`    | Adds the same user message and its reply (the fake model's “*Building a Treehouse* is on your shelf…”, which the preview never saves), cut at the last chunk at or before that fraction, repaired. At 0 only the statuses show, ending with the planner's (`activity` `"Planning “Building a Treehouse”…"`); at 1 the reply is whole | `"thinking"` at 0, `"streaming"` above, `"idle"` at 1; frozen ones forever |
 
-- `agentFreeze` takes `thinking` or any number from 0 to 1. Any other value is ignored.
-- The frozen message comes after the demo turns, so `?conversation=demo&agentFreeze=0.5` shows a
-  long conversation with a reply half-streamed at the bottom.
+- `librarianFreeze` takes `thinking` or any number from 0 to 1. Any other value is ignored.
+- The frozen message comes after the demo turns, so `?conversation=demo&librarianFreeze=0.5`
+  shows a long conversation with a reply half-streamed at the bottom.
 - A frozen reply never finishes, so `send` is ignored for the rest of that page load.
 - The first demo message is added as the page loads, so the conversation is never empty on a
   page loaded with these options; the replies arrive a few milliseconds later.
-- These are separate from the reader's `?freeze`, which doesn't affect the agent.
+- These are separate from the reader's `?freeze`, which doesn't affect the librarian.
 
 ## Example
 
 ```tsx
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { useAgent, useAgentActions } from "../agent";
+import { useLibrarian, useLibrarianActions } from "../librarian";
 import { refreshLibrary } from "../library";
 import { ReplyMarkdown } from "../ui";
 
 function Conversation({ onProposeDelete }: { onProposeDelete: (manualId: string) => void }) {
-  const { messages, status, activity, send } = useAgent();
+  const { messages, status, activity, send } = useLibrarian();
   const navigate = useNavigate();
   const [draft, setDraft] = useState("");
 
-  useAgentActions((action) => {
+  useLibrarianActions((action) => {
     if (action.type === "created") void refreshLibrary();
     else if (action.type === "open") navigate(`/read/${action.manualId}`);
     else onProposeDelete(action.manualId);
@@ -194,10 +195,10 @@ function Conversation({ onProposeDelete }: { onProposeDelete: (manualId: string)
 
 ## Files
 
-- `types.ts`: `AgentMessage`, `AgentStatus` and `AgentAction`, and the wire types re-exported
-  from `server/api/types.ts` with `export type`, with `LIBRARIAN_LIMITS`, the one value it
-  re-exports.
+- `types.ts`: `ConversationMessage`, `LibrarianStatus` and `LibrarianAction`, and the wire types
+  re-exported from `server/api/types.ts` with `export type`, with `LIBRARIAN_LIMITS`, the one
+  value it re-exports.
 - `api.ts`: `streamReply`, which posts the conversation and parses the server-sent events. Uses
   `apiFetch` (`src/reportErrors.ts`).
-- `store.ts`: the conversation, `send`, the URL options, `useAgent` and `useAgentActions`
+- `store.ts`: the conversation, `send`, the URL options, `useLibrarian` and `useLibrarianActions`
   (`handleActions` is the same registration without the hook, for tests).

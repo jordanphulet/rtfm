@@ -44,7 +44,7 @@ export default function Home() {
 | `Sheet.tsx`, `Sheet.css` | A panel with a focus trap |
 | `ExternalLink.tsx` | A link that leaves the app |
 | `MarkdownLink.tsx` | The link for rendered markdown: an `ExternalLink` for a web URL, else a plain `<a>` |
-| `ReplyMarkdown.tsx` | Short markdown for the agent's replies |
+| `ReplyMarkdown.tsx` | Short markdown for the librarian's replies |
 
 ## Tokens
 
@@ -272,8 +272,8 @@ when given, else the link's own `className`. Takes every `<a>` prop. The reader'
 
 ### `ReplyMarkdown`
 
-Renders one short markdown reply (the agent's) with the same treatment as the reader's prose, so a
-reply reads like the manual's text.
+Renders one short markdown reply (the librarian's) with the same treatment as the reader's prose,
+so a reply reads like the manual's text.
 
 ```ts
 interface ReplyMarkdownProps {
@@ -294,7 +294,7 @@ interface ReplyMarkdownProps {
   are not supported.
 - **Look:** the shared `.markdown` treatment (`DESIGN.md` › Markdown) at `--text-reply`, in
   `--ink`. No margin above the first block or below the last, so it sits flush in any container.
-- **Streaming:** pass the repaired text as it grows (`useAgent()` repairs it). Text only ever
+- **Streaming:** pass the repaired text as it grows (`useLibrarian()` repairs it). Text only ever
   appears at the end, and it uses ordinary wrapping (never `text-wrap: pretty`), so earlier lines
   never re-flow. It is memoized: finished messages don't re-render while another streams. Mark the
   live edge yourself on the last message only (put it in a `.write-head`; see The write head).

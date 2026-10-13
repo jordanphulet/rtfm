@@ -11,14 +11,14 @@ including each turn of the loop and each plan, goes through one gateway that cap
 what the models cost; this doc covers how the server works.
 
 ```
-browser (Vite, :5173)                        server (node:http, :8787)
-  src/library store ┐
-  src/manual store ─┤
-  src/agent store  ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake writer
-                                                  │                    └──▶ Bedrock writer ──▶ gateway ──▶ Bedrock
-                                                  ├──▶ librarian ──▶ agent loop ──▶ fake librarian model
-                                                  │       └──▶ planner          └──▶ gateway ──▶ Bedrock
-                                                  └──▶ storage/ (manuals, sections, ledger: files in .data/)
+browser (Vite, :5173)                           server (node:http, :8787)
+  src/library store ───┐
+  src/manual store ────┤
+  src/librarian store ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake writer
+                                                     │                    └──▶ Bedrock writer ──▶ gateway ──▶ Bedrock
+                                                     ├──▶ librarian ──▶ agent loop ──▶ fake librarian model
+                                                     │       └──▶ planner          └──▶ gateway ──▶ Bedrock
+                                                     └──▶ storage/ (manuals, sections, ledger: files in .data/)
 ```
 
 ## 1. The server
@@ -177,7 +177,7 @@ isn't JSON gets `400 { error: "Bad request" }`. Then it:
 
 The wire types live in `server/api/types.ts`. The browser imports them with `import type`:
 `src/manual/types.ts` re-exports the manual's types, `src/library/types.ts` re-exports
-`ManualSummary`, and `src/agent/types.ts` the librarian's. The one value the browser imports is
+`ManualSummary`, and `src/librarian/types.ts` the librarian's. The one value the browser imports is
 `LIBRARIAN_LIMITS`, which the file defines with no imports, so nothing else from `server/` reaches
 the bundle.
 
@@ -986,7 +986,8 @@ manual or the problems that stopped it.
 statuses and the text up to the last chunk end at or before that fraction of the reply's text,
 then `frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never sent, and its store
 saves no manual (`createManual` only answers `"created"`), so a preview costs nothing and changes
-nothing. The browser uses it for `?conversation=demo` and `?agentFreeze=` (`src/agent/README.md`).
+nothing. The browser uses it for `?conversation=demo` and `?librarianFreeze=`
+(`src/librarian/README.md`).
 
 **Tests**, all offline, cover the route, the tools, the page notes, narration kept or withdrawn,
 replies whose last turn is empty, with the fake model and with scripted turns through the real

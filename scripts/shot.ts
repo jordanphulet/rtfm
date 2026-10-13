@@ -137,10 +137,10 @@ function homeShots(): Shot[] {
   return [
     { state: "first-visit", path: "/" },
     { state: "typing", path: "/", prepare: typeMessage },
-    { state: "thinking", path: "/?agentFreeze=thinking" },
-    { state: "working", path: "/?agentFreeze=0" },
-    { state: "streaming", path: "/?agentFreeze=0.5" },
-    { state: "created", path: "/?agentFreeze=1", beforeLoad: createPlannedManual },
+    { state: "thinking", path: "/?librarianFreeze=thinking" },
+    { state: "working", path: "/?librarianFreeze=0" },
+    { state: "streaming", path: "/?librarianFreeze=0.5" },
+    { state: "created", path: "/?librarianFreeze=1", beforeLoad: createPlannedManual },
     { state: "conversation", path: "/?conversation=demo", fullPage: true },
     { state: "delete-confirm", path: "/", prepare: openDeleteConfirmation },
     { state: "fallback", path: "/", prepare: sendUnhandledMessage },
@@ -186,7 +186,7 @@ async function openTocIfCollapsed(page: Page, size: Size) {
 }
 
 async function typeMessage(page: Page) {
-  const input = await clickHook(page, "agent-input");
+  const input = await clickHook(page, "librarian-input");
   await input.pressSequentially(TYPED_MESSAGE);
   await settle(page);
 }
@@ -210,7 +210,7 @@ async function sendListMessage(page: Page) {
 }
 
 async function sendMessage(page: Page, message: string) {
-  const input = await clickHook(page, "agent-input");
+  const input = await clickHook(page, "librarian-input");
   await input.pressSequentially(message);
   await input.press("Enter");
 }

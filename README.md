@@ -19,7 +19,7 @@ writes each section only when a reader opens it. The app has two pages:
 - `ARCHITECTURE.md`: the server, its API, storage, the section writers, the model gateway, the
   agent loop, the librarian, configuration, logs and the reader's store.
 - `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
-- `src/*/README.md`: the API of each shared folder in `src/` (`agent`, `library`, `manual`, `ui`).
+- `src/*/README.md`: the API of each shared folder in `src/` (`librarian`, `library`, `manual`, `ui`).
 - `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
   the orchestrator's protocol.
 - `WORKLIST.md`: the phases and tasks, with each task's status.
@@ -50,16 +50,16 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 
 The API server listens on `127.0.0.1` only; `ARCHITECTURE.md` › The API has the checks it makes.
 
-| Script            | What it does                                                               |
-| ----------------- | -------------------------------------------------------------------------- |
-| `npm run dev`     | Starts Vite (5173) and the API server (8787) together.                     |
-| `npm run server`  | Starts the API server alone, for `curl` or `npm run preview`.              |
-| `npm test`        | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock. |
-| `npm run build`   | Type-checks everything and builds the app.                                 |
-| `npm run preview` | Serves the built app, passing `/api` to `npm run server` on 8787.          |
-| `npm run shot`    | Screenshots both pages in every state, on its own servers. See below.      |
-| `npm run usage`   | Today's and this month's model spend, by model and by job. See below.      |
-| `npm run logs`    | The server's recent log entries, filtered or followed. See below.          |
+| Script            | What it does                                                                 |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `npm run dev`     | Starts Vite (5173) and the API server (8787) together.                       |
+| `npm run server`  | Starts the API server alone, for `curl` or `npm run preview`.                |
+| `npm test`        | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock.   |
+| `npm run build`   | Type-checks everything and builds the app.                                   |
+| `npm run preview` | Serves the built app, passing `/api` to `npm run server` on 8787.            |
+| `npm run shot`    | Screenshots both pages in every state; `--compare` diffs against a baseline. |
+| `npm run usage`   | Today's and this month's model spend, by model and by job. See below.        |
+| `npm run logs`    | The server's recent log entries, filtered or followed. See below.            |
 
 ### Another data folder or port
 
@@ -276,7 +276,7 @@ npm run shot -- /tmp/shots-after --compare /tmp/shots-before
   it, and the markdown renderer. Its README documents the API.
 - `src/library/`: the landing page's store, which loads the library from the API and deletes
   through it. Its README documents the API.
-- `src/agent/`: the librarian's conversation. It sends the conversation to the librarian on the
+- `src/librarian/`: the librarian's conversation. It sends the conversation to the librarian on the
   server and streams back each reply. Its README documents the API and the URL options.
 - `src/reportErrors.ts`: reports the browser's errors and failed API requests to the server's log.
 - `server/`: the API server, storage and the data folder's lock, the section writers, the agent

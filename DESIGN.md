@@ -1032,7 +1032,7 @@ in the reader's terms:
 ### Opening, proposing a delete, and a new manual
 
 The librarian's tools hand the page an action (when each is handed over is in
-`src/agent/README.md`). The page carries out an open or a proposed delete **when the reply is
+`src/librarian/README.md`). The page carries out an open or a proposed delete **when the reply is
 done**, so you read what the librarian said first; a reply that fails carries nothing out. While a
 confirmation is open, those actions do nothing.
 
@@ -1055,7 +1055,7 @@ confirmation is open, those actions do nothing.
   - **Delete manual** deletes it through the same steps as the row's Delete.
   - **Focus returns to the field**, not the row, because you were talking to the librarian:
     after **Keep it**, Escape or the scrim, and after the manual is deleted.
-  - **The librarian hears how it ended** (`reportDeleteOutcome` in `src/agent/README.md`):
+  - **The librarian hears how it ended** (`reportDeleteOutcome` in `src/librarian/README.md`):
     nothing is said on the page, but your next message tells the librarian whether you kept the
     manual or deleted it, so asking again after Keep it opens the confirmation again. After a
     failed delete, Keep it reports nothing, since the delete may still have happened on the
@@ -1086,7 +1086,7 @@ above it (a job: it separates a scrolling log from a fixed control).
 - **Focus on load:** on `(hover: hover) and (pointer: fine)` at 1024px and up, the field takes
   focus when the page loads, so the input is the clearly dominant control and you can type at
   once. Touch devices never get a keyboard they didn't ask for.
-- **The field:** a `<textarea>`, `data-shot="agent-input"`, `aria-label="Ask the librarian"`,
+- **The field:** a `<textarea>`, `data-shot="librarian-input"`, `aria-label="Ask the librarian"`,
   placeholder `Ask the librarian…` (`--ink-faint`). It is the only text field on the page and the
   only well: `--ground` (darker than the panel, an inset), a 1px `--ink-faint` border (5.6:1
   against the panel, so its boundary meets WCAG 1.4.11's 3:1 at rest), `--radius-m`, padding
@@ -1372,7 +1372,7 @@ switched off where it is defined; all the information stays.
 
 ## States
 
-Each state is set up by a URL option (`src/library/README.md`, `src/agent/README.md`), a few
+Each state is set up by a URL option (`src/library/README.md`, `src/librarian/README.md`), a few
 clicks, or (for the failures and `created`) the shot script answering or rewriting the page's
 API requests itself, and
 `npm run shot` captures it at both sizes. The library is the seven seed manuals as a fresh server
@@ -1397,7 +1397,7 @@ scripted fake model's, so the shots cost nothing and never change between runs.
 | `library-unreachable` | `GET /api/manuals` fails: the `Library` title and the notice in the ledger's place; no panel | The same; no dock |
 | `delete-failed` | The delete answered 409: first row lit, the confirmation reading `Couldn’t delete …` with Try again and Keep it | The same at the bottom edge |
 
-Hooks: `agent-input` on the field (one is visible at every width), `delete` on each Delete,
+Hooks: `librarian-input` on the field (one is visible at every width), `delete` on each Delete,
 `confirm-delete` on the confirmation's Delete manual.
 
 ## Avoiding the generic
@@ -1419,7 +1419,7 @@ Hooks: `agent-input` on the field (one is visible at every width), `delete` on e
 ## Build structure
 
 The landing page lives in `src/home/`. It is built only on `src/ui/`, `src/library/` (the manuals)
-and `src/agent/` (the librarian), each documented in its README.
+and `src/librarian/` (the librarian), each documented in its README.
 
 - One component per file. Each one that has styles imports its own stylesheet, named after it
   (`Composer.css` for `Composer`), except a part that only its parent renders, which its parent's
@@ -1432,5 +1432,5 @@ and `src/agent/` (the librarian), each documented in its README.
   hovered row, the jump, the rows) and the two live regions; `useDeleteFlow.ts` holds the delete
   flow, `LibraryErrorBoundary` the unreachable notice.
 - Page actions are carried out by `HomePage` (load the library again, navigate, or open the
-  confirmation). Whichever of `LibrarianPanel` and `PhoneAgent` is showing receives them with
-  `useAgentActions`, and `PhoneAgent` closes its sheet before a proposed delete.
+  confirmation). Whichever of `LibrarianPanel` and `PhoneLibrarian` is showing receives them with
+  `useLibrarianActions`, and `PhoneLibrarian` closes its sheet before a proposed delete.
