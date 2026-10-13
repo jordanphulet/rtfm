@@ -8,19 +8,8 @@ The work still to do, with each task's status. **This file is the source of trut
 The app is moving into AWS, and agents must still be able to run, test and check all of it on one
 machine.
 
-### LF.3 — The loopback guard in child processes
-- **Status:** doing (agent abd8d3259005c72c9)
-- **Depends on:** LF.1
-- **Files:** `vitest.setup.ts` and its test, `loopback-only.ts` and its test, `vite.config.ts`,
-  `tsconfig.node.json`, `server/README.md`
-- **Do:** move the blocking itself into `loopback-only.ts`, which `vitest.setup.ts` uses and which
-  a Node process can preload (`--import`). Tests' child processes (such as `main.test.ts`'s server)
-  get it through `NODE_OPTIONS`, and a blocked connection there fails the process loudly.
-- **Done when:** `npm test` passes, a test shows a child Node process refused a non-loopback
-  connection, and `server/README.md` › Tests no longer lists child processes as uncovered.
-
 ### LF.4 — The fake models behind the real gateway
-- **Status:** todo
+- **Status:** doing (agent af334ef91305601dd)
 - **Depends on:** —
 - **Files:** `server/**`, `scripts/serve-temp.ts`, `scripts/shot.ts`, `README.md`, `ARCHITECTURE.md`
 - **Do:**
@@ -39,17 +28,6 @@ machine.
   `npm run shot -- --compare` shows no change; `README.md` and `ARCHITECTURE.md` no longer say
   the caps and kill switch apply only to Bedrock.
 
-### LF.5 — The loopback guard and a custom `lookup`
-- **Status:** todo
-- **Depends on:** LF.3
-- **Files:** `loopback-only.ts` and its test, `server/README.md`
-- **Do:** block a connection whose own `lookup` (the `lookup` option of `net` and `tls`, or
-  undici's `connect.lookup`) turns a loopback name into another address, for example by checking
-  the address the socket's `lookup` event reports.
-- **Done when:** `npm test` passes, and a test shows `net.connect({ host: "localhost", lookup })`
-  with a `lookup` that answers `192.0.2.1` blocked, and an ordinary connection to `localhost`
-  still allowed.
-
 ## Into AWS
 
 Infrastructure as code in `infra/`, a CDK app, in an AWS account that also holds things that
@@ -67,7 +45,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.1 — The `infra/` app and the access stack
-- **Status:** doing (agent a1e12c678639005f4)
+- **Status:** doing (agent a1e12c678639005f4; in review; on 2026-10-13 the user approved its `CLAUDE.md` and `PROCESS.md` diffs and its custom `RtfmToolkit` bootstrap)
 - **Depends on:** LF.1
 - **Files:** `infra/**`, `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`,
   `ARCHITECTURE.md`, `README.md`, `server/README.md`, `CLAUDE.md`, `PROCESS.md`
@@ -129,6 +107,9 @@ aren't RTFM's.
   - With `npm run cdk`, deploy an `RtfmApp` stack holding one log group, then show that it can't
     change `RtfmAccess`, create a role without the boundary, or touch a resource not named for
     RTFM.
+  - Check from Cost Explorer (through `npm run aws`) whether the `project=rtfm` tag catches
+    Bedrock calls made with `rtfm-local`'s key. If it doesn't, say so: the budget then needs
+    another filter, or the server's calls a tagged application inference profile.
   - Check the server still calls Bedrock with `rtfm-local`'s key (`npm run dev` with
     `RTFM_MODELS=bedrock`, one section, under $0.01).
   - `PROCESS.md` › Review loop: after merging a change to an app stack, the orchestrator runs

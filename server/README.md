@@ -166,14 +166,31 @@ records them, not read from AWS's bill.
 ## Tests
 
 Tests sit next to the code (`*.test.ts`) and never call Bedrock. They reach only loopback:
-`vitest.setup.ts`, which Vitest runs before every test file, fails any test that connects to
-anything but `127.0.0.1`, `::1` or `localhost`, through `fetch` (Node's or happy-dom's),
-`node:http`, `node:https`, `node:net` or `node:tls`, or that uses DNS for anything but a `lookup`
-or `lookupService` of those (the `resolve*` and `reverse` functions ask a nameserver, so they are
-blocked for every name). A blocked connection fails with the code `ECONNREFUSED` and a blocked DNS
-call with `ENOTFOUND`, and the test fails even when the code under test catches the error. The
-guard doesn't cover a child process a test starts (such as `main.test.ts`'s server), a
-`worker_threads` worker, or UDP (`node:dgram`).
+`loopback-only.ts`, at the repo root, blocks any connection to anything but `127.0.0.1`, `::1` or
+`localhost`, through `fetch` (Node's or happy-dom's), `node:http`, `node:https`, `node:net` or
+`node:tls`, and any DNS call but a `lookup` or `lookupService` of those or a `lookup` of an
+address, which answers itself (as when Vite listens on `0.0.0.0`). The `resolve*` and `reverse`
+functions ask a nameserver, so they are blocked for every name. A connection's own `lookup` (the
+`lookup` option of `node:net` and `node:tls`, or undici's `connect.lookup`) skips those DNS calls,
+so its answer must be `127.0.0.1` or `::1`: one that turns `localhost` into another address is
+blocked before Node connects to it. A blocked connection fails with the code `ECONNREFUSED` and a
+blocked DNS call with `ENOTFOUND`.
+
+- **Every Node process the tests start loads it first**, unless the test replaces its environment.
+  `vite.config.ts` adds `--import=<its file URL>` to `NODE_OPTIONS` for the test workers (not
+  Vitest's own main process), and every process they start inherits it: `main.test.ts`'s server,
+  `scripts/serve-temp.test.ts`'s server and its Vite, and the scripts the `scripts/` tests run. A
+  process that loads it twice (a worker preloads it, then `vitest.setup.ts` imports it) installs it
+  once.
+- **In a test**, `vitest.setup.ts`, which Vitest runs before every test file, fails the test that
+  was blocked, even when the code under test catches the error.
+- **In a child process**, each blocked target is written to stderr at once (`Blocked a connection
+  to 192.0.2.1: …`), and when the process exits normally or through a signal it handles, it exits
+  with code 1 where it would have exited with 0 (`SIGKILL` or an unhandled signal skips this). So
+  a test that checks only the child's exit code or its stderr still fails.
+
+A `worker_threads` worker loads it too, and the thread itself exits with code 1, but what it blocks
+fails neither the test nor the process's exit code. UDP (`node:dgram`) isn't covered.
 
 Any test that starts a server binds port 0 and sets its own `passcode` (`undefined` unless it
 tests the gate), so a `RTFM_PASSCODE` in the environment changes nothing. Tests that race a timer
