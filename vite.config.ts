@@ -17,10 +17,17 @@ const apiProxy: Record<string, ProxyOptions> = {
   },
 };
 
+const preloadLoopbackOnly = `--import=${new URL("./loopback-only.ts", import.meta.url).href}`;
+const testNodeOptions = [process.env.NODE_OPTIONS, preloadLoopbackOnly].filter(Boolean).join(" ");
+
 export default defineConfig({
   plugins: [react()],
   envDir: false,
   server: { port: 5173, strictPort: true, proxy: apiProxy, watch: { ignored: ["**/.data/**"] } },
   preview: { proxy: apiProxy },
-  test: { exclude: [...configDefaults.exclude, ".claude/**"], setupFiles: ["./vitest.setup.ts"] },
+  test: {
+    exclude: [...configDefaults.exclude, ".claude/**"],
+    setupFiles: ["./vitest.setup.ts"],
+    env: { NODE_OPTIONS: testNodeOptions },
+  },
 });
