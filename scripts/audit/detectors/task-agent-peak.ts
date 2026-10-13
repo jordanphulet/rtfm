@@ -1,4 +1,5 @@
 import type { Event } from "../events.ts";
+import { taskAgentId } from "../task-ids.ts";
 
 export type AgentRun = { agent: string; who: string; start: string; end: string };
 
@@ -8,8 +9,6 @@ export type TaskAgentPeak = {
   at?: string;
   running: AgentRun[];
 };
-
-const TASK_AGENT = /^subagent: [A-Z][A-Z0-9]{1,2}(?:\.[A-Za-z0-9]+)+\b/;
 
 /** The most task agents (subagents whose description starts with a task id) running at once. */
 export function taskAgentPeak(events: Event[]): TaskAgentPeak {
@@ -31,7 +30,7 @@ function taskAgentRuns(events: Event[]): AgentRun[] {
   const runs: AgentRun[] = [];
   const current = new Map<string, AgentRun>();
   for (const event of events) {
-    if (!event.agent || !TASK_AGENT.test(event.who)) continue;
+    if (!event.agent || taskAgentId(event.who) === undefined) continue;
     const run = current.get(event.agent);
     const end = event.resultTime ?? event.time;
     if (run && event.kind !== "prompt") {

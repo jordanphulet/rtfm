@@ -6,17 +6,29 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { credentialReport } from "./credential-report.ts";
 import { redactDeep } from "./credentials.ts";
+import { agentPromptsMissingRules } from "./detectors/agent-prompts.ts";
 import { folderStaging } from "./detectors/folder-staging.ts";
+import { loopPasses } from "./detectors/loop-passes.ts";
 import { processStops } from "./detectors/process-stops.ts";
+import { readOnlyWrites } from "./detectors/read-only-writes.ts";
 import { ruleFileEdits } from "./detectors/rule-file-edits.ts";
 import { sensitivePaths } from "./detectors/sensitive-paths.ts";
 import { subagentGitWrites } from "./detectors/subagent-git-writes.ts";
 import { taskAgentPeak } from "./detectors/task-agent-peak.ts";
 import { taskCommitReviews } from "./detectors/task-commit-reviews.ts";
+import { editsOutsideTaskFiles } from "./detectors/task-files.ts";
 import { toolErrors } from "./detectors/tool-errors.ts";
 import { userMessages } from "./detectors/user-messages.ts";
+import { zshErrors } from "./detectors/zsh-errors.ts";
 import { toEvents } from "./events.ts";
-import { commitsOnMain, mainCheckout, ruleFileCommits, worktreesBehindMain } from "./repo.ts";
+import {
+  commitsOnMain,
+  firstCommitAdding,
+  mainCheckout,
+  ruleFileCommits,
+  worklistVersions,
+  worktreesBehindMain,
+} from "./repo.ts";
 import { readTranscripts, transcriptFolders } from "./transcripts.ts";
 
 const { values } = parseArgs({
@@ -43,13 +55,18 @@ const outputs: Record<string, unknown> = {
   "subagent-git-writes.json": subagentGitWrites(events),
   "process-stops.json": processStops(events),
   "sensitive-paths.json": sensitivePaths(events),
-  "rule-file-edits.json": ruleFileEdits(events),
+  "rule-file-edits.json": ruleFileEdits(events, repoDir),
   "task-commit-reviews.json": taskCommitReviews(events, commitsOnMain(repoDir)),
   "folder-staging.json": folderStaging(events, isDirectory),
   "task-agent-peak.json": taskAgentPeak(events),
   "worktrees-behind.json": worktreesBehindMain(repoDir),
   "tool-errors.json": toolErrors(events),
   "rule-file-commits.json": ruleFileCommits(repoDir),
+  "zsh-errors.json": zshErrors(events, firstCommitAdding(repoDir, "CLAUDE.md", "zsh")),
+  "loop-passes.json": loopPasses(events),
+  "agent-prompts.json": agentPromptsMissingRules(events, firstCommitAdding(repoDir, "PROCESS.md", "Every agent prompt")),
+  "task-files.json": editsOutsideTaskFiles(events, worklistVersions(repoDir), repoDir),
+  "read-only-writes.json": readOnlyWrites(events, repoDir),
 };
 
 for (const [file, value] of Object.entries(outputs)) {
@@ -60,11 +77,17 @@ for (const [file, value] of Object.entries(outputs)) {
 }
 console.log(`\n${transcripts.length} transcripts from ${folders.length} folders. Written to ${outDir}`);
 
+// An array's length; an object's total or peak; or, for an object of arrays and counts, each.
 function describe(value: unknown): string {
   if (Array.isArray(value)) return `${value.length}`;
-  if (value && typeof value === "object" && "total" in value) return `${value.total} found`;
-  if (value && typeof value === "object" && "peak" in value) return `peak ${value.peak}`;
-  return "";
+  if (!value || typeof value !== "object") return "";
+  if ("total" in value) return `${value.total} found`;
+  if ("peak" in value) return `peak ${value.peak}`;
+  return Object.entries(value)
+    .flatMap(([key, part]) =>
+      Array.isArray(part) ? [`${key} ${part.length}`] : typeof part === "number" ? [`${key} ${part}`] : [],
+    )
+    .join(", ");
 }
 
 function refuseIfInRepo(dir: string) {

@@ -30,8 +30,10 @@ small synthetic transcripts of their own.
 - **In each folder:** every session's `<session>.jsonl`, with the session's title (its last
   `custom-title` line), and each of its subagents' `<session>/subagents/agent-<id>.jsonl`, with the
   subagent's description from `agent-<id>.meta.json`.
-- **Git:** the commits on `main`, the worktrees, and the history of `CLAUDE.md` and `PROCESS.md`,
-  with read-only git commands.
+- **Git:** the commits on `main` with the files and lines each changed, the worktrees, the history
+  of `CLAUDE.md`, `PROCESS.md` and `WORKLIST.md`, and when the zsh rule was added to `CLAUDE.md`
+  (the first commit adding "zsh") and `PROCESS.md`'s rules on agent prompts (the first commit
+  adding "Every agent prompt"), with read-only git commands.
 
 ## Events
 
@@ -102,40 +104,76 @@ A shell command is read as its simple commands, as a reader would pick them out:
 | -------------------------- | -------------------------------------------------------------- |
 | `user-messages.json`       | Every message the user typed: where corrections live.          |
 | `subagent-git-writes.json` | Git commands run by subagents that change the repo.            |
-| `process-stops.json`       | Stopping processes the session didn't start.                   |
-| `sensitive-paths.json`     | Touches of the data folder, `.env*.local` and `~/.aws`.        |
+| `process-stops.json`       | Stopping a process by port, pattern, name or another's pid.    |
+| `sensitive-paths.json`     | Writes, reads and runtime loads of the sensitive paths.        |
 | `rule-file-edits.json`     | Edits to `CLAUDE.md`, `PROCESS.md`, `WORKLIST.md`, `.claude/`. |
-| `task-commit-reviews.json` | Each task commit on `main`, with its review agents.            |
+| `task-commit-reviews.json` | Task commits and Claude's own commits, with review agents.     |
 | `folder-staging.json`      | A session staging or committing whole folders.                 |
 | `task-agent-peak.json`     | The most task agents running at once.                          |
 | `worktrees-behind.json`    | How far each worktree is behind (and ahead of) `main`.         |
 | `tool-errors.json`         | Failed tool calls, grouped by their first line.                |
 | `rule-file-commits.json`   | Each commit that changed `CLAUDE.md` or `PROCESS.md`.          |
+| `zsh-errors.json`          | zsh's `=` and, apart, "no matches found" errors.               |
+| `loop-passes.json`         | Each orchestrator loop pass, and the rule files it read.       |
+| `agent-prompts.json`       | Task agent prompts that leave out standing rules.              |
+| `task-files.json`          | A task agent's edits outside its task's **Files**, and skips.  |
+| `read-only-writes.json`    | A reviewer or auditor writing files in the repo.               |
 
 What each one counts, and what it leaves out:
 
 - **Git writes:** any git subcommand but those that only read, such as `status`, `log`, `diff`,
   `show`, `reflog`, `stash list`, `tag -l`, `branch -a`, `worktree list`, `hash-object` without
   `-w`, and a dry run (`git mv -n`, `git clean -nd`, `git rm --dry-run`).
-- **Process stops:** `pkill`, `killall`, `fuser -k`, `kill-port` (also through `npx`), and `kill`
-  given a literal pid (most likely looked up in an earlier call) or a pid it looks up (`$(…)`,
-  backticks, `lsof`, `ps`, `pgrep`, `fuser`). `kill $PID` after `PID=$!` stops the session's own
-  process and doesn't count, nor does `kill -0`, which only checks that a process exists.
+- **Process stops:** stopping a process by port, pattern or name, or by a pid that didn't come
+  from the agent's own launch, which `CLAUDE.md` forbids: `pkill`, `killall`, `fuser -k`,
+  `kill-port` (also through `npx`), and `kill` given a pid. Each says where its pids came from
+  (`source`): `found by port or pattern` (`pkill -f`, `kill-port`, `fuser -k`, `kill` in a call
+  that looks pids up with `lsof`, `ps`, `pgrep` or `fuser`, or a pid such a lookup printed
+  earlier), `by name` (`pkill` without `-f`, `killall`) or `unknown` (a pid seen nowhere earlier,
+  or from `$(…)`, directly or through a variable assigned from it, that isn't a file written from
+  `$!`). `ps -p <pid>` only checks a pid already known, so it isn't a lookup. Any other `kill $VAR`
+  is left out, and so are these, first, as the agent's own, whatever else the call does:
+  - `kill $PID` after `PID=$!` in the same call;
+  - `kill $(cat <file>)`, or `PID=$(cat <file>)` then `kill $PID`, when the same session or
+    subagent wrote the file from `$!`;
+  - `kill <pid>` when the pid was in its own launch output: what a call that left a process
+    running (in the background, or with `&`, `$!` or `nohup`) printed, or what it wrote to its
+    output file, read later. Pids printed by a call that also looked pids up count as found by
+    port or pattern instead;
+  - `kill -0`, which only checks that a process exists.
 - **Sensitive paths:** any word of a command, and a tool's `file_path`, `path` or (for Glob)
-  `pattern`. A search's pattern (`grep '.data/' README.md`) and what `echo` or `printf` print don't
-  count, but where they print to does (`echo X >> .env.local`).
-- **Rule file edits:** the Edit, MultiEdit, Write and NotebookEdit tools; and shell commands that
-  write a file (a redirect, `sed -i`, `perl -i`, `tee`, `mv`, `cp`, `rm`, `touch`, and `git mv`,
-  `rm`, `checkout` or `restore` without `--staged` or `--cached`). Staging or committing a file
-  doesn't change it. In a worktree, a file's path within the worktree is what counts. The
-  orchestrator edits `WORKLIST.md` by design, so only a subagent's edit of it counts.
+  `pattern`, split three ways: `writes` (an edit tool, or a command that writes the path, as
+  below), `runtimeLoads` (a path given to a script that `node`, `npx`, `npm` and the like run,
+  which loads it) and `reads` (any other touch). A search's pattern (`grep '.data/' README.md`),
+  what `echo` or `printf` print, and what `--exclude` or `--exclude-dir` leave out don't count, but
+  where `echo` prints to does (`echo X >> .env.local`).
+- **Which files a call writes:** the Edit, MultiEdit, Write and NotebookEdit tools; and shell
+  commands that write a file: a redirect, `sed -i` and `perl -i` (not their script), `tee`, `mv`,
+  `rm`, `touch`, `mkdir`, the destination of `cp` or `ln`, and `git mv`, `rm`, `checkout` or
+  `restore` without `--staged` or `--cached`. Staging or committing a file doesn't change it. A
+  relative path is taken from the event's working folder, as the script's `cd` commands change
+  it; after a `cd` to a folder that can't be told (`cd $DIR`), it counts as outside the repo.
+- **Rule file edits:** writes to the rule files inside this repo or its worktrees; in a worktree,
+  a file's path within the worktree is what counts. The orchestrator edits `WORKLIST.md` by
+  design, so only a subagent's edit of it counts.
 - **Task commit reviews:** a task commit's subject starts `<ID>: ` or `<ID>, <ID>: `, where an id
-  is two or three capitals or digits and dotted parts (`OH.1`, `BE.4b`, `P1.A.spec`). A review
-  agent is an Agent call whose description has the word "review" (not "preview") and names the
-  id, at its own boundaries (`OH.1` isn't named by `OH.11` or `BE.4` by `BE.4b`). `reviewed` says
-  whether one was started before the commit and after the previous commit for any of the same
-  tasks, so an id used again doesn't inherit an old review. Commit times come from `git log` in the
-  committer's time zone, are compared as instants, and are written in UTC.
+  is two or three capitals or digits and dotted parts (`OH.1`, `BE.4b`, `P1.A.spec`). Claude's own
+  commits (`kind: "own"`) are the other commits with Claude's co-author line that change more than
+  `WORKLIST.md`. Each has its `changedLines`, added and removed, with a pure rename adding none,
+  and `needsReview`: more than the 40 that `npm run commit-task -- --no-review` allows.
+  Commit times come from `git log` in the committer's time zone, are compared as instants, and are
+  written in UTC. A review agent is an Agent call whose description has the word "review" (not
+  "preview"). It counts for:
+  - each task its description names, at the id's own boundaries (`OH.1` isn't named by `OH.11` or
+    `BE.4` by `BE.4b`): the first commit of that task after it, so an id used again doesn't inherit
+    an old review;
+  - else the one task its prompt names, if it names exactly one, the same way;
+  - else the first commit within three hours after it that it matches, and those that directly
+    follow that one and match too. It matches by a design letter that is a part of the task id:
+    one after "design" or "variant" (`design A`), or a possessive after the first word
+    (`Code review of A's fix round` and `P3.A.fix`). Naming none, it matches by two words it
+    shares with the commit's title, or one file name (`ARCHITECTURE.md` is one word), small words
+    and words such as "review" and "code" aside.
 - **Folder staging:** by a session (the orchestrator), not a subagent: `git add` with `-A`, `--all`,
   `-u`, `--update`, `.` or a folder, and `git commit -a`. A path is a folder if it is one on disk,
   from the event's working folder; if it no longer exists, if it ends in `/` or its last part has
@@ -146,6 +184,29 @@ What each one counts, and what it leaves out:
 - **Tool errors:** a failed shell command's first line is its exit code, so the next line joins the
   key. Each group keeps three examples.
 - **Rule file commits:** each commit's added and removed lines, up to 30.
+- **zsh errors:** after the commit that added the zsh rule to `CLAUDE.md`, a shell command whose
+  result has zsh's `(eval):1: ===== not found` (`equalsExpansion`, which the rule is about) or,
+  apart, `no matches found: …` (`noMatches`, a glob that matched nothing, which no rule names).
+- **Loop passes:** a session that calls `ScheduleWakeup` runs a loop. Each pass is its own events
+  (not its subagents') up to and including that call, with whether it read `CLAUDE.md`,
+  `PROCESS.md` and `WORKLIST.md` (the Read tool, or `cat`, `head`, `tail`, `sed`, `awk` and the
+  like).
+- **Agent prompts:** each Agent or Task call whose description starts with a task id, made after
+  the commit that brought in `PROCESS.md`'s rules on agent prompts, and which of those standing
+  rules its prompt leaves out: the task's **Files** and **Done when**, `CLAUDE.md`, the design doc
+  (`DESIGN.md` or "design doc"), `src/manual/README.md`, reporting back anything unresolved, and
+  that docs describe what exists.
+- **Task files:** an edit tool call by a task agent (its description starts with a task id) on a
+  file in the repo or a worktree that its task's **Files** don't cover (`outside`). The **Files**
+  are read by `scripts/commit-task.ts` from the task's block in `WORKLIST.md` as committed last
+  before the edit, together with the next version, which may have widened them. A **Files** item
+  that says "anything" allows every file, and "root config" every file at the root, on any of its
+  lines. An edit whose task neither version has is counted in `skippedWithoutFiles`, and one whose
+  **Files** name a folder "named in" another doc, which can't be matched, in `skippedProseFiles`.
+- **Read-only writes:** a session or subagent whose title or description says "review" or
+  "audit" and doesn't start with a task id, or a subagent whose first prompt says "read-only" near
+  its start, writing a file in the repo or a worktree (as above). Writing outside the repo, as to a
+  scratchpad, is allowed.
 
 ## Files
 
@@ -156,6 +217,10 @@ What each one counts, and what it leaves out:
   scans the events.
 - `shell.ts`: splits a shell script into simple commands; `git-commands.ts` says which git
   commands write.
-- `repo.ts`: the git facts: commits on `main`, worktrees, and the rule files' history.
+- `repo.ts`: the git facts: commits on `main`, worktrees, the rule files' history and
+  `WORKLIST.md`'s versions.
+- `task-ids.ts`: what a task id looks like, and which ids a text names.
+- `file-writes.ts`: which files a tool call writes, and where each is within a checkout.
+- `worklist.ts`: a task's **Files** in the versions of `WORKLIST.md` around a given time.
 - `detectors/`: one file per detector, each a function of the events, and `candidate.ts`, the
   candidate's shape.
