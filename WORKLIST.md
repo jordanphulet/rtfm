@@ -57,7 +57,7 @@ edits and stops only where two tasks changed the same lines. When this phase is 
   never touch the real file.
 
 ### WT.1 — Read `.env.local` from the main checkout
-- **Status:** doing (agent a499adf9d828fce4d, in its own worktree; in review)
+- **Status:** doing (agent a499adf9d828fce4d, in its own worktree; review round 2)
 - **Depends on:** —
 - **Files:** `server/gateway/credentials.ts` and its test, `README.md` (the setup step that names
   `.env.local`), `ARCHITECTURE.md` (the Configuration line), `server/gateway/README.md` (the
