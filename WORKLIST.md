@@ -162,7 +162,7 @@ aren't RTFM's.
   can read holds the passcode.
 
 ### IN.16 — Let `rtfm-read` check schemas and tables
-- **Status:** doing (agent a6feaf98718c97c0c)
+- **Status:** doing (agent a6feaf98718c97c0c; reviewed; waiting for the user to approve and deploy `RtfmAccess` from the worktree's template)
 - **Depends on:** —
 - **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
 - **Do:** `rtfm-read` gains `cloudformation:DescribeType` on resource types (to check a live
