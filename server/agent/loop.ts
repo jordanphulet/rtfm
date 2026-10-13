@@ -9,17 +9,18 @@ type ToolResult = Extract<ContentBlock, { type: "tool_result" }>;
 
 export class AgentStopped extends Error {}
 
-export async function* runAgent({ gateway, job, system, tools, messages, signal }: {
+export async function* runAgent({ gateway, job, system, tools, messages, maxTurns, signal }: {
   gateway: Gateway;
   job: Job;
   system: string;
   tools: AgentTool[];
   messages: PromptMessage[];
+  maxTurns: number;
   signal: AbortSignal;
 }): AsyncGenerator<AgentEvent, PromptMessage[]> {
   const conversation = [...messages];
   const definitions = tools.map((tool) => tool.definition);
-  while (true) {
+  for (let turn = 1; ; turn++) {
     const reply = yield* modelTurn(gateway.stream(job, { system, tools: definitions, messages: conversation }, signal));
     const toolUses = reply.content.filter((block) => block.type === "tool_use");
     if (reply.stopReason === "end_turn" && reply.content.length === 0) {
@@ -33,6 +34,7 @@ export async function* runAgent({ gateway, job, system, tools, messages, signal 
     conversation.push({ role: "assistant", content: reply.content });
     if (reply.stopReason === "end_turn") return conversation;
     if (reply.stopReason !== "tool_use") throw new AgentStopped(`The model stopped with "${reply.stopReason}"`);
+    if (turn >= maxTurns) throw new AgentStopped(`The model was still calling tools after ${maxTurns} turns`);
 
     const results: ToolResult[] = [];
     for (const toolUse of toolUses) {

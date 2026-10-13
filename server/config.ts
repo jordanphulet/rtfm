@@ -17,6 +17,8 @@ export interface ServerConfig extends GatewayConfig {
 const MAX_CONCURRENT_RUNS = 3;
 /** Model calls allowed beside a full set of section runs, so the librarian and the planner always have room. */
 const CALLS_BESIDE_RUNS = 2;
+/** Model turns a librarian reply may take; normal replies take 2 or 3. */
+export const LIBRARIAN_MAX_TURNS = 8;
 
 export const config: ServerConfig = {
   port: portFromEnv(process.env.RTFM_PORT),

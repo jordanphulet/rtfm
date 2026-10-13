@@ -15,6 +15,7 @@ const SYSTEM = "You are the librarian of a library of manuals.";
 const LIBRARY_STATUS = "Looking through the library…";
 const SEARCH_STATUS = "Searching the shelves…";
 const QUESTION: PromptMessage = { role: "user", content: "Do you have anything about geese?" };
+const MAX_TURNS = 4;
 
 function libraryTools(store: ManualStore): AgentTool[] {
   return [
@@ -54,7 +55,15 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
   const tools = [...libraryTools(store), ...extraTools];
 
   function run(signal = new AbortController().signal) {
-    return runAgent({ gateway, job: "librarian", system: SYSTEM, tools, messages: [QUESTION], signal });
+    return runAgent({
+      gateway,
+      job: "librarian",
+      system: SYSTEM,
+      tools,
+      messages: [QUESTION],
+      maxTurns: MAX_TURNS,
+      signal,
+    });
   }
 
   async function ledgerEntries() {
@@ -62,6 +71,10 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
   }
 
   return { run, prompts, ledgerEntries };
+}
+
+function listingTurn(turn: number): ModelEvent[] {
+  return toolUseTurn([{ id: `call-${turn}`, name: "list_manuals" }]);
 }
 
 async function drain(run: AsyncGenerator<AgentEvent, PromptMessage[]>, events: AgentEvent[] = []) {
@@ -300,6 +313,35 @@ describe("the agent loop", () => {
     expect(prompts).toHaveLength(1);
     const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
     expect(settles.map(({ outcome }) => outcome)).toEqual(["complete"]);
+  });
+
+  it("stops a run still calling tools on its last allowed turn, running none of them", async () => {
+    const turns = Array.from({ length: MAX_TURNS + 1 }, (_, turn) => listingTurn(turn));
+    const { run, prompts, ledgerEntries } = await librarian(turns);
+    const events: AgentEvent[] = [];
+
+    await expect(drain(run(), events)).rejects.toThrow(
+      new AgentStopped(`The model was still calling tools after ${MAX_TURNS} turns`),
+    );
+
+    expect(prompts).toHaveLength(MAX_TURNS);
+    expect(events).toEqual(Array(MAX_TURNS - 1).fill({ type: "status", text: LIBRARY_STATUS }));
+    const entries = await ledgerEntries();
+    expect(entries.filter((entry) => entry.kind === "reserve")).toHaveLength(MAX_TURNS);
+    const settles = entries.filter((entry) => entry.kind === "settle");
+    expect(settles.map(({ outcome }) => outcome)).toEqual(Array(MAX_TURNS).fill("complete"));
+  });
+
+  it("answers on its last allowed turn as on any other", async () => {
+    const { run, prompts } = await librarian([
+      ...Array.from({ length: MAX_TURNS - 1 }, (_, turn) => listingTurn(turn)),
+      textTurn("Seven manuals."),
+    ]);
+
+    const { conversation } = await drain(run());
+
+    expect(prompts).toHaveLength(MAX_TURNS);
+    expect(conversation.at(-1)).toEqual({ role: "assistant", content: [{ type: "text", text: "Seven manuals." }] });
   });
 
   it("fails when the model stops for any reason but a tool call or the end of its turn", async () => {

@@ -1,4 +1,5 @@
 import type { LibrarianEvent, LibrarianMessage } from "../../api/types.ts";
+import { LIBRARIAN_MAX_TURNS } from "../../config.ts";
 import type { Gateway } from "../../gateway/gateway.ts";
 import { SpendingRefused, type PromptMessage } from "../../gateway/types.ts";
 import type { ManualStore } from "../../storage/types.ts";
@@ -45,6 +46,7 @@ export async function sendReply({ gateway, store, conversation, signal, send }: 
       onAction: (action) => send({ event: "action", data: action }),
     }),
     messages: promptMessages(conversation),
+    maxTurns: LIBRARIAN_MAX_TURNS,
     signal,
   });
   try {

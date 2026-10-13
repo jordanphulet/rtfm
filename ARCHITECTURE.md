@@ -733,8 +733,8 @@ each one is reserved, capped, settled and written to the ledger like any other, 
 caller names.
 
 - **`runAgent`** (`agent/loop.ts`) takes the gateway, the job, the system prompt, the tools, the
-  conversation so far (ending with the user's message) and a signal. It is an async generator of
-  `status` and `text` events that returns the whole conversation.
+  conversation so far (ending with the user's message), `maxTurns` and a signal. It is an async
+  generator of `status` and `text` events that returns the whole conversation.
 - **`defineTool`** (`agent/tool.ts`) makes an `AgentTool` from a name, a description, the input's
   zod fields, a status line (shown while it runs: "Looking through the library…") and
   `run(input, signal)`, which returns the result's text.
@@ -752,7 +752,8 @@ caller names.
 3. Append the assistant's message: its text and `tool_use` blocks, in order.
 4. If the stop reason is `end_turn`, return the conversation. If it is anything but `tool_use`
    (`max_tokens`, `refusal`, …), throw `AgentStopped`.
-5. For each `tool_use` block, in order: stop if the signal has aborted, yield the tool's
+5. If this was turn `maxTurns`, throw `AgentStopped` (below), without running its tools.
+6. For each `tool_use` block, in order: stop if the signal has aborted, yield the tool's
    `status` (when the tool exists), then run it. Then append all the results as one user message
    of `tool_result` blocks, and go back to step 1.
 
@@ -774,8 +775,14 @@ caller names.
 
 **Stopping.**
 
-- **No turn limit.** The gateway's caps bound a run: every turn reserves its own worst case for
-  the whole conversation, so a long run is refused once the next turn would cross a cap.
+- **A turn limit.** A run takes at most `maxTurns` model calls. A model that still calls tools on
+  its last allowed turn ends the run with `AgentStopped` ("The model was still calling tools
+  after 8 turns", for the librarian): that turn's tools don't run, since the model would never
+  see their results (one could plan a manual, with model calls of its own), and the model isn't
+  called again. Every call made before the stop has settled as usual. A run that ends its turn on
+  the last allowed turn returns normally. The caps bound spending across runs; the limit keeps
+  one run from spending a day's cap: every turn sends the whole conversation, so each costs more
+  than the last.
 - **Errors end the run as they are.** A refusal (`SpendingRefused`, `GatewayBusy`), a stall or a
   failed call is thrown from the generator unchanged, after the turns before it have settled.
   So is a `SpendingRefused` from a tool's own model call, such as the planner's.
@@ -823,7 +830,8 @@ reply's events.
   the user chose Keep it: the manual was not deleted.</page_note>`, or that they confirmed it and
   the manual has been deleted. The note goes in the user's turn, where it happened, not at the end
   of the reply: a note in the model's own turn is one it learns to write itself.
-- **The reply.** `sendReply` runs `runAgent` with the job `librarian` and sends:
+- **The reply.** `sendReply` runs `runAgent` with the job `librarian` and `LIBRARIAN_MAX_TURNS`
+  (section 8) as `maxTurns`, and sends:
   - `status` with each tool's status line, as the loop reports it, and the create tool's progress
     lines while the planner works;
   - `text` with each text delta;
@@ -875,6 +883,11 @@ after its last tool call, and always writes one.
 No `cache_control` is sent (section 5). A reply takes one call per model turn: two for a list or a
 find, two or three to open or propose a delete, and two to create a manual, with the planner's one
 or two calls between them. Section 8 has what a turn reads, writes, costs and reserves.
+
+**The turn limit.** A reply stops after 8 model turns (`LIBRARIAN_MAX_TURNS`), well above the 2
+or 3 a reply takes, so a model that keeps calling tools can't spend the day's cap on one reply.
+The loop throws `AgentStopped` instead of calling the model a ninth time (section 6), so the reply
+ends with `failed: "error"` and the page shows its "reply failed" state.
 
 **The planner** (`agent/planner/`) plans a new manual and saves it. `planManual` takes the
 gateway, the store, the request, a signal and an `onStatus` callback, and returns the saved
@@ -936,7 +949,7 @@ manual or the problems that stopped it.
 - Asked for a plan (the job `plan-manual`), it plays the planner's turn
   (`planner/fake-planner.ts`): `fakePlan`, the same nine-section manual for any request, titled
   after what the request is "about" (`Building a Treehouse`), streamed as one `tool-input` then
-  saved with `save_manual` 2.4s later. Asked twice for the same title, its id is taken both
+  saved with `save_manual` after a pause. Asked twice for the same title, its id is taken both
   times, so the second request isn't saved.
 - It waits before each turn (and before a plan) and streams text in the fake writer's chunks
   (`chunkEnds`), at the pace `README.md` › The models gives. Its fixed replies are
@@ -950,15 +963,16 @@ saves no manual (`createManual` only answers `"created"`), so a preview costs no
 nothing. The browser uses it for `?conversation=demo` and `?agentFreeze=` (`src/agent/README.md`).
 
 **Tests**, all offline, cover the route, the tools, the page notes, narration kept or withdrawn,
-and replies whose last turn is empty, with the fake model and with scripted turns through the real gateway, the planner's one retry and its
-checks, and finding; previews call no model and save nothing.
+replies whose last turn is empty, with the fake model and with scripted turns through the real
+gateway, the turn limit, the planner's one retry and its checks, and finding; previews call no
+model and save nothing.
 
 ## 8. Configuration
 
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Models, data dir, caps, concurrency, jobs, section length | `server/config.ts` | no |
+| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
@@ -986,6 +1000,7 @@ checks, and finding; previews call no model and save nothing.
   Its output costs at most about $0.005 a turn. The input bound includes the tool definitions,
   the conversation and the tool-use system prompt, so each later turn of a reply reserves more
   than the first.
+- **`LIBRARIAN_MAX_TURNS: 8`**, the librarian's turn limit (section 7).
 - **`plan-manual: maxTokens 4096`.** The measured plan used about 95 output tokens a section plus
   the voice; the prompt aims for 12–24 sections, and the hard limit of 32 comes to about 3,300
   tokens for the whole plan. 4096 leaves 65% headroom over the measured plan and room for the
