@@ -34,9 +34,15 @@ an `aws` command, which reads and writes RTFM's files; and an `infra/cdk.json` t
 It passes `SIGINT`, `SIGTERM` and `SIGHUP` on to the command, and removes the temporary `HOME`
 however it ends.
 
+Every argument after `--` reaches the command as given, so a `--query` such as
+`'Stacks[0].{Status:StackStatus,Protected:EnableTerminationProtection}'` needs only your own
+shell's quoting. npm runs a script through `sh` and leaves some arguments unquoted, such as
+braces and brackets, so the `aws` and `cdk` scripts first turn off brace expansion and globbing
+(`set +o braceexpand`, `set -f`), then `exec` the wrapper, which runs the command without a shell.
+
 Before any other command, it runs `aws sts get-caller-identity` and refuses unless the answer is
-the chosen role, assumed in account `438180219169`. The tests cover the environment it builds and
-the identity check without calling AWS.
+the chosen role, assumed in account `438180219169`. The tests cover the environment it builds,
+the identity check and the arguments passed through `npm run aws`, without calling AWS.
 
 ## The identities
 

@@ -20,8 +20,8 @@
     "commit-task": "node scripts/commit-task.ts",
     "orchestrator-check": "node scripts/orchestrator-check.ts",
     "task-prompt": "node scripts/task-prompt.ts",
-    "aws": "node infra/run-aws.ts aws",
-    "cdk": "node infra/run-aws.ts cdk"
+    "aws": "set -f; command set +o braceexpand 2>/dev/null; exec node infra/run-aws.ts aws",
+    "cdk": "set -f; command set +o braceexpand 2>/dev/null; exec node infra/run-aws.ts cdk"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "0.34.4",
