@@ -49,30 +49,9 @@ an earlier run left behind before the first pass.
 - **The user approves `PROCESS.md` before it is committed.** OS.2 stops at `needs-human` with the
   exact text to approve.
 
-### OS.2 — The `/orchestrate` skill
-- **Status:** needs-human (the user approves the `PROCESS.md` change; agent ab5db648346a2c135, in
-  its own worktree, reviewed by a8ac922500409b39c)
-- **Depends on:** —
-- **Files:** `.claude/skills/orchestrate/SKILL.md`, `PROCESS.md`, `README.md`
-- **Do:** write a skill the user invokes to start the loop. In order, it:
-  1. runs `npm run orchestrator-check`, and on failure reports the message and stops;
-  2. for each `doing` task whose recorded agent isn't in `ListAgents`, reports the task and its
-     worktree's state to the user and asks what to do: restart it, mark it `needs-human` with its
-     worktree kept, or set it back to `todo`. It never removes a worktree or branch on its own;
-  3. calls `/loop` with no interval, with the prompt "Do one orchestrator pass: `PROCESS.md` ›
-     Every loop pass."
-
-  The skill points to `PROCESS.md` for the protocol instead of restating it. In `PROCESS.md`,
-  the Orchestrator protocol opens by saying the loop starts with `/orchestrate`, in the main
-  checkout on `main`, and that `commit-task` refuses anywhere else.
-- **Done when:**
-  - the skill's steps match the above;
-  - nothing in it repeats or contradicts `PROCESS.md`;
-  - `README.md` lists the skill beside `rule-audit`.
-
 ### OS.3 — Try `/orchestrate`
 - **Status:** needs-human (the user runs `/orchestrate` in a new session in the main checkout)
-- **Depends on:** OS.2
+- **Depends on:** —
 - **Files:** `.claude/skills/orchestrate/SKILL.md`
 - **Do:** check that the preflight runs and `/loop` starts in dynamic mode when the skill calls it.
   Also check that the session refuses to start from a worktree. Fix the skill if any step doesn't
