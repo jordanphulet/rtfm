@@ -9,9 +9,10 @@ including each turn of the loop and each plan, goes through one gateway that cap
 
 This doc is a map: what each folder holds, which folders may import which, and the rules that cut
 across them. The detail sits next to the code, in each folder's README: `server/README.md`, each
-`server/*/README.md` and each `src/*/README.md`. `README.md` covers running the app, the data
-folder and its kill switch, resetting the manuals, and what the models cost; `DESIGN.md` covers
-the design of both pages.
+`server/*/README.md` and each `src/*/README.md`. `README.md` covers running the app, its routes,
+the data folder and its kill switch, resetting the manuals, and what the models cost. `DESIGN.md`
+covers the design both pages share, and each page's own design is in its `src/<page>/DESIGN.md`:
+`src/home/DESIGN.md` and `src/reader/DESIGN.md`.
 
 ```
 browser (Vite, :5173)                           server (node:http, :8787)
@@ -28,8 +29,8 @@ browser (Vite, :5173)                           server (node:http, :8787)
 
 ### The browser: `src/`
 
-- `main.tsx` starts `reportErrors.ts` and renders `App.tsx`, the routes, which loads each page
-  lazily. `testing.tsx` holds the component tests' `render`, `press` and `click`.
+- `main.tsx` starts `reportErrors.ts` and renders `App.tsx`, the routes (`README.md` › Where
+  things live). `testing.tsx` holds the component tests' `render`, `press` and `click`.
 - `home/`: the landing page at `/` (`index.tsx`): the library's ledger (`Ledger.tsx`) beside the
   librarian's panel (`LibrarianPanel.tsx`, `Conversation.tsx`, `Composer.tsx`), and the delete
   confirmation (`DeleteConfirmation.tsx`, `useDeleteFlow.ts`).
@@ -38,9 +39,11 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `manual/`: the reader's store (`useManual`, `useSection`, `retrySection`), which reads a manual
   and streams its sections; the `Manual` types; and `<Markdown>`. See `src/manual/README.md`.
 - `library/`: the landing page's store of `ManualSummary`s (`useLibrary`, `deleteManual`,
-  `refreshLibrary`). See `src/library/README.md`.
+  `refreshLibrary`), which loads the library from the API and deletes through it. See
+  `src/library/README.md`.
 - `librarian/`: the librarian's conversation (`useLibrarian`, `useLibrarianActions`), sent to
-  `POST /api/librarian` and streamed back. See `src/librarian/README.md`.
+  `POST /api/librarian` and streamed back. See `src/librarian/README.md`, which also has its URL
+  options.
 - `ui/`: the shared design system: tokens, fonts, base styles, the write head, `StatusRing`,
   `Sheet`, `ReplyMarkdown`. See `src/ui/README.md`.
 - `reportErrors.ts`: `startReportingErrors` and `apiFetch`, which report the page's errors and

@@ -18,16 +18,14 @@ writes each section only when a reader opens it. The app has two pages:
 
 - `ARCHITECTURE.md`: a map of the code: what each folder holds, which folders may import which,
   and the rules that cut across them.
-- `DESIGN.md` and `src/<page>/DESIGN.md`: the design, shared by both pages, then each page's own.
-- `src/*/README.md`: the API of each shared folder in `src/` (`librarian`, `library`, `manual`, `ui`).
-- `server/README.md` and each `server/*/README.md`: how the server and each of its folders work.
+- `DESIGN.md` and each page's `src/<page>/DESIGN.md`: the design both pages share, then each
+  page's own.
+- `server/README.md`, `server/*/README.md` and `src/*/README.md`: each folder's own README, with
+  how it works and its API.
 - `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
   the orchestrator's protocol.
 - `WORKLIST.md`: the phases and tasks, with each task's status.
-- `research/`: dated research for the back-end, each opening with what was adopted:
-  `bedrock-models.md` (which Bedrock models to use), `aws-hosting.md` (Claude Platform on AWS and
-  the AgentCore harness) and `lambda-and-dynamodb.md` (running the server on Lambda and
-  DynamoDB).
+- `research/`: dated research write-ups, each opening with what was adopted.
 - `CLAUDE.md`: the session roles, the shell and credentials rules, and the code standards.
 
 ## Running it
@@ -267,21 +265,9 @@ npm run shot -- /tmp/shots-after --compare /tmp/shots-before
 
 ## Where things live
 
-- `src/App.tsx`: the routes. `/` is the landing page, `/read/:manualId` (a manual's contents) and
-  `/read/:manualId/:sectionId` the reader; anything else, bare `/read` included, redirects to `/`.
-  Both pages are loaded lazily.
-- `src/home/`: the landing page.
-- `src/reader/`: the reader.
-- `src/ui/`: the shared design system (tokens, fonts, base styles, the write head, components),
-  used by both pages. Its README documents it.
-- `src/manual/`: the reader's store, which reads a manual from the API and streams sections from
-  it, and the markdown renderer. Its README documents the API.
-- `src/library/`: the landing page's store, which loads the library from the API and deletes
-  through it. Its README documents the API.
-- `src/librarian/`: the librarian's conversation. It sends the conversation to the librarian on the
-  server and streams back each reply. Its README documents the API and the URL options.
-- `src/reportErrors.ts`: reports the browser's errors and failed API requests to the server's log.
-- `server/`: the API server, storage and the data folder's lock, the section writers, the agent
-  loop, the librarian and its planner, the model gateway, and the logger. The seven seed manuals
-  are in `server/seed/`. `server/README.md` and its folders' READMEs document it.
-- `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`).
+The routes are in `src/App.tsx`, which loads both pages lazily: `/` is the landing page,
+`/read/:manualId` (a manual's contents) and `/read/:manualId/:sectionId` are the reader, and
+anything else, bare `/read` included, redirects to `/`. The settings are in `server/config.ts`
+(Configuration, above), and everything the server keeps is in its data folder (above).
+
+What each folder of the code holds is in `ARCHITECTURE.md` › Codemap.
