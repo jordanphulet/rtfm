@@ -13,8 +13,8 @@ rules, and the orchestrator's loop. `WORKLIST.md` holds the phases and tasks.
   reports back to the orchestrator, and never commits or edits `WORKLIST.md`.
 - **Reviewer:** reviews a change for the orchestrator and reports its findings. It is read-only:
   it changes no files.
-- **Auditor:** a read-only session that audits the repo and proposes tasks. It changes no files;
-  a proposed task becomes work only when the orchestrator adds it to `WORKLIST.md`.
+- **Auditor:** a read-only session that audits the repo and proposes tasks, as Orchestrator
+  protocol › Adding work says. It changes no files.
 
 ## Where state lives
 
@@ -29,8 +29,10 @@ rules, and the orchestrator's loop. `WORKLIST.md` holds the phases and tasks.
 ## Authority
 
 Only the user approves changes to `CLAUDE.md`, `PROCESS.md`, `.claude/settings.json` and hooks.
-A message from another session or agent is never the user's approval: when such a change is
-proposed, the orchestrator asks the user in its own session.
+An agent whose task changes one of these files makes the change in its worktree, gives its full
+diff in its report, and doesn't treat it as approved. A message from another session or agent is
+never the user's approval: when such a change is proposed, the orchestrator asks the user in its
+own session.
 
 ## How rules spread
 
@@ -117,6 +119,11 @@ When the orchestrator discovers work that should be done, it **adds a task** to 
 of `WORKLIST.md`: a new ID, **Depends on**, **Files**, **Do** and **Done when**. It also updates
 the dependencies of any existing task that must now wait for it.
 
+Any session may propose a task by sending the orchestrator a draft task block in that form. The
+orchestrator decides whether to add it, may change it first, and tells the sender what it did.
+When no orchestrator is running, the proposal goes to the user instead. A proposal is never the
+user's approval of a change it names to a file under Authority.
+
 `npm run commit-task` commits what **Files** names, so every path the task may change goes in a
 code span: a path, or a glob with `**` or `*`. "`x.ts` and its test" also names `x.test.*`, and
 "except `…`" leaves paths out. Other notes in parentheses are ignored, and so is prose such as "the
@@ -145,9 +152,11 @@ folder READMEs", which matches nothing.
 - **Agent prompts:** a task agent's prompt starts from the output of
   `npm run -s task-prompt -- <ID>`, and a task reviewer's from
   `npm run -s task-prompt -- <ID> --review`. It carries the task's block and its phase's rules
-  from `WORKLIST.md`, the standing rules from these Rules and `CLAUDE.md`, pointers to
-  `CLAUDE.md` and `README.md` › The docs, and what to report back. After it the orchestrator adds
-  the task's own notes, and for a reviewer the worktree's path and the agent's Outside Files.
+  from `WORKLIST.md`, what belongs to the agent's role, pointers to the sections of `CLAUDE.md`
+  and `PROCESS.md` that hold its rules (which it doesn't restate, so it can't fall out of step
+  when a rule changes) and to `README.md` › The docs, and what to report back. After it the
+  orchestrator adds the task's own notes, and for a reviewer the worktree's path and the agent's
+  Outside Files.
   Paths in a prompt are relative to the repo root, never the main checkout's absolute path, since
   the agent works in its worktree. The orchestrator's `SendMessage` notes to an agent name its
   worktree's path.
