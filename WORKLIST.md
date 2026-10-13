@@ -19,31 +19,6 @@ aren't RTFM's.
   `npm run aws` and `npm run cdk`.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
-### IN.2 — Prove the deploy path
-- **Status:** doing (agent a8e21f88b7c3c399f; in review; on 2026-10-13 the user approved its `PROCESS.md` step 5 as sent in review round 1: deploy after any `infra/` change but docs and tests, with `--require-approval never`; on failure a `needs-human` task)
-- **Depends on:** IN.1
-- **Files:** `infra/**`, `README.md`, `PROCESS.md`
-- **Do:**
-  - With `npm run aws`, read `RtfmAccess`'s stack and its outputs, and show that a work profile
-    in the user's own `~/.aws/config`, and the user's own CLI aliases, aren't reachable from it.
-  - With `npm run cdk`, deploy an `RtfmApp` stack holding one log group and one `rtfm-` bucket with
-    default props (no `blockPublicAccess`, which the boundary refuses to set), then show that it can't
-    change `RtfmAccess`, create a role without the boundary, touch a resource not named for
-    RTFM, create a Function URL with `AuthType NONE`, or lift the bucket's Block Public Access.
-  - Check from Cost Explorer (through `npm run aws`) whether the `project=rtfm` tag catches
-    Bedrock calls made with `rtfm-local`'s key. If it doesn't, say so: the budget then needs
-    another filter, or the server's calls a tagged application inference profile.
-  - Check the server still calls Bedrock with `rtfm-local`'s key (`npm run dev` with
-    `RTFM_MODELS=bedrock`, one section, under $0.01).
-  - `infra/README.md` › Your steps: the CloudShell route the user took (synthesize locally, upload
-    both templates, `aws cloudformation deploy` each, `aws iam create-access-key` for both users),
-    in place of `npx cdk bootstrap` with an admin profile.
-  - `PROCESS.md` › Review loop: after merging a change to an app stack, the orchestrator runs
-    `npm run cdk -- deploy`, then a smoke check. Give the diff in full; the user
-    approves it.
-- **Done when:** each check above passed and is recorded in `infra/README.md`, and the user has
-  approved the `PROCESS.md` change.
-
 ### IN.3 — Keep the development loop local
 - **Status:** todo
 - **Depends on:** IN.2
