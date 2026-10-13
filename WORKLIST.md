@@ -49,7 +49,7 @@ user says its step is done.
   running there), and never delete or edit the ledger.
 
 ### OH.11 — README catch-up
-- **Status:** todo
+- **Status:** doing (agent: a6d4a03f62d46a97d)
 - **Depends on:** —
 - **Files:** `README.md`
 - **Do:** bring README.md up to date with the code:
@@ -74,7 +74,7 @@ user says its step is done.
 - **Done when:** README.md matches the code and states nothing another doc owns.
 
 ### OH.14 — A turn limit for the librarian
-- **Status:** todo
+- **Status:** doing (agent: a1aae2e585bdddf26)
 - **Depends on:** —
 - **Files:** `server/agent/**`, `server/config.ts`, `server/config.test.ts`, `ARCHITECTURE.md`
 - **Do:** a librarian reply stops after 8 model turns (normal replies use 2 or 3), so a model
