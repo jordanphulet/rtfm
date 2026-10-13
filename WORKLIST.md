@@ -58,42 +58,13 @@ makes the right way the easy way. When this phase is done:
   `.claude/settings.json`, `CLAUDE.md` and `PROCESS.md`. Each task stops at `needs-human` with
   the exact text to approve.
 - **A session-start hook never blocks work.** If it fails, it prints nothing and exits 0.
-- **One at a time.** These tasks share `README.md`, `package.json`, `ARCHITECTURE.md` or
-  `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
-
-### RC.3 — A throwaway server that agents stop by its PID
-- **Status:** needs-human (the user approves the `CLAUDE.md` change; agent ad4fbd1d743526385,
-  reviewed by a86937862322b8b10)
-- **Depends on:** —
-- **Files:** `scripts/serve-temp.ts` and its test (new), `package.json`, `CLAUDE.md` (the line
-  about stopping processes; the user approves), `ARCHITECTURE.md` (the `scripts/` codemap entry),
-  `README.md`
-- **Do:**
-  - `npm run serve-temp -- [--keep]` starts the API and Vite on free ports, with a new temporary
-    data folder and the fake models. It has no Bedrock option: each copy's fresh ledger would
-    start the spending caps from zero. It reuses
-    `startServer` and `startViteServer` as `scripts/shot.ts` does, and never uses `.data/`.
-  - It prints the page's URL, the API's URL, the data folder and its own PID, then runs until
-    stopped. On `SIGINT` or `SIGTERM` it stops both servers and deletes the data folder, unless
-    `--keep` is given.
-  - Agents run it in the background and stop it with the handle or the printed PID.
-  - The line in `CLAUDE.md` about stopping processes names the script as the way to run a
-    server for a check, and says that a PID looked up by port or name (`lsof`, `ps`, `pgrep`) or
-    a `pkill -f` pattern never counts as a process you started: the second audit found 10 of 16
-    breaks were lookups like these.
-  - Tests:
-    - it starts on free ports and never on `.data/`;
-    - stopping it frees its ports and removes its folder;
-    - two copies run at once without colliding.
-- **Done when:** `npm run build` and `npm test` pass; two copies run side by side while the
-  user's dev server runs; stopping one by its PID leaves nothing of it running; the user has
-  approved the `CLAUDE.md` line.
 
 ### RC.4 — Vite helpers out of the screenshot script
-- **Status:** todo
-- **Depends on:** RC.3
+- **Status:** doing (agent a144aee7060143c88)
+- **Depends on:** —
 - **Files:** `scripts/screenshots.ts`, `scripts/shot.ts`, `scripts/serve-temp.ts`,
-  `scripts/vite-server.ts` (new), `server/main.ts`, `ARCHITECTURE.md` (the `scripts/` codemap entry)
+  `scripts/vite-server.ts` (new), `server/main.ts`, `server/exit.ts` (new), `ARCHITECTURE.md` (the
+  `scripts/` codemap entry and the `server/` entry for `exit.ts`)
 - **Do:**
   - Move `startViteServer`, `localUrl` and the logger they use from `scripts/screenshots.ts` into
     `scripts/vite-server.ts`, so `serve-temp` no longer loads Playwright when it starts.
@@ -125,7 +96,7 @@ edits and stops only where two tasks changed the same lines. When this phase is 
 
 ### WT.1 — Read `.env.local` from the main checkout
 - **Status:** todo
-- **Depends on:** RC.3 (both change `README.md` and `ARCHITECTURE.md`)
+- **Depends on:** WT.2 (both change `README.md`)
 - **Files:** `server/gateway/credentials.ts` and its test, `README.md` (the setup step that names
   `.env.local`), `ARCHITECTURE.md` (the Configuration line)
 - **Do:**
@@ -138,7 +109,7 @@ edits and stops only where two tasks changed the same lines. When this phase is 
   finds the credentials, checked without printing any value.
 
 ### WT.2 — Task agents in their own worktrees
-- **Status:** doing (agent a60214f124cbcf535; review round 2: part 1 done, part 2 waits for RC.3)
+- **Status:** doing (agent a60214f124cbcf535; review round 2, part 2)
 - **Depends on:** —
 - **Files:** `PROCESS.md` (the loop, the review loop and Rules; the user approves),
   `scripts/commit-task.ts` and its test; after RC.3 is committed: `CLAUDE.md` (the task agent's
@@ -196,7 +167,7 @@ When this phase is done:
 
 ### DC.1 — A test that docs name only what exists
 - **Status:** todo
-- **Depends on:** RC.3 (both change `README.md` and `ARCHITECTURE.md`)
+- **Depends on:** WT.2 and WT.1 (all change `README.md`), RC.4 (`ARCHITECTURE.md`)
 - **Files:** `scripts/doc-references.test.ts` (new); `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
   `src/**/README.md`, `src/**/DESIGN.md`, `server/**/README.md`, `scripts/audit/README.md` (only
   to fix references the test flags)
