@@ -42,13 +42,13 @@ user says its step is done.
 ## Before AWS
 
 Two things the app needs before it's hosted: logs that Claude can read without the user copying
-from a terminal, and a passphrase so a public URL can't be used by anyone who finds it. When this
-phase is done:
+from a terminal, and a passcode so a public URL can't spend on Bedrock for anyone who finds it.
+When this phase is done:
 
 - the server writes structured logs to a file Claude can read, and the same lines would go to
   CloudWatch unchanged;
 - errors in the browser reach the same log;
-- nothing in the app works without the passphrase, and the sign-in page fits the design.
+- with a passcode set, no API route answers without it, and the passcode screen fits the design.
 
 ### Rules for this phase
 
@@ -57,44 +57,38 @@ phase is done:
 - **No real Bedrock calls.** Tests and live checks use the fake models.
 - **`.data/` is the user's data.** Never start a server on it (the user's dev server may be
   running there); use `RTFM_DATA_DIR` on a temporary folder. Never delete or edit the ledger.
-- **Logs never hold secrets:** no credentials, no passphrase, no session tokens, no cookies.
+- **Logs never hold secrets:** no credentials, no passcode, no cookies.
 
-### BA.2 — The passphrase: design
-- **Status:** needs-human (the user approves `research/passphrase.md` and answers its "What you
-  decide")
-- **Depends on:** —
-- **Files:** `research/passphrase.md` (new)
-- **Do:** write the design for the user's approval in `research/passphrase.md`, dated and opening
-  with a status line, since the docs describe only what exists; BA.3 writes the approved design
-  into the docs that own each part. Short and concrete:
-  - where the passphrase is set (a setting loaded at runtime, never committed) and what the
-    server does when it isn't set;
-  - how the server checks it (a stored hash, a constant-time comparison) and slows guessing
-    (for example a few attempts a minute);
-  - the session: an `HttpOnly`, `SameSite=Strict` cookie holding a signed token (the reader's
-    streams can't send headers), how long it lasts, signing out, and what a changed passphrase
-    does to existing sessions;
-  - which routes need it (everything except signing in), what a request without it gets, and
-    how the page responds (the sign-in page, then back to where the user was);
-  - the sign-in page's design, within the design docs' rules;
-  - how it carries over to AWS (where the passphrase and signing key would live).
-- **Done when:** the design is reviewed, then marked `needs-human`; the user approves it.
-
-### BA.3 — The passphrase: build
+### BA.3 — The passcode gate
 - **Status:** todo
-- **Depends on:** BA.2 and the user's approval, RC.3 (the Rules into code chain)
-- **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
-  `package.json` (the `passphrase` script), `research/passphrase.md` (`server/**` and `src/**` include the folder READMEs and page design
-  docs)
-- **Do:** build what BA.2's approved design says, with the sign-in page and signing out; the
-  screenshot script signs in; logs record sign-ins and refusals without the passphrase or token.
-  Write the design into the docs that own each part (the server and folder READMEs,
-  `ARCHITECTURE.md`, the design docs), and set `research/passphrase.md`'s status line to what was
-  adopted.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover every route
-  refusing without a session, signing in and out, a wrong passphrase, the attempt limit, a
-  tampered or expired token, and streams working with the cookie; live, the whole app works
-  after signing in and nothing works before.
+- **Depends on:** RA.1 (both change `README.md`, `ARCHITECTURE.md` and `package.json`)
+- **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
+  (`server/**` and `src/**` include the folder READMEs and page design docs)
+- **Do:** build the gate the user approved, as simple as it can be: a static passcode that keeps
+  a public URL from spending on Bedrock.
+  - **The setting:** `RTFM_PASSCODE` in the server's environment, read by `server/config.ts`. The
+    user rotates it by changing it and restarting or redeploying. Not set means no gate, as now.
+  - **The server:** every `/api` route except `POST /api/passcode` answers `401` unless the
+    request carries a cookie `rtfm_passcode` equal to `RTFM_PASSCODE`, compared in constant time.
+    `POST /api/passcode { passcode }` checks it and, when it matches, sets that cookie
+    (`HttpOnly`, `SameSite=Strict`, `Path=/api`, and `Secure` when the request's host isn't
+    local); a wrong one gets `401`. The cookie carries the reader's section streams too.
+    Changing the passcode locks out every browser.
+  - **The page:** any `401` from the API shows a one-field passcode screen, in the house style;
+    on success it reloads where the user was.
+  - **Logs:** refusals and wrong passcodes are logged with no passcode or cookie value.
+  - **Not included:** hashing, signed sessions, expiry, an attempt limit, a sign-out button and a
+    passcode command.
+  - The screenshot script and the tests run with and without a passcode set; the screenshots
+    include the passcode screen.
+  - Write it into the docs that own each part (the server and api READMEs, `ARCHITECTURE.md`'s
+    cross-cutting rules, the design docs) and README's how-to, which recommends a passcode of a
+    few random words, since nothing slows guessing.
+- **Done when:** `npm run build` and `npm test` pass, and `npm run shot` passes with `--compare`
+  showing only the new passcode-screen shots; tests cover every route refusing without the
+  cookie, a wrong passcode, a right one, the streams with the cookie, no gate when unset, and no
+  passcode in any log line; live on a temporary data folder with a passcode set, the app works
+  after entering it and no API route answers before.
 
 ---
 
@@ -168,7 +162,7 @@ phase is done:
 
 ### RA.2 — The rule-audit skill
 - **Status:** todo
-- **Depends on:** RA.1
+- **Depends on:** RA.1, BA.3 (both change `README.md`)
 - **Files:** `.claude/skills/rule-audit/SKILL.md` (new, the user approves), `README.md`
 - **Do:** a project skill that a session runs when asked to "run the rule audit". The session
   acts as an auditor: it changes no files and proposes tasks. The method:
@@ -214,7 +208,7 @@ makes the right way the easy way. When this phase is done:
   the exact text to approve.
 - **A session-start hook never blocks work.** If it fails, it prints nothing and exits 0.
 - **One at a time.** These tasks, RA.1, RA.2 and BA.3 share `README.md`, `package.json`,
-  `ARCHITECTURE.md` or `PROCESS.md`, so they run in a chain: RA.1, RA.2, RC.1, RC.2, RC.3, BA.3.
+  `ARCHITECTURE.md` or `PROCESS.md`, so they run in a chain: RA.1, BA.3, RA.2, RC.1, RC.2, RC.3.
 
 ### RC.1 — Commit task work through one script
 - **Status:** todo
