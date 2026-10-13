@@ -38,30 +38,6 @@ user says its step is done.
 
 ---
 
-## Follow-ups
-
-### Rules for this phase
-
-- **AWS credentials come only from `.env.local`.** There are profiles in `~/.aws/config`, and
-  they **must never be used**. Never read, print, copy or edit `.env.local`.
-- **No real Bedrock calls.** Tests use fake models.
-- **`.data/` is the user's data.** Never start a server on it (the user's dev server may be
-  running there), and never delete or edit the ledger.
-
-### OH.14 — A turn limit for the librarian
-- **Status:** doing (agent: a1aae2e585bdddf26; in review)
-- **Depends on:** —
-- **Files:** `server/agent/**`, `server/config.ts`, `server/config.test.ts`, `ARCHITECTURE.md`
-- **Do:** a librarian reply stops after 8 model turns (normal replies use 2 or 3), so a model
-  that keeps calling tools can't spend the day's cap on one reply. The limit is per job in the
-  config (the librarian's is 8); the loop throws `AgentStopped` when it's reached, before
-  calling the model again, so the reply fails as an error. ARCHITECTURE.md's agent-loop and
-  librarian sections state the limit and why.
-- **Done when:** `npm run build` and `npm test` pass; a test shows a model that keeps calling
-  tools stops after exactly 8 calls, with every call settled.
-
----
-
 ## Before AWS
 
 Two things the app needs before it's hosted: logs that Claude can read without the user copying
@@ -83,8 +59,8 @@ phase is done:
 - **Logs never hold secrets:** no credentials, no passphrase, no session tokens, no cookies.
 
 ### BA.1 — Structured logs
-- **Status:** todo
-- **Depends on:** OH.14 (it changes `ARCHITECTURE.md`)
+- **Status:** doing (agent: a9e90b09702434c7d)
+- **Depends on:** —
 - **Files:** `server/**`, `src/**` (reporting browser errors only), `README.md`,
   `ARCHITECTURE.md`, `package.json` (a `logs` script)
 - **Do:**
@@ -109,9 +85,9 @@ phase is done:
   - README.md says where the logs are and how to read them; ARCHITECTURE.md describes the logger
     and the events.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover the log file,
-  the line shape, retention, the request and model-call entries, the client-error route, and that no secret
-  reaches a log line; live, a section write, a librarian reply and a forced browser error each
-  appear in `npm run logs`.
+  the line shape, retention, the request and model-call entries, the client-error route, and
+  that no secret reaches a log line; live, a section write, a librarian reply and a forced
+  browser error each appear in `npm run logs`.
 
 ### BA.2 — The passphrase: design
 - **Status:** todo
