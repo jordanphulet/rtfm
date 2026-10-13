@@ -158,7 +158,7 @@ When this phase is done:
   in that order. DC.1 may also fix `scripts/audit/README.md`, so it waits for RA.3 too.
 
 ### RA.3 — Sharper audit detectors
-- **Status:** doing (agent ae6de641e0af74280)
+- **Status:** doing (agent ae6de641e0af74280; in review by abdc5968be0c4b5ad)
 - **Depends on:** —
 - **Files:** `scripts/audit/**`
 - **Do:**
