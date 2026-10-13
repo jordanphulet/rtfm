@@ -62,7 +62,8 @@ makes the right way the easy way. When this phase is done:
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.2 — Tell a session when its rules are out of date
-- **Status:** doing (agent a0083ed43e106a6c4; review round 2)
+- **Status:** needs-human (the user approves `.claude/settings.json` and the `PROCESS.md` change; agent
+  a0083ed43e106a6c4, reviewed by ae65fd5555d52ee19)
 - **Depends on:** —
 - **Files:** `scripts/hooks/**` and their tests (new), `.claude/settings.json` (new, the user
   approves), `PROCESS.md` ("How rules spread"; the user approves), `README.md`,
