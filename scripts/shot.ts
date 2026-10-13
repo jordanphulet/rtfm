@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import type { BrowserContextOptions, Locator, Page } from "playwright";
-import { FAKE_REPLIES } from "../server/agent/librarian/fake-model.ts";
+import { FAKE_REPLIES } from "../server/agent/fake-model.ts";
 import { fakePlan } from "../server/agent/planner/fake-planner.ts";
 import type { FailureReason, ManualSummary } from "../server/api/types.ts";
 import { sectionsInReadingOrder } from "../server/storage/manual.ts";

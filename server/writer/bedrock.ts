@@ -1,11 +1,10 @@
 import type { Gateway } from "../gateway/gateway.ts";
-import { SpendingRefused } from "../gateway/types.ts";
 import { sectionsInReadingOrder } from "../storage/manual.ts";
 import { readSeedBody } from "../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
 import { sectionPrompt, sectionsNearestFirst, type WrittenExample } from "./prompt.ts";
 import { createSectionText } from "./section-text.ts";
-import { sectionToWrite, WriteFailed, type SectionWriter, type WrittenChunk } from "./types.ts";
+import { refusalAsBudget, sectionToWrite, type SectionWriter, type WrittenChunk } from "./types.ts";
 import { sectionProblems } from "./validate.ts";
 
 const MAX_ESTIMATED_PROGRESS = 0.99;
@@ -45,16 +44,7 @@ export function createBedrockWriter({ gateway, store, wordsRequested, expectedCh
     if (rest !== "") yield { text: rest, progress: progress() };
   }
 
-  return {
-    async *write(manual, sectionId, signal) {
-      try {
-        yield* writeSection(manual, sectionId, signal);
-      } catch (error) {
-        if (error instanceof SpendingRefused) throw new WriteFailed("budget");
-        throw error;
-      }
-    },
-  };
+  return { write: (manual, sectionId, signal) => refusalAsBudget(writeSection(manual, sectionId, signal)) };
 }
 
 async function exampleSection(

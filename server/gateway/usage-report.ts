@@ -1,7 +1,7 @@
 import { monthOf } from "../storage/file-ledger.ts";
 import type { LedgerEntry } from "../storage/types.ts";
 import { callsFrom, chargedUsd, dayOf, type LedgerCall } from "./ledger-calls.ts";
-import type { GatewayConfig } from "./types.ts";
+import { FAKE_MODEL, type GatewayConfig } from "./types.ts";
 
 export interface UsageReportInput {
   monthEntries: LedgerEntry[];
@@ -10,11 +10,12 @@ export interface UsageReportInput {
   killSwitchOn: boolean;
 }
 
+/** Spend against the caps. The fake model's calls are counted apart, on a line of their own. */
 export function usageReport({ monthEntries, now, caps, killSwitchOn }: UsageReportInput): string {
   const today = dayOf(now.toISOString());
   const month = monthOf(now.toISOString());
   const calls = callsFrom(monthEntries);
-  const unsettled = calls.filter((call) => !call.settle);
+  const unsettled = calls.filter((call) => !call.settle && call.model !== FAKE_MODEL);
 
   const lines = [
     `Model spend (UTC). Kill switch: ${killSwitchOn ? "ON, new calls are refused" : "off"}.`,
@@ -32,7 +33,9 @@ export function usageReport({ monthEntries, now, caps, killSwitchOn }: UsageRepo
   return lines.join("\n");
 }
 
-function periodLines(title: string, calls: LedgerCall[], capUsd: number): string[] {
+function periodLines(title: string, periodCalls: LedgerCall[], capUsd: number): string[] {
+  const calls = periodCalls.filter((call) => call.model !== FAKE_MODEL);
+  const fakeCalls = periodCalls.filter((call) => call.model === FAKE_MODEL);
   const count = (matches: (call: LedgerCall) => boolean) => calls.filter(matches).length;
   return [
     `${title}: ${formatUsd(totalUsd(calls))} of $${capUsd.toFixed(2)}, ${callCount(calls)}`,
@@ -44,6 +47,7 @@ function periodLines(title: string, calls: LedgerCall[], capUsd: number): string
     ...groupLines(calls, (call) => call.model),
     "  by job:",
     ...groupLines(calls, (call) => call.job),
+    `  ${FAKE_MODEL}, not counted above: ${formatUsd(totalUsd(fakeCalls))}, ${callCount(fakeCalls)}`,
   ];
 }
 

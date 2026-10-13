@@ -1,4 +1,5 @@
 import type { FailureReason } from "../api/types.ts";
+import { SpendingRefused } from "../gateway/types.ts";
 import { sectionsInReadingOrder } from "../storage/manual.ts";
 import type { StoredManual, StoredSection } from "../storage/types.ts";
 
@@ -18,6 +19,16 @@ export class WriteFailed extends Error {
   constructor(reason: FailureReason) {
     super(reason);
     this.reason = reason;
+  }
+}
+
+/** The chunks, failing with `WriteFailed("budget")` when the gateway refuses the call for a cap or the kill switch. */
+export async function* refusalAsBudget(chunks: AsyncIterable<WrittenChunk>): AsyncGenerator<WrittenChunk> {
+  try {
+    yield* chunks;
+  } catch (error) {
+    if (error instanceof SpendingRefused) throw new WriteFailed("budget");
+    throw error;
   }
 }
 

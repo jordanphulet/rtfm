@@ -9,6 +9,7 @@ import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry } from "../storage/types.ts";
 import { tempDataDir } from "../testing.ts";
 import { killSwitchPath } from "./gateway.ts";
+import { FAKE_MODEL } from "./types.ts";
 import { usageReport } from "./usage-report.ts";
 
 const HAIKU = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
@@ -74,6 +75,7 @@ describe("usage report", () => {
         `    ${HAIKU}  $0.0352  3 calls`,
         "  by job:",
         "    write-section  $0.0352  3 calls",
+        "  fake-model, not counted above: $0.0000, 0 calls",
         "",
         "This month, 2026-10: $0.1352 of $20.00, 4 calls",
         "  aborted 1, failed 0, estimated 1, unsettled 1",
@@ -83,9 +85,43 @@ describe("usage report", () => {
         "  by job:",
         "    write-section  $0.0352  3 calls",
         "    write-toc      $0.1000  1 call",
+        "  fake-model, not counted above: $0.0000, 0 calls",
         "",
         "Unsettled reservations, counted at their worst case:",
         "  2026-10-11T11:00:00.000Z  c  write-section  $0.0200",
+      ].join("\n"),
+    );
+  });
+
+  it("counts the fake model's calls apart, in none of the totals, counts or groups of real spend", () => {
+    const fake = { model: FAKE_MODEL };
+    const monthEntries = [
+      ...call("real", "2026-10-11T09:00:00.000Z", { usd: 0.005 }),
+      ...call("fake-1", "2026-10-11T09:01:00.000Z", { usd: 0, estimated: true, outcome: "aborted" }, fake),
+      ...call("fake-2", "2026-10-11T09:02:00.000Z", { usd: 0 }, { ...fake, job: "librarian" }),
+      ...call("fake-3", "2026-10-11T09:03:00.000Z", "unsettled", fake).map((entry) => ({ ...entry, worstCaseUsd: 0 })),
+    ];
+    const report = usageReport({ monthEntries, now, caps: CAPS, killSwitchOn: false });
+
+    expect(report).toBe(
+      [
+        "Model spend (UTC). Kill switch: off.",
+        "",
+        "Today, 2026-10-11: $0.0050 of $2.00, 1 call",
+        "  aborted 0, failed 0, estimated 0, unsettled 0",
+        "  by model:",
+        `    ${HAIKU}  $0.0050  1 call`,
+        "  by job:",
+        "    write-section  $0.0050  1 call",
+        "  fake-model, not counted above: $0.0000, 3 calls",
+        "",
+        "This month, 2026-10: $0.0050 of $20.00, 1 call",
+        "  aborted 0, failed 0, estimated 0, unsettled 0",
+        "  by model:",
+        `    ${HAIKU}  $0.0050  1 call`,
+        "  by job:",
+        "    write-section  $0.0050  1 call",
+        "  fake-model, not counted above: $0.0000, 3 calls",
       ].join("\n"),
     );
   });

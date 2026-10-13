@@ -6,7 +6,7 @@ import { seedStore } from "../../storage/seed.ts";
 import type { ManualStore } from "../../storage/types.ts";
 import { SAMPLE_ID, tempDataDir } from "../../testing.ts";
 import type { AgentTool } from "../tool.ts";
-import { fakeLibrarianModel, INSTANT_PACE } from "./fake-model.ts";
+import { INSTANT_PACE, unrecordedFakeModel } from "../fake-model.ts";
 import { LIBRARIAN_SYSTEM_PROMPT } from "./prompt.ts";
 import { librarianTools } from "./tools.ts";
 
@@ -39,7 +39,7 @@ async function fixedResultTexts(): Promise<string[]> {
   const signal = new AbortController().signal;
   function toolsForOneReply(): Record<string, AgentTool> {
     const tools = librarianTools({
-      gateway: fakeLibrarianModel(INSTANT_PACE),
+      gateway: unrecordedFakeModel(INSTANT_PACE),
       store,
       onStatus: () => {},
       onAction: () => {},

@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { fakeLibrarianModel } from "./agent/librarian/fake-model.ts";
+import { fakeModel } from "./agent/fake-model.ts";
 import { clientErrorsRoute } from "./api/client-errors.ts";
 import { deleteManualRoute } from "./api/delete-manual.ts";
 import { librarianRoute } from "./api/librarian.ts";
@@ -15,6 +15,7 @@ import { createBedrockClient } from "./gateway/bedrock-client.ts";
 import { ENV_LOCAL_FILE, readAwsCredentials } from "./gateway/credentials.ts";
 import { createGateway, type Gateway, type RunningGateway } from "./gateway/gateway.ts";
 import { prices } from "./gateway/prices.ts";
+import { FAKE_MODEL, type Job, type ModelClient } from "./gateway/types.ts";
 import { toLogFile } from "./logging/log-file.ts";
 import { createLogger, type Logger } from "./logging/logger.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
@@ -129,11 +130,17 @@ async function modelsFor(config: ServerConfig, store: ManualStore, replaced: Rep
   return {
     writer: writer ?? configured.writer,
     librarian: librarian ?? configured.librarian,
-    idle: idle ?? configured.idle,
+    async idle() {
+      await idle?.();
+      await configured.idle();
+    },
   };
 }
 
-/** With Bedrock, the writer and the librarian share one gateway, so one set of caps covers both. */
+/**
+ * The writer and the librarian share one gateway, with the fake model or with Bedrock, so one set
+ * of caps, the kill switch and the ledger cover every job.
+ */
 export async function createModels(
   config: ServerConfig,
   store: ManualStore,
@@ -141,10 +148,14 @@ export async function createModels(
   credentialsFile: URL = ENV_LOCAL_FILE,
 ): Promise<Models> {
   switch (config.models) {
-    case "fake":
-      return { writer: createFakeWriter(), librarian: fakeLibrarianModel(), idle: nothingToSettle };
+    case "fake": {
+      const gateway = await createModelGateway(withFakeModel(config), () => fakeModel(), logger);
+      return { writer: createFakeWriter(gateway), librarian: gateway, idle: gateway.idle };
+    }
     case "bedrock": {
-      const gateway = await createBedrockGateway(config, logger, credentialsFile);
+      const createClient = () =>
+        createBedrockClient(readAwsCredentials(credentialsFile), { timeoutMs: config.idleTimeoutMs });
+      const gateway = await createModelGateway(config, createClient, logger);
       const writer = createBedrockWriter({
         gateway,
         store,
@@ -156,9 +167,20 @@ export async function createModels(
   }
 }
 
-function createBedrockGateway(config: ServerConfig, logger: Logger, credentialsFile: URL): Promise<RunningGateway> {
+/** Every job on the fake model, keeping its `maxTokens` and idle timeout. */
+function withFakeModel(config: ServerConfig): ServerConfig {
+  const jobs = { ...config.jobs };
+  for (const job of Object.keys(jobs) as Job[]) jobs[job] = { ...jobs[job], model: FAKE_MODEL };
+  return { ...config, jobs };
+}
+
+function createModelGateway(
+  config: ServerConfig,
+  createClient: () => ModelClient,
+  logger: Logger,
+): Promise<RunningGateway> {
   return createGateway({
-    createClient: () => createBedrockClient(readAwsCredentials(credentialsFile), { timeoutMs: config.idleTimeoutMs }),
+    createClient,
     ledger: createFileLedger(config.dataDir, logger),
     config,
     prices,

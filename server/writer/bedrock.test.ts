@@ -1,7 +1,5 @@
-import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import type { SectionEvent } from "../api/types.ts";
-import { killSwitchPath } from "../gateway/gateway.ts";
 import type { ModelClient, ModelEvent, ModelRequest } from "../gateway/types.ts";
 import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
@@ -40,14 +38,14 @@ async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", co
   await seedStore(store);
   const manual = (await store.getManual(SAMPLE_ID))!;
   const { client, requests } = modelClient(pieces, stopReason);
-  const { gateway, ledgerEntries } = await testGateway(client, dataDir, config);
+  const { gateway, ledgerEntries } = await testGateway(client, dataDir, { config });
   const writer = createBedrockWriter({
     gateway,
     store,
     wordsRequested: WORDS_REQUESTED,
     expectedCharacters: EXPECTED_CHARACTERS,
   });
-  return { dataDir, store, manual, writer, requests, ledgerEntries };
+  return { store, manual, writer, requests, ledgerEntries };
 }
 
 function write(writer: ReturnType<typeof createBedrockWriter>, manual: StoredManual) {
@@ -118,13 +116,6 @@ describe("the Bedrock writer", () => {
     await expect(write(writer, manual)).rejects.toEqual(new WriteFailed("budget"));
     expect(requests).toEqual([]);
     expect(await ledgerEntries()).toEqual([]);
-  });
-
-  it("reports the kill switch as budget", async () => {
-    const { writer, manual, dataDir, requests } = await setUp();
-    await writeFile(killSwitchPath(dataDir), "");
-    await expect(write(writer, manual)).rejects.toEqual(new WriteFailed("budget"));
-    expect(requests).toEqual([]);
   });
 
   it("records each call's cost in the ledger", async () => {

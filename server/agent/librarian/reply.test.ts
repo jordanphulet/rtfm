@@ -5,7 +5,7 @@ import { createFileManualStore } from "../../storage/file-manual-store.ts";
 import { seedStore } from "../../storage/seed.ts";
 import { capturingLogger, tempDataDir, testGateway } from "../../testing.ts";
 import { scriptedClient, toolUseTurn } from "../scripted-client.ts";
-import { fakeLibrarianModel, INSTANT_PACE } from "./fake-model.ts";
+import { INSTANT_PACE, unrecordedFakeModel } from "../fake-model.ts";
 import { sendReply } from "./reply.ts";
 
 describe("a librarian reply", () => {
@@ -51,7 +51,7 @@ describe("a librarian reply", () => {
     const question = "What do I have in the library?";
 
     await sendReply({
-      gateway: fakeLibrarianModel(INSTANT_PACE),
+      gateway: unrecordedFakeModel(INSTANT_PACE),
       store,
       conversation: [{ role: "user", text: question }],
       signal: new AbortController().signal,

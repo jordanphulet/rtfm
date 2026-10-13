@@ -1,26 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { Gateway } from "../gateway/gateway.ts";
-import type { ModelEvent, ModelPrompt } from "../gateway/types.ts";
+import type { ModelClient, ModelEvent, ModelPrompt } from "../gateway/types.ts";
 import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import { collect, tempDataDir, testGateway } from "../testing.ts";
-import { fakeLibrarianModel, INSTANT_PACE } from "./librarian/fake-model.ts";
+import { fakeModel, INSTANT_PACE } from "./fake-model.ts";
 import { fakePlan } from "./planner/fake-planner.ts";
 import { planManual } from "./planner/plan.ts";
 import { scriptedClient, streamedToolUseTurn, textTurn, toolUseTurn } from "./scripted-client.ts";
 
 /**
  * Each test gives the turns Claude would send for its request. The fake model ignores them: it
- * reads the request itself, as it does in the app.
+ * reads the request itself, as it does in the app. Both are called through the real gateway.
  */
 const MODELS = [
-  { name: "the fake model", make: async (): Promise<Gateway> => fakeLibrarianModel(INSTANT_PACE) },
-  {
-    name: "Claude, through the gateway",
-    make: async (turns: ModelEvent[][]): Promise<Gateway> =>
-      (await testGateway(scriptedClient(turns).client, await tempDataDir())).gateway,
-  },
+  { name: "the fake model", client: (): ModelClient => fakeModel(INSTANT_PACE) },
+  { name: "Claude", client: (turns: ModelEvent[][]): ModelClient => scriptedClient(turns).client },
 ];
 
 const HELP_REQUEST = "Help";
@@ -40,12 +36,22 @@ async function seededStore() {
   return store;
 }
 
-describe.each(MODELS)("$name, as the librarian's and the planner's model", ({ make }) => {
+describe.each(MODELS)("$name, through the gateway, as the librarian's and the planner's model", ({ client }) => {
+  async function make(turns: ModelEvent[][]): Promise<Gateway> {
+    return (await testGateway(client(turns), await tempDataDir())).gateway;
+  }
+
   describe("a librarian turn", () => {
     async function turn(request: string, turns: ModelEvent[][]) {
       const model = await make(turns);
       return collect(model.stream("librarian", librarianPrompt(request), new AbortController().signal));
     }
+
+    it("reports its tokens and its stop, so the call settles complete and not estimated", async () => {
+      const { gateway, ledgerEntries } = await testGateway(client([HELP_TURN]), await tempDataDir());
+      await collect(gateway.stream("librarian", librarianPrompt(HELP_REQUEST), new AbortController().signal));
+      expect(await ledgerEntries()).toContainEqual(expect.objectContaining({ kind: "settle", outcome: "complete", estimated: false }));
+    });
 
     it("streams its text in several events and ends with one stop, last", async () => {
       const events = await turn(HELP_REQUEST, [HELP_TURN]);

@@ -199,6 +199,7 @@ describe("Bedrock client", () => {
 
   function request(signal = new AbortController().signal): ModelRequest {
     return {
+      job: "write-section",
       model: MODEL,
       maxTokens: MAX_TOKENS,
       prompt: { system: "You write manuals.", messages: [{ role: "user", content: "Write the section." }] },
@@ -238,6 +239,7 @@ describe("Bedrock client", () => {
       messages: [{ role: "user", content: "Write the section." }],
     });
     expect(body).not.toHaveProperty("model");
+    expect(body).not.toHaveProperty("job");
     expect(body).not.toHaveProperty("tools");
 
     expect(events).toEqual([

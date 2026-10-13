@@ -65,17 +65,22 @@ TypeScript directly on Node 22.18+, as `scripts/` does, with its own `tsconfig.s
 section writer and the librarian's model, which also plans new manuals (`createModels` in `app.ts`);
 `RTFM_MODELS=bedrock` selects Claude for both.
 
-- With `"bedrock"`, `startServer` builds one gateway on the file ledger, and the writer on it,
-  all before it seeds or listens. The librarian and its planner use the same gateway, so one set
-  of caps covers every job.
+- Either way, `startServer` builds one gateway on the file ledger, and the writer on it, all before
+  it seeds or listens. The librarian and its planner use the same gateway, so one set of caps, the
+  kill switch and the ledger cover every job.
+- With `"fake"`, every job's model is `FAKE_MODEL` (`server/gateway/README.md` › The fake model),
+  with the job's own `maxTokens` and idle timeout, and the gateway calls the fake model
+  (`agent/fake-model.ts`); the fake writer (`writer/fake.ts`) sends the section's sample
+  text through it. With `"bedrock"`, the jobs keep their Bedrock models, the gateway calls the
+  Bedrock client, and the writer is the Bedrock writer.
 - `createGateway` checks every job's model against the price table (`ModelNotPriced`), and only
-  then calls the client factory it is given, which reads the credentials (`CredentialsMissing`)
-  and builds the Bedrock client. Either problem stops the server from starting, and an unpriced
-  model is reported without reading any secret.
-- `createModels` also returns `idle`: the gateway's `idle()` with Bedrock, and one that resolves
-  at once with the fakes, which record nothing.
-- Tests replace either model with `startServer(config, { writer, librarian })`, and a test that
-  passes its own gateway passes its `idle` too, so `close()` waits for it.
+  then calls the client factory it is given, which, with Bedrock, reads the credentials
+  (`CredentialsMissing`) and builds the Bedrock client. Either problem stops the server from
+  starting, and an unpriced model is reported without reading any secret.
+- `createModels` also returns `idle`, the gateway's `idle()`.
+- Tests replace either model with `startServer(config, { writer, librarian })`. A test that passes
+  its own gateway passes its `idle` too, and `close()` waits for it and for the configured
+  gateway, if one was built.
 
 ## Configuration
 
@@ -133,7 +138,7 @@ section writer and the librarian's model, which also plans new manuals (`createM
 
 **Prices** (`gateway/prices.ts`) are USD per million tokens, dated by `checkedOn`, for the
 `global.` and `us.` Haiku 4.5 profiles: input, output, cache write, cache read, and
-`toolUseSystemPromptTokens`.
+`toolUseSystemPromptTokens`. The fake model is in the table too, with every price at 0.
 
 - **`toolUseSystemPromptTokens`** is the size of the system prompt the API adds whenever a request
   has tools. It is per model, so it sits with the model's prices. Haiku 4.5's is 496 tokens with
@@ -185,9 +190,11 @@ the machine.
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
 - `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, models, gateway,
   routes; `close()` waits for model calls to settle.
-- `testing.ts`: helpers shared by the tests: temp folders, fast fake writers, the test model's
-  prices and gateway config (`testGatewayConfig`), the real gateway over a fake `ModelClient`
-  (`testGateway`), `inPieces`, `collect`, and `readEvents` for server-sent events.
+- `testing.ts`: helpers shared by the tests: temp folders, the fake model's `FAST_PACE` and a
+  fast fake writer that calls it directly, the price table with the test model (`TEST_PRICES`)
+  and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`
+  (`testGateway`, with a config and a ledger of the test's own if it gives them), `inPieces`,
+  `collect`, and `readEvents` for server-sent events.
 - `usage.ts`: `npm run usage`.
 - `logs.ts`: `npm run logs` (`server/logging/README.md`).
 - `escape-tags.ts`: escapes `<` in text inserted in a prompt (the section writer's and the

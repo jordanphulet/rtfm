@@ -43,7 +43,7 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
   const store = createFileManualStore(dataDir, silentLogger);
   await seedStore(store);
   const { client, prompts } = scriptedClient(turns);
-  const { gateway, ledgerEntries } = await testGateway(client, dataDir, testGatewayConfig({ caps }));
+  const { gateway, ledgerEntries } = await testGateway(client, dataDir, { config: testGatewayConfig({ caps }) });
   const tools = [...libraryTools(store), ...extraTools];
 
   function run(signal = new AbortController().signal) {

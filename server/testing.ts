@@ -2,12 +2,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, onTestFinished } from "vitest";
+import { INSTANT_PACE, unrecordedFakeModel, type FakeModelPace } from "./agent/fake-model.ts";
 import { createGateway } from "./gateway/gateway.ts";
-import type { PriceTable } from "./gateway/prices.ts";
+import { prices, type PriceTable } from "./gateway/prices.ts";
 import type { GatewayConfig, ModelClient } from "./gateway/types.ts";
 import { createLogger, silentLogger, type LogEntry } from "./logging/logger.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
-import type { StoredManual } from "./storage/types.ts";
+import type { StoredManual, UsageLedger } from "./storage/types.ts";
 import { createFakeWriter } from "./writer/fake.ts";
 import type { SectionWriter } from "./writer/types.ts";
 
@@ -17,10 +18,17 @@ export const OTHER_UNWRITTEN_ID = "anatomy-of-a-scare";
 export const WRITTEN_ID = "sensing-the-guest";
 
 export const TEST_MODEL = "test-model";
+/** The committed price table, so the committed config's models are priced too, and the test model. */
 export const TEST_PRICES: PriceTable = {
   checkedOn: "2026-10-11",
-  models: { [TEST_MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 } },
+  models: {
+    ...prices.models,
+    [TEST_MODEL]: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1, toolUseSystemPromptTokens: 588 },
+  },
 };
+
+/** The fake model at a pace quick enough for tests, with a section still taking a few milliseconds a chunk. */
+export const FAST_PACE: FakeModelPace = { ...INSTANT_PACE, chunkIntervalMs: 2 };
 
 /** A gateway config for the test model, with the committed caps and room for 3 calls. */
 export function testGatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
@@ -37,9 +45,20 @@ export function testGatewayConfig(overrides: Partial<GatewayConfig> = {}): Gatew
   };
 }
 
-/** The real gateway, with its caps, kill switch and a file ledger in the data folder, calling a fake model client. */
-export async function testGateway(client: ModelClient, dataDir: string, config: GatewayConfig = testGatewayConfig()) {
-  const ledger = createFileLedger(dataDir, silentLogger);
+interface TestGatewayOptions {
+  config?: GatewayConfig;
+  ledger?: UsageLedger;
+}
+
+/**
+ * The real gateway, with its caps, kill switch and a ledger (a file ledger in the data folder,
+ * unless one is given), calling a fake model client.
+ */
+export async function testGateway(
+  client: ModelClient,
+  dataDir: string,
+  { config = testGatewayConfig(), ledger = createFileLedger(dataDir, silentLogger) }: TestGatewayOptions = {},
+) {
   const gateway = await createGateway({
     logger: silentLogger,
     createClient: () => client,
@@ -64,8 +83,9 @@ export async function tempDataDir(): Promise<string> {
   return dataDir;
 }
 
+/** The fake writer at `FAST_PACE`, calling the fake model directly rather than through a gateway. */
 export function fastFakeWriter(): SectionWriter {
-  return createFakeWriter({ firstChunkDelayMs: 0, chunkIntervalMs: 2 });
+  return createFakeWriter(unrecordedFakeModel(FAST_PACE));
 }
 
 export function recordingWriter(writer: SectionWriter = fastFakeWriter()) {

@@ -4,8 +4,10 @@ A local Node server stores the manuals and their sections. It writes unwritten s
 writer or with Claude Haiku 4.5 on Amazon Bedrock, and streams them to the reader. The librarian on
 the landing page is an agent: an agent loop runs a model with the library's tools over several
 turns, with a scripted fake model or with Claude Haiku 4.5. Asked for a new manual, it hands the
-request to a planner, which has the model plan the manual and saves it. Every Bedrock call,
-including each turn of the loop and each plan, goes through one gateway that caps spending.
+request to a planner, which has the model plan the manual and saves it. Every model call, Bedrock's
+or the fake model's, including each turn of the loop and each plan, goes through one gateway that
+caps spending. The one exception is a librarian preview, which plays the fake model directly so
+that it costs and records nothing (`server/agent/README.md` › Previews).
 
 This doc is a map: what each folder holds, which folders may import which, and the rules that cut
 across them. The detail sits next to the code, in each folder's README: `server/README.md`, each
@@ -18,10 +20,10 @@ covers the design both pages share, and each page's own design is in its `src/<p
 browser (Vite, :5173)                           server (node:http, :8787)
   src/library store ───┐
   src/manual store ────┤
-  src/librarian store ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake writer
-                                                     │                    └──▶ Bedrock writer ──▶ gateway ──▶ Bedrock
-                                                     ├──▶ librarian ──▶ agent loop ──▶ fake librarian model
-                                                     │       └──▶ planner          └──▶ gateway ──▶ Bedrock
+  src/librarian store ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake or Bedrock writer ┐
+                                                     │                                                 │
+                                                     ├──▶ librarian ──▶ agent loop ────────────────────┼──▶ gateway ──▶ Bedrock,
+                                                     │       └──▶ planner ─────────────────────────────┘              or the fake model
                                                      └──▶ storage/ (manuals, sections, ledger: files in .data/)
 ```
 
@@ -71,10 +73,12 @@ browser (Vite, :5173)                           server (node:http, :8787)
   (`prompt.ts`) and output handling (`section-text.ts`, `validate.ts`), and one run per section
   (`runs.ts`). See `server/writer/README.md`.
 - `gateway/`: `createGateway` (`gateway.ts`), the `Gateway` every model call goes through; the
-  `ModelClient` for Bedrock (`bedrock-client.ts`), the price table (`prices.ts`) and the
-  credentials (`credentials.ts`). See `server/gateway/README.md`.
+  `ModelClient` for Bedrock (`bedrock-client.ts`), the price table (`prices.ts`, with the fake
+  model, `FAKE_MODEL` in `types.ts`, at $0) and the credentials (`credentials.ts`). See
+  `server/gateway/README.md`.
 - `agent/`: the agent loop (`runAgent` in `loop.ts`, `defineTool` in `tool.ts`); the librarian
-  (`librarian/`, `sendReply`) and its planner (`planner/`, `planManual`). See
+  (`librarian/`, `sendReply`) and its planner (`planner/`, `planManual`); and the fake model
+  (`fake-model.ts`), the `ModelClient` that stands in for Claude in every job. See
   `server/agent/README.md`.
 - `logging/`: the `Logger` (`createLogger` in `logger.ts`), the daily log files (`log-file.ts`) and
   `npm run logs`'s reader (`log-reader.ts`). See `server/logging/README.md`.
@@ -128,10 +132,10 @@ other page:
 
 | Folder | Imports from `server/` |
 | --- | --- |
-| `api/` | `storage/`, `writer/` (`runs.ts`, `fake.ts`), `agent/librarian/`, the gateway's types, the logger |
-| `agent/librarian/` | `agent/`, `agent/planner/`, `storage/`, the gateway's types, `api/` (`types.ts`, `librarySummaries`), `writer/fake.ts` (`chunkEnds`), `config.ts` (`LIBRARIAN_MAX_TURNS`), the logger's types |
+| `api/` | `storage/`, `writer/` (`runs.ts`, `fake.ts`), `agent/librarian/`, `agent/fake-model.ts`, the gateway's types, the logger |
+| `agent/librarian/` | `agent/`, `agent/planner/`, `storage/`, the gateway's types, `api/` (`types.ts`, `librarySummaries`), `config.ts` (`LIBRARIAN_MAX_TURNS`), the logger's types |
 | `agent/planner/` | `agent/tool.ts`, `storage/`, the gateway's types, `escape-tags.ts` |
-| `agent/` | the gateway's types, the logger's types |
+| `agent/` | the gateway's types, the logger's types; `fake-model.ts` also `agent/planner/fake-planner.ts` and `writer/fake.ts` (`chunkEnds`) |
 | `writer/` | `storage/`, the gateway's types, `api/types.ts`, `escape-tags.ts`, the logger's types |
 | `gateway/` | `storage/` (the ledger, `files.ts`), the logger's types |
 | `storage/` | `api/types.ts`, the logger's types |
@@ -150,7 +154,9 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
   `gateway/sdk-boundary.test.ts` lists (`gateway/bedrock-client.ts` alone) imports an Anthropic or
   AWS SDK, and nothing outside `server/gateway/` and `server/app.ts` imports that client; the test
   enforces both. So every model call is reserved against the caps, checked against the kill
-  switch and written to the ledger (`server/gateway/README.md`).
+  switch and written to the ledger (`server/gateway/README.md`). The fake model is called through
+  the same gateway, at $0, so all of this runs without Bedrock too, except in a librarian preview,
+  which plays the fake model directly so that it costs and records nothing.
 - **One server per data folder.** The caps are totalled in one process's memory, so the server
   locks its data folder before it starts (`server/storage/README.md` › The data folder's lock).
 - **Configuration** is committed, apart from the AWS keys in `.env.local`, which only

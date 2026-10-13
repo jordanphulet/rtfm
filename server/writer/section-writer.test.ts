@@ -1,26 +1,36 @@
+import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { fakeModel } from "../agent/fake-model.ts";
 import { scriptedClient, textTurn } from "../agent/scripted-client.ts";
 import type { SectionEvent } from "../api/types.ts";
+import { killSwitchPath } from "../gateway/gateway.ts";
 import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore } from "../storage/types.ts";
-import { collect, fastFakeWriter, inPieces, SAMPLE_ID, tempDataDir, testGateway, UNWRITTEN_ID, waitUntil } from "../testing.ts";
+import { collect, FAST_PACE, inPieces, SAMPLE_ID, tempDataDir, testGateway, UNWRITTEN_ID, waitUntil } from "../testing.ts";
 import { createBedrockWriter } from "./bedrock.ts";
+import { createFakeWriter } from "./fake.ts";
 import { createRuns } from "./runs.ts";
-import type { SectionWriter, WrittenChunk } from "./types.ts";
+import { WriteFailed, type WrittenChunk } from "./types.ts";
 
 const CLAUDES_BODY = "Every room has a small, dull brain.\n\n## A room, in states\n\nIt waits, it plays, it stops.\n";
 
-async function bedrockWriter(store: ManualStore, dataDir: string): Promise<SectionWriter> {
-  const { client } = scriptedClient([textTurn(...inPieces(CLAUDES_BODY))]);
-  const { gateway } = await testGateway(client, dataDir);
-  return createBedrockWriter({ gateway, store, wordsRequested: 650, expectedCharacters: 100 });
+async function fakeWriter(dataDir: string) {
+  const { gateway, ledgerEntries } = await testGateway(fakeModel(FAST_PACE), dataDir);
+  return { writer: createFakeWriter(gateway), ledgerEntries };
 }
 
+async function bedrockWriter(dataDir: string, store: ManualStore) {
+  const { client } = scriptedClient([textTurn(...inPieces(CLAUDES_BODY))]);
+  const { gateway, ledgerEntries } = await testGateway(client, dataDir);
+  return { writer: createBedrockWriter({ gateway, store, wordsRequested: 650, expectedCharacters: 100 }), ledgerEntries };
+}
+
+/** Both writers call their model through the real gateway. */
 const WRITERS = [
-  { name: "the fake writer", make: async () => fastFakeWriter() },
-  { name: "the Bedrock writer, through the gateway", make: bedrockWriter },
+  { name: "the fake writer", make: fakeWriter },
+  { name: "the Bedrock writer", make: bedrockWriter },
 ];
 
 describe.each(WRITERS)("$name, as a SectionWriter", ({ make }) => {
@@ -29,7 +39,7 @@ describe.each(WRITERS)("$name, as a SectionWriter", ({ make }) => {
     const store = createFileManualStore(dataDir, silentLogger);
     await seedStore(store);
     const manual = (await store.getManual(SAMPLE_ID))!;
-    return { store, manual, writer: await make(store, dataDir) };
+    return { dataDir, store, manual, ...(await make(dataDir, store)) };
   }
 
   it("streams the section in whole-word chunks, with progress rising to at most 1", async () => {
@@ -61,6 +71,23 @@ describe.each(WRITERS)("$name, as a SectionWriter", ({ make }) => {
     await expect(collect(writer.write(manual, "no-such-section", new AbortController().signal))).rejects.toThrow(
       'The manual has no section "no-such-section"',
     );
+  });
+
+  it("fails as budget while the kill switch is on, before any call or charge", async () => {
+    const { writer, manual, dataDir, ledgerEntries } = await setUp();
+    await writeFile(killSwitchPath(dataDir), "");
+    await expect(collect(writer.write(manual, UNWRITTEN_ID, new AbortController().signal))).rejects.toEqual(
+      new WriteFailed("budget"),
+    );
+    expect(await ledgerEntries()).toEqual([]);
+  });
+
+  it("records its call in the ledger, settled complete", async () => {
+    const { writer, manual, ledgerEntries } = await setUp();
+    await collect(writer.write(manual, UNWRITTEN_ID, new AbortController().signal));
+    const entries = await ledgerEntries();
+    expect(entries.map(({ kind }) => kind)).toEqual(["reserve", "settle"]);
+    expect(entries[1]).toMatchObject({ job: "write-section", outcome: "complete", estimated: false });
   });
 
   it("refuses a signal that has already aborted, before any chunk", async () => {

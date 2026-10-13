@@ -187,7 +187,7 @@ export async function createGateway({
     const idle = idleTimer(idleTimeoutMs, () => cutOff.abort(new ModelStalled(idleTimeoutMs)));
     try {
       idle.restart();
-      const events = client.stream({ model, maxTokens, prompt, signal: AbortSignal.any([signal, cutOff.signal]) });
+      const events = client.stream({ job, model, maxTokens, prompt, signal: AbortSignal.any([signal, cutOff.signal]) });
       for await (const event of events) {
         idle.restart();
         if (event.type === "usage") recordUsage(reported, event);

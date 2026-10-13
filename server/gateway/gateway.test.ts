@@ -149,7 +149,7 @@ describe("model gateway", () => {
 
     expect(events).toEqual(COMPLETE_EVENTS);
     expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({ model: TEST_MODEL, maxTokens: MAX_TOKENS, prompt: EMPTY_PROMPT });
+    expect(requests[0]).toMatchObject({ job: "write-section", model: TEST_MODEL, maxTokens: MAX_TOKENS, prompt: EMPTY_PROMPT });
 
     const [reserve, settle] = await ledger.entriesForMonth("2026-10");
     expect(reserve).toMatchObject({ kind: "reserve", job: "write-section", model: TEST_MODEL, worstCaseUsd: WORST_CASE_USD });

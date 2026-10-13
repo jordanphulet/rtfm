@@ -6,8 +6,8 @@ const LONGEST_TOPIC = 60;
 const SMALL_WORDS = new Set(["a", "an", "and", "as", "at", "for", "in", "of", "on", "or", "the", "to", "with"]);
 
 /**
- * The scripted fake model's planning turn: it saves `fakePlan` for the request in the prompt, so
- * the library can be tried without Claude.
+ * The scripted fake model's planning turn, up to its stop: it saves `fakePlan` for the request in
+ * the prompt, so the library can be tried without Claude.
  */
 export function fakePlannerTurn(messages: PromptMessage[]): ModelEvent[] {
   const content = messages[0]!.content as string;
@@ -16,7 +16,6 @@ export function fakePlannerTurn(messages: PromptMessage[]): ModelEvent[] {
   return [
     { type: "tool-input", json: JSON.stringify(plan) },
     { type: "tool-use", id: "fake-plan", name: SAVE_MANUAL_TOOL.name, input: plan },
-    { type: "stop", reason: "tool_use" },
   ];
 }
 
