@@ -50,14 +50,14 @@ an earlier run left behind before the first pass.
   exact text to approve.
 
 ### OS.2 — The `/orchestrate` skill
-- **Status:** doing (agent ab5db648346a2c135, in its own worktree; in review)
+- **Status:** doing (agent ab5db648346a2c135, in its own worktree; review round 2)
 - **Depends on:** —
 - **Files:** `.claude/skills/orchestrate/SKILL.md`, `PROCESS.md`, `README.md`
 - **Do:** write a skill the user invokes to start the loop. In order, it:
   1. runs `npm run orchestrator-check`, and on failure reports the message and stops;
   2. for each `doing` task whose recorded agent isn't in `ListAgents`, reports the task and its
-     worktree's state to the user and asks what to do: restart it, keep the worktree's work for a
-     new agent, or set it back to `todo`. It never removes a worktree or branch on its own;
+     worktree's state to the user and asks what to do: restart it, mark it `needs-human` with its
+     worktree kept, or set it back to `todo`. It never removes a worktree or branch on its own;
   3. calls `/loop` with no interval, with the prompt "Do one orchestrator pass: `PROCESS.md` ›
      Every loop pass."
 
