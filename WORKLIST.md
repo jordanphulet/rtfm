@@ -249,14 +249,10 @@ Out of scope: web access for any model, the passphrase, and deploying.
 
 ## The place agents work
 
-The rules that govern how work happens get their own file, and the ones that must always hold
-are enforced by the harness instead of resting on instructions. When this phase is done:
+The rules that govern how work happens get their own file. When this phase is done:
 
 - `WORKLIST.md` holds only phases and tasks; the protocol lives in `PROCESS.md`;
-- every session knows its role, where state lives and that only the user approves rule changes;
-- reading credentials, killing processes by port and subagents changing git are blocked by hooks
-  and permission rules;
-- every running session learns of a change to `CLAUDE.md` or `PROCESS.md` at its next tool call.
+- every session knows its role, where state lives and that only the user approves rule changes.
 
 ### PR.1 — The process gets its own file
 - **Status:** done
@@ -285,46 +281,6 @@ are enforced by the harness instead of resting on instructions. When this phase 
 - **Done when:** `PROCESS.md` holds the protocol and the new sections; `CLAUDE.md` points to it;
   the protocol's substance is unchanged apart from the additions. Then mark it `needs-human`: the
   user approves the `CLAUDE.md` and `PROCESS.md` text before the commit.
-
-### PR.2 — Rules the harness enforces
-- **Status:** needs-human (the user approves .claude/settings.json and the hooks)
-- **Depends on:** PR.1, RL.9 (RL.8b and RL.9 also change `README.md` and may touch anything)
-- **Files:** `.claude/settings.json` (new), `scripts/hooks/**` (new), `PROCESS.md`, `README.md`
-- **Do:**
-  - `README.md`'s "Where things live" describes `PROCESS.md`, `WORKLIST.md` and `CLAUDE.md` as
-    they are now.
-  - **Permission rules** in `.claude/settings.json`: deny reading or editing `.env*.local` and
-    anything under `~/.aws/`.
-  - **A Bash guard** (`scripts/hooks/guard-bash.ts`, a PreToolUse hook on Bash) that blocks, with
-    a reason the agent sees:
-    - any command that mentions `.env*.local`, `~/.aws` or `AWS_PROFILE`;
-    - `pkill`, `killall`, and `kill` fed from `lsof`, `fuser` or a port. `kill <pid>` stays
-      allowed;
-    - inside a subagent (`agent_id` present in the hook input), git commands that change
-      anything: `commit`, `push`, `merge`, `rebase`, `reset`, `checkout`, `switch`, `restore`,
-      `stash`, `tag`, `add`, `rm`, `cherry-pick`. Read-only git stays allowed.
-  - **A rules-changed hook** (`scripts/hooks/rules-changed.ts`, on SessionStart and
-    PostToolUse) watching `CLAUDE.md` and `PROCESS.md`:
-    - on SessionStart it saves this session's copy of each file and says nothing;
-    - after a tool call, if a watched file differs from the session's copy, it returns
-      `hookSpecificOutput.additionalContext` naming the file, with the diff, then saves the new
-      copy, so each change is reported once;
-    - copies live in a per-session folder under the OS temp dir; on SessionStart it deletes
-      folders older than 7 days;
-    - it runs after every tool call in every session, so it must be fast: compare cheaply (for
-      example file size and modification time) before reading or diffing.
-  - `PROCESS.md` and `README.md` say what the harness enforces, and that a session loads hooks
-    only when it starts, so the orchestrator restarts after this lands.
-  - `.claude/` may be write-protected for agents. If writing `.claude/settings.json` is refused,
-    report its exact content for the user to apply.
-- **Done when:**
-  - `npm run build` and `npm test` pass. Tests feed sample hook input to each script: allowed
-    and blocked commands, from the main session and from a subagent; a first run that stays
-    silent; a change reported once with its diff; no output when nothing changed.
-  - No check reads, opens or touches the real `.env.local` or `~/.aws`: tests use made-up
-    commands and paths.
-  - Then mark it `needs-human`: the user reviews and approves `.claude/settings.json` and the
-    hooks, and restarts the orchestrator.
 
 ---
 
@@ -384,7 +340,7 @@ When this phase is done:
 - **Status:** done
 - **Depends on:** —
 - **Files:** `server/storage/**`, `server/app.ts`, `server/main.ts`, `server/dev.ts`, their
-  tests, `ARCHITECTURE.md` (not `README.md`, which holds PR.2's uncommitted edits)
+  tests, `ARCHITECTURE.md`
 - **Do:**
   - When the server starts it takes a lock on its data folder (for example a `server.lock`
     file holding its PID, created so that two starts can't both win). If another live process
@@ -545,7 +501,7 @@ When this phase is done:
 ### OH.9 — A faster, steadier test suite and shot script (tests audit)
 - **Status:** done
 - **Depends on:** OH.4 (both change `scripts/screenshots.ts`)
-- **Files:** `src/manual/repair.test.tsx`, `scripts/**` except `scripts/hooks/**`
+- **Files:** `src/manual/repair.test.tsx`, `scripts/**`
 - **Do:**
   - **`repair.test.tsx` times out when three suites run at once** (it renders once per
     character). Split the seed test with `it.each`, render only when the repaired output
@@ -581,7 +537,7 @@ When this phase is done:
 
 ### OH.11 — README catch-up
 - **Status:** todo
-- **Depends on:** PR.2 (its uncommitted edits are in `README.md`)
+- **Depends on:** —
 - **Files:** `README.md`
 - **Do:** bring README.md up to date with the hardening phase:
   - one server per data folder is enforced (it says "should"); add `server.lock` to the `.data/`
