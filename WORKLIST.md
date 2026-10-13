@@ -83,7 +83,7 @@ phase is done:
 - **Status:** todo
 - **Depends on:** BA.2 and the user's approval, RC.3 (the Rules into code chain)
 - **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
-  `research/passphrase.md` (`server/**` and `src/**` include the folder READMEs and page design
+  `package.json` (the `passphrase` script), `research/passphrase.md` (`server/**` and `src/**` include the folder READMEs and page design
   docs)
 - **Do:** build what BA.2's approved design says, with the sign-in page and signing out; the
   screenshot script signs in; logs record sign-ins and refusals without the passphrase or token.
