@@ -34,16 +34,32 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.10 — Measure the deployed app
-- **Status:** blocked (the user deploys `RtfmEdgeCertificate` and `RtfmEdge` from CloudShell)
-- **Depends on:** the user's deploy of the edge stacks (`infra/README.md` › Your steps › The edge stacks)
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `research/aws-design.md`, `infra/README.md`
+- **Do:** through `https://rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is
+  in AWS), with the throwaway passcode's cookie, and recorded in `research/aws-design.md`:
+  - events arriving one by one on a section stream, and the 15s heartbeat through CloudFront;
+  - a `POST` with a body (the librarian);
+  - a disconnect aborting the run (the server's log shows the abort);
+  - the cold start to a section's first byte;
+  - how long an idle environment lives (its `SIGTERM` in `/rtfm/app`), over at least a few hours;
+  - the credentials: `server.started` logs `credentials: "environment"` (Lambda sets the role's
+    keys as environment variables, which a running process can't renew), so check whether any
+    environment outlives its keys: look for `ExpiredToken` or `server` errors in `/rtfm/app`, and
+    compare environment lifetimes with the keys' expiry if `AWS_CREDENTIAL_EXPIRATION` is
+    visible. If environments can outlive their keys, propose the fix as a task.
+- **Done when:** each measurement is in the doc, and any problem it found is a proposed task.
+
+### IN.18 — Read the idle cost
+- **Status:** blocked (until 2026-10-15, two days after the Web Function's first deploy)
+- **Depends on:** IN.10
 - **Files:** `research/aws-design.md`
-- **Do:** through `rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is in
-  AWS): events arriving one by one; a `POST` with a body; a disconnect aborting the run; the cold
-  start to a section's first byte; how long an idle environment lives (its `SIGTERM` in the
-  logs); and the cost in Cost Explorer two days after the deploy, by service (Lambda, CloudFront,
-  DynamoDB, CloudWatch), not only by the `project` tag, until IN.5 settles what that tag catches.
-- **Done when:** the measurements are in this doc, and the idle cost is under $10 a month or the
-  orchestrator has a task to move to B.
+- **Do:** the cost in Cost Explorer since the Web Function's first deploy (2026-10-13), by service
+  (Lambda, CloudFront, DynamoDB, CloudWatch), not only by the `project` tag, until IN.5 settles
+  what that tag catches; projected to a month.
+- **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
+  to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.12 — One ledger for real spend
 - **Status:** doing (agent a820e5dcd6453a836)
@@ -113,9 +129,9 @@ aren't RTFM's.
   can read holds the passcode.
 
 ### IN.17 — The user's steps, repeatable from scratch
-- **Status:** todo
+- **Status:** doing (agent aed8798f9d5fd6aa4; on 2026-10-13 the user approved its `PROCESS.md` text for the first `RtfmApp` deploy)
 - **Depends on:** —
-- **Files:** `infra/README.md`, `README.md`
+- **Files:** `infra/README.md`, `README.md`, `PROCESS.md` (the first `RtfmApp` deploy, with the user's approval)
 - **Do:** make `infra/README.md` › Your steps work for someone setting RTFM up in a fresh account:
   - a short list of prerequisites first: the AWS CLI version (already there), a Route 53 public
     hosted zone for the app's domain in the account, and Bedrock access to Claude Haiku 4.5
