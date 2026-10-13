@@ -66,9 +66,10 @@ aren't RTFM's.
     Each runs its command with `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE` pointing at
     `~/.aws/rtfm/`, with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
     `AWS_PROFILE` and `AWS_DEFAULT_PROFILE` removed from its environment, and with the profile it
-    chooses: `rtfm-read`, or `rtfm-deploy` for `cdk deploy`. Before the command, it checks with
-    `sts get-caller-identity` that it acts as an RTFM role in the account `infra/` names, and
-    refuses otherwise. Tests cover the environment it builds, without calling AWS.
+    chooses: `rtfm-read`, or `rtfm-deploy` for `cdk deploy`. Before a command that reaches AWS,
+    it checks with `sts get-caller-identity` that it acts as an RTFM role in the account `infra/`
+    names, and refuses otherwise; `cdk synth` needs no credentials and skips the check. Tests
+    cover the environment it builds, without calling AWS.
   - A CDK app in TypeScript in `infra/`. Its stacks use
     `DefaultStackSynthesizer` with the qualifier `rtfm`, and name the account and region in code,
     with no context lookups, so synthesis and its tests run offline.
@@ -96,9 +97,9 @@ aren't RTFM's.
 
     List what the boundary can't scope by name, and why.
   - `CLAUDE.md` › Shell: never read, print, copy or edit anything under `~/.aws`; run AWS only
-    through `npm run aws` and `npm run cdk`, never `aws` or `cdk` directly. `PROCESS.md` › Authority: the
-    `RtfmAccess` stack joins the files only the user approves. Give both diffs in full; the user
-    approves them.
+    through `npm run aws` and `npm run cdk`, never `aws` or `cdk` directly. `PROCESS.md` ›
+    Authority: the `RtfmAccess` stack joins the files only the user approves. Give both diffs in
+    full; the user approves them.
 - **Done when:** `npm run build` and `npm test` pass, offline; `npm run cdk -- synth` produces
   both templates; and the user has approved the `CLAUDE.md` and `PROCESS.md` changes.
 
