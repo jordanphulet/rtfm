@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "shot": "node scripts/shot.ts",
+    "serve-temp": "node scripts/serve-temp.ts",
     "usage": "node server/usage.ts",
     "logs": "node server/logs.ts",
     "audit": "node scripts/audit/audit.ts",

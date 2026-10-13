@@ -58,6 +58,7 @@ has the checks it makes.
 | `npm run build`       | Type-checks everything and builds the app.                                   |
 | `npm run preview`     | Serves the built app, passing `/api` to `npm run server` on 8787.            |
 | `npm run shot`        | Screenshots both pages in every state; `--compare` diffs against a baseline. |
+| `npm run serve-temp`  | A throwaway copy of the app, on free ports and a new data folder. See below. |
 | `npm run usage`       | Today's and this month's model spend, by model and by job. See below.        |
 | `npm run logs`        | The server's recent log entries, filtered or followed. See below.            |
 | `npm run audit`       | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
@@ -132,6 +133,26 @@ stdin and the project folder from `CLAUDE_PROJECT_DIR`, so they run by hand too:
 ```sh
 echo '{"session_id":"try","cwd":"<a worktree>"}' | CLAUDE_PROJECT_DIR="$PWD" node scripts/hooks/behind-main.ts
 ```
+
+### A throwaway server
+
+`npm run serve-temp` starts the API server and Vite, each on a free port, on a new temporary data
+folder, always with the fake models: a new data folder's ledger would start the spending caps from
+zero. It never touches `.data/` and runs beside `npm run dev`, so it is how an agent runs the app
+for a check:
+
+```sh
+npm run serve-temp              # deletes its data folder once stopped
+npm run serve-temp -- --keep    # keeps it
+```
+
+- It prints the page's URL, the API's URL, the data folder and its own PID, then runs until it is
+  stopped.
+- On `SIGINT` (Ctrl-C), `SIGTERM` (`kill <pid>`) or `SIGHUP` (its terminal closing) it stops
+  both servers and deletes the data folder, unless `--keep` is given. A crash deletes it too.
+- Run it in the background, and stop it with the handle you got or the PID it printed.
+- `npm run logs -- <data folder>` reads its log. `RTFM_PASSCODE` puts it behind a passcode, as it
+  does `npm run dev`.
 
 ### Another data folder or port
 

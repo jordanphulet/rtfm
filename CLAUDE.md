@@ -27,9 +27,12 @@ otherwise reads it as a command lookup and fails with "not found".
 Never read, print, copy or edit `.env.local`. It holds real AWS credentials. Code may load it at
 runtime; checks may only confirm which variable names are set.
 
-Only stop processes you started yourself, using the handle or PID you got when you started them.
-Never kill a process because it holds a port: the Claude app and other tools listen on local
-ports too. If a port you need is taken by something that isn't yours, report it instead.
+To run the app for a check, start `npm run serve-temp` in the background and stop it with its handle
+or the PID it prints (`README.md` › A throwaway server). Only stop processes you started yourself,
+using the handle or PID you got when you started them. A PID looked up by port or name (`lsof`,
+`ps`, `pgrep`), or matched by a `pkill -f` pattern, never counts as one you started. Never kill a
+process because it holds a port: the Claude app and other tools listen on local ports too. If a port
+you need is taken by something that isn't yours, report it instead.
 
 ## Code standards
 

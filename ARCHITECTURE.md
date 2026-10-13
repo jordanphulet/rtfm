@@ -82,6 +82,9 @@ browser (Vite, :5173)                           server (node:http, :8787)
 
 - `shot.ts`: `npm run shot`, with the capture helpers in `screenshots.ts` and the comparison in
   `compare.ts`.
+- `serve-temp.ts`: `npm run serve-temp`, a throwaway API server and Vite server on free ports and
+  a temporary data folder, for checks (`README.md` › A throwaway server). It starts Vite with
+  `screenshots.ts`'s `startViteServer`.
 - `audit/`: `npm run audit`, candidate rule breaks from this repo's Claude Code transcripts. See
   `scripts/audit/README.md`.
 - `hooks/`: the Claude Code hooks `.claude/settings.json` runs, which tell a session when its
