@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.8 — Put the app on a Web Function
-- **Status:** todo
+- **Status:** doing (agent a50e41c8df5b1a314)
 - **Depends on:** IN.7
 - **Files:** `server/web-function.ts` and its test, `server/main.ts`, `server/app.ts`,
   `server/config.ts` and its test, `server/api/**`, `server/logging/**`, `server/README.md`,
