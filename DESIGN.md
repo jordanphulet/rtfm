@@ -976,8 +976,8 @@ The reader's signature, brought into the panel, so a reply arrives the same way 
 Both use the shared write head (`src/ui/write-head.css`), set `--write-head-offset` left of the
 text edge.
 
-- **Thinking** (`status === "thinking"`): one line, 12px under your message, exactly one reply
-  line tall (24px), a `.write-head-line` with `data-live`: the cue bar with its breathing lamp,
+- **Thinking** (`status === "thinking"`): one line, 12px under the last message (yours, or the
+  words the librarian wrote before a tool), exactly one reply line tall (24px), a `.write-head-line` with `data-live`: the cue bar with its breathing lamp,
   and beside them the activity, `--text-micro` mono `--cue`. It fades in over `--dur-base`.
   - **The activity** starts as `Thinking…`. While the librarian runs a tool, it is that tool's
     status line (`Searching the shelves…`; `ARCHITECTURE.md` › The librarian lists them all), and
@@ -988,11 +988,16 @@ text edge.
     checks, `Revising the plan…`, then `Revising “…”…`.
   - The activity is one line, here and in the header: a line too long for the panel ends in an
     ellipsis (`text-overflow`), and the live region still says it whole.
-  - **Words before a tool are taken back.** The librarian sometimes starts writing before it calls a
-    tool (“Let me check…”), saying what the activity line is about to say. When the call starts,
-    those words go: the reply so far is removed at once, with no motion, and the thinking line takes
-    its place, fading in as usual, with `Thinking…`, then the tool's line. The reply you keep is
-    what the librarian wrote after its last tool.
+  - **Words before a tool stand until new words replace them.** The librarian sometimes writes
+    before it calls a tool (“Let me check…”). Those words stay while the tool runs: they settle
+    (the bar retracts, the lamp goes out) and the thinking line fades in 12px under them with the
+    tool's line, so the page reads as the librarian saying what it is about to do, then doing it.
+    - If the librarian writes more after the tool, the first new chunk replaces the earlier words
+      in place, at once, with no motion, and the thinking line goes, as it does for any first
+      chunk.
+    - If it writes nothing more, the earlier words are the reply.
+    - A reply with no words at all leaves no empty message: the thinking line goes at the settle,
+      and the page carries out the reply's action.
 - **Streaming:** the first chunk replaces the thinking line in the same place, so the first words
   land where the lamp was. The reply is a `.write-head`, and only the last message gets
   `data-live`, so the bar sits on the reply's live block, growing with the paragraph or list as it

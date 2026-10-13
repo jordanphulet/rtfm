@@ -242,7 +242,7 @@ describe("the librarian's preview", () => {
 });
 
 describe("the librarian through the gateway", () => {
-  it("runs the tools over several turns, withdrawing text written before a tool call, and records each call", async () => {
+  it("runs the tools over several turns, withdrawing text written before a tool call once more text follows, and records each call", async () => {
     const dataDir = await tempDataDir();
     const { gateway, prompts, ledgerEntries } = await scriptedGateway(
       [
@@ -262,10 +262,10 @@ describe("the librarian through the gateway", () => {
 
     expect(events).toEqual([
       { event: "text", data: { text: "Let me look." } },
-      { event: "withdraw", data: {} },
       { event: "status", data: { text: "Searching the shelves…" } },
       { event: "status", data: { text: "Preparing the delete…" } },
       { event: "action", data: { type: "propose-delete", manualId: GEESE_ID } },
+      { event: "withdraw", data: {} },
       { event: "text", data: { text: "It’s waiting " } },
       { event: "text", data: { text: "for your confirmation." } },
       { event: "done", data: {} },
@@ -425,7 +425,7 @@ describe("the librarian through the gateway", () => {
     ]);
   });
 
-  it("withdraws once per turn that wrote text before its tool calls, however many it makes", async () => {
+  it("withdraws each turn's text before its tool calls once more text follows, however many calls it makes", async () => {
     const dataDir = await tempDataDir();
     const { gateway } = await scriptedGateway(
       [
@@ -447,11 +447,55 @@ describe("the librarian through the gateway", () => {
       { event: "text", data: { text: "Let me look." } },
       { event: "withdraw", data: {} },
       { event: "text", data: { text: "Opening it." } },
-      { event: "withdraw", data: {} },
       { event: "action", data: { type: "open", manualId: GEESE_ID } },
+      { event: "withdraw", data: {} },
       { event: "text", data: { text: "Opening *Negotiating With Geese*." } },
       { event: "done", data: {} },
     ]);
+  });
+
+  it("keeps the text written before a tool as the reply when the model's last turn is empty, and sends the action", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway, ledgerEntries } = await scriptedGateway(
+      [
+        toolUseTurn([{ id: "call-1", name: "propose_delete", input: { manual_id: GEESE_ID } }], "I’ll ask you to confirm."),
+        [{ type: "stop", reason: "end_turn" }],
+      ],
+      dataDir,
+    );
+    const { ask } = await start(gateway, dataDir);
+
+    expect(await ask("Delete the geese one")).toEqual([
+      { event: "text", data: { text: "I’ll ask you to confirm." } },
+      { event: "status", data: { text: "Preparing the delete…" } },
+      { event: "action", data: { type: "propose-delete", manualId: GEESE_ID } },
+      { event: "done", data: {} },
+    ]);
+    const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
+    expect(settles.map(({ outcome }) => outcome)).toEqual(["complete", "complete"]);
+  });
+
+  it("finishes a reply with no text at all when the model's last turn after a tool is empty", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway } = await scriptedGateway(
+      [toolUseTurn([{ id: "call-1", name: "propose_delete", input: { manual_id: GEESE_ID } }]), [{ type: "stop", reason: "end_turn" }]],
+      dataDir,
+    );
+    const { ask } = await start(gateway, dataDir);
+
+    expect(await ask("Delete the geese one")).toEqual([
+      { event: "status", data: { text: "Preparing the delete…" } },
+      { event: "action", data: { type: "propose-delete", manualId: GEESE_ID } },
+      { event: "done", data: {} },
+    ]);
+  });
+
+  it("fails with error when the model's first turn is empty", async () => {
+    const dataDir = await tempDataDir();
+    const { gateway } = await scriptedGateway([[{ type: "stop", reason: "end_turn" }]], dataDir);
+    const { ask } = await start(gateway, dataDir);
+
+    expect(await ask("What do I have?")).toEqual([{ event: "failed", data: { reason: "error" } }]);
   });
 
   it("withdraws nothing when a tool call comes before any text", async () => {

@@ -97,21 +97,54 @@ describe("useAgent", () => {
     expect(readAgent().messages[1]).toEqual({ id: expect.any(String), role: "agent", text: "You have **two manuals**." });
   });
 
-  it("drops the reply so far when the server withdraws it for a tool call, keeping only what follows", async () => {
+  it("keeps text written before a tool on screen while the tool runs, and replaces it with the text that follows", async () => {
     const { readAgent, requests } = await loadAgent();
     readAgent().send("Delete the geese one");
     await flush();
     requests[0]!.send(text("Let me get the correct id."));
     await flush();
-    expect(readAgent().messages).toHaveLength(2);
-
-    requests[0]!.send({ event: "withdraw", data: {} });
+    requests[0]!.send(status("Preparing the delete…"));
     await flush();
-    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Thinking…" });
-    expect(readAgent().messages.map(({ role }) => role)).toEqual(["user"]);
+    expect(readAgent()).toMatchObject({ status: "thinking", activity: "Preparing the delete…" });
+    expect(readAgent().messages[1]).toMatchObject({ role: "agent", text: "Let me get the correct id." });
 
-    await reply(requests[0]!, status("Preparing the delete…"), text("It’s waiting for you."), done);
+    requests[0]!.send({ event: "withdraw", data: {} }, text("It’s waiting"));
+    await flush();
+    expect(readAgent().status).toBe("streaming");
+    expect(readAgent().messages.map(({ text }) => text)).toEqual(["Delete the geese one", "It’s waiting"]);
+
+    await reply(requests[0]!, text(" for you."), done);
     expect(readAgent().messages[1]).toMatchObject({ role: "agent", text: "It’s waiting for you." });
+  });
+
+  it("keeps text written before a tool as the reply when nothing follows it, and hands over the action", async () => {
+    const { readAgent, requests, handleActions } = await loadAgent();
+    const actions: AgentAction[] = [];
+    handleActions((action) => actions.push(action));
+    readAgent().send("Delete the geese one");
+    await flush();
+    const proposeDelete: LibrarianEvent = { event: "action", data: { type: "propose-delete", manualId: "negotiating-with-geese" } };
+
+    await reply(requests[0]!, text("I’ll ask you to confirm."), status("Preparing the delete…"), proposeDelete, done);
+
+    expect(readAgent().status).toBe("idle");
+    expect(readAgent().messages[1]).toEqual({ id: expect.any(String), role: "agent", text: "I’ll ask you to confirm." });
+    expect(actions).toEqual([{ type: "propose-delete", manualId: "negotiating-with-geese" }]);
+  });
+
+  it("shows no message for a reply with no text, and still hands over its action", async () => {
+    const { readAgent, requests, handleActions } = await loadAgent();
+    const actions: AgentAction[] = [];
+    handleActions((action) => actions.push(action));
+    readAgent().send("Delete the geese one");
+    await flush();
+    const proposeDelete: LibrarianEvent = { event: "action", data: { type: "propose-delete", manualId: "negotiating-with-geese" } };
+
+    await reply(requests[0]!, status("Preparing the delete…"), proposeDelete, done);
+
+    expect(readAgent().status).toBe("idle");
+    expect(readAgent().messages).toEqual([{ id: expect.any(String), role: "user", text: "Delete the geese one" }]);
+    expect(actions).toEqual([{ type: "propose-delete", manualId: "negotiating-with-geese" }]);
   });
 
   it("sends the finished exchanges with each new message, leaving out failed ones", async () => {

@@ -3,8 +3,9 @@ import { act, Suspense } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentAction, AgentMessage } from "../agent";
+import type { LibrarianEvent } from "../agent/types";
 import type { DeleteResult, ManualSummary } from "../library";
-import { click, render } from "../testing";
+import { click, press, render } from "../testing";
 import { fakeWidth } from "./fakeWidth";
 
 const fake = vi.hoisted(() => ({
@@ -14,6 +15,8 @@ const fake = vi.hoisted(() => ({
   messages: [] as AgentMessage[],
   outcomes: [] as string[],
   onAction: undefined as ((action: AgentAction) => Promise<void> | void) | undefined,
+  realAgent: false,
+  replyEvents: [] as LibrarianEvent[],
 }));
 
 vi.mock("../library/api", () => ({
@@ -24,19 +27,33 @@ vi.mock("../library/api", () => ({
   deleteManual: () => fake.deleting ?? Promise.resolve("deleted"),
 }));
 
-vi.mock("../agent", async (importActual) => ({
-  ...(await importActual<typeof import("../agent")>()),
-  useAgent: () => ({
-    messages: fake.messages,
-    status: "idle",
-    activity: "",
-    send: () => {},
-    reportDeleteOutcome: (outcome: string) => fake.outcomes.push(outcome),
-  }),
-  useAgentActions: (handler: (action: AgentAction) => Promise<void> | void) => {
-    fake.onAction = handler;
+vi.mock("../agent/api", () => ({
+  streamReply: async function* () {
+    yield* fake.replyEvents;
   },
 }));
+
+/** A stand-in conversation, or with `fake.realAgent` the real store replying with `fake.replyEvents`. */
+vi.mock("../agent", async (importActual) => {
+  const actual = await importActual<typeof import("../agent")>();
+  return {
+    ...actual,
+    useAgent: () =>
+      fake.realAgent
+        ? actual.useAgent()
+        : {
+            messages: fake.messages,
+            status: "idle",
+            activity: "",
+            send: () => {},
+            reportDeleteOutcome: (outcome: string) => fake.outcomes.push(outcome),
+          },
+    useAgentActions: (handler: (action: AgentAction) => Promise<void> | void) => {
+      if (fake.realAgent) actual.useAgentActions(handler);
+      else fake.onAction = handler;
+    },
+  };
+});
 
 function summary(id: string, title: string): ManualSummary {
   return { id, title, subtitle: "", chapterCount: 1, sectionCount: 4, writtenCount: 0 };
@@ -62,6 +79,8 @@ beforeEach(() => {
   fake.deleting = undefined;
   fake.messages = [];
   fake.outcomes = [];
+  fake.realAgent = false;
+  fake.replyEvents = [];
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   vi.spyOn(window, "scrollBy").mockImplementation(() => {});
   vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
@@ -200,6 +219,55 @@ describe("the librarian's actions", () => {
     expect(rowTitles()).toEqual(["Gamma"]);
     expect(document.activeElement).toBe(field());
     expect(fake.outcomes).toEqual(["deleted"]);
+  });
+});
+
+describe("a reply that proposes a delete", () => {
+  const PROPOSE_ALPHA: LibrarianEvent = { event: "action", data: { type: "propose-delete", manualId: "alpha" } };
+
+  async function ask(text: string) {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    act(() => {
+      setValue.call(field(), text);
+      field().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    press("Enter", { on: field() });
+    await settle();
+  }
+
+  function replies(): string[] {
+    return [...document.querySelectorAll(".turn-reply")].map((reply) => reply.textContent ?? "");
+  }
+
+  beforeEach(() => {
+    fake.realAgent = true;
+  });
+
+  it("opens the confirmation and shows no empty reply when the reply has no text", async () => {
+    fake.replyEvents = [{ event: "status", data: { text: "Preparing the delete…" } }, PROPOSE_ALPHA, { event: "done", data: {} }];
+    await openPage();
+
+    await ask("Delete Alpha");
+
+    expect(document.querySelector(".said")?.textContent).toBe("You: Delete Alpha");
+    expect(confirmationTitle()).toBe("Delete “Alpha”?");
+    expect(replies()).toEqual([]);
+    expect(document.querySelector(".thinking")).toBeNull();
+  });
+
+  it("keeps the words written before the tool as the reply when nothing follows them", async () => {
+    fake.replyEvents = [
+      { event: "text", data: { text: "I’ll ask you to confirm." } },
+      { event: "status", data: { text: "Preparing the delete…" } },
+      PROPOSE_ALPHA,
+      { event: "done", data: {} },
+    ];
+    await openPage();
+
+    await ask("Delete Alpha");
+
+    expect(confirmationTitle()).toBe("Delete “Alpha”?");
+    expect(replies()).toEqual(["Librarian: I’ll ask you to confirm."]);
   });
 });
 

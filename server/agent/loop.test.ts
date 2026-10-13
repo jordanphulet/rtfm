@@ -309,12 +309,30 @@ describe("the agent loop", () => {
     await expect(drain(run())).rejects.toThrow(new AgentStopped('The model stopped with "max_tokens"'));
   });
 
-  it("fails on a turn that ends with nothing in it, or stops to use a tool without calling one", async () => {
+  it("ends the run normally when a turn after tools ends with nothing in it, adding no empty message", async () => {
+    const empty: ModelEvent[] = [{ type: "stop", reason: "end_turn" }];
+    const { run, ledgerEntries } = await librarian([toolUseTurn([{ id: "call-1", name: "list_manuals" }], "Let me look."), empty]);
+
+    const { events, conversation } = await drain(run());
+
+    expect(events).toEqual([
+      { type: "text", text: "Let me look." },
+      { type: "status", text: LIBRARY_STATUS },
+    ]);
+    expect(conversation.map(({ role }) => role)).toEqual(["user", "assistant", "user"]);
+    expect(conversation.at(-1)!.content).toEqual([
+      { type: "tool_result", tool_use_id: "call-1", content: expect.stringContaining("The Haunt That Listens") },
+    ]);
+    const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
+    expect(settles.map(({ outcome }) => outcome)).toEqual(["complete", "complete"]);
+  });
+
+  it("fails on a first turn that ends with nothing in it, or a turn that stops to use a tool without calling one", async () => {
     const empty: ModelEvent[] = [{ type: "stop", reason: "end_turn" }];
     const noToolCall: ModelEvent[] = [{ type: "text", text: "Let me look." }, { type: "stop", reason: "tool_use" }];
 
     await expect(drain((await librarian([empty])).run())).rejects.toThrow(
-      new AgentStopped("The model ended its turn with nothing in it"),
+      new AgentStopped("The model ended its first turn with nothing in it"),
     );
     await expect(drain((await librarian([noToolCall])).run())).rejects.toThrow(
       new AgentStopped("The model stopped to use a tool but called none"),

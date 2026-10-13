@@ -56,12 +56,14 @@ Every component that calls `useAgent()` sees the same conversation.
 3. As the reply streams:
    - text appends to the agent message (created with the first text) and sets `status` to
      `"streaming"`;
-   - when the librarian calls a tool after writing some text, that text is withdrawn: the agent
-     message is removed, `status` goes back to `"thinking"` and `activity` to `"Thinking…"`;
    - a running tool sets `status` to `"thinking"` and `activity` to its line, such as
-     `"Searching the shelves…"`.
+     `"Searching the shelves…"`. Text the librarian wrote before calling it stays in the agent
+     message meanwhile;
+   - when the librarian writes more text after a tool, that text replaces what it wrote before
+     the tool, in the same agent message (same `id`). If it writes nothing more, the earlier text
+     is the reply.
 4. When the reply is done, sets `status` back to `"idle"` and hands its page action, if any, to
-   the handler (below). A `created` action is handed over as soon as it arrives instead.
+   the handler (below). A reply that ends with no text at all adds no agent message. A `created` action is handed over as soon as it arrives instead.
 5. If the reply fails, sets `failure` on the agent message (keeping any text that arrived) and
    `status` to `"idle"`:
    - `"budget"`: a spending cap would be crossed, or the kill switch is on;
@@ -71,7 +73,7 @@ Every component that calls `useAgent()` sees the same conversation.
 ### Rendering a reply mid-stream
 
 - While `status` is `"thinking"`, show your thinking indicator with `activity` after the last
-  message, the user's.
+  message: the user's, or the text the librarian wrote before the tool that is running.
 - While `status` is `"streaming"`, the **last message** is the reply being streamed. Its `text`
   is already repaired (unfinished bold closed, half-typed links held back, and so on), so render
   it with `ReplyMarkdown` from `src/ui` like any other message. Mark the live edge on the last
@@ -79,8 +81,8 @@ Every component that calls `useAgent()` sees the same conversation.
   `src/ui/README.md`).
 - Every other message is complete, or has a `failure`.
 
-The text is markdown for `ReplyMarkdown` (`src/ui/README.md`), and only what the librarian wrote
-after its last tool.
+The text is markdown for `ReplyMarkdown` (`src/ui/README.md`), and only the last text the
+librarian wrote: what it wrote after its last tool, or before it when nothing followed.
 
 ## `useAgentActions(handler)`
 

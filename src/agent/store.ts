@@ -94,10 +94,11 @@ function reportDeleteOutcome(deleteOutcome: DeleteOutcome) {
 }
 
 /**
- * Sends the finished exchanges and the new message, and shows the reply as it streams. A page
- * action is handed to the page once the reply is done, except `created`, which reports a manual
- * already saved and is handed over as it arrives. `freeze` asks for the scripted reply, cut at
- * that fraction, which then stays as it is.
+ * Sends the finished exchanges and the new message, and shows the reply as it streams. Withdrawn
+ * text stays on screen until the text that follows it replaces it, and a reply with no text shows
+ * no message. A page action is handed to the page once the reply is done, except `created`, which
+ * reports a manual already saved and is handed over as it arrives. `freeze` asks for the scripted
+ * reply, cut at that fraction, which then stays as it is.
  */
 async function reply(text: string, freeze?: number) {
   const conversation: LibrarianMessage[] = [...recentExchanges(state.messages), { role: "user", text }];
@@ -126,11 +127,6 @@ async function reply(text: string, freeze?: number) {
           break;
         case "withdraw":
           raw = "";
-          setState({
-            messages: state.messages.filter((message) => message.id !== replyId),
-            status: "thinking",
-            activity: THINKING,
-          });
           break;
         case "action":
           if (event.data.type === "created") actionHandler?.(event.data);

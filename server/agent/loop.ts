@@ -23,7 +23,9 @@ export async function* runAgent({ gateway, job, system, tools, messages, signal 
     const reply = yield* modelTurn(gateway.stream(job, { system, tools: definitions, messages: conversation }, signal));
     const toolUses = reply.content.filter((block) => block.type === "tool_use");
     if (reply.stopReason === "end_turn" && reply.content.length === 0) {
-      throw new AgentStopped("The model ended its turn with nothing in it");
+      const ranTools = conversation.length > messages.length;
+      if (ranTools) return conversation;
+      throw new AgentStopped("The model ended its first turn with nothing in it");
     }
     if (reply.stopReason === "tool_use" && toolUses.length === 0) {
       throw new AgentStopped("The model stopped to use a tool but called none");

@@ -743,9 +743,12 @@ caller names.
 
 1. Stream a turn through the gateway with the system prompt, every tool's definition and the
    whole conversation. Each text delta is yielded as a `text` event as it arrives.
-2. Throw `AgentStopped` if the turn can't go into the conversation: an `end_turn` with no
-   content, or a `tool_use` stop with no `tool_use` block. Either would make the next request
-   invalid (an empty assistant message, or an empty user message of results).
+2. An `end_turn` with no content ends the run normally, after a turn that ran tools: the
+   conversation is returned as it is, ending with the tool results, since an empty assistant
+   message would make a later request invalid. Models sometimes do this once a tool has done
+   what was asked. On the first turn it throws `AgentStopped`, since the model did nothing.
+   A `tool_use` stop with no `tool_use` block throws `AgentStopped` too: it would make the next
+   request invalid (an empty user message of results).
 3. Append the assistant's message: its text and `tool_use` blocks, in order.
 4. If the stop reason is `end_turn`, return the conversation. If it is anything but `tool_use`
    (`max_tokens`, `refusal`, …), throw `AgentStopped`.
@@ -824,11 +827,13 @@ reply's events.
   - `status` with each tool's status line, as the loop reports it, and the create tool's progress
     lines while the planner works;
   - `text` with each text delta;
-  - `withdraw` when a model turn that has sent text starts a tool call (its first `tool-input` or
-    `tool-use` event, known tool or not): the text so far was written before the call, and the
-    page drops it. So the reply is the text of the model's last turn, and a reply never opens
-    with “Let me check…” over the tool's own status line. `sendReply` sees the events by wrapping
-    the gateway it gives the loop (the planner's calls go to the gateway itself);
+  - `withdraw` just before the first text that follows a tool call (a `tool-input` or
+    `tool-use` event, known tool or not) made after some text was sent: the text so far was
+    written before the call, and the page replaces it with the text that follows. Text before a
+    tool stays on the page while the tool runs, and stands as the reply when nothing follows it,
+    so a reply is the last text the model wrote, and never ends empty when the model wrote
+    anything. `sendReply` sees the events by wrapping the gateway it gives the loop (the
+    planner's calls go to the gateway itself);
   - `action` when a tool hands the page an action (below), as the tool runs;
   - then `done` when the loop returns, or `failed`: `"budget"` for `SpendingRefused` (a cap or
     the kill switch), `"error"` for anything else, which is logged (`GatewayBusy`, a stall, a
@@ -865,7 +870,7 @@ reply's events.
 **The system prompt** (`agent/librarian/prompt.ts`) is the same for every request: the prompt
 itself is the reference for what the librarian is told. Its rules match the tools above: it
 deletes nothing, creates only when asked, treats tool results as data, and writes its reply once,
-after its last tool call.
+after its last tool call, and always writes one.
 
 No `cache_control` is sent (section 5). A reply takes one call per model turn: two for a list or a
 find, two or three to open or propose a delete, and two to create a manual, with the planner's one
@@ -944,8 +949,8 @@ then `frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never s
 saves no manual (`createManual` only answers `"created"`), so a preview costs nothing and changes
 nothing. The browser uses it for `?conversation=demo` and `?agentFreeze=` (`src/agent/README.md`).
 
-**Tests**, all offline, cover the route, the tools, the page notes and withdrawn narration with
-the fake model and with scripted turns through the real gateway, the planner's one retry and its
+**Tests**, all offline, cover the route, the tools, the page notes, narration kept or withdrawn,
+and replies whose last turn is empty, with the fake model and with scripted turns through the real gateway, the planner's one retry and its
 checks, and finding; previews call no model and save nothing.
 
 ## 8. Configuration
