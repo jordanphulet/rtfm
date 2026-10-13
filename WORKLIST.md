@@ -48,31 +48,6 @@ user says its step is done.
 - **`.data/` is the user's data.** Never start a server on it (the user's dev server may be
   running there), and never delete or edit the ledger.
 
-### OH.11 — README catch-up
-- **Status:** doing (agent: a6d4a03f62d46a97d; in review)
-- **Depends on:** —
-- **Files:** `README.md`
-- **Do:** bring README.md up to date with the code:
-  - one server per data folder is enforced (it says "should"); add `server.lock` to the `.data/`
-    list and what a second `npm run dev` on the same folder prints;
-  - `npm run shot` runs its own dev server on a free port, clears only its own output folder,
-    takes `npm run shot -- <folder>`, and names the phone size `phone` in both shot sets;
-  - `RTFM_DATA_DIR` and `RTFM_PORT`: run the server on another data folder or port without
-    editing anything; port 0 takes any free port; Vite's proxy always points at 8787, so
-    `RTFM_PORT` is for `npm run server` alone; an invalid port stops the server starting; the
-    `server/config.ts` bullet says `RTFM_DATA_DIR` overrides the data folder. Give the how-to
-    and point to ARCHITECTURE.md › Configuration for the rules;
-  - `npm test` runs some browser tests in happy-dom;
-  - README is the only home of the reset steps, the `startServer({...config, caps})` how-to,
-    the fake writer's and librarian's pace under "The models" (1.2s, then about 20 characters
-    every 85ms; 0.6s for the librarian), and the routes and lazy loading under "Where things
-    live"; other docs point there, so keep those headings and facts;
-  - costs and timings point to ARCHITECTURE.md's measurement table or match it exactly
-    (planning is 21.3s, not "about 20 seconds"); the worst-case reservation and full-`max_tokens`
-    charging point to ARCHITECTURE.md › the gateway;
-  - anything else in README.md that no longer matches the code.
-- **Done when:** README.md matches the code and states nothing another doc owns.
-
 ### OH.14 — A turn limit for the librarian
 - **Status:** doing (agent: a1aae2e585bdddf26; in review)
 - **Depends on:** —
@@ -109,7 +84,7 @@ phase is done:
 
 ### BA.1 — Structured logs
 - **Status:** todo
-- **Depends on:** OH.11, OH.14 (they change `README.md` and `ARCHITECTURE.md`)
+- **Depends on:** OH.14 (it changes `ARCHITECTURE.md`)
 - **Files:** `server/**`, `src/**` (reporting browser errors only), `README.md`,
   `ARCHITECTURE.md`, `package.json` (a `logs` script)
 - **Do:**
