@@ -62,32 +62,14 @@ When this phase is done:
   logs and reports alike.
 - **The audit writes nothing inside the repo.** Its output goes to a folder outside it.
 
-### DC.1 — A test that docs name only what exists
-- **Status:** doing (agent acebb14dbc85b563c, in its own worktree; review round 2)
-- **Depends on:** —
-- **Files:** `scripts/doc-references.test.ts` (new); `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
-  `src/**/README.md`, `src/**/DESIGN.md`, `server/**/README.md`, `scripts/audit/README.md` (only
-  to fix references the test flags)
-- **Do:**
-  - A test that reads every doc in README's docs index and every folder README and design doc,
-    and checks each code span that names something checkable:
-    - a repo path (`server/…`, `src/…`, `scripts/…`, globs allowed) exists;
-    - `npm run <name>` is a script in `package.json`;
-    - an `RTFM_*` setting is read by `server/config.ts` or a script;
-    - an API route is one the server defines.
-  - Placeholders such as `<manual>` are allowed. `research/` and `WORKLIST.md` are skipped:
-    they describe what might be and what is planned.
-  - Fix whatever it finds.
-- **Done when:** `npm run build` and `npm test` pass; renaming a file or setting that a doc names
-  makes `npm test` fail with the doc and line; the docs pass as they stand.
-
 ### AP.1 — Agent prompts from the task block
-- **Status:** needs-human (the user approves the `PROCESS.md` change; agent a437a723c5776a271, in
-  its own worktree, reviewed by a10ebcd079d529dc5)
+- **Status:** doing (the user approved the `PROCESS.md` change; agent a437a723c5776a271 fixes
+  `npm test` after the merge with `main`)
 - **Depends on:** —
 - **Files:** `scripts/task-prompt.ts` and its test (new), `package.json`, `PROCESS.md` (its rules
   for agent prompts; the user approves), `README.md` (the scripts table), `scripts/commit-task.ts`
-  (its task-block parsing, exported for reuse), `ARCHITECTURE.md` (the `scripts/` codemap entry)
+  (its task-block parsing, exported for reuse), `ARCHITECTURE.md` (the `scripts/` codemap entry),
+  `scripts/doc-references.test.ts` (its `npm run` pattern skips flags)
 - **Do:**
   - `npm run task-prompt -- <ID>` prints a prompt with:
     - the task's full block from `WORKLIST.md` and its phase's "Rules for this phase";
