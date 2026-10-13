@@ -14,7 +14,7 @@ writes each section only when a reader opens it. The app has two pages:
   written yet has the server write it and stream it in, with a fake writer by default or with
   Claude Haiku 4.5 on Amazon Bedrock.
 
-`ARCHITECTURE.md` describes the server, its API and the model gateway in full.
+`ARCHITECTURE.md` describes the server, its API, the model gateway and the librarian in full.
 
 ## Running it
 
@@ -31,18 +31,40 @@ npm run dev                       # then open http://localhost:5173/
 Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 
 - If 5173 is taken, Vite exits, and `npm run dev` stops the API server too.
-- If 8787 is taken, the API server fails to start and `node --watch` waits for a file change,
-  while Vite keeps running. Free the port, then save a server file or restart `npm run dev`.
+- If 8787 is taken, or another server is using the data folder (below), the API server doesn't
+  start and `node --watch` waits for a file change, while Vite keeps running. Stop the other
+  server, then save a server file or restart `npm run dev`.
 
-| Script            | What it does                                                         |
-| ----------------- | -------------------------------------------------------------------- |
-| `npm run dev`     | Starts Vite (5173) and the API server (8787) together.               |
-| `npm run server`  | Starts the API server alone, for `curl` or `npm run preview`.        |
-| `npm test`        | Unit tests (Vitest). They never call Bedrock.                        |
-| `npm run build`   | Type-checks everything and builds the app.                           |
-| `npm run preview` | Serves the built app, with `/api` passed to a running `npm run server`. |
-| `npm run shot`    | Screenshots both pages in every state, with its own dev server on port 5174. See below. |
-| `npm run usage`   | Today's and this month's model spend, by model and by job. See below. |
+The API server listens on `127.0.0.1` only; `ARCHITECTURE.md` › The API has the checks it makes.
+
+| Script            | What it does                                                               |
+| ----------------- | -------------------------------------------------------------------------- |
+| `npm run dev`     | Starts Vite (5173) and the API server (8787) together.                     |
+| `npm run server`  | Starts the API server alone, for `curl` or `npm run preview`.              |
+| `npm test`        | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock. |
+| `npm run build`   | Type-checks everything and builds the app.                                 |
+| `npm run preview` | Serves the built app, passing `/api` to `npm run server` on 8787.          |
+| `npm run shot`    | Screenshots both pages in every state, on its own servers. See below.      |
+| `npm run usage`   | Today's and this month's model spend, by model and by job. See below.      |
+
+### Another data folder or port
+
+`RTFM_DATA_DIR` and `RTFM_PORT` run the server on another data folder or port, with nothing
+edited:
+
+```sh
+RTFM_DATA_DIR=/tmp/rtfm-try npm run dev                  # a fresh folder, seeded on start
+RTFM_DATA_DIR=/tmp/rtfm-try RTFM_PORT=0 npm run server   # alone, on any free port
+```
+
+- A relative `RTFM_DATA_DIR` is resolved against the working directory, which under `npm run` is
+  the repo root.
+- `RTFM_PORT=0` takes any free port, and the server prints the one it got
+  (`API server on http://127.0.0.1:<port> (fake models)`). A port that isn't a whole number from
+  0 to 65535 stops the server from starting.
+- Vite's proxy always points at 8787, so `RTFM_PORT` is for `npm run server` alone.
+
+`ARCHITECTURE.md` › Configuration has the rules.
 
 ## The models
 
@@ -51,22 +73,24 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 - **`fake`** (the default). Nothing costs anything, and tests and screenshots always use it.
   - **The fake writer** replays the sample manual's own text for the section after 1.2s, about
     20 characters every 85ms. A section that has no sample text (every section of the other six
-    manuals) gets a one-line placeholder instead, which streams like any section but is never
-    saved: after a reload the section is unwritten again, and the library's count doesn't change.
+    manuals, and of any manual the librarian creates) gets a one-line placeholder instead, which
+    streams like any section but is never saved: after a reload the section is unwritten again,
+    and the library's count doesn't change.
   - **The fake librarian** is a scripted stand-in for the model. It picks what to do from a
     keyword in your message (such as list, find, open, delete, new or help), calls the same tools
     Claude would, against the real library, and streams its answer in the fake writer's chunks
-    (about 20 characters every 85ms) after 0.6s. Asked for
-    a new manual, it saves the same small nine-section manual, titled after what you asked for
-    (“…about building a treehouse” plans *Building a Treehouse*). Anything else gets a polite
-    “I can’t do that”.
-- **`bedrock`**: Claude Haiku 4.5, through the model gateway, for both.
+    (about 20 characters every 85ms) after 0.6s. Asked for a new manual, it plans the same small
+    nine-section manual, titled after what you asked for (“…about building a treehouse” plans
+    *Building a Treehouse*): the title shows 0.6s into the plan, and the manual is saved 2.4s
+    later. Anything else gets a polite “I can’t do that”.
+- **`bedrock`**: Claude Haiku 4.5, through the model gateway, for both. As measured
+  (`ARCHITECTURE.md` › Configuration has the table):
   - It writes a section live: about 4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a
     section.
-  - It answers as the librarian in one model call per turn, usually two or three a reply, about
+  - It answers as the librarian in one model call per turn, usually two or three a reply,
     $0.002–0.004 each.
-  - It plans a new manual in one more call (two if the first plan fails its checks), about 20
-    seconds and $0.016 for a plan of about 20 sections.
+  - It plans a new manual in one more call (two if the first plan fails its checks): 21.3s and
+    $0.0164 for a plan of 23 sections.
 
 To switch to Claude:
 
@@ -98,31 +122,35 @@ Any value of `RTFM_MODELS` other than `fake` or `bedrock` stops the server from 
 
 Everything but the credentials is committed:
 
-- `server/config.ts`: the data folder, the models, the spending caps ($2 a day and $20 a month,
-  UTC), how many sections may be written and how many model calls may run at once, the 30s stall
-  timeout (60s for planning a manual), each job's model and `max_tokens`, the length in words the
-  prompt asks Claude for (`sectionWordsRequested`), and the length in characters a section's
-  progress counts to while Claude writes (`sectionExpectedCharacters`). The API port is in
+- `server/config.ts`: the data folder (`RTFM_DATA_DIR` overrides it), the port (`RTFM_PORT`
+  overrides it), the models (`RTFM_MODELS`), the spending caps ($2 a day and $20 a month, UTC),
+  how many sections may be written and how many model calls may run at once, the 30s stall
+  timeout (60s for planning a manual), each job's model and `max_tokens`, the most model turns one
+  librarian reply may take (8), the length in words the prompt asks Claude for
+  (`sectionWordsRequested`), and the length in characters a section's progress counts to while
+  Claude writes (`sectionExpectedCharacters`). The default API port is `API_PORT` in
   `server/ports.ts`.
 - `server/gateway/prices.ts`: the dated price table. With `RTFM_MODELS=bedrock`, the server
   refuses to start with a model that isn't in it.
 
-Before each model call, the gateway reserves the call's worst case (its whole prompt plus
-`max_tokens` at the model's price, about $0.025 for a section). If that would cross the daily or
-monthly cap, the call is refused, nothing is charged, and the reader shows "budget reached" (the
-librarian's reply says its budget is used up).
-After the call, the reservation is settled to what it really cost.
+The gateway refuses a model call that could cross the daily or monthly cap: nothing is charged,
+and the reader shows "budget reached" (the librarian's reply says its budget is used up). How it
+reserves each call's worst case and settles it afterwards is in `ARCHITECTURE.md` › The model
+gateway.
 
 To try a different setting without changing the committed one (a tiny cap, say), call
 `startServer({ ...config, caps: { dailyUsd: 0.001, monthlyUsd: 20 } })` from a scratch script,
-as `scripts/shot.ts` does for its own settings.
+as `scripts/shot.ts` does for its own settings. Stop `npm run dev` first, or give the script its
+own `dataDir` and `port: 0` as the shot script does: otherwise the data folder's lock refuses it,
+and port 8787 is taken.
 
 ## The data folder and spending
 
-The server keeps everything in `.data/` (gitignored). When it starts, it seeds each manual in
-`server/seed/` that it hasn't seeded before: the sample, *The Haunt That Listens*, with 7 of its 18
-sections written, and six more with a table of contents and nothing written. A manual you delete
-stays deleted, and a manual already in `.data/` is left as it is.
+The server keeps everything in `.data/` (gitignored), or in the folder `RTFM_DATA_DIR` names.
+When it starts, it seeds each manual in `server/seed/` that it hasn't seeded before: the sample,
+*The Haunt That Listens*, with 7 of its 18 sections written, and six more with a table of contents
+and nothing written. A manual you delete stays deleted, and a manual already in `.data/` is left
+as it is.
 
 - `.data/manuals/<manualId>/`: a manual (`manual.json`) and one `sections/<id>.md` per written
   section. A section is written when its file exists. To have one written again, stop the
@@ -131,6 +159,7 @@ stays deleted, and a manual already in `.data/` is left as it is.
   seed, stop the server, delete `.data/manuals/` and `.data/seeded.json`, and start it again.
 - `.data/ledger/<yyyy-mm>.jsonl`: the usage ledger, one line per model call reserved and settled.
   The caps are computed from it, so **never delete or edit it**.
+- `.data/server.lock`: the PID of the server using the folder (below).
 - `.data/STOP`: **the kill switch.** While this file exists, the gateway refuses every new model
   call at once, with no restart, and the reader and the librarian say their budget is reached.
   Delete it to resume.
@@ -144,24 +173,36 @@ touch .data/STOP   # stop all model calls
 rm .data/STOP      # allow them again
 ```
 
+**One server per data folder.** The caps are checked in the server's memory, so a second server
+on the same folder refuses to start. It prints this and exits with code 1:
+
+```text
+Another server (PID <pid>) is using the data folder <folder>. Stop it first, or use another data folder.
+```
+
+A second `npm run dev` in the same checkout stops altogether, because its Vite also finds 5173
+taken. To run a second server, give it another folder with `RTFM_DATA_DIR`. If a server is
+refused while no server is using the folder, delete `.data/server.lock`. How the lock works is in
+`ARCHITECTURE.md` › Storage.
+
 `npm run usage` prints today's and this month's spend against the caps, by model and by job,
 with counts of aborted, failed and estimated calls, any unsettled reservations, and whether the
 kill switch is on. `npm run usage -- <dataDir>` reads another data folder. A call cut short (the
-reader closed the tab, the model stalled) is charged at its full `max_tokens` and marked
-estimated, because the stream doesn't say what was billed after the cut.
-
-Only one server should use a data folder at a time: the caps are checked in the server's memory.
+reader closed the tab, the model stalled) is marked estimated; what it is charged is in
+`ARCHITECTURE.md` › The model gateway.
 
 ## Screenshots
 
-`npm run shot` starts its own API server with the fake models on a temporary data folder, so it
-never touches `.data/` or Bedrock. It clears `shots/`, then writes:
+`npm run shot` starts its own API server, with the fake models on a temporary data folder, and
+its own Vite dev server, each on a free port, so it never touches `.data/` or Bedrock and runs
+beside `npm run dev`. It writes to `shots/`, or to the folder given as `npm run shot -- <folder>`,
+clearing that folder first and nothing else:
 
-- `shots/reader/<state>-<desktop|mobile|desktop-reduced>.png`, for the states `start`, `toc`,
-  `written`, `dense`, `waiting`, `streaming`, `streaming-full`, `appendix`, `budget` and `error`
+- `reader/<state>-<desktop|phone|desktop-reduced>.png`, for the states `start`, `toc`,
+  `written`, `dense`, `waiting`, `streaming`, `streaming-full`, `budget`, `error` and `appendix`
   (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
-- `shots/home/<state>-<desktop|phone>.png`, for the landing page's states (listed in
-  `DESIGN.md`, under "States").
+- `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in `DESIGN.md`,
+  under "States").
 
 ## Where things live
 
@@ -178,8 +219,9 @@ never touches `.data/` or Bedrock. It clears `shots/`, then writes:
   through it. Its README documents the API.
 - `src/agent/`: the librarian's conversation. It sends the conversation to the librarian on the
   server and streams back each reply. Its README documents the API and the URL options.
-- `server/`: the API server, storage, the section writers, the librarian agent and the model
-  gateway. The seven seed manuals are in `server/seed/`. `ARCHITECTURE.md` documents it.
+- `server/`: the API server, storage and the data folder's lock, the section writers, the agent
+  loop, the librarian and its planner, and the model gateway. The seven seed manuals are in
+  `server/seed/`. `ARCHITECTURE.md` documents it.
 - `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`).
 - `research/`: dated research for the back-end, each opening with what was adopted:
   `bedrock-models.md` (which Bedrock models to use), `aws-hosting.md` (Claude Platform on AWS and
