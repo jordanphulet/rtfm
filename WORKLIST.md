@@ -108,39 +108,19 @@ Make the repo quicker to find your way around, for agents and people. When this 
 - **No real Bedrock calls**, and never start a server on `.data/`.
 - **No task changes `CLAUDE.md`.** Only the user approves changes to it.
 
-### RS.6 — Screenshot comparison with a tolerance
-- **Status:** doing (agent: ad40d53e4e6a8edf0)
-- **Depends on:** —
-- **Files:** `scripts/**`, `README.md` (its "Screenshots" section), `package.json` and
-  `package-lock.json` (a comparison dependency, if one is needed)
-- **Do:**
-  - Add a comparison mode to the shot script, for example
-    `npm run shot -- --compare <baseline folder>`. It compares each PNG with the baseline's under
-    a small tolerance (a per-pixel color threshold and a small count of differing pixels), using
-    Playwright's own comparator if it is reachable from the `playwright` package, or
-    `pixelmatch`. It prints only the shots over the tolerance, saves a diff image for each, and
-    exits non-zero when any shot differs or is missing.
-  - Exact pixel equality trips on rendering noise: the same commit flips between two renderings
-    of the writing ring's edge (a few pixels, one color step). Where it is cheap and inside
-    `scripts/`, make captures render the same on every run, so the tolerance can stay tight.
-  - Document the mode in README's "Screenshots" section.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; `--compare` against a fresh
-  baseline of the same commit reports no differences on two runs in a row; a deliberate one-line
-  CSS change (made in a scratch copy or reverted before reporting) is reported, with its diff
-  image.
-
 ### RS.2 — Rename `src/agent/` to `src/librarian/`
-- **Status:** todo
+- **Status:** doing (agent: ac938390edea55761)
 - **Depends on:** RS.1, RS.6 (it changes `README.md`)
-- **Files:** `src/agent/**` (moving to `src/librarian/**`), `src/home/**`, `src/manual/README.md`,
-  `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
+- **Files:** `src/**` (`src/agent/` moves to `src/librarian/`), `scripts/**`, `README.md`,
+  `ARCHITECTURE.md`, `DESIGN.md`
 - **Do:**
   - Move the folder and update every import and doc reference.
   - Rename its exports wherever "agent" means the librarian conversation (for example
     `useAgent` → `useLibrarian`, `useAgentActions` → `useLibrarianActions`).
   - Leave the wire format alone (the `agent` message role in `server/api/types.ts`), and keep
     the URL options (`?agentFreeze=`) unless the screenshot script and the docs change with them.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; nothing in `src/`,
+- **Done when:** `npm run build` and `npm test` pass; `npm run shot -- <out> --compare
+  <baseline>` against shots of the commit before reports no differences; nothing in `src/`,
   `scripts/` or any doc refers to `src/agent` or imports `../agent`.
 
 ### RS.3 — Turn `ARCHITECTURE.md` into a short map, with detail in folder READMEs
