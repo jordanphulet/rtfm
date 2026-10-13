@@ -102,7 +102,7 @@ written from now on use US spelling, vocabulary and dollars, whatever voice the 
 - **No real Bedrock calls.** Tests use the fake models.
 
 ### MO.1 — Name the locale in the planner and writer prompts
-- **Status:** todo
+- **Status:** doing (agent: a78861ede4dcd1d91)
 - **Depends on:** BA.1, LB.1 (both change `server/**` or `ARCHITECTURE.md`)
 - **Files:** `server/agent/planner/prompt.ts`, `server/writer/prompt.ts`,
   `server/writer/prompt.test.ts`, `server/agent/planner/plan.test.ts`,
