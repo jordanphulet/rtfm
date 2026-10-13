@@ -155,7 +155,8 @@ Any session can propose work, and `PROCESS.md` says how a proposal reaches the w
   exact text to approve.
 
 ### TP.1 — Sessions propose tasks to the orchestrator
-- **Status:** doing (agent a7dcb0c62c2d318af, in its own worktree)
+- **Status:** needs-human (the user approves the `PROCESS.md` change; agent a7dcb0c62c2d318af, in
+  its own worktree, reviewed by the orchestrator)
 - **Depends on:** —
 - **Files:** `PROCESS.md`
 - **Do:** in `PROCESS.md` › Adding work, say that:
