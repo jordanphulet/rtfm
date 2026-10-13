@@ -5,8 +5,11 @@ import { createExclusively, isErrorCode, readIfExists } from "./files.ts";
 export const LOCK_FILE_NAME = "server.lock";
 
 export class DataFolderInUse extends Error {
+  readonly pid: number;
+
   constructor(dataDir: string, pid: number) {
     super(`Another server (PID ${pid}) is using the data folder ${dataDir}. Stop it first, or use another data folder.`);
+    this.pid = pid;
   }
 }
 

@@ -18,13 +18,13 @@ describe("fetchLibrary", () => {
     const summaries = [{ id: "geese", title: "Negotiating With Geese" }];
     const fetch = stubFetch(async () => Response.json(summaries));
     expect(await fetchLibrary()).toEqual(summaries);
-    expect(fetch).toHaveBeenCalledWith("/api/manuals");
+    expect(fetch).toHaveBeenCalledWith("/api/manuals", undefined);
   });
 
   it("passes ?library=empty on to the API", async () => {
     const fetch = stubFetch(async () => Response.json([]), "?library=empty&conversation=demo");
     await fetchLibrary();
-    expect(fetch).toHaveBeenCalledWith("/api/manuals?library=empty");
+    expect(fetch).toHaveBeenCalledWith("/api/manuals?library=empty", undefined);
   });
 
   it("fails when the API answers with an error", async () => {

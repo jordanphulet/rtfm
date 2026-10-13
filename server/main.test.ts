@@ -3,6 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, onTestFinished } from "vitest";
+import type { LogEntry } from "./logging/logger.ts";
 import { LOCK_FILE_NAME } from "./storage/lock.ts";
 import { tempDataDir } from "./testing.ts";
 
@@ -35,7 +36,8 @@ function startMain(dataDir: string) {
       child.stdout.on("data", resolveOnceListening);
       void exited.then(() => reject(new Error(`main.ts exited before listening:\n${stderr}`)));
     });
-  return { child, listening, exited, stderr: () => stderr };
+  const entries = () => stdout.trim().split("\n").map((line) => JSON.parse(line) as LogEntry);
+  return { child, listening, exited, stdout: () => stdout, entries, stderr: () => stderr };
 }
 
 describe("main.ts", () => {
@@ -52,6 +54,21 @@ describe("main.ts", () => {
     expect(await readdir(dataDir)).not.toContain(LOCK_FILE_NAME);
   });
 
+  it("logs each line both to standard output and to the data folder's log file", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const dataDir = await tempDataDir();
+    const main = startMain(dataDir);
+    const port = await main.listening();
+    await fetch(`http://127.0.0.1:${port}/api/manuals`);
+    main.child.kill("SIGTERM");
+    await main.exited;
+
+    expect(main.entries().map(({ event }) => event)).toEqual(["server.started", "request", "server.stopped"]);
+    const logsDir = path.join(dataDir, "logs");
+    const logFiles = await readdir(logsDir);
+    const logged = await Promise.all(logFiles.sort().map((file) => readFile(path.join(logsDir, file), "utf8")));
+    expect(logged.join("")).toBe(main.stdout());
+  });
+
   it("refuses a second server on the same folder with a message and exit code 1", { timeout: TEST_TIMEOUT_MS }, async () => {
     const dataDir = await tempDataDir();
     const first = startMain(dataDir);
@@ -59,7 +76,13 @@ describe("main.ts", () => {
 
     const second = startMain(dataDir);
     expect(await second.exited).toBe(1);
-    expect(second.stderr()).toContain(`Another server (PID ${first.child.pid}) is using the data folder ${dataDir}.`);
+    expect(second.entries()).toEqual([
+      expect.objectContaining({
+        level: "WARN",
+        event: "server.refused",
+        message: expect.stringContaining(`Another server (PID ${first.child.pid}) is using the data folder ${dataDir}.`),
+      }),
+    ]);
 
     first.child.kill("SIGTERM");
     expect(await first.exited).toBe(0);

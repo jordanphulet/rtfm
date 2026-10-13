@@ -1,4 +1,5 @@
 import type { SectionEvent, SectionStatus } from "../api/types.ts";
+import type { Logger } from "../logging/logger.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
 import { WriteFailed, type SectionWriter } from "./types.ts";
 
@@ -13,6 +14,9 @@ export interface Runs {
 }
 
 interface Run {
+  manualId: string;
+  sectionId: string;
+  startedAt: number;
   text: string;
   progress: number;
   listeners: Set<Listener>;
@@ -24,26 +28,33 @@ interface Run {
 const WRITTEN = "written";
 const nothingToLeave: Leave = () => {};
 
-export function createRuns({ store, writer, maxConcurrentRuns }: {
+export function createRuns({ store, writer, maxConcurrentRuns, logger }: {
   store: ManualStore;
   writer: SectionWriter;
   maxConcurrentRuns: number;
+  logger: Logger;
 }): Runs {
   const runs = new Map<string, Run | typeof WRITTEN>();
 
   async function join(manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave> {
     const key = runKey(manual.id, sectionId);
     const runBefore = runs.get(key);
-    if (runBefore !== undefined && runBefore !== WRITTEN) return follow(key, runBefore, listener);
+    if (runBefore !== undefined && runBefore !== WRITTEN) return joinRun(key, runBefore, listener);
 
     const storedBody = await store.getBody(manual.id, sectionId);
     if (storedBody !== undefined) return sendWholeBody(listener, storedBody);
 
     const runAfter = runs.get(key);
     if (runAfter === WRITTEN) return sendWrittenBody(key, manual, sectionId, listener);
-    if (runAfter !== undefined) return follow(key, runAfter, listener);
+    if (runAfter !== undefined) return joinRun(key, runAfter, listener);
 
-    if (activeRunCount() >= maxConcurrentRuns) {
+    const activeRuns = activeRunCount();
+    if (activeRuns >= maxConcurrentRuns) {
+      logger.warn("section.refused", `Refused ${key}: ${activeRuns} sections are already being written`, {
+        manualId: manual.id,
+        sectionId,
+        activeRuns,
+      });
       listener({ event: "failed", data: { reason: "error" } });
       return nothingToLeave;
     }
@@ -55,6 +66,15 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
     if (body !== undefined) return sendWholeBody(listener, body);
     if (runs.get(key) === WRITTEN) runs.delete(key);
     return join(manual, sectionId, listener);
+  }
+
+  function joinRun(key: string, run: Run, listener: Listener): Leave {
+    logger.info("section.joined", `Joined ${key}`, {
+      ...sectionFields(run),
+      listeners: run.listeners.size + 1,
+      backlogCharacters: run.text.length,
+    });
+    return follow(key, run, listener);
   }
 
   function follow(key: string, run: Run, listener: Listener): Leave {
@@ -73,6 +93,9 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
 
   function startRun(key: string, manual: StoredManual, sectionId: string): Run {
     const run: Run = {
+      manualId: manual.id,
+      sectionId,
+      startedAt: performance.now(),
       text: "",
       progress: 0,
       listeners: new Set(),
@@ -81,6 +104,7 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
       isPlaceholder: false,
     };
     runs.set(key, run);
+    logger.info("section.started", `Started ${key}`, sectionFields(run));
     void writeSection(key, run, manual, sectionId);
     return run;
   }
@@ -103,12 +127,18 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
         await store.saveBody(manual.id, sectionId, run.text);
         runs.set(key, WRITTEN);
       }
+      logger.info("section.finished", `Finished ${key}`, { ...runFields(run), placeholder: run.isPlaceholder });
       broadcast(run, { event: "written", data: {} });
     } catch (error) {
       if (runs.get(key) === run) runs.delete(key);
-      if (signal.aborted) return;
-      if (!(error instanceof WriteFailed)) console.error(`Writing ${key} failed:`, error);
+      if (signal.aborted) {
+        logger.info("section.aborted", `Aborted ${key}: every reader left`, runFields(run));
+        return;
+      }
       const reason = error instanceof WriteFailed ? error.reason : "error";
+      const fields = { ...runFields(run), reason };
+      if (reason === "budget") logger.warn("section.failed", `Writing ${key} was refused by the budget`, fields);
+      else logger.error("section.failed", `Writing ${key} failed`, fields, error);
       broadcast(run, { event: "failed", data: { reason } });
     }
   }
@@ -138,6 +168,16 @@ export function createRuns({ store, writer, maxConcurrentRuns }: {
 
 function runKey(manualId: string, sectionId: string): string {
   return `${manualId}/${sectionId}`;
+}
+
+function sectionFields({ manualId, sectionId }: Run) {
+  return { manualId, sectionId };
+}
+
+/** The run's ids, how much it wrote and how long it took. */
+function runFields(run: Run) {
+  const durationMs = Math.round(performance.now() - run.startedAt);
+  return { ...sectionFields(run), characters: run.text.length, durationMs };
 }
 
 function broadcast(run: Run, event: SectionEvent) {

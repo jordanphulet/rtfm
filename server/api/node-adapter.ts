@@ -1,9 +1,14 @@
+import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Logger } from "../logging/logger.ts";
 import { badRequest, notFound, type EventStream, type JsonResponse, type Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
+const MAX_LOGGED_CHARACTERS = 300;
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+
+type RequestFields = { requestId: string; method: string | undefined; path: string };
 
 const hostNotAllowed: JsonResponse = { status: 403, body: { error: "Host not allowed" } };
 const originNotAllowed: JsonResponse = { status: 403, body: { error: "Origin not allowed" } };
@@ -13,15 +18,20 @@ class Refused extends Error {
   readonly response: JsonResponse;
 
   constructor(response: JsonResponse) {
-    super(`Refused with ${response.status}`);
+    super((response.body as { error: string }).error);
     this.response = response;
   }
 }
 
-export function createRequestHandler(routes: Route[]) {
+export function createRequestHandler(routes: Route[], logger: Logger) {
   return async (request: IncomingMessage, response: ServerResponse) => {
+    const startedAt = performance.now();
+    const logged: RequestFields = { requestId: randomUUID(), method: request.method, path: pathOf(request) };
     const controller = new AbortController();
-    response.on("close", () => controller.abort());
+    response.on("close", () => {
+      controller.abort();
+      logRequest(logger, response, logged, startedAt);
+    });
     try {
       refuseOtherSites(request);
       const body = await readJsonBody(request);
@@ -38,12 +48,39 @@ export function createRequestHandler(routes: Route[]) {
       if (typeof result === "function") await writeEvents(response, result);
       else writeJson(response, result);
     } catch (error) {
-      if (error instanceof Refused) return writeJson(response, error.response);
-      console.error(`${request.method} ${request.url} failed:`, error);
+      if (error instanceof Refused) {
+        const fields = { ...logged, status: error.response.status, ...headersOf(request) };
+        logger.warn("request.refused", error.message, fields);
+        return writeJson(response, error.response);
+      }
+      logger.error("request.failed", `${logged.method} ${logged.path} failed`, logged, error);
       if (response.headersSent) response.end();
       else writeJson(response, { status: 500, body: { error: "Internal error" } });
     }
   };
+}
+
+/** The path without its query, which is never logged. */
+function pathOf(request: IncomingMessage): string {
+  return (request.url ?? "/").split("?")[0].slice(0, MAX_LOGGED_CHARACTERS);
+}
+
+/** One line per request once its response closes; `clientClosed` when the client left before it ended. */
+function logRequest(logger: Logger, response: ServerResponse, logged: RequestFields, startedAt: number) {
+  const status = response.headersSent ? response.statusCode : undefined;
+  const log = status !== undefined && status >= 500 ? logger.warn : logger.info;
+  log("request", `${logged.method} ${logged.path} ${status ?? "closed"}`, {
+    ...logged,
+    status,
+    durationMs: Math.round(performance.now() - startedAt),
+    clientClosed: response.writableFinished ? undefined : true,
+  });
+}
+
+/** The refused request's Host and Origin, cut short: they name a site, never a secret. */
+function headersOf(request: IncomingMessage) {
+  const { host, origin } = request.headers;
+  return { host: host?.slice(0, MAX_LOGGED_CHARACTERS), origin: origin?.slice(0, MAX_LOGGED_CHARACTERS) };
 }
 
 /**

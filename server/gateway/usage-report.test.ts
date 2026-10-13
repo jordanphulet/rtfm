@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { silentLogger } from "../logging/logger.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry } from "../storage/types.ts";
 import { tempDataDir } from "../testing.ts";
@@ -102,7 +103,7 @@ describe("npm run usage", () => {
 
   it("reads a test ledger and the kill switch from the data dir it is given", async () => {
     const dataDir = await tempDataDir();
-    const ledger = createFileLedger(dataDir);
+    const ledger = createFileLedger(dataDir, silentLogger);
     const reservedAt = new Date().toISOString();
     for (const entry of [...call("a", reservedAt, { usd: 0.0081 }), ...call("b", reservedAt, "unsettled")]) {
       await ledger.append(entry);
@@ -118,7 +119,7 @@ describe("npm run usage", () => {
 
   it("reports the lines it can read when a crash cut one off and a later entry followed it, and warns about the cut one", async () => {
     const dataDir = await tempDataDir();
-    const ledger = createFileLedger(dataDir);
+    const ledger = createFileLedger(dataDir, silentLogger);
     const reservedAt = new Date().toISOString();
     const [reserveA, settleA] = call("a", reservedAt, { usd: 0.0081 });
     await ledger.append(reserveA!);
@@ -128,6 +129,6 @@ describe("npm run usage", () => {
     const { stdout, stderr } = await runUsage(dataDir);
     expect(stdout).toMatch(/Today, \d{4}-\d{2}-\d{2}: \$0\.0230 of \$2\.00, 2 calls/);
     expect(stdout).toContain(`${reservedAt}  a  write-section  $0.0200`);
-    expect(stderr).toContain("Skipped line 2 of");
+    expect(JSON.parse(stderr)).toMatchObject({ level: "WARN", event: "ledger.line-skipped", line: 2 });
   });
 });

@@ -1,7 +1,11 @@
 import { createServer, type IncomingHttpHeaders, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { EventStreamCodec } from "@smithy/eventstream-codec";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { logFileName, logsDir, toLogFile } from "../logging/log-file.ts";
+import { createLogger, silentLogger, type Logger } from "../logging/logger.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import type { SettleEntry } from "../storage/types.ts";
 import { collect, tempDataDir, testGatewayConfig, waitUntil } from "../testing.ts";
@@ -125,6 +129,15 @@ function exceptionFrame(exceptionType: string, message: string): Uint8Array {
     },
     body: new TextEncoder().encode(JSON.stringify({ message })),
   });
+}
+
+/** What AWS answers when a signature doesn't match: its message quotes the access key ID. */
+function answerSignatureMismatch(response: ServerResponse) {
+  const message =
+    "The request signature we calculated does not match the signature you provided. The Canonical String for this " +
+    `request should have been 'Credential=${FAKE_CREDENTIALS.accessKeyId}/20261012/us-west-2/bedrock/aws4_request'`;
+  response.writeHead(403, { "content-type": "application/json", "x-amzn-errortype": "InvalidSignatureException" });
+  response.end(JSON.stringify({ message }));
 }
 
 function startEventStream(response: ServerResponse, events: object[]) {
@@ -305,6 +318,21 @@ describe("Bedrock client", () => {
     expect(received).toHaveLength(1);
   });
 
+  it("writes the AWS keys out of an error's message and stack, as a signature error quotes the access key ID", async () => {
+    respond = answerSignatureMismatch;
+
+    const error = await collect(bedrockClient().stream(request())).then(
+      () => undefined,
+      (thrown: unknown) => thrown as Error,
+    );
+
+    expect(error?.message).toContain("Credential=[redacted]/20261012");
+    for (const text of [error!.message, error!.stack!]) {
+      expect(text).not.toContain(FAKE_CREDENTIALS.accessKeyId);
+      expect(text).not.toContain(FAKE_CREDENTIALS.secretAccessKey);
+    }
+  });
+
   describe("through the gateway", () => {
     const config = testGatewayConfig({
       idleTimeoutMs: 5000,
@@ -318,10 +346,18 @@ describe("Bedrock client", () => {
     async function streamThroughGateway(
       job: Job = "write-section",
       prompt: ModelPrompt = request().prompt,
+      { dataDir, logger = silentLogger }: { dataDir?: string; logger?: Logger } = {},
     ): Promise<{ result: Promise<ModelEvent[]>; settles: () => Promise<SettleEntry[]> }> {
-      const dataDir = await tempDataDir();
-      const ledger = createFileLedger(dataDir);
-      const gateway = await createGateway({ createClient: () => bedrockClient(), ledger, config, prices, dataDir });
+      dataDir ??= await tempDataDir();
+      const ledger = createFileLedger(dataDir, logger);
+      const gateway = await createGateway({
+        createClient: () => bedrockClient(),
+        ledger,
+        config,
+        prices,
+        dataDir,
+        logger,
+      });
       const result = collect(gateway.stream(job, prompt, new AbortController().signal));
       const month = monthOf(new Date().toISOString());
       const settles = async () =>
@@ -332,6 +368,21 @@ describe("Bedrock client", () => {
     function chargedAtFullOutput(settle: SettleEntry | undefined) {
       expect(settle).toMatchObject({ outcome: "failed", inputTokens: 42, outputTokens: MAX_TOKENS, estimated: true });
     }
+
+    it("logs a failed call without the AWS keys, though Bedrock's error quoted the access key ID", async () => {
+      respond = answerSignatureMismatch;
+      const dataDir = await tempDataDir();
+      const logger = createLogger([toLogFile(dataDir)]);
+
+      const { result } = await streamThroughGateway("librarian", request().prompt, { dataDir, logger });
+      await expect(result).rejects.toThrow();
+
+      const logged = await readFile(path.join(logsDir(dataDir), logFileName(new Date().toISOString())), "utf8");
+      expect(logged).toContain('"event":"model.call"');
+      expect(logged).toContain("Credential=[redacted]");
+      expect(logged).not.toContain(FAKE_CREDENTIALS.accessKeyId);
+      expect(logged).not.toContain(FAKE_CREDENTIALS.secretAccessKey);
+    });
 
     it("settles a complete stream at the usage Bedrock reported", async () => {
       const { result, settles } = await streamThroughGateway();
@@ -417,9 +468,16 @@ describe("Bedrock client", () => {
 
       async function planThroughGateway() {
         const dataDir = await tempDataDir();
-        const ledger = createFileLedger(dataDir);
+        const ledger = createFileLedger(dataDir, silentLogger);
         const shortTimeout = { ...config, idleTimeoutMs: IDLE_TIMEOUT_MS };
-        const gateway = await createGateway({ createClient: () => bedrockClient(), ledger, config: shortTimeout, prices, dataDir });
+        const gateway = await createGateway({
+          createClient: () => bedrockClient(),
+          ledger,
+          config: shortTimeout,
+          prices,
+          dataDir,
+          logger: silentLogger,
+        });
         const result = collect(gateway.stream("plan-manual", PLAN_PROMPT, new AbortController().signal));
         const settles = async () =>
           (await ledger.entriesForMonth(monthOf(new Date().toISOString()))).filter((entry) => entry.kind === "settle");

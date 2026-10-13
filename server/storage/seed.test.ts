@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { silentLogger } from "../logging/logger.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, WRITTEN_ID } from "../testing.ts";
 import { createFileManualStore } from "./file-manual-store.ts";
 import { sectionsInReadingOrder } from "./manual.ts";
@@ -43,7 +44,7 @@ async function addSeedManual(seedDir: URL, id: string) {
 
 describe("seedStore", () => {
   it("puts the sample manual and its 7 written sections into an empty store", async () => {
-    const store = createFileManualStore(await tempDataDir());
+    const store = createFileManualStore(await tempDataDir(), silentLogger);
     await seedStore(store);
 
     const manual = await store.getManual(SAMPLE_ID);
@@ -57,7 +58,7 @@ describe("seedStore", () => {
   });
 
   it("has a seed body for every section of the sample", async () => {
-    const store = createFileManualStore(await tempDataDir());
+    const store = createFileManualStore(await tempDataDir(), silentLogger);
     await seedStore(store);
     for (const section of sectionsInReadingOrder((await store.getManual(SAMPLE_ID))!)) {
       expect(await readSeedBody(SAMPLE_ID, section.id), section.id).toBeTruthy();
@@ -68,7 +69,7 @@ describe("seedStore", () => {
     const seedDir = await tempSeedDir();
     await addSeedManual(seedDir, "alpha");
     await addSeedManual(seedDir, "beta");
-    const store = createFileManualStore(await tempDataDir());
+    const store = createFileManualStore(await tempDataDir(), silentLogger);
     await seedStore(store, seedDir);
 
     expect((await store.listManuals()).map(({ id }) => id).sort()).toEqual(["alpha", "beta"]);
@@ -80,7 +81,7 @@ describe("seedStore", () => {
   it("leaves a seeded manual as it is", async () => {
     const seedDir = await tempSeedDir();
     await addSeedManual(seedDir, "alpha");
-    const store = createFileManualStore(await tempDataDir());
+    const store = createFileManualStore(await tempDataDir(), silentLogger);
     await seedStore(store, seedDir);
     await store.saveBody("alpha", "second", "written since");
     await seedStore(store, seedDir);
@@ -92,10 +93,10 @@ describe("seedStore", () => {
     await addSeedManual(seedDir, "alpha");
     await addSeedManual(seedDir, "beta");
     const dataDir = await tempDataDir();
-    await seedStore(createFileManualStore(dataDir), seedDir);
-    await createFileManualStore(dataDir).deleteManual("alpha");
+    await seedStore(createFileManualStore(dataDir, silentLogger), seedDir);
+    await createFileManualStore(dataDir, silentLogger).deleteManual("alpha");
 
-    const restarted = createFileManualStore(dataDir);
+    const restarted = createFileManualStore(dataDir, silentLogger);
     await seedStore(restarted, seedDir);
     expect((await restarted.listManuals()).map(({ id }) => id)).toEqual(["beta"]);
   });
@@ -104,12 +105,12 @@ describe("seedStore", () => {
     const seedDir = await tempSeedDir();
     await addSeedManual(seedDir, "alpha");
     const dataDir = await tempDataDir();
-    const store = createFileManualStore(dataDir);
+    const store = createFileManualStore(dataDir, silentLogger);
     await seedStore(store, seedDir);
     await store.saveBody("alpha", "second", "written since");
 
     await addSeedManual(seedDir, "beta");
-    const restarted = createFileManualStore(dataDir);
+    const restarted = createFileManualStore(dataDir, silentLogger);
     await seedStore(restarted, seedDir);
 
     expect((await restarted.listManuals()).map(({ id }) => id).sort()).toEqual(["alpha", "beta"]);
@@ -121,7 +122,7 @@ describe("seedStore", () => {
     const seedDir = await tempSeedDir();
     await addSeedManual(seedDir, "alpha");
     await addSeedManual(seedDir, "beta");
-    const store = createFileManualStore(await tempDataDir());
+    const store = createFileManualStore(await tempDataDir(), silentLogger);
     const storedEarlier = { ...fixtureManual("alpha"), title: "Stored earlier" };
     await store.createManual(storedEarlier);
     await store.saveBody("alpha", "second", "written earlier");

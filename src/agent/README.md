@@ -197,6 +197,7 @@ function Conversation({ onProposeDelete }: { onProposeDelete: (manualId: string)
 - `types.ts`: `AgentMessage`, `AgentStatus` and `AgentAction`, and the wire types re-exported
   from `server/api/types.ts` with `export type`, with `LIBRARIAN_LIMITS`, the one value it
   re-exports.
-- `api.ts`: `streamReply`, which posts the conversation and parses the server-sent events.
+- `api.ts`: `streamReply`, which posts the conversation and parses the server-sent events. Uses
+  `apiFetch` (`src/reportErrors.ts`).
 - `store.ts`: the conversation, `send`, the URL options, `useAgent` and `useAgentActions`
   (`handleActions` is the same registration without the hook, for tests).

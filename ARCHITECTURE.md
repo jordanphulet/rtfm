@@ -39,6 +39,7 @@ server/
   testing.ts              helpers shared by the tests: temp folders, fast fake writers, the test model's prices and
                           gateway config (testGatewayConfig), collect, and readEvents for server-sent events
   usage.ts                npm run usage
+  logs.ts                 npm run logs (section 9)
   escape-tags.ts          escapes `<` in text inserted in a prompt (the section writer's and the planner's)
   api/
     types.ts              the API contract shared with the browser (section 2)
@@ -52,6 +53,7 @@ server/
     section-stream.ts     GET /api/manuals/:manualId/sections/:sectionId/stream
     librarian.ts          POST /api/librarian: the librarian's reply to a conversation (section 7)
     preview.ts            ?freeze, ?fail and ?library=empty: canned, never stored, never billed
+    client-errors.ts      POST /api/client-errors: logs what the browser reports (section 9)
   storage/
     types.ts              ManualStore, UsageLedger
     file-manual-store.ts  manuals and sections as files
@@ -98,6 +100,10 @@ server/
     bedrock-client.ts     the only file that imports @anthropic-ai/bedrock-sdk
     usage-report.ts       formats npm run usage
     sdk-boundary.test.ts  fails if anything else imports the SDK or the client
+  logging/                the logger (section 9)
+    logger.ts             createLogger, the line's shape, standard output and standard error
+    log-file.ts           the daily log files in the data folder, and their retention
+    log-reader.ts         reads, filters and formats entries for npm run logs
 ```
 
 Tests sit next to the code (`*.test.ts`) and never call Bedrock. Any test that starts a server
@@ -132,13 +138,19 @@ they hold when several test runs share the machine.
   `server.watch.ignored: ["**/.data/**"]`, so the data folder's writes never reach Vite's watcher.
 - `npm run server` runs the server alone, for `curl` and `npm run preview`. `RTFM_DATA_DIR` and
   `RTFM_PORT` (section 8) run it on another data folder or port.
-- `main.ts` prints `API server on http://127.0.0.1:<port>` and the model source. On SIGINT and
-  SIGTERM it closes the server and then exits. `close()` closes every connection, which aborts the
-  sections being written and the librarian's replies; waits until the gateway is idle (section 5);
-  then releases the data folder's lock (section 3). Under `npm run dev` the signal comes from
-  Ctrl-C, `dev.ts` forwarding one, or `node --watch` restarting the server after an edit. If the
-  folder is in use, `main.ts` prints the refusal and exits with code 1; under `npm run dev`, `node
-  --watch` then waits for a file change and Vite keeps running without an API server.
+- `main.ts` logs to standard output and to the data folder's log file (section 9). Its first
+  line, `server.started`, says `API server on http://127.0.0.1:<port>` and the model source.
+  - On SIGINT and SIGTERM it closes the server and then exits. `close()` closes every connection,
+    which aborts the sections being written and the librarian's replies; waits until the gateway
+    is idle (section 5); then releases the data folder's lock (section 3) and logs
+    `server.stopped`. Under `npm run dev` the signal comes from Ctrl-C, `dev.ts` forwarding one, or
+    `node --watch` restarting the server after an edit.
+  - If the folder is in use, the refusal is logged (`server.refused`) and `main.ts` exits with
+    code 1; under `npm run dev`, `node --watch` then waits for a file change and Vite keeps
+    running without an API server. Any other failure to start is logged as
+    `server.start-failed`, and an uncaught exception or unhandled rejection as `server.crashed`;
+    both exit with code 1.
+  - It exits only once standard output has taken every line, since a pipe may still hold some.
 - `.claude/launch.json` runs `npm run dev`.
 - `npm run shot` starts the server in process with `startServer({ ...config, port: 0,
   dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it
@@ -157,7 +169,7 @@ own pages (section 2), then reads the body, up to 262,144 characters: one that i
 isn't JSON gets `400 { error: "Bad request" }`. Then it:
 
 - matches `method` exactly, and `pattern` by splitting the path on `/`;
-- turns `res.on("close")` into the `AbortSignal`;
+- turns `res.on("close")` into the `AbortSignal`, and logs the request then (section 9);
 - writes the SSE headers (`content-type: text/event-stream`, `cache-control: no-cache`);
 - writes a response whose `body` is `undefined` with no body and no content type (`noContent`, 204).
 
@@ -188,6 +200,7 @@ the bundle.
 | `GET /api/manuals/:manualId/sections/:sectionId` | `200 { status, body? }`, with the body only when written, or `404` |
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
 | `POST /api/librarian` with `{ messages: LibrarianMessage[] }` | `text/event-stream` of `LibrarianEvent`s (section 7), or `400` |
+| `POST /api/client-errors` with a `ClientErrorReport` | `204`, `400`, or `429` past the hourly limit (section 9) |
 
 Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
 `500 { error: "Internal error" }` (or, once a stream has started, the stream just ends).
@@ -317,6 +330,7 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 .data/ledger/2026-10.jsonl                   one JSON line per ledger entry, append-only
 .data/STOP                                   the kill switch (section 5)
 .data/server.lock                            the PID of the server using the folder
+.data/logs/2026-10-12.jsonl                  the server's log for one UTC day (section 9)
 ```
 
 - **One server per data folder, enforced.** `startServer` first calls `lockDataFolder`
@@ -355,8 +369,9 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
   still succeeds: the manual is already gone, and the leftover folder is ignored.
 - **`markSeeded`** rewrites `seeded.json` through a temp file and a `rename`.
 - **A line cut off by a crash.** A crash mid-append can leave a last line with no newline.
-  - Reading skips any line that doesn't parse, wherever it is, with a warning naming the file and
-    line, so neither the gateway's replay nor `npm run usage` throws on it.
+  - Reading skips any line that doesn't parse, wherever it is, and logs a `ledger.line-skipped`
+    warning naming the file and line (on standard error for `npm run usage`), so neither the
+    gateway's replay nor `npm run usage` throws on it.
   - Skipping is safe for the caps. A `reserve` is awaited before the model is called, so a cut-off
     `reserve` means no call was made. A cut-off `settle` leaves its `reserve` unsettled, counted at
     its worst case.
@@ -1042,7 +1057,122 @@ records them, not read from AWS's bill.
 | A librarian turn | 2,000–2,700 | up to a few hundred | — | $0.002–0.004 | $0.013–0.016 (about $0.014 for a first turn) |
 | A plan of 23 sections | 3,957 | 2,481 | 21.3s, the longest silence 11.2s (the chapters, about 116 tokens a second) | $0.0164 | about $0.036 |
 
-## 9. The reader's store
+## 9. Logs
+
+One logger (`server/logging/`) writes every log line. It is created with its sinks and passed to
+whatever logs, as the gateway and the store are: `createRequestHandler`, `createRuns`,
+`createGateway`, `runAgent`, `sendReply`, the file store and the file ledger, and the client-error
+route all take a `Logger`. `main.ts` creates it with two sinks, standard output and the data
+folder's log file; `startServer` without a logger of its own (the shot script) logs to the log
+file alone. Tests pass `silentLogger`, or `capturingLogger()` (`testing.ts`) to read the entries,
+so nothing reaches the test runner's output.
+
+**A line.** `createLogger(sinks)` returns `info`, `warn` and `error`, each taking an event name, a
+short message, flat fields (strings, numbers and booleans; undefined ones are left out) and an
+optional error. It writes one JSON object per line, shaped for CloudWatch so a Lambda can send
+the same lines unchanged:
+
+```json
+{"timestamp":"2026-10-12T18:30:00.123Z","level":"ERROR","event":"section.failed","message":"Writing the-haunt-that-listens/the-room-controller failed","manualId":"the-haunt-that-listens","sectionId":"the-room-controller","characters":812,"durationMs":3150,"reason":"error","error":{"name":"Error","message":"…","stack":"…"}}
+```
+
+- `timestamp` is ISO 8601 in UTC; `level` is `INFO`, `WARN` or `ERROR`, from the values Lambda's
+  log-level filtering reads (`DEBUG` is the fourth, which nothing logs); then `event`, `message`
+  and the fields. Only the `error` nests: `{ name, message, stack }`, or the thrown value's type
+  and text when it isn't an `Error`.
+- **Standard output** is written with `process.stdout.write`, not `console.log`, which Lambda's
+  text format would prefix. `main.ts` ignores errors on standard output, so a closed pipe
+  (`EPIPE`) can't stop the server.
+- **The log file** is the only local part: `toLogFile(dataDir)` appends each line to
+  `<dataDir>/logs/<UTC date>.jsonl`.
+  - The first line written each UTC day creates the folder if needed, then removes the log files
+    older than 14 days (that day's and the 13 before it are kept; other files are left alone).
+  - **A daily budget of 50 MB** (`LOG_BYTES_PER_DAY`), counting what the day's file already holds
+    when the server starts. Any page can make the server log a `request` or `request.refused`
+    line, so past the budget one last `log.file-full` WARN line goes into the file, and the rest
+    of the day's lines go to standard output only.
+  - Writes are synchronous, so lines keep their order and none is lost when the process exits.
+  - A write that fails is never thrown, so the log file can't crash the server or fail a request.
+    The first failure is reported on standard error, and the next line tries again from the
+    start, creating the folder if it is gone.
+
+**What is logged.** Ids, sizes, counts and durations, never a manual's text, a prompt, a
+conversation or a reply, a request's query or headers (other than a refused request's `Host` and
+`Origin`), or credentials. A browser error's message and stack are logged as the browser reports
+them. The Bedrock client writes the AWS keys out of a thrown error's message and stack, since a
+signature error from AWS quotes the access key ID.
+
+| Event | Level | When, and its fields |
+| --- | --- | --- |
+| `server.started`, `server.stopped` | INFO | `startServer` listening (`port`, `models`, `dataDir`), and `close()` done |
+| `server.refused` | WARN | The data folder's lock is held by another server (`pid`, `dataDir`) |
+| `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use); an uncaught exception or unhandled rejection in `main.ts` |
+| `request` | INFO, WARN for 5xx | Each request, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
+| `request.refused` | WARN | The local-only checks refused it, or its body was too long or not JSON (`status`, `host`, `origin`) |
+| `request.failed` | ERROR | A handler threw (the 500 above) |
+| `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
+| `model.refused` | WARN | The gateway refused a call: `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap` or `busy`) |
+| `ledger.line-skipped` | WARN | A ledger line that isn't JSON (`file`, `line`) |
+| `section.started`, `section.joined` | INFO | A run starts; a reader joins one (`listeners`, `backlogCharacters`) |
+| `section.finished`, `section.aborted` | INFO | A run ends with `written` (`placeholder`), or its last reader left; `characters` and `durationMs` |
+| `section.failed` | WARN for budget, ERROR | A run fails (`reason`), with the error unless the budget refused it |
+| `section.refused` | WARN | A run beyond `maxConcurrentRuns` (`activeRuns`) |
+| `librarian.reply` | INFO, WARN for budget, ERROR | A reply ends: `outcome` (`done`, `aborted`, `budget` or `error`), `messages`, `turns`, `tools` (the tools the model called, comma-separated), `durationMs`; a failed reply's error |
+| `agent.tool-failed` | WARN | A tool threw, and the model got an error result (`tool`) |
+| `manual.cleanup-failed` | ERROR | A deleted manual's folder couldn't be removed (`manualId`, `folder`) |
+| `client.error` | ERROR, WARN for a request | What the browser reported (below) |
+| `client.limited` | WARN | Once an hour, when browser reports pass the hourly limit |
+| `log.file-full` | WARN | Written by the log file itself, as the day's last line in it |
+
+**Browser errors.** `src/reportErrors.ts` reports what goes wrong in the page to `POST
+/api/client-errors`, which is subject to the local-only checks like any route:
+
+- `startReportingErrors()`, called in `main.tsx`, listens for `error` (an uncaught error) and
+  `unhandledrejection` on `window`. `apiFetch`, which the library, manual and librarian stores
+  use in place of `fetch`, reports a request that gets no answer or a 5xx. A 4xx is the server's
+  own answer and already in its `request` line. Section streams aren't reported: the browser fires
+  an `error` on an `EventSource` whenever the page is left mid-stream, and a stream the server
+  ends early is in its own log (`section.aborted`, `clientClosed`).
+- A report is `{ kind, page, … }`, the `ClientErrorReport` in `api/types.ts`: `error` or
+  `rejection` with the error's `name`, `message` and `stack`; or `request` with its `method`,
+  `path` and `status` (none when there was no answer). `page` is the page's path, without its
+  query. It is sent with `fetch(…, { keepalive: true })`, and a report that fails is dropped, never
+  reported. Nothing is sent before `startReportingErrors()`, so tests send nothing, and a page
+  sends at most 20.
+- The route takes untrusted input. The body is capped like any other, and the schema is strict:
+  an unknown field is `400`, a request's `method` is `GET`, `POST` or `DELETE`, and its `path` is
+  printable ASCII starting `/api/`. Long strings are cut rather than refused (the page and path
+  to 300 characters, the message to 1,000, the stack to 4,000). At most 60 reports an hour (UTC)
+  are logged; past that it answers `429` and logs `client.limited` once, so a page that fails in
+  a loop can't fill the disk.
+- The route logs an error or rejection as `client.error` at ERROR with the browser's error
+  nested, and a failed request at WARN with its `method`, `path` (without its query) and
+  `status`.
+
+**`npm run logs`** (`server/logs.ts`, with `logging/log-reader.ts`) reads the daily files and
+prints the recent entries, oldest first, as `timestamp LEVEL event message key=value …` with an
+error's stack indented under it; `README.md` › Logs has its options.
+
+- **Nothing in a line can pass for another line.** Control characters (U+0000–U+001F and
+  U+007F–U+009F) are shown as `\uXXXX`, in the line and in each line of a stack, so a browser's
+  message can't start a forged line or send the terminal escape sequences. A field's value is
+  shown bare only when it is printable ASCII without spaces or quotes, and as JSON otherwise.
+- **Following.** Before it reads the recent entries, it notes the size of today's file. It then
+  reads that file from there every 500ms, taking whole lines only (`completeLinesFrom`), so a line
+  still being written is read once it is whole and none written meanwhile is missed. When the
+  UTC day changes it moves to the new day's file.
+- Lines that aren't log entries are skipped.
+
+**Tests**, next to each module: the line's shape and levels; the daily files, retention, the
+daily budget, and a failed write and the recovery after it; reading, filtering, formatting with
+control characters escaped, and reading whole lines from an offset (the follow loop itself is
+not tested); the request, refusal, model-call, run and reply entries; the client-error route
+(its fields, the local-only checks, truncation and the hourly limit); `main.ts` writing the same
+lines to standard output and the file; and that no cookie, query, conversation or section text
+reaches the log file (`api/logging.test.ts`), nor an AWS key from a Bedrock error
+(`gateway/bedrock-client.test.ts`, since only `server/gateway/` may use the Bedrock client).
+
+## 10. The reader's store
 
 The browser's side of the API (`src/manual/`: reading a manual, streaming its sections, at most
 three streams at once, and the preview options) is documented in `src/manual/README.md`.

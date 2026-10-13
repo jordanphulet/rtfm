@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createGateway } from "../../gateway/gateway.ts";
 import type { ModelEvent } from "../../gateway/types.ts";
+import { silentLogger } from "../../logging/logger.ts";
 import { createFileLedger, monthOf } from "../../storage/file-ledger.ts";
 import { createFileManualStore } from "../../storage/file-manual-store.ts";
 import { seedStore } from "../../storage/seed.ts";
@@ -33,12 +34,13 @@ function withRepeatedId(plan: StoredManual): StoredManual {
 
 async function planner(turns: ModelEvent[][], { request = REQUEST, store: wrapStore = (store: ManualStore) => store } = {}) {
   const dataDir = await tempDataDir();
-  const seeded = createFileManualStore(dataDir);
+  const seeded = createFileManualStore(dataDir, silentLogger);
   await seedStore(seeded);
   const store = wrapStore(seeded);
-  const ledger = createFileLedger(dataDir);
+  const ledger = createFileLedger(dataDir, silentLogger);
   const { client, prompts } = scriptedClient(turns);
   const gateway = await createGateway({
+    logger: silentLogger,
     createClient: () => client,
     ledger,
     config: testGatewayConfig(),

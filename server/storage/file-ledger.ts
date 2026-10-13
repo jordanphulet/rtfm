@@ -1,11 +1,12 @@
 import { mkdir, open, type FileHandle } from "node:fs/promises";
 import path from "node:path";
+import type { Logger } from "../logging/logger.ts";
 import { readIfExists } from "./files.ts";
 import type { LedgerEntry, UsageLedger } from "./types.ts";
 
 const NEWLINE = 0x0a;
 
-export function createFileLedger(dataDir: string): UsageLedger {
+export function createFileLedger(dataDir: string, logger: Logger): UsageLedger {
   const ledgerDir = path.join(dataDir, "ledger");
   const monthFile = (month: string) => path.join(ledgerDir, `${month}.jsonl`);
 
@@ -29,7 +30,10 @@ export function createFileLedger(dataDir: string): UsageLedger {
         try {
           return [JSON.parse(line) as LedgerEntry];
         } catch {
-          console.warn(`Skipped line ${index + 1} of ${file}, which isn't JSON (cut off by a crash mid-append?)`);
+          logger.warn("ledger.line-skipped", "Skipped a ledger line that isn't JSON (cut off by a crash mid-append?)", {
+            file,
+            line: index + 1,
+          });
           return [];
         }
       });

@@ -1,3 +1,4 @@
+import { apiFetch } from "../reportErrors";
 import type { LibrarianEvent, LibrarianMessage } from "./types";
 
 const LIBRARIAN_URL = "/api/librarian";
@@ -8,7 +9,7 @@ const LIBRARIAN_URL = "/api/librarian";
  */
 export async function* streamReply(messages: LibrarianMessage[], freeze?: number): AsyncGenerator<LibrarianEvent> {
   const url = freeze === undefined ? LIBRARIAN_URL : `${LIBRARIAN_URL}?freeze=${freeze}`;
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ messages }),

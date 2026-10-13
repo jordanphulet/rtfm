@@ -108,5 +108,6 @@ function Shelf() {
 ## Files
 
 - `types.ts`: `ManualSummary` (re-exported from the server) and `DeleteResult`.
-- `api.ts`: the API's URLs: `fetchLibrary` and `deleteManual`.
+- `api.ts`: the API's URLs: `fetchLibrary` and `deleteManual`. Uses `apiFetch`
+  (`src/reportErrors.ts`).
 - `store.ts`: `useLibrary`, `refreshLibrary`, `removeFromLibrary`, and the background refresh.

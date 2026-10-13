@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sendReply } from "../agent/librarian/reply.ts";
 import type { Gateway } from "../gateway/gateway.ts";
+import type { Logger } from "../logging/logger.ts";
 import type { ManualStore } from "../storage/types.ts";
 import { librarianPreview, previewFraction } from "./preview.ts";
 import { badRequest, type Route } from "./route.ts";
@@ -21,7 +22,7 @@ const requestSchema = z.object({
 });
 
 /** POST /api/librarian: the conversation so far, ending with the user's message; the reply streams back. */
-export function librarianRoute(store: ManualStore, gateway: Gateway): Route {
+export function librarianRoute(store: ManualStore, gateway: Gateway, logger: Logger): Route {
   return {
     method: "POST",
     pattern: "/api/librarian",
@@ -38,6 +39,7 @@ export function librarianRoute(store: ManualStore, gateway: Gateway): Route {
           conversation,
           signal,
           send: ({ event, data }: LibrarianEvent) => sink.send(event, data),
+          logger,
         });
     },
   };

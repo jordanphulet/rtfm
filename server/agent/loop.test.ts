@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createGateway } from "../gateway/gateway.ts";
 import { SpendingRefused, type ModelEvent, type PromptMessage } from "../gateway/types.ts";
+import { silentLogger } from "../logging/logger.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
@@ -41,11 +42,12 @@ function libraryTools(store: ManualStore): AgentTool[] {
 
 async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyUsd: 20 }, extraTools = [] as AgentTool[] } = {}) {
   const dataDir = await tempDataDir();
-  const store = createFileManualStore(dataDir);
+  const store = createFileManualStore(dataDir, silentLogger);
   await seedStore(store);
-  const ledger = createFileLedger(dataDir);
+  const ledger = createFileLedger(dataDir, silentLogger);
   const { client, prompts } = scriptedClient(turns);
   const gateway = await createGateway({
+    logger: silentLogger,
     createClient: () => client,
     ledger,
     config: testGatewayConfig({ caps }),
@@ -63,6 +65,7 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
       messages: [QUESTION],
       maxTurns: MAX_TURNS,
       signal,
+      logger: silentLogger,
     });
   }
 

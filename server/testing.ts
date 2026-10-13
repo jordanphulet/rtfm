@@ -4,6 +4,7 @@ import path from "node:path";
 import { expect, onTestFinished } from "vitest";
 import type { PriceTable } from "./gateway/prices.ts";
 import type { GatewayConfig } from "./gateway/types.ts";
+import { createLogger, type LogEntry } from "./logging/logger.ts";
 import type { StoredManual } from "./storage/types.ts";
 import { createFakeWriter } from "./writer/fake.ts";
 import type { SectionWriter } from "./writer/types.ts";
@@ -32,6 +33,12 @@ export function testGatewayConfig(overrides: Partial<GatewayConfig> = {}): Gatew
     },
     ...overrides,
   };
+}
+
+/** A logger that keeps its entries, for a test to read, and writes nowhere. */
+export function capturingLogger() {
+  const entries: LogEntry[] = [];
+  return { logger: createLogger([(_line, entry) => entries.push(entry)]), entries };
 }
 
 export async function tempDataDir(): Promise<string> {

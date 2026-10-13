@@ -9,6 +9,7 @@ import { CredentialsMissing } from "./gateway/credentials.ts";
 import { createGateway } from "./gateway/gateway.ts";
 import { prices } from "./gateway/prices.ts";
 import { ModelNotPriced, type ModelClient, type ModelRequest } from "./gateway/types.ts";
+import { silentLogger } from "./logging/logger.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { DataFolderInUse, LOCK_FILE_NAME } from "./storage/lock.ts";
@@ -28,8 +29,9 @@ describe("starting with Bedrock models", () => {
   it("refuses to start without credentials", async () => {
     const dataDir = await tempDataDir();
     const missingFile = pathToFileURL(path.join(dataDir, ".env.local"));
+    const store = createFileManualStore(dataDir, silentLogger);
     await expect(
-      createModels({ ...config, dataDir, models: "bedrock" }, createFileManualStore(dataDir), missingFile),
+      createModels({ ...config, dataDir, models: "bedrock" }, store, silentLogger, missingFile),
     ).rejects.toThrow(CredentialsMissing);
   });
 });
@@ -50,7 +52,7 @@ describe("one server per data folder", () => {
 describe("stopping", () => {
   it("waits for running model calls to settle in the ledger before it releases the data folder", async () => {
     const dataDir = await tempDataDir();
-    const fileLedger = createFileLedger(dataDir);
+    const fileLedger = createFileLedger(dataDir, silentLogger);
     const slowToSettle: UsageLedger = {
       async append(entry) {
         if (entry.kind === "settle") await sleep(100);
@@ -66,6 +68,7 @@ describe("stopping", () => {
       },
     };
     const gateway = await createGateway({
+      logger: silentLogger,
       createClient: () => answersOnlyAnAbort,
       ledger: slowToSettle,
       config,

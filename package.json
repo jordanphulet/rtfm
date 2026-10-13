@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "shot": "node scripts/shot.ts",
-    "usage": "node server/usage.ts"
+    "usage": "node server/usage.ts",
+    "logs": "node server/logs.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "0.34.4",

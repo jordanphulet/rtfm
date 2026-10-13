@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore } from "../storage/types.ts";
@@ -17,14 +18,14 @@ const writesUntilAborted: SectionWriter = {
 
 describe("GET /api/manuals/:manualId", () => {
   it("reads the written sections once, never a body, and reports a section being written as writing", async () => {
-    const seeded = createFileManualStore(await tempDataDir());
+    const seeded = createFileManualStore(await tempDataDir(), silentLogger);
     await seedStore(seeded);
     const store: ManualStore = {
       ...seeded,
       getBody: vi.fn(seeded.getBody),
       writtenSectionIds: vi.fn(seeded.writtenSectionIds),
     };
-    const runs = createRuns({ store: seeded, writer: writesUntilAborted, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store: seeded, writer: writesUntilAborted, maxConcurrentRuns: 3, logger: silentLogger });
     const events: string[] = [];
     const leave = await runs.join((await seeded.getManual(SAMPLE_ID))!, UNWRITTEN_ID, ({ event }) => events.push(event));
     await waitUntil(() => events.includes("append"));

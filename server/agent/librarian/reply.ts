@@ -2,6 +2,7 @@ import type { LibrarianEvent, LibrarianMessage } from "../../api/types.ts";
 import { LIBRARIAN_MAX_TURNS } from "../../config.ts";
 import type { Gateway } from "../../gateway/gateway.ts";
 import { SpendingRefused, type PromptMessage } from "../../gateway/types.ts";
+import type { Logger } from "../../logging/logger.ts";
 import type { ManualStore } from "../../storage/types.ts";
 import { runAgent } from "../loop.ts";
 import { DELETE_OUTCOME_NOTES, LIBRARIAN_SYSTEM_PROMPT } from "./prompt.ts";
@@ -13,18 +14,24 @@ import { librarianTools } from "./tools.ts";
  * tool runs, and is withdrawn just before the model writes more text after it, so the reply is
  * the last text the model wrote. A client that disconnects gets nothing more.
  */
-export async function sendReply({ gateway, store, conversation, signal, send }: {
+export async function sendReply({ gateway, store, conversation, signal, send, logger }: {
   gateway: Gateway;
   store: ManualStore;
   conversation: LibrarianMessage[];
   signal: AbortSignal;
   send: (event: LibrarianEvent) => void;
+  logger: Logger;
 }): Promise<void> {
+  const startedAt = performance.now();
+  let turns = 0;
+  const toolsCalled: string[] = [];
   let textSent = false;
   let toolCalledSinceText = false;
   const withdrawingTextBeforeTools: Gateway = {
     async *stream(...call) {
+      turns++;
       for await (const event of gateway.stream(...call)) {
+        if (event.type === "tool-use") toolsCalled.push(event.name);
         if (event.type === "tool-input" || event.type === "tool-use") toolCalledSinceText = textSent;
         if (event.type === "text") {
           if (toolCalledSinceText) send({ event: "withdraw", data: {} });
@@ -48,6 +55,14 @@ export async function sendReply({ gateway, store, conversation, signal, send }: 
     messages: promptMessages(conversation),
     maxTurns: LIBRARIAN_MAX_TURNS,
     signal,
+    logger,
+  });
+  const replyFields = (outcome: string) => ({
+    outcome,
+    messages: conversation.length,
+    turns,
+    tools: toolsCalled.join(","),
+    durationMs: Math.round(performance.now() - startedAt),
   });
   try {
     for await (const event of run) {
@@ -57,11 +72,20 @@ export async function sendReply({ gateway, store, conversation, signal, send }: 
       }
       send({ event: "text", data: { text: event.text } });
     }
+    logger.info("librarian.reply", `Replied in ${turns} ${turns === 1 ? "turn" : "turns"}`, replyFields("done"));
     send({ event: "done", data: {} });
   } catch (error) {
-    if (signal.aborted) return;
-    if (!(error instanceof SpendingRefused)) console.error("The librarian's reply failed:", error);
-    send({ event: "failed", data: { reason: error instanceof SpendingRefused ? "budget" : "error" } });
+    if (signal.aborted) {
+      logger.info("librarian.reply", "The reply was aborted: the client left", replyFields("aborted"));
+      return;
+    }
+    if (error instanceof SpendingRefused) {
+      logger.warn("librarian.reply", "The reply was refused by the budget", replyFields("budget"));
+      send({ event: "failed", data: { reason: "budget" } });
+      return;
+    }
+    logger.error("librarian.reply", "The reply failed", replyFields("error"), error);
+    send({ event: "failed", data: { reason: "error" } });
   }
 }
 

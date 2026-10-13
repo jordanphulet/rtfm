@@ -76,3 +76,11 @@ export type LibrarianEvent =
   | { event: "done"; data: NoData }
   | { event: "frozen"; data: NoData }
   | { event: "failed"; data: { reason: FailureReason } };
+
+/** What went wrong in the browser: an uncaught error, an unhandled rejection, or a failed API request. */
+export type ClientError =
+  | { kind: "error" | "rejection"; name?: string; message: string; stack?: string }
+  | { kind: "request"; method: string; path: string; status?: number };
+
+/** What the browser sends to `POST /api/client-errors`: what went wrong, and on which page. */
+export type ClientErrorReport = ClientError & { page: string };

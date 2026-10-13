@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Logger } from "../logging/logger.ts";
 import { createExclusively, isErrorCode, namesInFolder, readIfExists, tempPathFor } from "./files.ts";
 import { ID_PATTERN } from "./manual.ts";
 import type { ManualStore, StoredManual } from "./types.ts";
 
 const SECTION_FILE_EXTENSION = ".md";
 
-export function createFileManualStore(dataDir: string): ManualStore {
+export function createFileManualStore(dataDir: string, logger: Logger): ManualStore {
   const manualsDir = path.join(dataDir, "manuals");
   const seededFile = path.join(dataDir, "seeded.json");
   const manualDir = (manualId: string) => path.join(manualsDir, checkedId(manualId));
@@ -61,7 +62,8 @@ export function createFileManualStore(dataDir: string): ManualStore {
         throw error;
       }
       await rm(deleting, { recursive: true, force: true }).catch((error: unknown) => {
-        console.error(`The manual "${manualId}" is deleted, but removing ${deleting} failed:`, error);
+        const fields = { manualId, folder: deleting };
+        logger.error("manual.cleanup-failed", "The manual is deleted, but removing its folder failed", fields, error);
       });
     },
 

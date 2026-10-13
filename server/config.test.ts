@@ -3,6 +3,7 @@ import { config } from "./config.ts";
 import { createGateway } from "./gateway/gateway.ts";
 import { prices } from "./gateway/prices.ts";
 import { GatewayBusy, type Job, type ModelClient, type Prompt } from "./gateway/types.ts";
+import { silentLogger } from "./logging/logger.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { collect, tempDataDir, waitUntil } from "./testing.ts";
 
@@ -19,8 +20,9 @@ describe("committed config", () => {
       },
     };
     const gateway = await createGateway({
+      logger: silentLogger,
       createClient: () => answersOnlyAnAbort,
-      ledger: createFileLedger(dataDir),
+      ledger: createFileLedger(dataDir, silentLogger),
       config,
       prices,
       dataDir,

@@ -1,7 +1,8 @@
 import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { tempDataDir } from "../testing.ts";
+import { beforeEach, describe, expect, it } from "vitest";
+import { silentLogger } from "../logging/logger.ts";
+import { capturingLogger, tempDataDir } from "../testing.ts";
 import { createFileManualStore } from "./file-manual-store.ts";
 import type { ManualStore, StoredManual } from "./types.ts";
 
@@ -20,7 +21,7 @@ describe("file manual store", () => {
 
   beforeEach(async () => {
     dataDir = await tempDataDir();
-    store = createFileManualStore(dataDir);
+    store = createFileManualStore(dataDir, silentLogger);
   });
 
   it("stores and reads a manual", async () => {
@@ -118,17 +119,18 @@ describe("file manual store", () => {
     await store.saveBody(manual.id, "s", "body");
     const manualsDir = path.join(dataDir, "manuals");
     await chmod(path.join(manualsDir, manual.id, "sections"), 0o500);
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { logger, entries } = capturingLogger();
 
     try {
-      await expect(store.deleteManual(manual.id)).resolves.toBeUndefined();
+      await expect(createFileManualStore(dataDir, logger).deleteManual(manual.id)).resolves.toBeUndefined();
       expect(await store.getManual(manual.id)).toBeUndefined();
       expect(await store.listManuals()).toEqual([]);
-      expect(consoleError).toHaveBeenCalledOnce();
+      expect(entries).toEqual([
+        expect.objectContaining({ level: "ERROR", event: "manual.cleanup-failed", manualId: manual.id }),
+      ]);
     } finally {
       const [leftover] = await readdir(manualsDir);
       await chmod(path.join(manualsDir, leftover, "sections"), 0o700);
-      consoleError.mockRestore();
     }
   });
 
@@ -148,6 +150,6 @@ describe("file manual store", () => {
     await store.markSeeded("one");
     await store.markSeeded("two");
     await store.markSeeded("one");
-    expect(await createFileManualStore(dataDir).seededManualIds()).toEqual(["one", "two"]);
+    expect(await createFileManualStore(dataDir, silentLogger).seededManualIds()).toEqual(["one", "two"]);
   });
 });

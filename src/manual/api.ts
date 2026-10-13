@@ -1,3 +1,4 @@
+import { apiFetch } from "../reportErrors";
 import type { Manual, SectionEvent, SectionState } from "./types";
 
 export type StreamEvent = SectionEvent | { event: "error" };
@@ -49,7 +50,7 @@ function previewQuery(): string {
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   if (!response.ok) throw new Error(`GET ${url} answered ${response.status}`);
   return (await response.json()) as T;
 }

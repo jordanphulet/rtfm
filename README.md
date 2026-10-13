@@ -46,6 +46,7 @@ The API server listens on `127.0.0.1` only; `ARCHITECTURE.md` › The API has th
 | `npm run preview` | Serves the built app, passing `/api` to `npm run server` on 8787.          |
 | `npm run shot`    | Screenshots both pages in every state, on its own servers. See below.      |
 | `npm run usage`   | Today's and this month's model spend, by model and by job. See below.      |
+| `npm run logs`    | The server's recent log entries, filtered or followed. See below.          |
 
 ### Another data folder or port
 
@@ -59,7 +60,7 @@ RTFM_DATA_DIR=/tmp/rtfm-try RTFM_PORT=0 npm run server   # alone, on any free po
 
 - A relative `RTFM_DATA_DIR` is resolved against the working directory, which under `npm run` is
   the repo root.
-- `RTFM_PORT=0` takes any free port, and the server prints the one it got
+- `RTFM_PORT=0` takes any free port, and the server's first log line says which one it got
   (`API server on http://127.0.0.1:<port> (fake models)`). A port that isn't a whole number from
   0 to 65535 stops the server from starting.
 - Vite's proxy always points at 8787, so `RTFM_PORT` is for `npm run server` alone.
@@ -159,6 +160,7 @@ as it is.
   seed, stop the server, delete `.data/manuals/` and `.data/seeded.json`, and start it again.
 - `.data/ledger/<yyyy-mm>.jsonl`: the usage ledger, one line per model call reserved and settled.
   The caps are computed from it, so **never delete or edit it**.
+- `.data/logs/<yyyy-mm-dd>.jsonl`: the server's log, one file per UTC day (see Logs, below).
 - `.data/server.lock`: the PID of the server using the folder (below).
 - `.data/STOP`: **the kill switch.** While this file exists, the gateway refuses every new model
   call at once, with no restart, and the reader and the librarian say their budget is reached.
@@ -174,7 +176,8 @@ rm .data/STOP      # allow them again
 ```
 
 **One server per data folder.** The caps are checked in the server's memory, so a second server
-on the same folder refuses to start. It prints this and exits with code 1:
+on the same folder refuses to start. It logs this as a `server.refused` line and exits with code
+1:
 
 ```text
 Another server (PID <pid>) is using the data folder <folder>. Stop it first, or use another data folder.
@@ -190,6 +193,30 @@ with counts of aborted, failed and estimated calls, any unsettled reservations, 
 kill switch is on. `npm run usage -- <dataDir>` reads another data folder. A call cut short (the
 reader closed the tab, the model stalled) is marked estimated; what it is charged is in
 `ARCHITECTURE.md` › The model gateway.
+
+## Logs
+
+The server logs one JSON line per event, both to its standard output (the terminal running
+`npm run dev` or `npm run server`) and to `logs/<yyyy-mm-dd>.jsonl` in its data folder, one file
+per UTC day. The browser's uncaught errors and failed API requests reach the same log. The line's
+shape, how long files are kept, and what is and isn't logged are in `ARCHITECTURE.md` › Logs.
+
+`npm run logs` prints recent entries, one line each, with any error's stack under it:
+
+```sh
+npm run logs                              # the last 50 entries in .data/logs
+npm run logs -- --level warn              # warnings and errors only
+npm run logs -- --event section           # section.started, section.failed, …
+npm run logs -- --lines 200 --follow      # the last 200, then each new one as it is written
+npm run logs -- /tmp/rtfm-try -e request  # another data folder's requests
+```
+
+- `--level` (`-l`) shows that level and the ones above it: `DEBUG`, `INFO`, `WARN`, `ERROR`.
+- `--event` (`-e`) shows that event and the events under it (`section` matches `section.failed`).
+- `--lines` (`-n`) is how many entries to show first (50 unless given); `--follow` (`-f`) then
+  keeps printing new ones until it is stopped with Ctrl-C.
+
+The files are JSON lines, so `grep` and `jq` read them as they are.
 
 ## Screenshots
 
@@ -219,16 +246,17 @@ clearing that folder first and nothing else:
   through it. Its README documents the API.
 - `src/agent/`: the librarian's conversation. It sends the conversation to the librarian on the
   server and streams back each reply. Its README documents the API and the URL options.
+- `src/reportErrors.ts`: reports the browser's errors and failed API requests to the server's log.
 - `server/`: the API server, storage and the data folder's lock, the section writers, the agent
-  loop, the librarian and its planner, and the model gateway. The seven seed manuals are in
-  `server/seed/`. `ARCHITECTURE.md` documents it.
+  loop, the librarian and its planner, the model gateway, and the logger. The seven seed manuals
+  are in `server/seed/`. `ARCHITECTURE.md` documents it.
 - `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`).
 - `research/`: dated research for the back-end, each opening with what was adopted:
   `bedrock-models.md` (which Bedrock models to use), `aws-hosting.md` (Claude Platform on AWS and
   the AgentCore harness) and `lambda-and-dynamodb.md` (running the server on Lambda and
   DynamoDB).
 - `ARCHITECTURE.md`: the server, the API, storage, the writers, the gateway, the agent loop, the
-  librarian, configuration and the reader's store.
+  librarian, configuration, logs and the reader's store.
 - `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
 - `WORKLIST.md`: the phases and tasks, with each task's status.
 - `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and

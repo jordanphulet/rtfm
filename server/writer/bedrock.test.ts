@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SectionEvent } from "../api/types.ts";
 import { createGateway, killSwitchPath } from "../gateway/gateway.ts";
 import type { ModelClient, ModelEvent, ModelRequest } from "../gateway/types.ts";
+import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { LedgerEntry, StoredManual } from "../storage/types.ts";
@@ -39,12 +40,13 @@ function modelClient(pieces: string[], stopReason = "end_turn") {
 
 async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", config = testGatewayConfig() } = {}) {
   const dataDir = await tempDataDir();
-  const store = createFileManualStore(dataDir);
+  const store = createFileManualStore(dataDir, silentLogger);
   await seedStore(store);
   const manual = (await store.getManual(SAMPLE_ID))!;
   const ledgerEntries: LedgerEntry[] = [];
   const { client, requests } = modelClient(pieces, stopReason);
   const gateway = await createGateway({
+    logger: silentLogger,
     createClient: () => client,
     ledger: { append: async (entry) => void ledgerEntries.push(entry), entriesForMonth: async () => [] },
     config,
@@ -148,7 +150,7 @@ describe("the Bedrock writer", () => {
 
 describe("a run with the Bedrock writer", () => {
   async function runEvents(setup: Awaited<ReturnType<typeof setUp>>, maxConcurrentRuns = 3) {
-    const runs = createRuns({ store: setup.store, writer: setup.writer, maxConcurrentRuns });
+    const runs = createRuns({ store: setup.store, writer: setup.writer, maxConcurrentRuns, logger: silentLogger });
     const events: SectionEvent[] = [];
     await runs.join(setup.manual, UNWRITTEN_ID, (event) => events.push(event));
     await waitUntil(() => events.some((event) => event.event !== "append"));

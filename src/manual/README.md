@@ -23,7 +23,8 @@ described in `DESIGN.md`, and the API in `ARCHITECTURE.md` › The API. The samp
 ## Files
 
 - `api.ts`: the API's URLs, `fetch` for the manual and a section, and the `EventSource` for a
-  section's stream (closed after its first event that isn't `append`).
+  section's stream (closed after its first event that isn't `append`). Uses `apiFetch`
+  (`src/reportErrors.ts`).
 - `store.ts`: `useManual`, `useSection` and `retrySection`. It keeps each manual's state apart,
   keyed by manual id: the manual, its cached requests, section texts, opened sections, open
   streams and failures. Only the queue of streams waiting for a slot is shared, because the limit

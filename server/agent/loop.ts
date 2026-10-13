@@ -1,5 +1,6 @@
 import type { Gateway } from "../gateway/gateway.ts";
 import { SpendingRefused, type ContentBlock, type Job, type ModelEvent, type PromptMessage } from "../gateway/types.ts";
+import type { Logger } from "../logging/logger.ts";
 import type { AgentTool } from "./tool.ts";
 
 export type AgentEvent = { type: "status"; text: string } | { type: "text"; text: string };
@@ -9,7 +10,7 @@ type ToolResult = Extract<ContentBlock, { type: "tool_result" }>;
 
 export class AgentStopped extends Error {}
 
-export async function* runAgent({ gateway, job, system, tools, messages, maxTurns, signal }: {
+export async function* runAgent({ gateway, job, system, tools, messages, maxTurns, signal, logger }: {
   gateway: Gateway;
   job: Job;
   system: string;
@@ -17,6 +18,7 @@ export async function* runAgent({ gateway, job, system, tools, messages, maxTurn
   messages: PromptMessage[];
   maxTurns: number;
   signal: AbortSignal;
+  logger: Logger;
 }): AsyncGenerator<AgentEvent, PromptMessage[]> {
   const conversation = [...messages];
   const definitions = tools.map((tool) => tool.definition);
@@ -41,7 +43,7 @@ export async function* runAgent({ gateway, job, system, tools, messages, maxTurn
       signal.throwIfAborted();
       const tool = tools.find(({ definition }) => definition.name === toolUse.name);
       if (tool) yield { type: "status", text: tool.status };
-      results.push(await runTool(tool, toolUse, signal));
+      results.push(await runTool(tool, toolUse, signal, logger));
     }
     conversation.push({ role: "user", content: results });
   }
@@ -63,7 +65,12 @@ async function* modelTurn(events: AsyncIterable<ModelEvent>) {
   return { content, stopReason };
 }
 
-async function runTool(tool: AgentTool | undefined, toolUse: ToolUse, signal: AbortSignal): Promise<ToolResult> {
+async function runTool(
+  tool: AgentTool | undefined,
+  toolUse: ToolUse,
+  signal: AbortSignal,
+  logger: Logger,
+): Promise<ToolResult> {
   const result = { type: "tool_result" as const, tool_use_id: toolUse.id };
   if (!tool) return { ...result, content: `There is no tool named "${toolUse.name}"`, is_error: true };
   try {
@@ -72,6 +79,7 @@ async function runTool(tool: AgentTool | undefined, toolUse: ToolUse, signal: Ab
   } catch (error) {
     if (error instanceof SpendingRefused) throw error;
     signal.throwIfAborted();
+    logger.warn("agent.tool-failed", `The tool ${toolUse.name} threw`, { tool: toolUse.name }, error);
     return { ...result, content: String(error), is_error: true };
   }
 }

@@ -2,11 +2,12 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SectionEvent } from "../api/types.ts";
+import { silentLogger, type LogEntry } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
 import {
-  OTHER_UNWRITTEN_ID, recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil, WRITTEN_ID,
+  capturingLogger, OTHER_UNWRITTEN_ID, recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil, WRITTEN_ID,
 } from "../testing.ts";
 import { fakeBody } from "./fake.ts";
 import { createRuns } from "./runs.ts";
@@ -57,14 +58,14 @@ describe("runs", () => {
 
   beforeEach(async () => {
     dataDir = await tempDataDir();
-    store = createFileManualStore(dataDir);
+    store = createFileManualStore(dataDir, silentLogger);
     await seedStore(store);
     manual = (await store.getManual(SAMPLE_ID))!;
   });
 
   it("writes an unwritten section, saves it and reports it written", async () => {
     const writer = recordingWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const reader = recorder();
 
     await runs.join(manual, UNWRITTEN_ID, reader.listener);
@@ -79,7 +80,7 @@ describe("runs", () => {
 
   it("streams a placeholder to the end but stores nothing, so the section stays unwritten", async () => {
     const writer = recordingWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const geese = (await store.getManual(GEESE_ID))!;
     const sectionId = geese.chapters[0].sections[0].id;
     const first = recorder();
@@ -107,7 +108,7 @@ describe("runs", () => {
   });
 
   it("knows which sections of a manual are being written", async () => {
-    const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3, logger: silentLogger });
     const reader = recorder();
     expect(runs.isWriting(SAMPLE_ID)).toBe(false);
 
@@ -123,9 +124,9 @@ describe("runs", () => {
 
   it("fails a run whose manual is deleted before it finishes, and stores nothing", async () => {
     const writer = signalIgnoringWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const { logger, entries } = capturingLogger();
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger });
     const reader = recorder();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await runs.join(manual, UNWRITTEN_ID, reader.listener);
     await store.deleteManual(SAMPLE_ID);
@@ -135,12 +136,12 @@ describe("runs", () => {
     expect(reader.events.at(-1)).toEqual({ event: "failed", data: { reason: "error" } });
     expect(await store.listManuals()).not.toContainEqual(expect.objectContaining({ id: SAMPLE_ID }));
     expect(await store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBeUndefined();
-    consoleError.mockRestore();
+    expect(entries.at(-1)).toMatchObject({ level: "ERROR", event: "section.failed", reason: "error" });
   });
 
   it("writes a section again when its body file was deleted after it was written", async () => {
     const writer = recordingWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const first = recorder();
     await runs.join(manual, UNWRITTEN_ID, first.listener);
     await waitUntil(() => first.last() === "written");
@@ -158,7 +159,7 @@ describe("runs", () => {
 
   it("sends a written section whole, without starting a writer", async () => {
     const writer = recordingWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const reader = recorder();
 
     await runs.join(manual, WRITTEN_ID, reader.listener);
@@ -170,7 +171,7 @@ describe("runs", () => {
 
   it("starts one writer when two readers open a section at the same moment", async () => {
     const writer = recordingWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const first = recorder();
     const second = recorder();
 
@@ -198,7 +199,7 @@ describe("runs", () => {
       },
     };
     const writer = recordingWriter();
-    const runs = createRuns({ store: secondReadIsLate, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store: secondReadIsLate, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const first = recorder();
     const late = recorder();
 
@@ -215,7 +216,7 @@ describe("runs", () => {
   });
 
   it("gives a reader who joins mid-run the text so far, then the same events", async () => {
-    const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3, logger: silentLogger });
     const first = recorder();
     const joiner = recorder();
 
@@ -230,7 +231,7 @@ describe("runs", () => {
 
   it("aborts the writer and stores nothing when the last reader leaves", async () => {
     const writer = recordingWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const first = recorder();
     const second = recorder();
 
@@ -252,7 +253,7 @@ describe("runs", () => {
 
   it("stores nothing when the last reader leaves and the writer finishes anyway", async () => {
     const writer = signalIgnoringWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 3, logger: silentLogger });
     const reader = recorder();
     const saveBody = vi.spyOn(store, "saveBody");
 
@@ -269,7 +270,7 @@ describe("runs", () => {
   });
 
   it("reports a failed writer and leaves the section unwritten", async () => {
-    const runs = createRuns({ store, writer: failingWriter, maxConcurrentRuns: 3 });
+    const runs = createRuns({ store, writer: failingWriter, maxConcurrentRuns: 3, logger: silentLogger });
     const reader = recorder();
 
     await runs.join(manual, UNWRITTEN_ID, reader.listener);
@@ -280,7 +281,7 @@ describe("runs", () => {
   });
 
   it("refuses a run beyond the limit with an error", async () => {
-    const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 1 });
+    const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 1, logger: silentLogger });
     const first = recorder();
     const second = recorder();
 
@@ -294,7 +295,7 @@ describe("runs", () => {
 
   it("frees a run's slot once it is aborted or written", async () => {
     const writer = recordingWriter();
-    const runs = createRuns({ store, writer, maxConcurrentRuns: 1 });
+    const runs = createRuns({ store, writer, maxConcurrentRuns: 1, logger: silentLogger });
     const aborted = recorder();
     const written = recorder();
     const last = recorder();
@@ -307,5 +308,60 @@ describe("runs", () => {
     await waitUntil(() => last.last() === "written");
 
     expect(writer.signals).toHaveLength(3);
+  });
+
+  describe("logging", () => {
+    const summary = (entries: LogEntry[]) => entries.map(({ level, event, sectionId }) => ({ level, event, sectionId }));
+
+    it("logs a run starting, a reader joining it and the run finishing, with its size and duration", async () => {
+      const { logger, entries } = capturingLogger();
+      const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3, logger });
+      const first = recorder();
+      const second = recorder();
+
+      await runs.join(manual, UNWRITTEN_ID, first.listener);
+      await runs.join(manual, UNWRITTEN_ID, second.listener);
+      await waitUntil(() => second.last() === "written");
+
+      expect(summary(entries)).toEqual([
+        { level: "INFO", event: "section.started", sectionId: UNWRITTEN_ID },
+        { level: "INFO", event: "section.joined", sectionId: UNWRITTEN_ID },
+        { level: "INFO", event: "section.finished", sectionId: UNWRITTEN_ID },
+      ]);
+      expect(entries[1]).toMatchObject({ manualId: SAMPLE_ID, listeners: 2 });
+      expect(entries[2]).toMatchObject({
+        manualId: SAMPLE_ID,
+        characters: (await fakeBody(SAMPLE_ID, UNWRITTEN_ID)).length,
+        durationMs: expect.any(Number),
+        placeholder: false,
+      });
+    });
+
+    it("logs a run aborted when its last reader leaves, a refused run, and a budget failure", async () => {
+      const { logger, entries } = capturingLogger();
+      const writer = signalIgnoringWriter();
+      const runs = createRuns({ store, writer, maxConcurrentRuns: 1, logger });
+
+      const leave = await runs.join(manual, UNWRITTEN_ID, recorder().listener);
+      await runs.join(manual, OTHER_UNWRITTEN_ID, recorder().listener);
+      leave();
+      writer.carryOn();
+      await writer.finished;
+      await waitUntil(() => entries.some(({ event }) => event === "section.aborted"));
+      const budget = recorder();
+      const budgetRuns = createRuns({ store, writer: failingWriter, maxConcurrentRuns: 1, logger });
+      await budgetRuns.join(manual, UNWRITTEN_ID, budget.listener);
+      await waitUntil(() => budget.last() === "failed");
+
+      expect(summary(entries)).toEqual([
+        { level: "INFO", event: "section.started", sectionId: UNWRITTEN_ID },
+        { level: "WARN", event: "section.refused", sectionId: OTHER_UNWRITTEN_ID },
+        { level: "INFO", event: "section.aborted", sectionId: UNWRITTEN_ID },
+        { level: "INFO", event: "section.started", sectionId: UNWRITTEN_ID },
+        { level: "WARN", event: "section.failed", sectionId: UNWRITTEN_ID },
+      ]);
+      expect(entries.at(-1)).toMatchObject({ reason: "budget" });
+      expect(entries.at(-1)).not.toHaveProperty("error");
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { sectionsInReadingOrder } from "../storage/manual.ts";
 import { seedStore } from "../storage/seed.ts";
@@ -16,7 +17,7 @@ function userMessage(manual: StoredManual, sectionId: string): string {
 }
 
 async function sampleManual() {
-  const store = createFileManualStore(await tempDataDir());
+  const store = createFileManualStore(await tempDataDir(), silentLogger);
   await seedStore(store);
   return (await store.getManual(SAMPLE_ID))!;
 }

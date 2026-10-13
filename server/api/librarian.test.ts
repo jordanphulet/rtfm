@@ -9,6 +9,7 @@ import { startServer, type RunningServer } from "../app.ts";
 import { config as committedConfig } from "../config.ts";
 import { createGateway, killSwitchPath, type Gateway } from "../gateway/gateway.ts";
 import type { ModelEvent } from "../gateway/types.ts";
+import { silentLogger } from "../logging/logger.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import { collect, readEvents, SAMPLE_ID, tempDataDir, TEST_PRICES, testGatewayConfig } from "../testing.ts";
 import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage, type ManualSummary } from "./types.ts";
@@ -46,9 +47,10 @@ async function start(librarian: Gateway = fakeLibrarianModel(INSTANT_PACE), data
 }
 
 async function scriptedGateway(turns: ModelEvent[][], dataDir: string, caps = { dailyUsd: 2, monthlyUsd: 20 }) {
-  const ledger = createFileLedger(dataDir);
+  const ledger = createFileLedger(dataDir, silentLogger);
   const { client, prompts } = scriptedClient(turns);
   const gateway = await createGateway({
+    logger: silentLogger,
     createClient: () => client,
     ledger,
     config: testGatewayConfig({ caps }),

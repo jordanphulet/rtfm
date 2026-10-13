@@ -2,9 +2,10 @@ import { appendFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { silentLogger, type Logger } from "../logging/logger.ts";
 import { createFileLedger } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry, UsageLedger } from "../storage/types.ts";
-import { collect, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, waitUntil } from "../testing.ts";
+import { capturingLogger, collect, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, waitUntil } from "../testing.ts";
 import { createGateway, killSwitchPath, type RunningGateway } from "./gateway.ts";
 import {
   GatewayBusy,
@@ -95,7 +96,7 @@ describe("model gateway", () => {
 
   beforeEach(async () => {
     dataDir = await tempDataDir();
-    ledger = createFileLedger(dataDir);
+    ledger = createFileLedger(dataDir, silentLogger);
   });
 
   afterEach(() => {
@@ -115,9 +116,13 @@ describe("model gateway", () => {
 
   async function gateway(
     client: ModelClient,
-    { config = gatewayConfig(), now = () => NOW }: { config?: GatewayConfig; now?: () => Date } = {},
+    {
+      config = gatewayConfig(),
+      now = () => NOW,
+      logger = silentLogger,
+    }: { config?: GatewayConfig; now?: () => Date; logger?: Logger } = {},
   ): Promise<RunningGateway> {
-    return createGateway({ createClient: () => client, ledger, config, prices: TEST_PRICES, dataDir, now });
+    return createGateway({ createClient: () => client, ledger, config, prices: TEST_PRICES, dataDir, now, logger });
   }
 
   async function seedLedger(entries: LedgerEntry[]) {
@@ -131,7 +136,8 @@ describe("model gateway", () => {
   it("refuses at start-up a job whose model is not in the price table, before creating the client", async () => {
     const config = gatewayConfig({ jobs: { ...JOBS, librarian: { model: "unpriced-model", maxTokens: 10 } } });
     const createClient = vi.fn(() => fakeClient().client);
-    await expect(createGateway({ createClient, ledger, config, prices: TEST_PRICES, dataDir })).rejects.toThrow(
+    const logger = silentLogger;
+    await expect(createGateway({ createClient, ledger, config, prices: TEST_PRICES, dataDir, logger })).rejects.toThrow(
       ModelNotPriced,
     );
     expect(createClient).not.toHaveBeenCalled();
@@ -236,7 +242,8 @@ describe("model gateway", () => {
     });
 
     it("replays a ledger with a line cut off by a crash, counting every line it can read", async () => {
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { logger, entries } = capturingLogger();
+      ledger = createFileLedger(dataDir, logger);
       const crashed = { callId: "crashed", reservedAt: "2026-10-11T08:00:00.000Z", job: "write-section", model: TEST_MODEL };
       await seedLedger([{ kind: "reserve", ...crashed, worstCaseUsd: 1.8 }]);
       await appendFile(path.join(dataDir, "ledger", "2026-10.jsonl"), '{"kind":"settle","callId":"crashed"');
@@ -244,7 +251,7 @@ describe("model gateway", () => {
 
       const stream = (await gateway(fakeClient().client)).stream("write-section", EMPTY_PROMPT, signal());
       await expect(collect(stream)).rejects.toThrow(SpendingRefused);
-      expect(warn).toHaveBeenCalledOnce();
+      expect(entries.filter(({ event }) => event === "ledger.line-skipped")).toHaveLength(1);
     });
 
     it("frees the unused part of a reservation once the call settles", async () => {
@@ -525,5 +532,74 @@ describe("model gateway", () => {
     await expect(collect(running.stream("write-section", EMPTY_PROMPT, aborted))).rejects.toThrow();
     expect(requests).toHaveLength(0);
     expect(await ledger.entriesForMonth("2026-10")).toEqual([]);
+  });
+
+  describe("logging", () => {
+    it("logs each call once it settles: its ledger call id, job, model, outcome, tokens, cost and duration", async () => {
+      const { logger, entries } = capturingLogger();
+      await collect((await gateway(fakeClient().client, { logger })).stream("write-section", EMPTY_PROMPT, signal()));
+
+      const [settle] = await settleEntries();
+      expect(entries).toEqual([
+        expect.objectContaining({
+          level: "INFO",
+          event: "model.call",
+          callId: settle!.callId,
+          job: "write-section",
+          model: TEST_MODEL,
+          outcome: "complete",
+          inputTokens: 50,
+          outputTokens: 20,
+          cacheWriteTokens: 0,
+          cacheReadTokens: 0,
+          usd: settle!.usd,
+          estimated: false,
+          durationMs: 0,
+        }),
+      ]);
+    });
+
+    it("logs a failed call as a warning, with its error", async () => {
+      const { logger, entries } = capturingLogger();
+      const client: ModelClient = {
+        async *stream() {
+          throw new Error("AccessDeniedException");
+        },
+      };
+      const running = await gateway(client, { logger });
+
+      await expect(collect(running.stream("librarian", EMPTY_PROMPT, signal()))).rejects.toThrow();
+      expect(entries).toEqual([
+        expect.objectContaining({
+          level: "WARN",
+          event: "model.call",
+          job: "librarian",
+          outcome: "failed",
+          error: expect.objectContaining({ message: "AccessDeniedException" }),
+        }),
+      ]);
+    });
+
+    it("logs each refusal with its reason: the kill switch, too many calls, or a cap", async () => {
+      const { logger, entries } = capturingLogger();
+      const { client, requests } = fakeClient({ ending: "hang" });
+      const oneCallAtATime = await gateway(client, { config: gatewayConfig({ maxConcurrentCalls: 1 }), logger });
+      const tinyCap = await gateway(client, { config: gatewayConfig({ caps: { dailyUsd: 0.0001, monthlyUsd: 20 } }), logger });
+
+      await writeFile(killSwitchPath(dataDir), "");
+      await expect(collect(oneCallAtATime.stream("write-section", EMPTY_PROMPT, signal()))).rejects.toThrow(SpendingRefused);
+      await rm(killSwitchPath(dataDir));
+      void collect(oneCallAtATime.stream("write-section", EMPTY_PROMPT, signal())).catch(() => {});
+      await waitUntil(() => requests.length === 1);
+      await expect(collect(oneCallAtATime.stream("librarian", EMPTY_PROMPT, signal()))).rejects.toThrow(GatewayBusy);
+      await expect(collect(tinyCap.stream("plan-manual", EMPTY_PROMPT, signal()))).rejects.toThrow(SpendingRefused);
+
+      const refusals = entries.filter(({ event }) => event === "model.refused");
+      expect(refusals.map(({ level, job, model, reason }) => ({ level, job, model, reason }))).toEqual([
+        { level: "WARN", job: "write-section", model: TEST_MODEL, reason: "kill-switch" },
+        { level: "WARN", job: "librarian", model: TEST_MODEL, reason: "busy" },
+        { level: "WARN", job: "plan-manual", model: TEST_MODEL, reason: "daily-cap" },
+      ]);
+    });
   });
 });

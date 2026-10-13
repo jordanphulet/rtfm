@@ -1,5 +1,6 @@
 import { fakeLibrarianModel, INSTANT_PACE } from "../agent/librarian/fake-model.ts";
 import { sendReply } from "../agent/librarian/reply.ts";
+import { silentLogger } from "../logging/logger.ts";
 import type { ManualStore } from "../storage/types.ts";
 import { chunkEnds, fakeBody } from "../writer/fake.ts";
 import type { EventSink, EventStream } from "./route.ts";
@@ -61,6 +62,7 @@ export function librarianPreview(store: ManualStore, conversation: LibrarianMess
       conversation,
       signal: new AbortController().signal,
       send: (event) => events.push(event),
+      logger: silentLogger,
     });
     sendCutReply(sink, events, fraction);
   };
