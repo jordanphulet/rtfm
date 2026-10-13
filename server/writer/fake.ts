@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { readSeedBody } from "../storage/seed.ts";
-import type { SectionWriter } from "./types.ts";
+import { sectionToWrite, type SectionWriter } from "./types.ts";
 
 export interface FakePace {
   firstChunkDelayMs: number;
@@ -15,7 +15,7 @@ const PLACEHOLDER_BODY =
 export function createFakeWriter(pace: FakePace = READER_PACE): SectionWriter {
   return {
     async *write(manual, sectionId, signal) {
-      const body = await fakeBody(manual.id, sectionId);
+      const body = await fakeBody(manual.id, sectionToWrite(manual, sectionId).id);
       const placeholder = body === PLACEHOLDER_BODY;
       await sleep(pace.firstChunkDelayMs, undefined, { signal });
       let start = 0;

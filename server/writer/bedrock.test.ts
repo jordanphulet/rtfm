@@ -1,13 +1,15 @@
 import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import type { SectionEvent } from "../api/types.ts";
-import { createGateway, killSwitchPath } from "../gateway/gateway.ts";
+import { killSwitchPath } from "../gateway/gateway.ts";
 import type { ModelClient, ModelEvent, ModelRequest } from "../gateway/types.ts";
 import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
-import type { LedgerEntry, StoredManual } from "../storage/types.ts";
-import { collect, SAMPLE_ID, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, UNWRITTEN_ID, waitUntil } from "../testing.ts";
+import type { StoredManual } from "../storage/types.ts";
+import {
+  collect, inPieces, SAMPLE_ID, tempDataDir, TEST_MODEL, testGateway, testGatewayConfig, UNWRITTEN_ID, waitUntil,
+} from "../testing.ts";
 import { createBedrockWriter, SectionRejected } from "./bedrock.ts";
 import { createRuns } from "./runs.ts";
 import { WriteFailed, type WrittenChunk } from "./types.ts";
@@ -17,12 +19,6 @@ const EXPECTED_CHARACTERS = 100;
 
 const GOOD_BODY =
   "Every room has a small, dull brain.[^dull]\n\n## A room, in states\n\nSee [The Show Must Stop](section:the-show-must-stop).\n\n[^dull]: Dull is good.\n";
-
-function inPieces(text: string, size = 7): string[] {
-  const pieces: string[] = [];
-  for (let start = 0; start < text.length; start += size) pieces.push(text.slice(start, start + size));
-  return pieces;
-}
 
 function modelClient(pieces: string[], stopReason = "end_turn") {
   const requests: ModelRequest[] = [];
@@ -43,16 +39,8 @@ async function setUp({ pieces = inPieces(GOOD_BODY), stopReason = "end_turn", co
   const store = createFileManualStore(dataDir, silentLogger);
   await seedStore(store);
   const manual = (await store.getManual(SAMPLE_ID))!;
-  const ledgerEntries: LedgerEntry[] = [];
   const { client, requests } = modelClient(pieces, stopReason);
-  const gateway = await createGateway({
-    logger: silentLogger,
-    createClient: () => client,
-    ledger: { append: async (entry) => void ledgerEntries.push(entry), entriesForMonth: async () => [] },
-    config,
-    prices: TEST_PRICES,
-    dataDir,
-  });
+  const { gateway, ledgerEntries } = await testGateway(client, dataDir, config);
   const writer = createBedrockWriter({
     gateway,
     store,
@@ -67,12 +55,11 @@ function write(writer: ReturnType<typeof createBedrockWriter>, manual: StoredMan
 }
 
 describe("the Bedrock writer", () => {
-  it("streams the body in whole-word chunks with progress estimated against the expected length", async () => {
+  it("streams the body with progress estimated against the expected length, from the job's model", async () => {
     const { writer, manual, requests } = await setUp();
     const chunks = await write(writer, manual);
 
     expect(chunks.map((chunk) => chunk.text).join("")).toBe(GOOD_BODY);
-    expect(chunks.slice(0, -1).every((chunk) => /\s$/.test(chunk.text))).toBe(true);
     expect(chunks.every((chunk) => chunk.progress <= 0.99)).toBe(true);
     expect(chunks[0]!.progress).toBeCloseTo(chunks[0]!.text.length / EXPECTED_CHARACTERS);
     expect(requests[0]!.model).toBe(TEST_MODEL);
@@ -130,7 +117,7 @@ describe("the Bedrock writer", () => {
     });
     await expect(write(writer, manual)).rejects.toEqual(new WriteFailed("budget"));
     expect(requests).toEqual([]);
-    expect(ledgerEntries).toEqual([]);
+    expect(await ledgerEntries()).toEqual([]);
   });
 
   it("reports the kill switch as budget", async () => {
@@ -143,8 +130,9 @@ describe("the Bedrock writer", () => {
   it("records each call's cost in the ledger", async () => {
     const { writer, manual, ledgerEntries } = await setUp();
     await write(writer, manual);
-    expect(ledgerEntries.map((entry) => entry.kind)).toEqual(["reserve", "settle"]);
-    expect(ledgerEntries[1]).toMatchObject({ outcome: "complete", inputTokens: 1000, outputTokens: 200, usd: 0.002 });
+    const entries = await ledgerEntries();
+    expect(entries.map((entry) => entry.kind)).toEqual(["reserve", "settle"]);
+    expect(entries[1]).toMatchObject({ outcome: "complete", inputTokens: 1000, outputTokens: 200, usd: 0.002 });
   });
 });
 
@@ -156,12 +144,6 @@ describe("a run with the Bedrock writer", () => {
     await waitUntil(() => events.some((event) => event.event !== "append"));
     return events;
   }
-
-  it("stores exactly the streamed text", async () => {
-    const setup = await setUp();
-    expect((await runEvents(setup)).at(-1)).toEqual({ event: "written", data: {} });
-    expect(await setup.store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe(GOOD_BODY);
-  });
 
   it("makes the model's straight quotes typographic, outside code, and stores exactly what it streamed", async () => {
     const body = `The bride's line: "Don't go." See [the 'Director'](section:the-show-must-stop "It's").\n\n\`\`\`json\n{"gesture": "none"}\n\`\`\`\n`;

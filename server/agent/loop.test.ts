@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createGateway } from "../gateway/gateway.ts";
 import { SpendingRefused, type ModelEvent, type PromptMessage } from "../gateway/types.ts";
 import { silentLogger } from "../logging/logger.ts";
-import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore } from "../storage/types.ts";
-import { tempDataDir, TEST_PRICES, testGatewayConfig } from "../testing.ts";
+import { tempDataDir, testGateway, testGatewayConfig } from "../testing.ts";
 import { AgentStopped, runAgent, type AgentEvent } from "./loop.ts";
 import { scriptedClient, textTurn, toolUseTurn } from "./scripted-client.ts";
 import { defineTool, type AgentTool } from "./tool.ts";
@@ -44,16 +42,8 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
   const dataDir = await tempDataDir();
   const store = createFileManualStore(dataDir, silentLogger);
   await seedStore(store);
-  const ledger = createFileLedger(dataDir, silentLogger);
   const { client, prompts } = scriptedClient(turns);
-  const gateway = await createGateway({
-    logger: silentLogger,
-    createClient: () => client,
-    ledger,
-    config: testGatewayConfig({ caps }),
-    prices: TEST_PRICES,
-    dataDir,
-  });
+  const { gateway, ledgerEntries } = await testGateway(client, dataDir, testGatewayConfig({ caps }));
   const tools = [...libraryTools(store), ...extraTools];
 
   function run(signal = new AbortController().signal) {
@@ -67,10 +57,6 @@ async function librarian(turns: ModelEvent[][], { caps = { dailyUsd: 2, monthlyU
       signal,
       logger: silentLogger,
     });
-  }
-
-  async function ledgerEntries() {
-    return ledger.entriesForMonth(monthOf(new Date().toISOString()));
   }
 
   return { run, prompts, ledgerEntries };

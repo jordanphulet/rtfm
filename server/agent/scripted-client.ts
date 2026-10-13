@@ -1,4 +1,5 @@
 import type { ModelClient, ModelEvent, ModelPrompt } from "../gateway/types.ts";
+import { inPieces } from "../testing.ts";
 
 export interface ScriptedToolUse {
   id: string;
@@ -39,4 +40,11 @@ export function toolUseTurn(toolUses: ScriptedToolUse[], text?: string): ModelEv
     { type: "usage", outputTokens: 30 },
     { type: "stop", reason: "tool_use" },
   ];
+}
+
+/** A turn that calls one tool, whose input also streams in, in fragments a few characters long, as Bedrock sends it. */
+export function streamedToolUseTurn(toolUse: ScriptedToolUse): ModelEvent[] {
+  const fragments = inPieces(JSON.stringify(toolUse.input ?? {})).map((json): ModelEvent => ({ type: "tool-input", json }));
+  const [usage, ...rest] = toolUseTurn([toolUse]);
+  return [usage!, ...fragments, ...rest];
 }
