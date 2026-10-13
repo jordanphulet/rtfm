@@ -617,7 +617,7 @@ When this phase is done:
   window; live at 812×375 the confirmation and its row are both on screen.
 
 ### OH.13 — A librarian turn that ends empty after a tool
-- **Status:** doing (agent: a68041d8cd1c8efba)
+- **Status:** done
 - **Depends on:** —
 - **Files:** `server/agent/loop.ts` and its test, `server/agent/librarian/**`, `server/api/**`,
   `src/agent/**`, `src/home/**`, `DESIGN.md`, `ARCHITECTURE.md`
