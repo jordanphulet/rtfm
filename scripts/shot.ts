@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { parseArgs } from "node:util";
 import type { BrowserContextOptions, Locator, Page } from "playwright";
 import { FAKE_REPLIES } from "../server/agent/librarian/fake-model.ts";
 import { fakePlan } from "../server/agent/planner/fake-planner.ts";
@@ -8,9 +9,12 @@ import type { FailureReason, ManualSummary } from "../server/api/types.ts";
 import { sectionsInReadingOrder } from "../server/storage/manual.ts";
 import { startServer } from "../server/app.ts";
 import { config } from "../server/config.ts";
+import { baselineProblem, compareShots } from "./compare.ts";
 import { captureAll, localUrl, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
 
-const SHOTS_DIR = process.argv[2] ?? "shots";
+const { positionals, values } = parseArgs({ allowPositionals: true, options: { compare: { type: "string" } } });
+const SHOTS_DIR = positionals[0] ?? "shots";
+const BASELINE_DIR = values.compare;
 const READER_DIR = `${SHOTS_DIR}/reader`;
 const HOME_DIR = `${SHOTS_DIR}/home`;
 const TYPED_MESSAGE = "Delete the manual about birthday parties";
@@ -66,10 +70,18 @@ const HOME_SIZES: Size[] = [
   { name: "phone", options: PHONE },
 ];
 
+const baselineError = BASELINE_DIR && (await baselineProblem(BASELINE_DIR, SHOTS_DIR));
+if (baselineError) {
+  console.error(baselineError);
+  process.exit(1);
+}
+
 let dataDir: string | undefined;
 try {
   dataDir = await mkdtemp(path.join(tmpdir(), "rtfm-shots-"));
-  process.exitCode = (await captureWithServers(dataDir)) ? 0 : 1;
+  const captured = await captureWithServers(dataDir);
+  const matched = !BASELINE_DIR || (await compareShots(SHOTS_DIR, BASELINE_DIR));
+  process.exitCode = captured && matched ? 0 : 1;
 } finally {
   if (dataDir) await rm(dataDir, { recursive: true, force: true });
 }

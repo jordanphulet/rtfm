@@ -244,6 +244,25 @@ clearing that folder first and nothing else:
 - `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in `DESIGN.md`,
   under "States").
 
+`--compare <baseline>` checks a run against an earlier one, such as a copy of `shots/` taken
+before a change:
+
+```sh
+npm run shot -- --compare /tmp/shots-before           # writes to shots/, then compares
+npm run shot -- /tmp/shots-after --compare /tmp/shots-before
+```
+
+- It lists only the shots that differ from the baseline's or are missing from either folder,
+  and exits with 1 if there are any.
+- For each shot that differs, it saves a diff image, with the changed pixels in red, under
+  `diffs/` in the output folder, at the shot's own path (`diffs/reader/start-desktop.png`).
+- A shot differs when more than 10 pixels change by more than about two color steps
+  (pixelmatch, threshold 0.01). Shots of one commit come out pixel for pixel the same on every
+  run, because Chromium redraws whole tiles (`--disable-partial-raster`); without that, the
+  anti-aliased edges of the status rings drift by a step or two.
+- The baseline must be a separate folder, not the output folder or one inside it, since the run
+  clears its output first.
+
 ## Where things live
 
 - `src/App.tsx`: the routes. `/` is the landing page, `/read/:manualId` (a manual's contents) and
