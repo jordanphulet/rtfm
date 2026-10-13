@@ -165,8 +165,11 @@ Tests sit next to the code (`*.test.ts`) and never call Bedrock. They reach only
 `localhost`, through `fetch` (Node's or happy-dom's), `node:http`, `node:https`, `node:net` or
 `node:tls`, and any DNS call but a `lookup` or `lookupService` of those or a `lookup` of an
 address, which answers itself (as when Vite listens on `0.0.0.0`). The `resolve*` and `reverse`
-functions ask a nameserver, so they are blocked for every name. A blocked connection fails with
-the code `ECONNREFUSED` and a blocked DNS call with `ENOTFOUND`.
+functions ask a nameserver, so they are blocked for every name. A connection's own `lookup` (the
+`lookup` option of `node:net` and `node:tls`, or undici's `connect.lookup`) skips those DNS calls,
+so its answer must be `127.0.0.1` or `::1`: one that turns `localhost` into another address is
+blocked before Node connects to it. A blocked connection fails with the code `ECONNREFUSED` and a
+blocked DNS call with `ENOTFOUND`.
 
 - **Every Node process the tests start loads it first**, unless the test replaces its environment.
   `vite.config.ts` adds `--import=<its file URL>` to `NODE_OPTIONS` for the test workers (not

@@ -34,16 +34,21 @@ function block(target: string, code: "ECONNREFUSED" | "ENOTFOUND"): Error {
   return Object.assign(new Error(message), { code });
 }
 
+/** `connect`'s options and callback, or its port and host. Node's own callers pass them as one array. */
+function connectArguments(connectArgs: unknown[]): unknown[] {
+  const [first] = connectArgs;
+  return Array.isArray(first) ? first : connectArgs;
+}
+
 function remoteHost(connectArgs: unknown[]): string | undefined {
-  const [first, second] = connectArgs;
-  const options = Array.isArray(first) ? first[0] : first;
+  const [options, hostAfterPort] = connectArguments(connectArgs);
   if (typeof options === "object" && options !== null) {
-    const { host, path } = options as { host?: string; path?: string };
+    const { host, path } = options as net.TcpNetConnectOpts & net.IpcNetConnectOpts;
     return path ? undefined : host || "localhost";
   }
   const isPort = typeof options === "number" || (typeof options === "string" && /^\d+$/.test(options));
   if (!isPort) return undefined;
-  return typeof second === "string" ? second : "localhost";
+  return typeof hostAfterPort === "string" ? hostAfterPort : "localhost";
 }
 
 function failWhileConnecting(socket: net.Socket, error: Error): net.Socket {
@@ -53,11 +58,30 @@ function failWhileConnecting(socket: net.Socket, error: Error): net.Socket {
   return socket;
 }
 
+/** Fails a lookup that answers with an address beyond loopback, so Node connects to nothing. */
+function loopbackOnlyLookup(lookup: net.LookupFunction): net.LookupFunction {
+  return (hostname, options, callback) =>
+    lookup(hostname, options, (error, answer, family) => {
+      const addresses = Array.isArray(answer) ? answer.map(({ address }) => address) : [answer];
+      const beyondLoopback = addresses.find((address) => typeof address === "string" && !isLoopback(address));
+      if (error || beyondLoopback === undefined) return callback(error, answer, family);
+      callback(block(`a connection to ${beyondLoopback}, looked up for ${hostname}`, "ECONNREFUSED"), []);
+    });
+}
+
+/** A socket's own `lookup` (from `net`, `tls` or undici's `connect`) skips the guarded `dns.lookup`. */
+function withLoopbackOnlyLookup(connectArgs: unknown[]): unknown[] {
+  const [options, callback] = connectArguments(connectArgs);
+  const lookup = (options as net.TcpNetConnectOpts | undefined)?.lookup;
+  if (typeof lookup !== "function") return connectArgs;
+  return [{ ...(options as object), lookup: loopbackOnlyLookup(lookup) }, callback];
+}
+
 function guardSockets(): void {
   const connect = net.Socket.prototype.connect;
   net.Socket.prototype.connect = function (this: net.Socket, ...args: unknown[]) {
     const host = remoteHost(args);
-    if (host === undefined || isLoopback(host)) return Reflect.apply(connect, this, args);
+    if (host === undefined || isLoopback(host)) return Reflect.apply(connect, this, withLoopbackOnlyLookup(args));
     return failWhileConnecting(this, block(`a connection to ${host}`, "ECONNREFUSED"));
   } as typeof connect;
 }

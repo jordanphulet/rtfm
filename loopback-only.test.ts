@@ -57,6 +57,21 @@ async function bodyOf(response: http.IncomingMessage): Promise<string> {
   return body;
 }
 
+/** A socket's `lookup` option that answers every name with `address`, in either shape Node asks for. */
+function lookupAnswering(address: string): net.LookupFunction {
+  return (_hostname, options, callback) => {
+    if (options.all) callback(null, [{ address, family: 4 }]);
+    else callback(null, address, 4);
+  };
+}
+
+/** Node refuses to connect to these addresses itself, so a test sends nothing even if the guard fails. */
+function neverConnectingTo(address: string): net.BlockList {
+  const blockList = new net.BlockList();
+  blockList.addAddress(address);
+  return blockList;
+}
+
 /** Runs an ES module in a child Node process, which inherits the test's NODE_OPTIONS. */
 function runNode(source: string) {
   return spawnSync(process.execPath, ["--input-type=module", "--eval", source], { encoding: "utf8" });
@@ -100,6 +115,31 @@ describe("the loopback-only guard", () => {
       `a connection to ${TEST_NET_ADDRESS}`,
       `a connection to ${TEST_NET_ADDRESS}`,
     ]);
+  });
+
+  it("fails a connection whose own lookup answers localhost with another address", async () => {
+    const options = {
+      host: "localhost",
+      lookup: lookupAnswering(TEST_NET_ADDRESS),
+      blockList: neverConnectingTo(TEST_NET_ADDRESS),
+    };
+    expectRefused(await errorFrom(net.connect({ ...options, port: 80 })));
+    expectRefused(await errorFrom(net.connect({ ...options, port: 80, autoSelectFamily: false })));
+    expect(takeBlockedTargets()).toEqual(Array(2).fill(`a connection to ${TEST_NET_ADDRESS}, looked up for localhost`));
+  });
+
+  it("lets a connection to localhost through, with or without its own lookup", async () => {
+    const server = await startServer("127.0.0.1");
+    const port = Number(new URL(server.url).port);
+    try {
+      for (const lookup of [undefined, lookupAnswering("127.0.0.1")]) {
+        const socket = net.connect({ host: "localhost", port, lookup });
+        await once(socket, "connect");
+        socket.destroy();
+      }
+    } finally {
+      await server.close();
+    }
   });
 
   it("fails a DNS lookup of another name", async () => {
