@@ -60,7 +60,8 @@ phase is done:
 - **Logs never hold secrets:** no credentials, no passphrase, no session tokens, no cookies.
 
 ### BA.2 — The passphrase: design
-- **Status:** doing (agent: a45d3aa24426d132f; in review)
+- **Status:** needs-human (the user approves `research/passphrase.md` and answers its "What you
+  decide")
 - **Depends on:** —
 - **Files:** `research/passphrase.md` (new)
 - **Do:** write the design for the user's approval in `research/passphrase.md`, dated and opening
