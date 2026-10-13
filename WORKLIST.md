@@ -175,7 +175,22 @@ Make the repo quicker to find your way around, for agents and people. When this 
 
 - **No real Bedrock calls**, and never start a server on `.data/`.
 - **`CLAUDE.md` changes need the user's approval.** The orchestrator asks the user when it
-  reviews the task, and commits the `CLAUDE.md` part only once the user approves.
+  reviews RS.0, and commits `CLAUDE.md` only once the user approves. No other task changes it.
+
+### RS.0 — `CLAUDE.md` points to README for the docs
+- **Status:** todo
+- **Depends on:** BA.1 (it changes `README.md`)
+- **Files:** `CLAUDE.md` (the user approves), `README.md`
+- **Do:**
+  - In `CLAUDE.md`, replace the overview and the doc list with two lines: what RTFM is in one
+    sentence, and "Start with `README.md`: how to run it, and where every other doc and folder
+    is." Keep "How work happens here", "Shell" and "Code standards" as they are. `CLAUDE.md`
+    then names no doc section and no folder, so restructuring the docs never changes it.
+  - Make `README.md` the one index of the docs, one line each: `ARCHITECTURE.md`, `DESIGN.md`,
+    the folder READMEs, `PROCESS.md`, `WORKLIST.md` and `research/`. Move anything the old
+    `CLAUDE.md` overview said that README doesn't already say.
+- **Done when:** `CLAUDE.md` holds only the two lines and the three kept sections; every doc it
+  used to list is in README's index; the user has approved the `CLAUDE.md` change.
 
 ### RS.1 — Name each stylesheet after its component
 - **Status:** todo
@@ -199,9 +214,9 @@ Make the repo quicker to find your way around, for agents and people. When this 
 
 ### RS.2 — Rename `src/agent/` to `src/librarian/`
 - **Status:** todo
-- **Depends on:** BA.1, RS.1
+- **Depends on:** BA.1, RS.0, RS.1
 - **Files:** `src/agent/**` (moving to `src/librarian/**`), `src/home/**`, `src/manual/README.md`,
-  `README.md`, `ARCHITECTURE.md`, `DESIGN.md`, `CLAUDE.md` (the user approves)
+  `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
 - **Do:**
   - Move the folder and update every import and doc reference.
   - Rename its exports wherever "agent" means the librarian conversation (for example
@@ -209,14 +224,13 @@ Make the repo quicker to find your way around, for agents and people. When this 
   - Leave the wire format alone (the `agent` message role in `server/api/types.ts`), and keep
     the URL options (`?agentFreeze=`) unless the screenshot script and the docs change with them.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; nothing in `src/`,
-  `scripts/` or any doc refers to `src/agent` or imports `../agent`; the user has approved the
-  `CLAUDE.md` line.
+  `scripts/` or any doc refers to `src/agent` or imports `../agent`.
 
 ### RS.3 — Turn `ARCHITECTURE.md` into a short map, with detail in folder READMEs
 - **Status:** todo
 - **Depends on:** BA.1, RS.2, LB.1 (it changes `ARCHITECTURE.md`)
 - **Files:** `ARCHITECTURE.md`, `server/README.md`, `server/*/README.md` (new),
-  `src/manual/README.md`, `README.md`, `CLAUDE.md` (the user approves)
+  `src/manual/README.md`, `README.md`
 - **Do:**
   - Cut `ARCHITECTURE.md` (now over 1,000 lines) to a map of about 150 lines or fewer, following
     matklad's ARCHITECTURE.md guidance. It should cover:
@@ -240,13 +254,13 @@ Make the repo quicker to find your way around, for agents and people. When this 
   - Move content without rewriting it, except where the new location needs a different opening.
 - **Done when:** every fact in the old `ARCHITECTURE.md` is in exactly one new place (the review
   compares the old and new text); `ARCHITECTURE.md` is a short map; each server folder above has
-  a README; no doc points to an old heading; the user has approved the `CLAUDE.md` change.
+  a README; no doc points to an old heading.
 
 ### RS.4 — Split `DESIGN.md` by page
 - **Status:** todo
 - **Depends on:** RS.1, RS.2, RS.3 (both change `README.md` and the folder READMEs)
 - **Files:** `DESIGN.md`, `src/home/DESIGN.md` (new), `src/reader/DESIGN.md` (new),
-  `src/*/README.md` (links only), `README.md`, `CLAUDE.md` (the user approves)
+  `src/*/README.md` (links only), `README.md`
 - **Do:**
   - `DESIGN.md` (now over 1,400 lines) keeps only what both pages share: what RTFM is, the data
     model, the craft bar, the banned list, the concept, the tokens, and any rule that applies to
@@ -257,18 +271,17 @@ Make the repo quicker to find your way around, for agents and people. When this 
     "Landing page behavior") moves with its page.
   - Update every link to a moved heading.
 - **Done when:** every fact in the old `DESIGN.md` is in exactly one new place (the review
-  compares the old and new text); `DESIGN.md` holds only what both pages share; links resolve;
-  the user has approved the `CLAUDE.md` change.
+  compares the old and new text); `DESIGN.md` holds only what both pages share; links resolve.
 
 ### RS.5 — Write the repo map down once
 - **Status:** todo
 - **Depends on:** RS.2, RS.3, RS.4
-- **Files:** `CLAUDE.md` (the user approves), `README.md`, `ARCHITECTURE.md`
+- **Files:** `README.md`, `ARCHITECTURE.md`
 - **Do:**
   - Keep the folder map in one place, the codemap in `ARCHITECTURE.md`.
   - Cut the README's "Where things live" to what someone running the app needs, and point to
     the codemap for the rest.
-  - `CLAUDE.md`'s doc list stays a short index, one line per doc. It names the pattern (each
-    folder's README, each page's `DESIGN.md`) rather than restating what each folder holds.
+  - README's doc index stays one line per doc. It names the pattern (each folder's README, each
+    page's `DESIGN.md`) rather than restating what each folder holds.
 - **Done when:** no folder's description appears in more than one doc; every doc the index names
-  exists; the user has approved the `CLAUDE.md` change.
+  exists.
