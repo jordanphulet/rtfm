@@ -199,9 +199,14 @@ Haiku 4.5 has thinking off unless asked. No `cache_control` is sent: Haiku 4.5 c
 of at least 4,096 tokens, and every call's whole input is shorter than that (`server/README.md` ›
 Configuration).
 
-**`credentials.ts`** reads the file at the repo root: `util.parseEnv(readFileSync(new
-URL("../../.env.local", import.meta.url), "utf8"))`.
+**`credentials.ts`** reads `.env.local` with `util.parseEnv(readFileSync(ENV_LOCAL_FILE, "utf8"))`.
 
+- `ENV_LOCAL_FILE` is in the main checkout's root, the parent of `git rev-parse
+  --path-format=absolute --git-common-dir`, resolved once when the module loads. So a server
+  started in a linked worktree reads the main checkout's file, and no worktree needs a copy.
+  Where git can't be run, or `credentials.ts` isn't in a normal checkout or linked worktree, it
+  is the repo root. Git runs with every `GIT_*` variable removed, so a `GIT_DIR` set for a hook
+  can't point it at another repo.
 - The result goes into a local object, never `process.env`.
 - It takes exactly `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`, and treats an
   empty or blank value, or a missing file, as missing.

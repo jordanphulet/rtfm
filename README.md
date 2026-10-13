@@ -208,7 +208,8 @@ To switch to Claude:
 
 1. The AWS account needs Amazon Bedrock access to Claude Haiku 4.5 through its `global.`
    inference profile (`global.anthropic.claude-haiku-4-5-20251001-v1:0`).
-2. Put its keys in `.env.local` at the repo root (gitignored):
+2. Put its keys in `.env.local` at the main checkout's root (gitignored). A server started in a
+   linked worktree reads the main checkout's file too, so there is only ever one copy:
 
    ```sh
    AWS_ACCESS_KEY_ID=…
