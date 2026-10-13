@@ -39,42 +39,6 @@ user says its step is done.
 
 ---
 
-## Rules into code
-
-The first rule audit (2026-10-12) ranked the written rules agents break by how often and what it
-cost. Three broke with real cost: task work committed without a review, agents stopping processes
-they didn't start, and sessions working from stale rules. This phase turns each into code that
-makes the right way the easy way. When this phase is done:
-
-- task work is committed only through `npm run commit-task`, which stages only the task's Files
-  and records who reviewed it;
-- a session in a worktree that is behind `main` is told so when it starts;
-- an agent that needs a server for a check starts one with `npm run serve-temp` and stops it by
-  its PID.
-
-### Rules for this phase
-
-- **The user approves hooks and rule files before they are committed:** `.githooks/`,
-  `.claude/settings.json`, `CLAUDE.md` and `PROCESS.md`. Each task stops at `needs-human` with
-  the exact text to approve.
-- **A session-start hook never blocks work.** If it fails, it prints nothing and exits 0.
-
-### RC.4 — Vite helpers out of the screenshot script
-- **Status:** doing (agent a144aee7060143c88; in review)
-- **Depends on:** —
-- **Files:** `scripts/screenshots.ts`, `scripts/shot.ts`, `scripts/serve-temp.ts`,
-  `scripts/vite-server.ts` (new), `server/main.ts`, `server/exit.ts` (new), `ARCHITECTURE.md` (the
-  `scripts/` codemap entry and the `server/` entry for `exit.ts`), `server/README.md` (› Files)
-- **Do:**
-  - Move `startViteServer`, `localUrl` and the logger they use from `scripts/screenshots.ts` into
-    `scripts/vite-server.ts`, so `serve-temp` no longer loads Playwright when it starts.
-    `shot.ts` and `serve-temp.ts` import them from there.
-  - `serve-temp.ts` and `server/main.ts` share one `exitOnceWritten` instead of two copies.
-- **Done when:** `npm run build` and `npm test` pass; `npm run shot` still captures every state;
-  `scripts/serve-temp.ts` imports nothing that loads Playwright.
-
----
-
 ## Agents in their own worktrees
 
 Every task agent works in its own git worktree on its own branch, and the orchestrator merges each
@@ -168,7 +132,7 @@ When this phase is done:
 
 ### DC.1 — A test that docs name only what exists
 - **Status:** todo
-- **Depends on:** WT.2 and WT.1 (all change `README.md`), RC.4 (`ARCHITECTURE.md`)
+- **Depends on:** WT.2 and WT.1 (all change `README.md`)
 - **Files:** `scripts/doc-references.test.ts` (new); `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
   `src/**/README.md`, `src/**/DESIGN.md`, `server/**/README.md`, `scripts/audit/README.md` (only
   to fix references the test flags)
