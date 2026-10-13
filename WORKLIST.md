@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.3 — Keep the development loop local
-- **Status:** todo
+- **Status:** doing (agent a836d08475935f871)
 - **Depends on:** IN.2
 - **Files:** `ARCHITECTURE.md`, `PROCESS.md`
 - **Do:**
@@ -85,7 +85,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.6 — Arguments reach AWS as given
-- **Status:** todo
+- **Status:** doing (agent a89e145766bb4f5b9)
 - **Depends on:** IN.2
 - **Files:** `infra/run-aws.ts` and its test, `package.json`, `infra/README.md`
 - **Do:** find why `npm run aws -- … --query 'Stacks[0].{Status:StackStatus,Protected:EnableTerminationProtection}'`
