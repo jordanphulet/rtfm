@@ -615,3 +615,26 @@ When this phase is done:
   Choose the simplest design that keeps the row visible, within DESIGN.md's rules.
 - **Done when:** `npm run build`, `npm test` and `npm run shot` pass; a test covers a short
   window; live at 812×375 the confirmation and its row are both on screen.
+
+### OH.13 — A librarian turn that ends empty after a tool
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/agent/loop.ts` and its test, `server/agent/librarian/**`, `server/api/**`,
+  `src/agent/**`, `src/home/**`, `DESIGN.md`, `ARCHITECTURE.md`
+- **Do:**
+  - Live with Haiku 4.5, "delete the … manual" failed with `AgentStopped: The model ended its
+    turn with nothing in it`: Haiku narrated, called `propose_delete`, then ended its next turn
+    with no content. The reply failed, so the page dropped the proposed delete and no dialog
+    opened.
+  - An `end_turn` with no content after a turn that ran tools is a normal end: return without
+    appending an empty assistant message. Only an empty first turn is still an error.
+  - Text written before a tool is withdrawn only when the model writes more text after the
+    tool, so a reply never ends empty when the model said something; the narration stands as
+    the reply otherwise. A reply that ends with no text at all shows no empty message on the
+    page.
+  - Tests for: an empty last turn after a tool (the action reaches the page and the reply is
+    `done`), narration kept when nothing follows, narration replaced when text follows, and an
+    empty first turn still failing.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; live with Haiku 4.5 on
+  `.data/` (`RTFM_MODELS=bedrock`, with no other server on `.data/`), "delete the … manual"
+  opens the dialog (cancel it); this task's real spend is under $0.05.
