@@ -20,7 +20,7 @@ const ANY_FILE = /^[a-z]\.\w+$/;
 const REPO_PATH = /(?<![\w./-])(?:server|src|scripts)\/(?:\{[^}\s]*\}|[^\s`'"(),;{])*/g;
 /** A `:line`, `:line-line` or `#anchor` after a path. */
 const LOCATION = /(?::\d+(?:-\d+)?|#[\w-]*)$/;
-const NPM_SCRIPT = /\bnpm run ([\w:-]+)/g;
+const NPM_SCRIPT = /\bnpm run (?:-{1,2}[\w-]+ )*([\w:-]+)/g;
 const SETTING = /\bRTFM_[A-Z0-9_]*[A-Z0-9]/g;
 const SETTING_READ = /process\.env\.(RTFM_\w+)/g;
 const API_ROUTE = /(?:\b(GET|POST|PUT|PATCH|DELETE) )?(?<![\w./-])(\/api\/[^\s`'"(),;?]+)/g;
@@ -195,7 +195,7 @@ describe("doc references", () => {
     const doc = [
       "Paths: `server/config.ts`, `server/conifg.ts`, `src/<page>/DESIGN.md`, `src/*/nothing.md`.",
       "",
-      "Run `npm run usage` or `npm run usages`.",
+      "Run `npm run usage` or `npm run usages`, `npm run -s usage` or `npm run -s nope`.",
       "",
       "```sh",
       "RTFM_PORT=0 RTFM_PROT=1 npm run server",
@@ -211,6 +211,7 @@ describe("doc references", () => {
       "DOC.md:1: `server/conifg.ts` doesn't exist",
       "DOC.md:1: `src/*/nothing.md` doesn't exist",
       "DOC.md:3: `npm run usages` isn't a script in package.json",
+      "DOC.md:3: `npm run nope` isn't a script in package.json",
       "DOC.md:6: `RTFM_PROT` isn't read by server/config.ts or a script",
       "DOC.md:9: `POST /api/manuals/:manualId` isn't a route the server defines",
       "DOC.md:9: `/api/manual` isn't a route the server defines",
