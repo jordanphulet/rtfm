@@ -109,7 +109,8 @@ edits and stops only where two tasks changed the same lines. When this phase is 
   finds the credentials, checked without printing any value.
 
 ### WT.2 — Task agents in their own worktrees
-- **Status:** doing (agent a60214f124cbcf535; review round 2, part 2)
+- **Status:** needs-human (the user approves the `PROCESS.md`, `CLAUDE.md` and `.claude/settings.json`
+  changes; agent a60214f124cbcf535, reviewed by abaa44de1070c8e91)
 - **Depends on:** —
 - **Files:** `PROCESS.md` (the loop, the review loop and Rules; the user approves),
   `scripts/commit-task.ts` and its test; after RC.3 is committed: `CLAUDE.md` (the task agent's
