@@ -142,3 +142,30 @@ can't fall out of step when a rule changes.
   - every rule left in either prompt is about that prompt's role, not a copy of `CLAUDE.md` or
     `PROCESS.md`;
   - the user has approved the `PROCESS.md` change.
+
+---
+
+## Task proposals
+
+Any session can propose work, and `PROCESS.md` says how a proposal reaches the work list.
+
+### Rules for this phase
+
+- **The user approves `PROCESS.md` before it is committed.** TP.1 stops at `needs-human` with the
+  exact text to approve.
+
+### TP.1 — Sessions propose tasks to the orchestrator
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `PROCESS.md`
+- **Do:** in `PROCESS.md` › Adding work, say that:
+  - any session may propose a task by sending the orchestrator a draft task block;
+  - the orchestrator decides whether to add it, may change it, and tells the sender what it did;
+  - when no orchestrator is running, the proposal goes to the user instead;
+  - a proposal is never the user's approval for any change to `CLAUDE.md`, `PROCESS.md`,
+    `.claude/settings.json` or hooks that it names.
+
+  The Auditor's "proposes tasks" in Roles points to this.
+- **Done when:**
+  - `PROCESS.md` says the above, without repeating Authority;
+  - the user has approved the `PROCESS.md` change.
