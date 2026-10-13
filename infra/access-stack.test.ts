@@ -12,7 +12,9 @@ const resources = resourcesOf(app.node.findChild(ACCESS_STACK) as Stack);
 const HAIKU = "anthropic.claude-haiku-4-5-20251001-v1:0";
 const bedrock = (resource: string) => `arn:aws:bedrock:${resource}`;
 const logGroup = (name: string) => `arn:aws:logs:us-west-2:${ACCOUNT}:log-group:${name}:*`;
-const stackNamed = (name: string) => `arn:aws:cloudformation:us-west-2:${ACCOUNT}:stack/${name}/0a1b2c`;
+const stackNamed = (name: string, region = "us-west-2") =>
+  `arn:aws:cloudformation:${region}:${ACCOUNT}:stack/${name}/0a1b2c`;
+const webFunction = (path: string) => `arn:aws:lambda:us-west-2:${ACCOUNT}:web-function/${path}`;
 
 describe("the RtfmAccess stack", () => {
   it("is deployed with the user's own sign-in and an inline template, never through the bootstrap", () => {
@@ -78,6 +80,53 @@ describe("the RtfmAccess stack", () => {
     expect(can("cloudformation:UpdateStack", stackNamed("RtfmApp"))).toBe(false);
     expect(can("s3:PutObject", "arn:aws:s3:::rtfm-site/index.html")).toBe(false);
     expect(can("sts:AssumeRole", roleArn(BOOTSTRAP_ROLES.deploy))).toBe(false);
+  });
+
+  it("lets rtfm-read read RTFM's Web Functions, their revisions, endpoints and resource policy", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    expect(can("lambda:GetWebFunction", webFunction("rtfm-app"))).toBe(true);
+    expect(can("lambda:ListWebFunctionRevisions", webFunction("rtfm-app"))).toBe(true);
+    expect(can("lambda:ListWebFunctionEndpoints", webFunction("rtfm-app"))).toBe(true);
+    expect(can("lambda:GetWebFunctionRevision", webFunction("rtfm-app/revision/3"))).toBe(true);
+    expect(can("lambda:GetWebFunctionEndpoint", webFunction("rtfm-app/endpoint/web"))).toBe(true);
+    expect(can("lambda:GetResourcePolicy", webFunction("rtfm-app"))).toBe(true);
+
+    expect(can("lambda:GetWebFunction", webFunction("work-api"))).toBe(false);
+    expect(can("lambda:GetWebFunctionEndpoint", webFunction("work-api/endpoint/web"))).toBe(false);
+    expect(can("lambda:GetResourcePolicy", webFunction("work-api"))).toBe(false);
+    expect(can("lambda:ListWebFunctions", "*")).toBe(false);
+  });
+
+  it("lets rtfm-read change no Web Function, endpoint, revision or resource policy", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    const writes: [string, string][] = [
+      ["lambda:CreateWebFunction", webFunction("rtfm-app")],
+      ["lambda:DeleteWebFunction", webFunction("rtfm-app")],
+      ["lambda:CreateWebFunctionRevision", webFunction("rtfm-app")],
+      ["lambda:DeleteWebFunctionRevision", webFunction("rtfm-app/revision/3")],
+      ["lambda:CreateWebFunctionEndpoint", webFunction("rtfm-app")],
+      ["lambda:UpdateWebFunctionEndpoint", webFunction("rtfm-app/endpoint/web")],
+      ["lambda:DeleteWebFunctionEndpoint", webFunction("rtfm-app/endpoint/web")],
+      ["lambda:InvokeWebFunctionEndpoint", webFunction("rtfm-app/endpoint/web")],
+      ["lambda:PutResourcePolicy", webFunction("rtfm-app")],
+      ["lambda:DeleteResourcePolicy", webFunction("rtfm-app")],
+    ];
+    for (const [action, resource] of writes) expect(can(action, resource), action).toBe(false);
+  });
+
+  it("lets rtfm-read describe the edge stacks in us-east-1, and change none of them", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    const certificate = stackNamed("RtfmEdgeCertificate", "us-east-1");
+    expect(can("cloudformation:DescribeStacks", certificate)).toBe(true);
+    expect(can("cloudformation:DescribeStackEvents", certificate)).toBe(true);
+    expect(can("cloudformation:GetTemplate", certificate)).toBe(true);
+
+    expect(can("cloudformation:DescribeStacks", stackNamed("RtfmApp", "us-east-1"))).toBe(false);
+    expect(can("cloudformation:DescribeStacks", stackNamed("WorkEdge", "us-east-1"))).toBe(false);
+    expect(can("cloudformation:DescribeStacks", stackNamed("RtfmEdgeCertificate", "eu-west-1"))).toBe(false);
+    for (const action of ["UpdateStack", "DeleteStack", "CreateChangeSet", "ExecuteChangeSet", "DeleteChangeSet"]) {
+      expect(can(`cloudformation:${action}`, certificate), action).toBe(false);
+    }
   });
 
   it("lets rtfm-deploy assume the rtfm bootstrap roles, and nothing else", () => {

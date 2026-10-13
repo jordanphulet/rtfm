@@ -50,7 +50,7 @@ the identity check and the arguments passed through `npm run aws`, without calli
 | --- | --- | --- |
 | `rtfm-local` (user) | The key in the server's `.env.local` | Claude on Bedrock, through the policy `rtfm-bedrock` |
 | `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read` and `rtfm-deploy`, nothing else |
-| `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks and buckets, assuming the lookup role (`cdk diff`), and Cost Explorer |
+| `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks, buckets and Web Functions, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
 | `cdk-rtfm-deploy-role-…` | The CDK CLI's deploys | CloudFormation on `Rtfm*` stacks, but only reading `RtfmAccess` and `RtfmToolkit`; passing the execution role |
 | `cdk-rtfm-file-publishing-role-…` | Uploading assets | The staging bucket |
@@ -64,9 +64,20 @@ region (a `global.` profile's foundation-model ARN has no region),
 `bedrock-mantle:CreateInference` and `ListModels` on the account's `project/default`, and
 `aws-marketplace:ViewSubscriptions` and `Subscribe`, which a model's first call needs.
 
-`rtfm-read` also has actions on `*` that take no narrower resource: listing log groups, reading
-the results of a Logs Insights query by the ID its own `StartQuery` returned, and Cost Explorer,
-which covers the whole account. It can't list other queries (`DescribeQueries`) or stop them.
+`rtfm-read` reads, and changes nothing of:
+
+- the log groups `rtfm-*`, `/rtfm/*` and `/aws/lambda/rtfm-*`;
+- the stacks `Rtfm*` in `us-west-2`, and `RtfmEdge*` in `us-east-1` too, where the certificate's
+  stack is;
+- the buckets `rtfm-*` and the staging bucket;
+- the Web Functions `rtfm-*`, with their revisions, endpoints and resource policy
+  (`lambda:GetWebFunction`, `GetWebFunctionRevision`, `GetWebFunctionEndpoint`,
+  `ListWebFunctionRevisions`, `ListWebFunctionEndpoints` and `GetResourcePolicy`). It can't list
+  the account's Web Functions (`ListWebFunctions` takes only `*`), and can't invoke an endpoint.
+
+It also has actions on `*` that take no narrower resource: listing log groups, reading the results
+of a Logs Insights query by the ID its own `StartQuery` returned, and Cost Explorer, which covers
+the whole account. It can't list other queries (`DescribeQueries`) or stop them.
 
 You deploy `RtfmToolkit` and `RtfmAccess` yourself, with your own admin sign-in. Both use
 `LegacyStackSynthesizer`: no bootstrap role, so `rtfm-deploy` can change neither, and no template
@@ -344,6 +355,42 @@ the laptop.
    Cost allocation tags). It is listed twice: as a user-defined tag, from the tagged resources,
    and as an IAM principal tag, once `rtfm-local` has called Bedrock. Activate both. Until then the
    budget counts nothing.
+
+### Updating a stack you deploy
+
+When `access-stack.ts` or `toolkit-stack.ts` changes, you update its stack from CloudShell, as
+your own admin sign-in. These steps update `RtfmAccess`; for `RtfmToolkit`, change the stack
+name and the template.
+
+1. **Write the template** with `npm run cdk -- synth --quiet`, and upload
+   `infra/cdk.out/RtfmAccess.template.json` to CloudShell in `us-west-2`, as in Your steps › 1.
+   `npm run cdk -- diff RtfmAccess` shows the change on the laptop beforehand.
+2. **Make a change set without running it.** A parameter left out, here `BudgetEmail`, keeps the
+   stack's current value, so the budget alarm's address needn't be typed again:
+
+   ```sh
+   aws cloudformation deploy --region us-west-2 --stack-name RtfmAccess \
+     --template-file RtfmAccess.template.json --capabilities CAPABILITY_NAMED_IAM \
+     --no-execute-changeset
+   ```
+
+   It prints the change set's ARN.
+3. **Read the change set:**
+
+   ```sh
+   aws cloudformation describe-change-set --region us-west-2 --change-set-name <its ARN> \
+     --query 'Changes[].ResourceChange.[Action,LogicalResourceId,ResourceType,Replacement]' \
+     --output table
+   ```
+
+4. **Run it, and wait for the update:**
+
+   ```sh
+   aws cloudformation execute-change-set --region us-west-2 --change-set-name <its ARN>
+   aws cloudformation wait stack-update-complete --region us-west-2 --stack-name RtfmAccess
+   ```
+
+An update leaves termination protection on.
 
 ## What the deploy path was checked against
 

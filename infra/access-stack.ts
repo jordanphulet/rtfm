@@ -11,6 +11,7 @@ import {
   BOOTSTRAP_ROLES,
   BUDGET,
   DEPLOY_ROLE,
+  EDGE_STACKS,
   LOCAL_USER,
   PROJECT_TAG,
   READ_ROLE,
@@ -24,6 +25,9 @@ import {
 
 /** The gateway's monthly cap (`server/config.ts`). */
 export const MONTHLY_BUDGET_USD = 20;
+
+/** The certificate's stack is in us-east-1, where CloudFront takes its certificates from. */
+const EDGE_STACKS_IN_US_EAST_1 = `arn:aws:cloudformation:us-east-1:${ACCOUNT}:stack/${EDGE_STACKS}*/*`;
 
 /**
  * Who may do what to RTFM in AWS. The user deploys it with their own sign-in: it uses no
@@ -118,7 +122,19 @@ function readStatements(): PolicyStatement[] {
         "cloudformation:DescribeChangeSet",
         "cloudformation:ListChangeSets",
       ],
-      resources: [RTFM_STACKS],
+      resources: [RTFM_STACKS, EDGE_STACKS_IN_US_EAST_1],
+    }),
+    new PolicyStatement({
+      sid: "ReadRtfmWebFunctions",
+      actions: [
+        "lambda:GetWebFunction",
+        "lambda:GetWebFunctionRevision",
+        "lambda:GetWebFunctionEndpoint",
+        "lambda:ListWebFunctionEndpoints",
+        "lambda:ListWebFunctionRevisions",
+        "lambda:GetResourcePolicy",
+      ],
+      resources: RTFM_RESOURCES.webFunctions,
     }),
     new PolicyStatement({
       sid: "ReadRtfmBuckets",
