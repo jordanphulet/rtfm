@@ -108,26 +108,12 @@ Make the repo quicker to find your way around, for agents and people. When this 
 - **No real Bedrock calls**, and never start a server on `.data/`.
 - **No task changes `CLAUDE.md`.** Only the user approves changes to it.
 
-### RS.2 — Rename `src/agent/` to `src/librarian/`
-- **Status:** doing (agent: ac938390edea55761)
-- **Depends on:** RS.1, RS.6 (it changes `README.md`)
-- **Files:** `src/**` (`src/agent/` moves to `src/librarian/`), `scripts/**`, `README.md`,
-  `ARCHITECTURE.md`, `DESIGN.md`
-- **Do:**
-  - Move the folder and update every import and doc reference.
-  - Rename its exports wherever "agent" means the librarian conversation (for example
-    `useAgent` → `useLibrarian`, `useAgentActions` → `useLibrarianActions`).
-  - Leave the wire format alone (the `agent` message role in `server/api/types.ts`), and keep
-    the URL options (`?agentFreeze=`) unless the screenshot script and the docs change with them.
-- **Done when:** `npm run build` and `npm test` pass; `npm run shot -- <out> --compare
-  <baseline>` against shots of the commit before reports no differences; nothing in `src/`,
-  `scripts/` or any doc refers to `src/agent` or imports `../agent`.
-
 ### RS.3 — Turn `ARCHITECTURE.md` into a short map, with detail in folder READMEs
-- **Status:** todo
-- **Depends on:** BA.1, RS.2, LB.1, MO.1 (they change `ARCHITECTURE.md`)
+- **Status:** doing (agent: a9bef813a1320451c)
+- **Depends on:** RS.2
 - **Files:** `ARCHITECTURE.md`, `server/README.md`, `server/*/README.md` (new),
-  `src/manual/README.md`, `README.md`
+  `src/manual/README.md`, `README.md`; for pointers to moved headings only: `DESIGN.md`,
+  `src/*/README.md`, `research/*.md`
 - **Do:**
   - Cut `ARCHITECTURE.md` (now over 1,000 lines) to a map of about 150 lines or fewer, following
     matklad's ARCHITECTURE.md guidance. It should cover:
@@ -146,6 +132,7 @@ Make the repo quicker to find your way around, for agents and people. When this 
     - the section writer → `server/writer/README.md`;
     - the gateway → `server/gateway/README.md`;
     - the agent loop and the librarian → `server/agent/README.md`;
+    - logs → `server/logging/README.md`;
     - the server and configuration → `server/README.md`;
     - the reader's store → merged into `src/manual/README.md`, with nothing duplicated.
   - Move content without rewriting it, except where the new location needs a different opening.
