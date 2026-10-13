@@ -36,25 +36,3 @@ user says its step is done.
   under $0.50, and pick each job's model.
 - **Done when:** the research doc records the results and status, and `server/config.ts` uses
   the chosen models.
-
----
-
-## Orchestrator start
-
-A session starts the orchestration loop with `/orchestrate`, which checks where it runs and what
-an earlier run left behind before the first pass.
-
-### Rules for this phase
-
-- **The user approves `PROCESS.md` before it is committed.** OS.2 stops at `needs-human` with the
-  exact text to approve.
-
-### OS.3 — Try `/orchestrate`
-- **Status:** needs-human (the user runs `/orchestrate` in a new session in the main checkout)
-- **Depends on:** —
-- **Files:** `.claude/skills/orchestrate/SKILL.md`
-- **Do:** check that the preflight runs and `/loop` starts in dynamic mode when the skill calls it.
-  Also check that the session refuses to start from a worktree. Fix the skill if any step doesn't
-  work.
-- **Done when:** the user has seen one full pass start from `/orchestrate`, and a later wake-up run
-  the one-pass prompt.
