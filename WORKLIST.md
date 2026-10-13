@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.2 — Prove the deploy path
-- **Status:** blocked (the user follows `infra/README.md`'s steps)
+- **Status:** doing (agent a8e21f88b7c3c399f; in review; on 2026-10-13 the user approved its `PROCESS.md` step 5 as sent in review round 1: deploy after any `infra/` change but docs and tests, with `--require-approval never`; on failure a `needs-human` task)
 - **Depends on:** IN.1
 - **Files:** `infra/**`, `README.md`, `PROCESS.md`
 - **Do:**
@@ -35,11 +35,89 @@ aren't RTFM's.
     another filter, or the server's calls a tagged application inference profile.
   - Check the server still calls Bedrock with `rtfm-local`'s key (`npm run dev` with
     `RTFM_MODELS=bedrock`, one section, under $0.01).
+  - `infra/README.md` › Your steps: the CloudShell route the user took (synthesize locally, upload
+    both templates, `aws cloudformation deploy` each, `aws iam create-access-key` for both users),
+    in place of `npx cdk bootstrap` with an admin profile.
   - `PROCESS.md` › Review loop: after merging a change to an app stack, the orchestrator runs
     `npm run cdk -- deploy`, then a smoke check. Give the diff in full; the user
     approves it.
 - **Done when:** each check above passed and is recorded in `infra/README.md`, and the user has
   approved the `PROCESS.md` change.
+
+### IN.3 — Keep the development loop local
+- **Status:** todo
+- **Depends on:** IN.2
+- **Files:** `ARCHITECTURE.md`, `PROCESS.md`
+- **Do:**
+  - `PROCESS.md`, next to IN.2's deploy step in › Review loop: "Only the orchestrator deploys an
+    app stack, and only from `main` after a merge. A task agent reaches AWS only when its task's
+    **Do** says so."
+  - `ARCHITECTURE.md` › Everything runs on one machine, two more bullets:
+    - "No task's **Done when** needs the deployed app; a smoke check after each deploy covers what
+      local can't show."
+    - "Agents try out stored-data changes on throwaway data. Deployed data changes only when a
+      change merges, and that change carries its migration or reads the old form."
+- **Done when:** both changes are in, and the user has approved the `PROCESS.md` diff.
+
+### IN.4 — Settle the AWS design
+- **Status:** todo
+- **Depends on:** IN.3
+- **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
+  `ARCHITECTURE.md`, `infra/**`
+- **Do:**
+  - From the local server, list what the deployed app must do: each route and its stream (the
+    section SSE stream, the librarian POST stream), one writer per section with joiners, abort on
+    the last disconnect, the caps across instances, the passcode, the kill switch, idle cost.
+  - Weigh, against that list:
+    - CloudFront and a streaming Lambda Function URL behind origin access control (OAC): one
+      domain keeps the Origin checks, the passcode cookie and `EventSource` working;
+    - API Gateway REST with response streaming (check that it exists and how it behaves);
+    - one always-on Node instance running the server unchanged;
+    - rule out API Gateway HTTP API (no streaming) and AppSync (it would replace the REST and SSE
+      contract), with the reasons;
+    - for storage, DynamoDB alone against DynamoDB plus S3 for section bodies. Bodies are under
+      about 10 KB at `max_tokens` 2048, and saving one needs a conditional write and a check
+      that the manual exists.
+  - Weigh each option by how much of it runs outside AWS: the AWS-only code should be thin
+    adapters, with the logic in shared code that runs locally. Say where the design changes a
+    shared interface and how its local implementation keeps up (`ARCHITECTURE.md` › Everything
+    runs on one machine).
+  - Spike in throwaway `RtfmSpike…` stacks, under a boundary change the user approves and
+    deploys first (from CloudShell, as in `infra/README.md` › Your steps), for under $1 in all:
+    - SSE through the front door;
+    - a POST with a body through it (OAC needs a body-hash header);
+    - whether Lambda sees a client disconnect;
+    - the cold-start time to open a section.
+  - Give the exact boundary diff the chosen design needs, the cost at idle and at the $20 cap,
+    the local and AWS interface pairs to build, and the build tasks that follow.
+- **Done when:** the doc recommends one design with the spikes' results, every spike stack is
+  destroyed and any spike-only boundary change is withdrawn, and the user has decided. The
+  decision then goes into `ARCHITECTURE.md`, the two older research docs' status lines say what
+  was adopted, and the orchestrator adds the build tasks.
+
+### IN.5 — Check the budget counts Bedrock
+- **Status:** blocked (the user activates the `project` cost allocation tag, both the user-defined
+  and the IAM principal one, a day after `rtfm-local` has called Bedrock)
+- **Depends on:** IN.2
+- **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
+- **Do:** with `npm run aws -- ce get-cost-and-usage`, group a day's Bedrock cost (the services
+  "Claude Haiku 4.5 (Amazon Bedrock Edition)" and "Amazon Bedrock") by the `project` tag, and
+  find whether `rtfm-local`'s calls carry `project=rtfm` and under which tag key. If the budget's
+  `user:project` filter misses them, change its filter to the IAM principal tag if AWS Budgets
+  accepts it, or propose a tagged application inference profile for the server. A change to
+  `access-stack.ts` needs the user's approval and their redeploy from CloudShell.
+- **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
+  `infra/README.md` › The budget says how.
+
+### IN.6 — Arguments reach AWS as given
+- **Status:** todo
+- **Depends on:** IN.2
+- **Files:** `infra/run-aws.ts` and its test, `package.json`, `infra/README.md`
+- **Do:** find why `npm run aws -- … --query 'Stacks[0].{Status:StackStatus,Protected:EnableTerminationProtection}'`
+  reaches the AWS CLI with its braces gone and split at the comma (npm runs scripts through a
+  shell), and make every argument after `--` reach the command unchanged.
+- **Done when:** `npm test` passes, and a test shows arguments with braces, commas, spaces,
+  quotes and `$` reach the spawned command exactly as given.
 
 ## Waiting on AWS
 
