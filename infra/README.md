@@ -50,7 +50,7 @@ the identity check and the arguments passed through `npm run aws`, without calli
 | --- | --- | --- |
 | `rtfm-local` (user) | The key in the server's `.env.local` | Claude on Bedrock, through the policy `rtfm-bedrock` |
 | `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read` and `rtfm-deploy`, nothing else |
-| `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks, buckets and Web Functions, assuming the lookup role (`cdk diff`), and Cost Explorer |
+| `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
 | `cdk-rtfm-deploy-role-…` | The CDK CLI's deploys | CloudFormation on `Rtfm*` stacks, but only reading `RtfmAccess` and `RtfmToolkit`; passing the execution role |
 | `cdk-rtfm-file-publishing-role-…` | Uploading assets | The staging bucket |
@@ -73,11 +73,20 @@ region (a `global.` profile's foundation-model ARN has no region),
 - the Web Functions `rtfm-*`, with their revisions, endpoints and resource policy
   (`lambda:GetWebFunction`, `GetWebFunctionRevision`, `GetWebFunctionEndpoint`,
   `ListWebFunctionRevisions`, `ListWebFunctionEndpoints` and `GetResourcePolicy`). It can't list
-  the account's Web Functions (`ListWebFunctions` takes only `*`), and can't invoke an endpoint.
+  the account's Web Functions (`ListWebFunctions` takes only `*`), and can't invoke an endpoint;
+- the tables `rtfm-*`, their settings and their point-in-time recovery only
+  (`dynamodb:DescribeTable` and `DescribeContinuousBackups`): it reads no item, and can't list
+  the account's tables.
 
 It also has actions on `*` that take no narrower resource: listing log groups, reading the results
-of a Logs Insights query by the ID its own `StartQuery` returned, and Cost Explorer, which covers
-the whole account. It can't list other queries (`DescribeQueries`) or stop them.
+of a Logs Insights query by the ID its own `StartQuery` returned, Cost Explorer, which covers the
+whole account, and reading a CloudFormation resource type's live schema, such as
+`AWS::Lambda::ResourcePolicy`'s (`cloudformation:DescribeType`). It can't list other queries
+(`DescribeQueries`) or stop them. The Service Authorization Reference (read 2026-10-13) gives
+`DescribeType` no resource type and no condition key, so it reads any type in any region, another
+project's private extensions among them; CloudFormation's `type` resource
+(`…:type/resource/<type>`) applies only to stack set actions. It can't register, deregister,
+activate or configure a type.
 
 You deploy `RtfmToolkit` and `RtfmAccess` yourself, with your own admin sign-in. Both use
 `LegacyStackSynthesizer`: no bootstrap role, so `rtfm-deploy` can change neither, and no template
