@@ -50,7 +50,7 @@ an earlier run left behind before the first pass.
   exact text to approve.
 
 ### OS.2 — The `/orchestrate` skill
-- **Status:** doing (agent ab5db648346a2c135, in its own worktree)
+- **Status:** doing (agent ab5db648346a2c135, in its own worktree; in review)
 - **Depends on:** —
 - **Files:** `.claude/skills/orchestrate/SKILL.md`, `PROCESS.md`, `README.md`
 - **Do:** write a skill the user invokes to start the loop. In order, it:
