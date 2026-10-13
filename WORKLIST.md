@@ -177,23 +177,7 @@ Make the repo quicker to find your way around, for agents and people. When this 
 ### Rules for this phase
 
 - **No real Bedrock calls**, and never start a server on `.data/`.
-- **`CLAUDE.md` changes need the user's approval.** The orchestrator asks the user when it
-  reviews RS.0, and commits `CLAUDE.md` only once the user approves. No other task changes it.
-
-### RS.0 — `CLAUDE.md` points to README for the docs
-- **Status:** doing (agent: ae64d1d4871d2fa71)
-- **Depends on:** BA.1 (it changes `README.md`)
-- **Files:** `CLAUDE.md` (the user approves), `README.md`
-- **Do:**
-  - In `CLAUDE.md`, replace the overview and the doc list with two lines: what RTFM is in one
-    sentence, and "Start with `README.md`: how to run it, and where every other doc and folder
-    is." Keep "How work happens here", "Shell" and "Code standards" as they are. `CLAUDE.md`
-    then names no doc section and no folder, so restructuring the docs never changes it.
-  - Make `README.md` the one index of the docs, one line each: `ARCHITECTURE.md`, `DESIGN.md`,
-    the folder READMEs, `PROCESS.md`, `WORKLIST.md` and `research/`. Move anything the old
-    `CLAUDE.md` overview said that README doesn't already say.
-- **Done when:** `CLAUDE.md` holds only the two lines and the three kept sections; every doc it
-  used to list is in README's index; the user has approved the `CLAUDE.md` change.
+- **No task changes `CLAUDE.md`.** Only the user approves changes to it.
 
 ### RS.1 — Name each stylesheet after its component
 - **Status:** doing (agent: aaa4767337b69b029)
