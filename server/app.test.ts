@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
@@ -6,15 +6,28 @@ import { describe, expect, it } from "vitest";
 import { createModels, startServer } from "./app.ts";
 import { config } from "./config.ts";
 import { CredentialsMissing } from "./gateway/credentials.ts";
-import { createGateway } from "./gateway/gateway.ts";
-import { prices } from "./gateway/prices.ts";
-import { ModelNotPriced, type ModelClient, type ModelRequest } from "./gateway/types.ts";
+import { killSwitchPath } from "./gateway/gateway.ts";
+import {
+  FAKE_MODEL,
+  ModelNotPriced,
+  SpendingRefused,
+  type ModelClient,
+  type ModelPrompt,
+  type ModelRequest,
+} from "./gateway/types.ts";
 import { silentLogger } from "./logging/logger.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { DataFolderInUse, LOCK_FILE_NAME } from "./storage/lock.ts";
+import { seedStore } from "./storage/seed.ts";
 import type { UsageLedger } from "./storage/types.ts";
-import { tempDataDir, waitUntil } from "./testing.ts";
+import { collect, tempDataDir, testGateway, waitUntil } from "./testing.ts";
+import { WriteFailed } from "./writer/types.ts";
+
+/** A seed manual with no sample text, so the fake writer plays its short placeholder. */
+const GEESE_ID = "negotiating-with-geese";
+/** A message the fake librarian answers in one short turn, its fallback reply. */
+const GREETING: ModelPrompt = { system: "", messages: [{ role: "user", content: "Good morning" }] };
 
 describe("starting with Bedrock models", () => {
   it("refuses a model that isn't in the price table, before reading any credentials, and releases the data folder", async () => {
@@ -33,6 +46,37 @@ describe("starting with Bedrock models", () => {
     await expect(
       createModels({ ...config, dataDir, models: "bedrock" }, store, silentLogger, missingFile),
     ).rejects.toThrow(CredentialsMissing);
+  });
+});
+
+describe("starting with the fake models", () => {
+  it("sends their calls through the gateway: recorded at $0 under the fake model, never capped, and refused by the kill switch", async () => {
+    const dataDir = await tempDataDir();
+    const store = createFileManualStore(dataDir, silentLogger);
+    await seedStore(store);
+    const zeroCaps = { dailyUsd: 0, monthlyUsd: 0 };
+    const models = await createModels({ ...config, dataDir, models: "fake", caps: zeroCaps }, store, silentLogger);
+    const geese = (await store.getManual(GEESE_ID))!;
+    const sectionId = geese.chapters[0]!.sections[0]!.id;
+    const writeSection = () => collect(models.writer.write(geese, sectionId, new AbortController().signal));
+    const askLibrarian = () => collect(models.librarian.stream("librarian", GREETING, new AbortController().signal));
+
+    await Promise.all([writeSection(), askLibrarian()]);
+    await models.idle();
+    const entries = await createFileLedger(dataDir, silentLogger).entriesForMonth(monthOf(new Date().toISOString()));
+    expect(entries.map(({ kind, job }) => `${kind} ${job}`).toSorted()).toEqual([
+      "reserve librarian",
+      "reserve write-section",
+      "settle librarian",
+      "settle write-section",
+    ]);
+    for (const entry of entries) {
+      expect(entry).toMatchObject(entry.kind === "reserve" ? { model: FAKE_MODEL, worstCaseUsd: 0 } : { model: FAKE_MODEL, usd: 0 });
+    }
+
+    await writeFile(killSwitchPath(dataDir), "");
+    await expect(writeSection()).rejects.toEqual(new WriteFailed("budget"));
+    await expect(askLibrarian()).rejects.toThrow(SpendingRefused);
   });
 });
 
@@ -67,14 +111,7 @@ describe("stopping", () => {
         await new Promise((_, reject) => request.signal.addEventListener("abort", () => reject(request.signal.reason)));
       },
     };
-    const gateway = await createGateway({
-      logger: silentLogger,
-      createClient: () => answersOnlyAnAbort,
-      ledger: slowToSettle,
-      config,
-      prices,
-      dataDir,
-    });
+    const { gateway } = await testGateway(answersOnlyAnAbort, dataDir, { config, ledger: slowToSettle });
     const server = await startServer(
       { ...config, port: 0, dataDir, models: "fake", passcode: undefined },
       { librarian: gateway, idle: gateway.idle },

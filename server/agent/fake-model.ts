@@ -1,17 +1,24 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import type { Gateway } from "../../gateway/gateway.ts";
-import type { ContentBlock, ModelEvent, PromptMessage } from "../../gateway/types.ts";
-import { chunkEnds } from "../../writer/fake.ts";
-import { fakePlannerTurn } from "../planner/fake-planner.ts";
+import type { Gateway } from "../gateway/gateway.ts";
+import { FAKE_MODEL, type ContentBlock, type Job, type ModelClient, type ModelEvent, type PromptMessage } from "../gateway/types.ts";
+import { chunkEnds } from "../writer/fake.ts";
+import { fakePlannerTurn } from "./planner/fake-planner.ts";
 
-export interface FakeLibrarianPace {
-  firstEventDelayMs: number;
+export interface FakeModelPace {
+  /** Before a section's first chunk. */
+  sectionDelayMs: number;
+  /** Before each librarian turn and each plan. */
+  turnDelayMs: number;
   chunkIntervalMs: number;
+  /** Between a plan's streamed input and its `save_manual` call. */
   planDelayMs: number;
 }
 
-const CONVERSATION_PACE: FakeLibrarianPace = { firstEventDelayMs: 600, chunkIntervalMs: 85, planDelayMs: 2400 };
-export const INSTANT_PACE: FakeLibrarianPace = { firstEventDelayMs: 0, chunkIntervalMs: 0, planDelayMs: 0 };
+const PACE: FakeModelPace = { sectionDelayMs: 1200, turnDelayMs: 600, chunkIntervalMs: 85, planDelayMs: 2400 };
+export const INSTANT_PACE: FakeModelPace = { sectionDelayMs: 0, turnDelayMs: 0, chunkIntervalMs: 0, planDelayMs: 0 };
+
+/** The fake model uses no tokens and reports that, so a complete call of its is never marked estimated. */
+const NO_TOKENS: ModelEvent = { type: "usage", inputTokens: 0, outputTokens: 0 };
 
 type Intent = "delete" | "create" | "open" | "list" | "find" | "help" | "fallback";
 type Step = { text: string } | { tool: string; input: Record<string, string> };
@@ -48,38 +55,83 @@ export const FAKE_REPLIES = {
 };
 
 /**
- * A scripted stand-in for the model behind the librarian and the planner, for development, tests
- * and screenshots. It reads the user's latest message for a keyword, calls the tools a model would,
- * and answers from their results; asked for a plan, it plans `fakePlan`. It makes no model call, so
- * nothing is reserved or recorded.
+ * A scripted stand-in for Claude, for development, tests and screenshots, called through the
+ * gateway as Bedrock is. It answers each job from its request alone: a section by repeating the
+ * user's message (the fake writer sends the sample text), a librarian turn by reading the user's
+ * latest message for a keyword and calling the tools a model would, and a plan with `fakePlan`.
  */
-export function fakeLibrarianModel(pace: FakeLibrarianPace = CONVERSATION_PACE): Gateway {
+export function fakeModel(pace: FakeModelPace = PACE): ModelClient {
   return {
-    async *stream(job, { messages }, signal): AsyncGenerator<ModelEvent> {
-      if (job === "plan-manual") {
-        await sleep(pace.firstEventDelayMs, undefined, { signal });
-        for (const event of fakePlannerTurn(messages)) {
-          yield event;
-          if (event.type === "tool-input") await sleep(pace.planDelayMs, undefined, { signal });
-        }
-        return;
+    async *stream({ job, prompt: { messages }, signal }) {
+      for await (const event of turn(job, messages, pace, signal)) {
+        yield event;
+        signal.throwIfAborted();
       }
-      const step = nextStep(messages);
-      await sleep(pace.firstEventDelayMs, undefined, { signal });
-      if ("tool" in step) {
-        yield { type: "tool-use", id: `fake-call-${messages.length}`, name: step.tool, input: step.input };
-        yield { type: "stop", reason: "tool_use" };
-        return;
-      }
-      let start = 0;
-      for (const end of chunkEnds(step.text)) {
-        if (start > 0) await sleep(pace.chunkIntervalMs, undefined, { signal });
-        yield { type: "text", text: step.text.slice(start, end) };
-        start = end;
-      }
-      yield { type: "stop", reason: "end_turn" };
     },
   };
+}
+
+/**
+ * The fake model called directly, as a `Gateway` with no caps, kill switch or ledger: for previews,
+ * which cost nothing and record nothing, and for tests of what sits above the gateway.
+ */
+export function unrecordedFakeModel(pace: FakeModelPace): Gateway {
+  const model = fakeModel(pace);
+  return { stream: (job, prompt, signal) => model.stream({ job, model: FAKE_MODEL, maxTokens: 0, prompt, signal }) };
+}
+
+async function* turn(job: Job, messages: PromptMessage[], pace: FakeModelPace, signal: AbortSignal): AsyncGenerator<ModelEvent> {
+  const stopReason = yield* content(job, messages, pace, signal);
+  yield NO_TOKENS;
+  yield { type: "stop", reason: stopReason };
+}
+
+/** The turn's text or tool calls, returning its stop reason. */
+function content(job: Job, messages: PromptMessage[], pace: FakeModelPace, signal: AbortSignal): AsyncGenerator<ModelEvent, string> {
+  switch (job) {
+    case "write-section":
+      return sectionTurn(messages, pace, signal);
+    case "librarian":
+      return librarianTurn(messages, pace, signal);
+    case "plan-manual":
+      return plannerTurn(messages, pace, signal);
+  }
+}
+
+async function* sectionTurn(messages: PromptMessage[], pace: FakeModelPace, signal: AbortSignal): AsyncGenerator<ModelEvent, string> {
+  await sleep(pace.sectionDelayMs, undefined, { signal });
+  yield* textInChunks(messages.at(-1)!.content as string, pace, signal);
+  return "end_turn";
+}
+
+async function* plannerTurn(messages: PromptMessage[], pace: FakeModelPace, signal: AbortSignal): AsyncGenerator<ModelEvent, string> {
+  await sleep(pace.turnDelayMs, undefined, { signal });
+  for (const event of fakePlannerTurn(messages)) {
+    yield event;
+    if (event.type === "tool-input") await sleep(pace.planDelayMs, undefined, { signal });
+  }
+  return "tool_use";
+}
+
+async function* librarianTurn(messages: PromptMessage[], pace: FakeModelPace, signal: AbortSignal): AsyncGenerator<ModelEvent, string> {
+  const step = nextStep(messages);
+  await sleep(pace.turnDelayMs, undefined, { signal });
+  if ("tool" in step) {
+    yield { type: "tool-use", id: `fake-call-${messages.length}`, name: step.tool, input: step.input };
+    return "tool_use";
+  }
+  yield* textInChunks(step.text, pace, signal);
+  return "end_turn";
+}
+
+/** The text in the fake writer's chunks (`chunkEnds`), one every `chunkIntervalMs`. */
+async function* textInChunks(text: string, pace: FakeModelPace, signal: AbortSignal): AsyncGenerator<ModelEvent> {
+  let start = 0;
+  for (const end of chunkEnds(text)) {
+    if (start > 0) await sleep(pace.chunkIntervalMs, undefined, { signal });
+    yield { type: "text", text: text.slice(start, end) };
+    start = end;
+  }
 }
 
 function nextStep(messages: PromptMessage[]): Step {

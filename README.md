@@ -190,8 +190,9 @@ npm run serve-temp -- --keep    # keeps it
 - On `SIGINT` (Ctrl-C), `SIGTERM` (`kill <pid>`) or `SIGHUP` (its terminal closing) it stops
   both servers and deletes the data folder, unless `--keep` is given. A crash deletes it too.
 - Run it in the background, and stop it with the handle you got or the PID it printed.
-- `npm run logs -- <data folder>` reads its log. `RTFM_PASSCODE` puts it behind a passcode, as it
-  does `npm run dev`.
+- `npm run logs -- <data folder>` reads its log, and `npm run usage -- <data folder>` its ledger.
+  A `STOP` file in the data folder is its kill switch (The data folder and spending, below).
+  `RTFM_PASSCODE` puts it behind a passcode, as it does `npm run dev`.
 
 ### Another data folder or port
 
@@ -216,7 +217,10 @@ RTFM_DATA_DIR=/tmp/rtfm-try RTFM_PORT=0 npm run server   # alone, on any free po
 
 `RTFM_MODELS` chooses who writes unwritten sections and who answers as the librarian:
 
-- **`fake`** (the default). Nothing costs anything, and tests and screenshots always use it.
+- **`fake`** (the default). Nothing costs anything, and tests and screenshots always use it. Its
+  calls go through the model gateway as Bedrock's do, under the model `fake-model`, priced at $0:
+  the caps (to which each call adds $0), the kill switch, the idle timeout and the ledger all
+  apply to them, and `npm run usage` lists them apart from real spend.
   - **The fake writer** replays the sample manual's own text for the section after 1.2s, about
     20 characters every 85ms. A section that has no sample text (every section of the other six
     manuals, and of any manual the librarian creates) gets a one-line placeholder instead, which
@@ -300,8 +304,8 @@ Everything but the credentials and the passcode is committed:
   prompt asks Claude for (`sectionWordsRequested`), and the length in characters a section's
   progress counts to while Claude writes (`sectionExpectedCharacters`). The default API port is
   `API_PORT` in `server/ports.ts`.
-- `server/gateway/prices.ts`: the dated price table. With `RTFM_MODELS=bedrock`, the server
-  refuses to start with a model that isn't in it.
+- `server/gateway/prices.ts`: the dated price table, with the fake model at $0. The server refuses
+  to start with a model that isn't in it.
 
 The gateway refuses a model call that could cross the daily or monthly cap: nothing is charged,
 and the reader shows "budget reached" (the librarian's reply says its budget is used up). How it
@@ -328,16 +332,14 @@ as it is.
 - `.data/seeded.json`: the ids of the seed manuals already seeded. To reset every manual to the
   seed, stop the server, delete `.data/manuals/` and `.data/seeded.json`, and start it again.
 - `.data/ledger/<yyyy-mm>.jsonl`: the usage ledger, one line per model call reserved and settled.
-  The caps are computed from it, so **never delete or edit it**.
+  The fake model's calls are in it too, under `fake-model` at $0. The caps are computed from it,
+  so **never delete or edit it**.
 - `.data/logs/<yyyy-mm-dd>.jsonl`: the server's log, one file per UTC day (see Logs, below).
 - `.data/server.lock`: the PID of the server using the folder (below).
 - `.data/STOP`: **the kill switch.** While this file exists, the gateway refuses every new model
-  call at once, with no restart, and the reader and the librarian say their budget is reached.
-  Delete it to resume.
+  call at once, the fake model's included, with no restart, and the reader and the librarian say
+  their budget is reached. Delete it to resume.
   A call already running finishes.
-
-The caps and the kill switch apply only to the Bedrock models. The fake writer and the fake
-librarian make no model calls, so they never reach the gateway.
 
 ```sh
 touch .data/STOP   # stop all model calls
@@ -359,7 +361,8 @@ refused while no server is using the folder, delete `.data/server.lock`. How the
 
 `npm run usage` prints today's and this month's spend against the caps, by model and by job,
 with counts of aborted, failed and estimated calls, any unsettled reservations, and whether the
-kill switch is on. `npm run usage -- <dataDir>` reads another data folder. A call cut short (the
+kill switch is on. The fake model's calls are counted on a line of their own, in none of these.
+`npm run usage -- <dataDir>` reads another data folder. A call cut short (the
 reader closed the tab, the model stalled) is marked estimated; what it is charged is in
 `server/gateway/README.md` › Each call.
 

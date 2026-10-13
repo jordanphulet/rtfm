@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { fakeLibrarianModel, INSTANT_PACE } from "../agent/librarian/fake-model.ts";
+import { INSTANT_PACE, unrecordedFakeModel } from "../agent/fake-model.ts";
 import { fakePlan } from "../agent/planner/fake-planner.ts";
 import { startServer, type RunningServer } from "../app.ts";
 import { config } from "../config.ts";
@@ -52,7 +52,7 @@ async function start(passcode: string | undefined, dataDir?: string) {
   dataDir ??= await tempDataDir();
   const server = await startServer(
     { ...config, port: 0, dataDir, models: "fake", passcode },
-    { writer, librarian: fakeLibrarianModel(INSTANT_PACE), logger },
+    { writer, librarian: unrecordedFakeModel(INSTANT_PACE), logger },
   );
   servers.push(server);
   const base = `http://127.0.0.1:${server.port}`;

@@ -1,3 +1,6 @@
+/** The fake model's id in the gateway, the price table (at $0) and the ledger: never a Bedrock model id. */
+export const FAKE_MODEL = "fake-model";
+
 export type Job = "write-section" | "librarian" | "plan-manual";
 
 export interface ToolDefinition {
@@ -27,6 +30,8 @@ export interface Prompt extends ModelPrompt {
 }
 
 export interface ModelRequest {
+  /** What the call is for. Bedrock doesn't need it; the fake model answers by it. */
+  job: Job;
   model: string;
   maxTokens: number;
   prompt: ModelPrompt;

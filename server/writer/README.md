@@ -1,19 +1,34 @@
 # server/writer
 
 Writes a section that isn't written yet and streams it to every reader who has it open, with the
-fake writer or with Claude through the gateway.
+fake writer or with Claude, both through the gateway.
 
 A `SectionWriter` (`writer/types.ts`) takes the stored manual, a section id and a signal, and
 yields chunks of `{ text, progress, placeholder? }`; the body is exactly all the text joined. It
-fails with `WriteFailed("budget" | "error")` or any other error.
+fails with `WriteFailed("budget" | "error")` or any other error. Both writers keep the same
+contract:
+
+- Chunks end on whole words, and `progress` rises to at most 1.
+- A section the manual doesn't have is refused (`sectionToWrite`).
+- Once the signal aborts, no chunk follows: the write throws the abort, or ends if it had nothing
+  left to send.
+- Only the gateway's `SpendingRefused` (a cap or the kill switch) becomes `WriteFailed("budget")`
+  (`refusalAsBudget`). The gateway throws it before reserving or calling anything, so "budget"
+  always means nothing was charged. Everything else reaches `runs.ts` as is and becomes `"error"`.
 
 ## The fake writer
 
-**`writer/fake.ts`** waits, then yields the seed body in chunks of about 20 characters at a steady
-pace (`README.md` › The models gives the timings), split at word boundaries, the same pace as the
-fake librarian's replies.
+**`writer/fake.ts`** sends the seed body through the gateway, as a `write-section` call whose
+user message is the body, and the fake model repeats it back (`server/agent/README.md` › The fake
+model): after a wait, in chunks of about 20 characters at a steady pace (`README.md` › The models
+gives the timings), split at word boundaries, the same pace as the fake librarian's replies. The
+call is reserved, capped, refused by the kill switch, stopped by the idle timeout and recorded at
+$0 like any other.
 
-- `chunkEnds` splits a body into these chunks. The fake librarian and the previews use it too.
+- It sends its own prompt, not the Bedrock writer's: the fake model answers from its request
+  alone, and that prompt holds the manual's contents but not the section's sample text. So the
+  Bedrock writer's prompt, output handling and checks run only with Claude.
+- `chunkEnds` splits a body into these chunks. The fake model and the previews use it too.
 - `progress` is exact.
 - A section with no seed body gets a short placeholder, with every chunk marked `placeholder`,
   so the reader can be tried on any manual without storing anything.
@@ -82,10 +97,6 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   A fence closes only on a line of the same character, at least as long, with nothing after it,
   so a four-backtick `text` block holding a three-backtick `json` block and a `# Role` line is
   still code.
-- **Failure reasons.** Only the gateway's `SpendingRefused` (a cap or the kill switch) becomes
-  `WriteFailed("budget")`. The gateway throws it before reserving or calling anything, so
-  "budget" always means nothing was charged. Everything else reaches `runs.ts` as is and becomes
-  `"error"`.
 - **Progress** is `min(0.99, characters shown / config.sectionExpectedCharacters)`. It is a separate
   setting from the words requested because Haiku 4.5 writes past the length it is asked for (the
   measurements in `server/README.md` › Configuration). Set near what it writes, progress usually
@@ -119,11 +130,20 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   so this keeps the page's other requests flowing. The reader keeps a section's stream open while
   it navigates elsewhere.
 
+## Tests
+
+`section-writer.test.ts` is the `SectionWriter`'s shared suite: its tests run once against the fake
+writer, with the fake model, and once against the Bedrock writer, with a scripted `ModelClient`,
+both through the real gateway. It checks the contract above, that the kill switch fails a write as
+"budget" with nothing recorded, that a write's call is recorded settled, and that a run stores
+exactly the text that streamed. `fake.test.ts` and `bedrock.test.ts` cover what only one writer
+does, and `runs.test.ts` covers the runs.
+
 ## Files
 
-- `types.ts`: `SectionWriter`, `WriteFailed`.
+- `types.ts`: `SectionWriter`, `WriteFailed`, `refusalAsBudget`, `sectionToWrite`.
 - `runs.ts`: one run per section; later requests join it.
-- `fake.ts`: plays the seed body at a steady pace.
+- `fake.ts`: plays the seed body through the gateway, which the fake model repeats back.
 - `bedrock.ts`: writes through the gateway, choosing an example section.
 - `prompt.ts`: builds the prompt.
 - `section-text.ts`: holds back the opening, typesets quotes and yields whole words.

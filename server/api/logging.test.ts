@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { fakeLibrarianModel, INSTANT_PACE } from "../agent/librarian/fake-model.ts";
+import { INSTANT_PACE, unrecordedFakeModel } from "../agent/fake-model.ts";
 import { startServer, type Replaced, type RunningServer } from "../app.ts";
 import { config } from "../config.ts";
 import { logsDir } from "../logging/log-file.ts";
@@ -20,7 +20,7 @@ const STREAM_PATH = `/api/manuals/${SAMPLE_ID}/sections/${UNWRITTEN_ID}/stream`;
 async function start(dataDir?: string, replaced: Replaced = {}) {
   const server = await startServer(
     { ...config, port: 0, dataDir: dataDir ?? (await tempDataDir()), models: "fake", passcode: undefined },
-    { writer: fastFakeWriter(), librarian: fakeLibrarianModel(INSTANT_PACE), ...replaced },
+    { writer: fastFakeWriter(), librarian: unrecordedFakeModel(INSTANT_PACE), ...replaced },
   );
   servers.push(server);
   return { server, base: `http://127.0.0.1:${server.port}` };

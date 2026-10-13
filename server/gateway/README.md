@@ -8,7 +8,9 @@ ID, a price or the SDK.
   and messages whose content is a string or a list of `text`, `tool_use` and `tool_result` blocks.
   Blocks and tool definitions use Anthropic's field names, so `bedrock-client.ts` passes them to
   the SDK as they are. `Prompt` is the plain-text form the section writer builds.
-- **A `ModelClient`** (`bedrock-client.ts`, and fakes for tests) streams `ModelEvent`s: `text`;
+- **A `ModelClient`** (`bedrock-client.ts`; the fake model, below; and scripted fakes for tests)
+  is given the job, the job's model and `max_tokens`, the prompt and a signal (`ModelRequest`),
+  and streams `ModelEvent`s: `text`;
   `tool-input`, each fragment of a tool's input as it arrives; `tool-use`, one per whole
   `tool_use` block; `usage`, with input, output and cache token counts; and `stop`, with the stop
   reason.
@@ -132,6 +134,19 @@ totals. A `reserve` with no `settle` (the server died mid-call) counts at its wo
   `npm run usage` both use it, so they count spend the same way. `monthOf` comes from
   `storage/file-ledger.ts`, which files entries by it.
 
+## The fake model
+
+With `RTFM_MODELS=fake`, `app.ts` runs every job on `FAKE_MODEL` (`"fake-model"`, in `types.ts`),
+keeping each job's `maxTokens` and idle timeout, and the gateway calls the fake model
+(`server/agent/README.md` › The fake model) in place of the Bedrock client. Its id can never be a
+Bedrock model's, and it is in the price table with every price at 0, so:
+
+- each call reserves $0 and settles $0, so it adds nothing toward the caps (Each call, step 4);
+- the kill switch, the concurrency limit and the idle timeout refuse or stop it as they do any
+  call, and the reader and the librarian show the kill switch as "budget", as with Bedrock;
+- each call is written to the ledger under `fake-model`. The fake model reports zero tokens and
+  a stop reason, so a complete call is not marked estimated.
+
 ## The Bedrock client
 
 **`bedrock-client.ts`** is the only importer of `@anthropic-ai/bedrock-sdk`. It builds the client
@@ -236,11 +251,15 @@ config's room for the librarian.
 
 `npm run usage` (`server/usage.ts`, with the formatting in `gateway/usage-report.ts`) prints
 today's and this month's spend (UTC) against the caps, as `README.md` describes. It reads another
-data folder when given one; the tests use this.
+data folder when given one; the tests use this. Calls on `FAKE_MODEL` are left out of each
+period's total, its counts, its groups by model and by job, and the unsettled reservations, and
+are counted on a line of their own with what they cost, so they can't hide or pad a real charge.
+Only that exact id is left out, and no Bedrock call can have it.
 
 ## Files
 
-- `types.ts`: `ModelClient`, `ModelPrompt`, `ModelEvent`, `GatewayConfig`, refusal errors.
+- `types.ts`: `ModelClient`, `ModelPrompt`, `ModelEvent`, `GatewayConfig`, refusal errors,
+  `FAKE_MODEL`.
 - `gateway.ts`: caps, reservations, concurrency, idle timeout, kill switch, ledger.
 - `ledger-calls.ts`: pairs reserve and settle entries into calls (replay and usage).
 - `prices.ts`: the dated price table, cost and worst-case cost.

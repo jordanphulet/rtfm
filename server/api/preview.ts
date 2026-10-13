@@ -1,4 +1,4 @@
-import { fakeLibrarianModel, INSTANT_PACE } from "../agent/librarian/fake-model.ts";
+import { INSTANT_PACE, unrecordedFakeModel } from "../agent/fake-model.ts";
 import { sendReply } from "../agent/librarian/reply.ts";
 import { silentLogger } from "../logging/logger.ts";
 import type { ManualStore } from "../storage/types.ts";
@@ -57,7 +57,7 @@ export function librarianPreview(store: ManualStore, conversation: LibrarianMess
   return async (sink) => {
     const events: LibrarianEvent[] = [];
     await sendReply({
-      gateway: fakeLibrarianModel(INSTANT_PACE),
+      gateway: unrecordedFakeModel(INSTANT_PACE),
       store: { ...store, createManual: async () => "created" },
       conversation,
       signal: new AbortController().signal,

@@ -1,17 +1,15 @@
 import { writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { FAKE_REPLIES, fakeLibrarianModel, INSTANT_PACE } from "../agent/librarian/fake-model.ts";
+import { FAKE_REPLIES, INSTANT_PACE, unrecordedFakeModel } from "../agent/fake-model.ts";
 import { ONE_PER_REPLY } from "../agent/librarian/create-manual.ts";
 import { DELETE_OUTCOME_NOTES } from "../agent/librarian/prompt.ts";
 import { fakePlan } from "../agent/planner/fake-planner.ts";
 import { scriptedClient, textTurn, toolUseTurn } from "../agent/scripted-client.ts";
 import { startServer, type RunningServer } from "../app.ts";
 import { config as committedConfig } from "../config.ts";
-import { createGateway, killSwitchPath, type Gateway } from "../gateway/gateway.ts";
+import { killSwitchPath, type Gateway } from "../gateway/gateway.ts";
 import type { ModelEvent } from "../gateway/types.ts";
-import { silentLogger } from "../logging/logger.ts";
-import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
-import { collect, readEvents, SAMPLE_ID, tempDataDir, TEST_PRICES, testGatewayConfig } from "../testing.ts";
+import { collect, readEvents, SAMPLE_ID, tempDataDir, testGateway, testGatewayConfig } from "../testing.ts";
 import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage, type ManualSummary } from "./types.ts";
 
 const GEESE_ID = "negotiating-with-geese";
@@ -25,7 +23,7 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-async function start(librarian: Gateway = fakeLibrarianModel(INSTANT_PACE), dataDir?: string) {
+async function start(librarian: Gateway = unrecordedFakeModel(INSTANT_PACE), dataDir?: string) {
   dataDir ??= await tempDataDir();
   const server = await startServer({ ...committedConfig, port: 0, dataDir, models: "fake", passcode: undefined }, { librarian });
   servers.push(server);
@@ -47,17 +45,9 @@ async function start(librarian: Gateway = fakeLibrarianModel(INSTANT_PACE), data
 }
 
 async function scriptedGateway(turns: ModelEvent[][], dataDir: string, caps = { dailyUsd: 2, monthlyUsd: 20 }) {
-  const ledger = createFileLedger(dataDir, silentLogger);
   const { client, prompts } = scriptedClient(turns);
-  const gateway = await createGateway({
-    logger: silentLogger,
-    createClient: () => client,
-    ledger,
-    config: testGatewayConfig({ caps }),
-    prices: TEST_PRICES,
-    dataDir,
-  });
-  return { gateway, prompts, ledgerEntries: () => ledger.entriesForMonth(monthOf(new Date().toISOString())) };
+  const { gateway, ledgerEntries } = await testGateway(client, dataDir, { config: testGatewayConfig({ caps }) });
+  return { gateway, prompts, ledgerEntries };
 }
 
 function librarianEvents(response: Response): Promise<LibrarianEvent[]> {

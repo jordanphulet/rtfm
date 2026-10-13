@@ -234,14 +234,21 @@ manual or the problems that stopped it.
 
 ## The fake model
 
-The fake model (`agent/librarian/fake-model.ts`) is the default (`config.models`, `server/README.md`
-› Choosing the models):
+The fake model (`fakeModel` in `agent/fake-model.ts`) is the default (`config.models`,
+`server/README.md` › Choosing the models):
 
-- It implements `Gateway` itself, so it makes no model call and never reaches the real gateway:
-  nothing is reserved, recorded or capped, as with the fake writer.
-- It reads the latest user message, without a page note at its start, for a keyword, the first
-  match in this order: `delete` or `remove`; `create`, `new` or `start`; `open` or `read`;
-  `list`, `library`, `manuals` or "what do I have"; `find`, `anything` or `which`; `help`. Then
+- It is a `ModelClient`, which the real gateway calls in place of the Bedrock client, under the id
+  `fake-model` at $0 (`server/gateway/README.md` › The fake model). So each of its calls is
+  reserved, refused by the kill switch, stopped by the idle timeout and written to the ledger,
+  as Claude's are.
+- It answers each job from its request alone (`ModelRequest`'s `job` and prompt), and reports
+  zero tokens and a stop reason at the end of every turn.
+- Asked to write a section (the job `write-section`), it repeats the user's message: the fake
+  writer sends the section's sample text (`server/writer/README.md` › The fake writer).
+- Asked for a librarian turn (the job `librarian`), it reads the latest user message, without a
+  page note at its start, for a keyword, the first match in this order: `delete` or `remove`;
+  `create`, `new` or `start`; `open` or `read`; `list`, `library`, `manuals` or "what do I have";
+  `find`, `anything` or `which`; `help`. Then
   it plays the turns a model would, through the real tools: a list calls `list_manuals` and
   lists every title with its counts; an open or a delete calls `find_manuals` with the message
   as the topic, then `open_manual` or `propose_delete` with the best match, then says so; with
@@ -254,17 +261,22 @@ The fake model (`agent/librarian/fake-model.ts`) is the default (`config.models`
   (`Building a Treehouse`), streamed as one `tool-input` then saved with `save_manual` after a
   pause. Asked twice for the same title, its id is taken both times, so the second request isn't
   saved.
-- It waits before each turn (and before a plan) and streams text in the fake writer's chunks
-  (`chunkEnds`), at the pace `README.md` › The models gives. Its fixed replies are
-  `FAKE_REPLIES`, which the tests and the shot script match.
+- It waits before each turn, plan and section, and streams text in the fake writer's chunks
+  (`chunkEnds`), at the pace `README.md` › The models gives (`FakeModelPace`). Its fixed replies
+  are `FAKE_REPLIES`, which the tests and the shot script match.
+- It stops on its signal: a signal that has already aborted is refused before any event, and
+  once the signal aborts, the next read throws the abort, whichever event the caller holds.
+- `unrecordedFakeModel` calls it directly, as a `Gateway` with no caps, kill switch or ledger,
+  for the previews (below) and for tests of what sits above the gateway.
 
 ## Previews
 
 `?freeze=<0–1>` on the librarian's route, in `api/preview.ts`. Whatever models are configured, it
 runs `sendReply` with the fake model at once (no waits) and collects the events. It then sends the
 statuses and the text up to the last chunk end at or before that fraction of the reply's text, then
-`frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never sent, and its store saves
-no manual (`createManual` only answers `"created"`), so a preview costs nothing and changes nothing.
+`frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never sent, its store saves no
+manual (`createManual` only answers `"created"`), and it calls the fake model outside the gateway
+(`unrecordedFakeModel`), so a preview costs nothing, records nothing and changes nothing.
 The browser uses it for `?conversation=demo` and `?librarianFreeze=` (`src/librarian/README.md`).
 
 ## Tests
@@ -274,18 +286,29 @@ replies whose last turn is empty, with the fake model and with scripted turns th
 gateway, the turn limit, the planner's one retry and its checks, and finding; previews call no
 model and save nothing.
 
+`model.test.ts` is the shared suite of the librarian's and the planner's model, the
+`ModelClient` that `config.models` chooses: its tests run once with the fake model and once with
+a scripted `ModelClient` standing in for Claude (`scripted-client.ts`), both through the real
+gateway. Each test gives the turns Claude would send; the fake model reads the request itself.
+It checks the contract, not the text: a turn reports its tokens and its stop, so its call settles
+complete and not estimated; a librarian turn streams its text in several events and ends with one
+`stop`; a tool call has an id and an input and stops with `tool_use`; an aborted signal ends the
+stream at the next read; and a plan passes the planner's checks and is saved, or nothing is saved
+once the plan is aborted. The caps, the kill switch and stalls are the gateway's, in its own
+tests; `server/app.test.ts` checks that the fake models' calls reach them.
+
 ## Files
 
 - `loop.ts`: `runAgent`: model turns and tool calls through the gateway (The agent loop, above).
 - `tool.ts`: `defineTool`: a tool's schema, status line and handler.
 - `scripted-client.ts`: a fake `ModelClient` that plays scripted turns, tool calls included.
+- `fake-model.ts`: the scripted fake model, for every job (The fake model, above).
 - `librarian/`: the librarian agent (The librarian, above).
   - `reply.ts`: `sendReply`: runs the loop on a conversation and sends the reply's events.
   - `prompt.ts`: the system prompt.
   - `tools.ts`: list, find, open and propose a delete.
   - `create-manual.ts`: the create tool, which hands the request to the planner.
   - `find.ts`: `findManuals`: manuals that match a topic.
-  - `fake-model.ts`: the scripted fake model (the librarian's and the planner's).
 - `planner/`: plans a new manual and saves it (The planner, above).
   - `plan.ts`: `planManual`: one plan, one retry, then save.
   - `prompt.ts`: the system prompt, the request message and the `save_manual` tool.

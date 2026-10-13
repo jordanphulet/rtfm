@@ -1,3 +1,5 @@
+import { FAKE_MODEL } from "./types.ts";
+
 export interface ModelPrice {
   input: number;
   output: number;
@@ -21,6 +23,7 @@ export interface TokenCounts {
 export const prices: PriceTable = {
   checkedOn: "2026-10-11",
   models: {
+    [FAKE_MODEL]: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, toolUseSystemPromptTokens: 0 },
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
       input: 1.0,
       output: 5.0,
