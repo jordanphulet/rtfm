@@ -65,9 +65,11 @@ which covers the whole account. It can't list other queries (`DescribeQueries`) 
 You deploy `RtfmToolkit` and `RtfmAccess` yourself, with your own admin sign-in. Both use
 `LegacyStackSynthesizer`: no bootstrap role, so `rtfm-deploy` can change neither, and no template
 asset, so the CLI sends the template inline (both are well under its 50 KiB limit, which the
-tests check) rather than through the staging bucket, which `rtfm-deploy` can write. Every other
-stack is named `Rtfm*` and deploys through the bootstrap: the app's default synthesizer is
-`DefaultStackSynthesizer` with the qualifier `rtfm`.
+tests check) rather than through the staging bucket, which `rtfm-deploy` can write. Stacks named
+`RtfmEdge*` are yours too (`research/aws-design.md`); RTFM's roles may only read them. Every
+other stack is named `Rtfm*` and deploys through the bootstrap: the app's default synthesizer is
+`DefaultStackSynthesizer` with the qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which
+the tests check.
 
 ## The stacks
 
@@ -85,6 +87,11 @@ stack is named `Rtfm*` and deploys through the bootstrap: the app's default synt
     CLI's own template from replacing it.
   - Only `rtfm-deploy` may assume its deploy and file publishing roles, and `rtfm-read` and
     `rtfm-deploy` its lookup role, never with an external ID.
+  - The deploy role may only read the stacks you deploy: `RtfmAccess`, `RtfmToolkit` and
+    `RtfmEdge*`.
+  - The staging bucket's policy lets `lambda.amazonaws.com` read objects and their versions for a
+    revision of a Web Function `rtfm-*` in this account: Lambda reads a revision's code as its
+    own service principal.
 - **`RtfmAccess`** (`access-stack.ts`): the users, the two roles, `rtfm-bedrock`, and the budget
   alarm. It has termination protection.
 - **`RtfmApp`** (`app-stack.ts`): the app, deployed through the bootstrap with
@@ -135,28 +142,37 @@ every role a stack creates must carry it too. The execution policy, `rtfm-cfn-ex
 same document, so CloudFormation can do exactly what the boundary allows.
 
 It allows every action of Logs, Lambda, DynamoDB, S3, SSM and IAM on resources named for RTFM:
-log groups `rtfm-*`, `/rtfm/*` and `/aws/lambda/rtfm-*`; functions, tables, buckets, roles and
-policies `rtfm-*`; and parameters `/rtfm/*`. **Every resource an app stack creates must be named
-explicitly with the `rtfm-` prefix.** A name CloudFormation makes up begins with the stack's name
+log groups `rtfm-*`, `/rtfm/*` and `/aws/lambda/rtfm-*`; functions, Web Functions (with their
+revisions and endpoints), tables, buckets, roles and policies `rtfm-*`; and parameters
+`/rtfm/*`. **Every resource an app stack creates must be named explicitly with the `rtfm-`
+prefix.** A name CloudFormation makes up begins with the stack's name
 (`RtfmApp-ApiServiceRole1A2B`, or `rtfmapp-sitebucket1a2b` for a bucket) or with `CFN-` (a
 parameter), and the boundary refuses it.
 
 It also lets Claude be called as `rtfm-bedrock` does, less the Marketplace subscription, and
-reads the staging bucket's objects and the bootstrap's version.
+reads the staging bucket's objects (and their versions, which a Web Function revision is made
+from) and the bootstrap's version.
 
 It denies, whatever any other policy allows:
 
 - creating a role, or setting a role's boundary, with any boundary but `rtfm-boundary`, and
   removing a boundary;
 - anything on the boundary, the execution policy, `rtfm-bedrock`, `rtfm-read`, `rtfm-deploy`, the
-  bootstrap's roles, the stacks `RtfmAccess` and `RtfmToolkit`, and the budget;
+  bootstrap's roles, the stacks you deploy (`RtfmAccess`, `RtfmToolkit`, `RtfmEdge*`), and the
+  budget;
 - anything on an IAM user: no stack creates one, or a key;
 - anything but reading on the staging bucket and the version parameter;
 - a public endpoint: a Lambda Function URL whose auth type isn't `AWS_IAM` (a request without
-  the auth type is denied too, so changing a URL's settings must restate `AWS_IAM`), and any
-  function permission (`lambda:AddPermission`), even for an AWS service. Lambda has no condition
+  the auth type is denied too, so changing a URL's settings must restate `AWS_IAM`); a Web
+  Function endpoint created with any auth type but `IamAuth`, and a Web Function made, or an
+  endpoint changed, with any auth type given but `IamAuth` (one made without an endpoint, as
+  CloudFormation makes it, or an endpoint update that leaves the auth type alone, gives none);
+  any function permission (`lambda:AddPermission`), even for an AWS service; and any resource
+  policy (`lambda:PutResourcePolicy`), on a function or a Web Function. Lambda has no condition
   key for a permission's source, so a permission for API Gateway or CloudFront would let another
-  account's API or distribution expose the function to anyone;
+  account's API or distribution expose the function to anyone, and a whole resource policy could
+  grant anyone anything, such as changing a Web Function endpoint's auth type from another
+  account;
 - a role or policy with a path (`role/rtfm-x/any-name`), which `rtfm-*` would otherwise match;
 - changing Block Public Access, on a bucket (`s3:PutBucketPublicAccessBlock`, which removing a
   bucket's block also takes) or on the account. Every bucket keeps S3's default, which blocks
@@ -185,10 +201,12 @@ It allows no action on `*` itself.
 
 ### What it can't name, and so leaves out
 
-- CloudFront distributions, API Gateway APIs, Lambda event source mappings and KMS keys get an ID
-  from AWS when they are made, so a policy can't name them in advance. Tag conditions
-  (`aws:RequestTag` and `aws:ResourceTag` on `project`) could scope them instead. The staging
-  bucket uses S3's own encryption, so it needs no key.
+- CloudFront distributions and origin access controls, API Gateway APIs, Lambda event source
+  mappings and KMS keys get an ID from AWS when they are made, so a policy can't name them in
+  advance. Tag conditions don't close the gap for distributions: a role allowed to tag one could
+  tag another project's `project=rtfm` by its ID and then change it, and creating one could front
+  another project's origin. So a distribution is yours to deploy, in an `RtfmEdge*` stack. The
+  staging bucket uses S3's own encryption, so it needs no key.
 - CloudWatch metrics and X-Ray traces: their actions take only `*`.
 - Buckets: an S3 bucket ARN (`arn:aws:s3:::rtfm-*`) carries no account, so a role under the
   boundary could write RTFM's data to another account's bucket named `rtfm-…`. Only RTFM's own
@@ -204,6 +222,16 @@ RTFM stack from naming an outsider in them, on RTFM's own resources:
 - a bucket policy (`s3:PutBucketPolicy`) on a bucket `rtfm-*` may name another account, though
   Block Public Access (above) refuses one that names everyone;
 - a DynamoDB resource policy (`dynamodb:PutResourcePolicy`) on a table `rtfm-*`.
+
+Lambda's resource policies and function permissions would be on this list, so the boundary
+denies them outright (above).
+
+### What it allows that reaches beyond RTFM
+
+`lambda:*` on RTFM's functions includes `lambda:PutFunctionConcurrency`. Reserved concurrency
+comes out of the account's shared pool, so a stack could reserve most of it for a function
+`rtfm-*` and leave other projects' functions throttled. It stays allowed, so reserved concurrency
+can serve as a cost cap.
 
 The bootstrap has no container image repository, so stacks can't use Docker image assets.
 

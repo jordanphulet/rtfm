@@ -34,7 +34,22 @@ export const parameterArn = (name: string) => `arn:aws:ssm:${REGION}:${ACCOUNT}:
 export const logGroupArn = (name: string) => `arn:aws:logs:${REGION}:${ACCOUNT}:log-group:${name}`;
 export const budgetArn = (name: string) => `arn:aws:budgets::${ACCOUNT}:budget/${name}`;
 
+export const functionArn = (name: string) => `arn:aws:lambda:${REGION}:${ACCOUNT}:function:${name}`;
+/** A Web Function's revisions and endpoints are under its ARN: `…/revision/<id>`, `…/endpoint/<name>`. */
+export const webFunctionArn = (name: string) => `arn:aws:lambda:${REGION}:${ACCOUNT}:web-function/${name}`;
+
 export const RTFM_STACKS = stackArn("Rtfm*");
+
+/**
+ * The prefix of the stacks that put the app on the web (its certificate, DNS record, CloudFront
+ * distribution, and what lets the distribution invoke the app), which the user deploys: RTFM's
+ * roles get no Route 53, ACM or CloudFront permission, and no resource policy. No app stack may
+ * be named with it.
+ */
+export const EDGE_STACKS = "RtfmEdge";
+
+/** The stacks the user deploys with their own sign-in, which RTFM's roles may only read. */
+export const USER_STACKS = [ACCESS_STACK, TOOLKIT_STACK, `${EDGE_STACKS}*`];
 
 /**
  * RTFM's resources. Every one an app stack creates must be named explicitly with the `rtfm-`
@@ -43,7 +58,8 @@ export const RTFM_STACKS = stackArn("Rtfm*");
  */
 export const RTFM_RESOURCES = {
   logGroups: ["rtfm-*", "/rtfm/*", "/aws/lambda/rtfm-*"].map(logGroupArn),
-  functions: [`arn:aws:lambda:${REGION}:${ACCOUNT}:function:rtfm-*`],
+  functions: [functionArn("rtfm-*")],
+  webFunctions: [webFunctionArn("rtfm-*")],
   tables: [`arn:aws:dynamodb:${REGION}:${ACCOUNT}:table/rtfm-*`],
   buckets: bucketArns("rtfm-*"),
   parameters: [parameterArn("/rtfm/*")],

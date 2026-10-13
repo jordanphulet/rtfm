@@ -21,7 +21,6 @@ import { StringParameter } from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
 import { boundaryStatements } from "./boundary.ts";
 import {
-  ACCESS_STACK,
   ACCOUNT,
   BOOTSTRAP_ROLES,
   BOOTSTRAP_VERSION_PARAMETER,
@@ -34,11 +33,13 @@ import {
   RTFM_STACKS,
   STAGING_BUCKET,
   TOOLKIT_STACK,
+  USER_STACKS,
   bucketArns,
   parameterArn,
   policyArn,
   roleArn,
   stackArn,
+  webFunctionArn,
 } from "./rtfm.ts";
 
 /** The bootstrap version whose roles, bucket and outputs this template provides. */
@@ -97,9 +98,27 @@ export class RtfmToolkitStack extends Stack {
     this.bootstrapRole("FilePublishingRole", filePublishing, [DEPLOY_ROLE], filePublishingStatements());
     this.bootstrapRole("LookupRole", lookup, [READ_ROLE, DEPLOY_ROLE], lookupStatements());
 
+    this.letLambdaReadWebFunctionCode(bucket);
+
     new CfnOutput(this, "BucketName", { value: bucket.bucketName });
     new CfnOutput(this, "BucketDomainName", { value: bucket.bucketRegionalDomainName });
     new CfnOutput(this, "BootstrapVersion", { value: BOOTSTRAP_VERSION });
+  }
+
+  /** Lambda reads a Web Function revision's code from the staging bucket as its own service principal. */
+  private letLambdaReadWebFunctionCode(bucket: Bucket): void {
+    bucket.addToResourcePolicy(
+      new PolicyStatement({
+        sid: "LambdaReadsWebFunctionCode",
+        principals: [new ServicePrincipal("lambda.amazonaws.com")],
+        actions: ["s3:GetObject", "s3:GetObjectVersion"],
+        resources: [bucket.arnForObjects("*")],
+        conditions: {
+          ArnLike: { "aws:SourceArn": `${webFunctionArn("rtfm-*")}/revision/*` },
+          StringEquals: { "aws:SourceAccount": ACCOUNT },
+        },
+      }),
+    );
   }
 
   /**
@@ -179,10 +198,10 @@ function deployStatements(): PolicyStatement[] {
       resources: [RTFM_STACKS],
     }),
     new PolicyStatement({
-      sid: "OnlyReadAccessAndBootstrapStacks",
+      sid: "OnlyReadUserStacks",
       effect: Effect.DENY,
       notActions: ["cloudformation:Describe*", "cloudformation:Get*", "cloudformation:List*"],
-      resources: [stackArn(ACCESS_STACK), stackArn(TOOLKIT_STACK)],
+      resources: USER_STACKS.map(stackArn),
     }),
     new PolicyStatement({
       sid: "PassExecutionRole",

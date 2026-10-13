@@ -3,8 +3,13 @@
 Research only, written 2026-10-11 from the design of the local server in `ARCHITECTURE.md`. No AWS
 calls were made.
 
-**Status (2026-10-11):** nothing here is adopted. The app runs locally, on one Node server that
-keeps the manuals and the usage ledger as files in `.data/`.
+**Status (2026-10-13):** adopted in part, by `research/aws-design.md`. Adopted: DynamoDB for the
+manuals, sections and ledger, with the conditional saves, the counter items that make the caps
+one atomic step across instances, and a lease per section for one writer across instances.
+Not adopted: Lambda with `streamifyResponse` behind a function URL (the server runs unchanged on a
+Lambda Web Function, with a function URL through the Lambda Web Adapter as the fallback); one
+table per kind of item (two tables, `rtfm-app` and `rtfm-usage`); reserved concurrency as the cap
+on calls; and the kill switch in SSM (an item in `rtfm-usage`).
 
 ## What the local server already gives
 

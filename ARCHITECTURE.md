@@ -202,6 +202,8 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
     local one stays as strict as the AWS one.
   - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
     adapters on purpose, or the test fails.
+  - An AWS deployment runs this same server, on a Lambda Web Function behind CloudFront
+    (`research/aws-design.md`), so its AWS code is only adapters behind these interfaces.
   - A feature that works only in AWS needs the user's approval.
   - No task's **Done when** needs the deployed app. Local can't show IAM permissions, Lambda
     response streaming and its disconnects, or cold starts; a smoke check after each deploy covers

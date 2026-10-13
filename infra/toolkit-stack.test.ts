@@ -17,14 +17,17 @@ import {
   EXECUTION_POLICY,
   READ_ROLE,
   REGION,
+  EDGE_STACKS,
   STAGING_BUCKET,
   TOOLKIT_STACK,
+  USER_STACKS,
   budgetArn,
   logGroupArn,
   parameterArn,
   policyArn,
   roleArn,
   userArn,
+  webFunctionArn,
 } from "./rtfm.ts";
 import { BOOTSTRAP_VERSION } from "./toolkit-stack.ts";
 import {
@@ -88,6 +91,22 @@ describe("the RtfmToolkit stack, RTFM's bootstrap", () => {
     Template.fromStack(toolkit).hasResourceProperties("AWS::S3::Bucket", { BucketName: STAGING_BUCKET });
   });
 
+  it("lets Lambda read an RTFM Web Function's code from the staging bucket, and nothing else", () => {
+    const policies = Template.fromStack(toolkit).findResources("AWS::S3::BucketPolicy");
+    const statements = Object.values(policies).flatMap((policy) => policy.Properties.PolicyDocument.Statement);
+    const forLambda = statements.filter((statement) => statement.Principal?.Service === "lambda.amazonaws.com");
+    expect(forLambda).toEqual([
+      expect.objectContaining({
+        Effect: "Allow",
+        Action: ["s3:GetObject", "s3:GetObjectVersion"],
+        Condition: {
+          ArnLike: { "aws:SourceArn": `${webFunctionArn("rtfm-*")}/revision/*` },
+          StringEquals: { "aws:SourceAccount": ACCOUNT },
+        },
+      }),
+    ]);
+  });
+
   it("lets only RTFM's own roles assume the bootstrap roles, and none on another's behalf", () => {
     const assumers = (roleName: string) => trustOf(resources, roleName)[0].Condition;
     expect(assumers(BOOTSTRAP_ROLES.deploy)).toEqual({
@@ -113,10 +132,12 @@ describe("the RtfmToolkit stack, RTFM's bootstrap", () => {
     expect(can("iam:PassRole", roleArn(BOOTSTRAP_ROLES.execution))).toBe(true);
     expect(can("s3:GetObject", stagingObject)).toBe(true);
 
-    for (const stack of [ACCESS_STACK, TOOLKIT_STACK]) {
-      expect(can("cloudformation:CreateChangeSet", stackNamed(stack))).toBe(false);
-      expect(can("cloudformation:DeleteStack", stackNamed(stack))).toBe(false);
+    for (const stack of [ACCESS_STACK, TOOLKIT_STACK, `${EDGE_STACKS}Certificate`, `${EDGE_STACKS}Distribution`]) {
+      expect(can("cloudformation:CreateChangeSet", stackNamed(stack)), stack).toBe(false);
+      expect(can("cloudformation:DeleteStack", stackNamed(stack)), stack).toBe(false);
+      expect(can("cloudformation:DescribeStacks", stackNamed(stack)), stack).toBe(true);
     }
+    expect(USER_STACKS).toEqual([ACCESS_STACK, TOOLKIT_STACK, `${EDGE_STACKS}*`]);
     for (const stack of ["CDKToolkit", "WorkStack"]) {
       expect(can("cloudformation:UpdateStack", stackNamed(stack))).toBe(false);
       expect(can("cloudformation:DeleteStack", stackNamed(stack))).toBe(false);
@@ -124,6 +145,12 @@ describe("the RtfmToolkit stack, RTFM's bootstrap", () => {
     }
     expect(can("iam:PassRole", roleArn(`cdk-hnb659fds-cfn-exec-role-${ACCOUNT}-${REGION}`))).toBe(false);
     expect(can("s3:PutObject", stagingObject)).toBe(false);
+  });
+
+  it("names no stack the deploy role deploys like one the user deploys", () => {
+    const deployed = assembly.stacks.filter((stack) => stack.assumeRoleArn !== undefined).map((stack) => stack.stackName);
+    expect(deployed).toEqual([APP_STACK]);
+    for (const name of deployed) expect(name.startsWith(EDGE_STACKS), name).toBe(false);
   });
 
   it("lets the file publishing role write to the staging bucket only", () => {
@@ -164,6 +191,7 @@ describe("the execution role, under the boundary", () => {
     expect(can("iam:CreateRole", roleArn("rtfm-api"), withBoundary)).toBe(true);
     expect(can("iam:PassRole", roleArn("rtfm-api"))).toBe(true);
     expect(can("s3:GetObject", stagingObject)).toBe(true);
+    expect(can("s3:GetObjectVersion", stagingObject)).toBe(true);
   });
 
   it("refuses the names CloudFormation makes up for an RtfmApp stack's resources", () => {
@@ -194,6 +222,10 @@ describe("the boundary", () => {
     expect(managedPolicyStatements(resources, EXECUTION_POLICY)).toEqual(boundary);
   });
 
+  it("fits in a managed policy, which IAM limits to 6,144 characters without whitespace", () => {
+    expect(JSON.stringify({ Version: "2012-10-17", Statement: boundary }).length).toBeLessThan(6144);
+  });
+
   it("denies a role created or changed without it", () => {
     const role = roleArn("rtfm-api");
     expect(denies("iam:CreateRole", role)).toBe("deny");
@@ -214,7 +246,9 @@ describe("the boundary", () => {
       expect(denies("iam:UpdateAssumeRolePolicy", roleArn(role))).toBe("deny");
       expect(denies("iam:PassRole", roleArn(role))).toBe("deny");
     }
-    expect(denies("cloudformation:UpdateStack", stackNamed(ACCESS_STACK))).toBe("deny");
+    for (const stack of [ACCESS_STACK, TOOLKIT_STACK, `${EDGE_STACKS}Distribution`]) {
+      expect(denies("cloudformation:UpdateStack", stackNamed(stack)), stack).toBe("deny");
+    }
     expect(denies("budgets:ModifyBudget", budgetArn(BUDGET))).toBe("deny");
   });
 
@@ -250,7 +284,7 @@ describe("the boundary", () => {
     }
   });
 
-  it("denies a public Function URL, and any permission for another to invoke a function", () => {
+  it("denies a public Function URL", () => {
     const can = reachOf(resources, "AWS::IAM::Role", BOOTSTRAP_ROLES.execution);
     const api = lambda("rtfm-api");
     const urlAuth = (type: string) => ({ "lambda:FunctionUrlAuthType": type });
@@ -260,7 +294,11 @@ describe("the boundary", () => {
       expect(denies(action, api)).toBe("deny");
       expect(can(action, api, urlAuth("AWS_IAM"))).toBe(true);
     }
+  });
 
+  it("denies any permission for another to invoke a function, and any resource policy", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", BOOTSTRAP_ROLES.execution);
+    const api = lambda("rtfm-api");
     const principals = [
       "*",
       "111122223333",
@@ -269,11 +307,50 @@ describe("the boundary", () => {
       "apigateway.amazonaws.com",
       "s3.amazonaws.com",
     ];
-    for (const principal of principals) {
-      const context = { "lambda:Principal": principal };
-      expect(can("lambda:AddPermission", api, context), principal).toBe(false);
-      expect(denies("lambda:AddPermission", api, context), principal).toBe("deny");
+    for (const target of [api, lambda("rtfm-web")]) {
+      for (const principal of principals) {
+        const context = { "lambda:Principal": principal };
+        expect(can("lambda:AddPermission", target, context), principal).toBe(false);
+        expect(denies("lambda:AddPermission", target, context), principal).toBe("deny");
+      }
     }
+    for (const target of [api, webFunctionArn("rtfm-app")]) {
+      expect(can("lambda:PutResourcePolicy", target), target).toBe(false);
+      expect(denies("lambda:PutResourcePolicy", target), target).toBe("deny");
+    }
+  });
+
+  it("lets a stack make RTFM's Web Functions, with signed endpoints only, and no others", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", BOOTSTRAP_ROLES.execution);
+    const web = webFunctionArn("rtfm-app");
+    const endpoint = `${web}/endpoint/live`;
+    const auth = (type: string) => ({ "lambda:Request/WebFunctionAuthType": type });
+    expect(can("lambda:CreateWebFunction", web)).toBe(true);
+    expect(can("lambda:CreateWebFunction", web, auth("IamAuth"))).toBe(true);
+    expect(can("lambda:CreateWebFunctionRevision", web)).toBe(true);
+    expect(can("lambda:CreateWebFunctionEndpoint", web, auth("IamAuth"))).toBe(true);
+    expect(can("lambda:UpdateWebFunctionEndpoint", endpoint)).toBe(true);
+    expect(can("lambda:UpdateWebFunctionEndpoint", endpoint, auth("IamAuth"))).toBe(true);
+    expect(can("lambda:DeleteWebFunctionEndpoint", endpoint)).toBe(true);
+
+    for (const type of ["ApplicationManaged", "AnyFutureAuthType"]) {
+      expect(denies("lambda:CreateWebFunctionEndpoint", web, auth(type)), type).toBe("deny");
+      expect(denies("lambda:CreateWebFunction", web, auth(type)), type).toBe("deny");
+      expect(denies("lambda:UpdateWebFunctionEndpoint", endpoint, auth(type)), type).toBe("deny");
+    }
+    expect(denies("lambda:CreateWebFunctionEndpoint", web)).toBe("deny");
+
+    expect(can("lambda:CreateWebFunction", webFunctionArn("RtfmApp-Web1A2B"))).toBe(false);
+    expect(can("lambda:CreateWebFunction", webFunctionArn("work-site"))).toBe(false);
+    expect(can("lambda:DeleteWebFunction", webFunctionArn("work-site"))).toBe(false);
+  });
+
+  it("allows nothing in CloudFront", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", BOOTSTRAP_ROLES.execution);
+    const tagged = { "aws:RequestTag/project": "rtfm", "aws:ResourceTag/project": "rtfm" };
+    expect(can("cloudfront:CreateDistribution", "*", tagged)).toBe(false);
+    expect(can("cloudfront:UpdateDistribution", `arn:aws:cloudfront::${ACCOUNT}:distribution/E1`, tagged)).toBe(false);
+    expect(can("cloudfront:CreateOriginAccessControl", "*")).toBe(false);
   });
 
   it("denies roles and policies with a path, which the rtfm- prefix would otherwise let in", () => {

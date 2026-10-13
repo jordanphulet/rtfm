@@ -1,7 +1,6 @@
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { claudeStatements } from "./bedrock.ts";
 import {
-  ACCESS_STACK,
   BEDROCK_POLICY,
   BOOTSTRAP_VERSION_PARAMETER,
   BOUNDARY_POLICY,
@@ -12,7 +11,7 @@ import {
   READ_ROLE,
   RTFM_RESOURCES,
   STAGING_BUCKET,
-  TOOLKIT_STACK,
+  USER_STACKS,
   bucketArns,
   budgetArn,
   logGroupArn,
@@ -24,17 +23,21 @@ import {
 } from "./rtfm.ts";
 
 const RTFM_SERVICES = ["logs:*", "lambda:*", "dynamodb:*", "s3:*", "ssm:*", "iam:*"];
+const WEB_FUNCTION_AUTH_TYPE = "lambda:Request/WebFunctionAuthType";
 
-/** `RtfmAccess`'s resources and the bootstrap's, which nothing a stack creates may touch. */
+/**
+ * The stacks the user deploys, and `RtfmAccess`'s resources and the bootstrap's, which nothing a
+ * stack creates may touch.
+ */
 const PROTECTED = [
   ...[BOUNDARY_POLICY, EXECUTION_POLICY, BEDROCK_POLICY].map(policyArn),
   ...[READ_ROLE, DEPLOY_ROLE, `cdk-${QUALIFIER}-*`].map(roleArn),
   userArn("*"),
-  stackArn(ACCESS_STACK),
-  stackArn(TOOLKIT_STACK),
+  ...USER_STACKS.map(stackArn),
   budgetArn(BUDGET),
 ];
-const BOOTSTRAP_READS = ["s3:GetObject", "ssm:GetParameter", "ssm:GetParameters"];
+/** A Web Function revision is created from a version of its code's object, so it reads the version too. */
+const BOOTSTRAP_READS = ["s3:GetObject", "s3:GetObjectVersion", "ssm:GetParameter", "ssm:GetParameters"];
 
 function allows(): PolicyStatement[] {
   return [
@@ -107,6 +110,34 @@ function denials(): PolicyStatement[] {
       effect: Effect.DENY,
       actions: ["lambda:AddPermission"],
       resources: ["*"],
+    }),
+    // A whole resource policy, on a function or a Web Function, could grant anyone anything the
+    // policy names, such as changing an endpoint's auth type from another account.
+    new PolicyStatement({
+      sid: "NoResourcePolicies",
+      effect: Effect.DENY,
+      actions: ["lambda:PutResourcePolicy"],
+      resources: ["*"],
+    }),
+    // An endpoint's auth type is required when it is created.
+    new PolicyStatement({
+      sid: "OnlySignedWebFunctionEndpoints",
+      effect: Effect.DENY,
+      actions: ["lambda:CreateWebFunctionEndpoint"],
+      resources: ["*"],
+      conditions: { StringNotEquals: { [WEB_FUNCTION_AUTH_TYPE]: "IamAuth" } },
+    }),
+    // A Web Function made without an endpoint, as CloudFormation makes one, or an endpoint update
+    // that leaves the auth type as it is, has none to check; any one given must be `IamAuth`.
+    new PolicyStatement({
+      sid: "OnlySignedWebFunctionAuthTypes",
+      effect: Effect.DENY,
+      actions: ["lambda:CreateWebFunction", "lambda:UpdateWebFunctionEndpoint"],
+      resources: ["*"],
+      conditions: {
+        Null: { [WEB_FUNCTION_AUTH_TYPE]: "false" },
+        StringNotEquals: { [WEB_FUNCTION_AUTH_TYPE]: "IamAuth" },
+      },
     }),
     // Names can't hold `/`, so `*/*` means a path, which `rtfm-*` would let in (`role/rtfm-x/any`).
     new PolicyStatement({
