@@ -105,8 +105,8 @@ describing a tool that no longer exists.
 ### LB.1 — Describe the librarian's tools only in their definitions
 - **Status:** doing (agent: ace5d73e86fd3d284)
 - **Depends on:** BA.1 (it changes `server/**`)
-- **Files:** `server/agent/librarian/**`, `ARCHITECTURE.md` (§7's paragraph on the system prompt
-  only)
+- **Files:** `server/agent/librarian/**`, `server/api/librarian.test.ts` (its check of the
+  prompt's wording), `ARCHITECTURE.md` (§7's paragraph on the system prompt only)
 - **Do:**
   - Remove the per-tool list from the system prompt's `<tools>` section in
     `server/agent/librarian/prompt.ts`, so the definitions sent with the tools are the only place
