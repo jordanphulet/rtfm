@@ -9,7 +9,7 @@ The app is moving into AWS, and agents must still be able to run, test and check
 machine.
 
 ### LF.2 — One shared suite per model interface
-- **Status:** todo
+- **Status:** doing (agent afce95d7c34d819e6)
 - **Depends on:** LF.1
 - **Files:** `server/writer/**`, `server/agent/**`, `server/gateway/**`, `server/testing.ts`,
   `server/README.md`
@@ -22,7 +22,7 @@ machine.
   `ARCHITECTURE.md` › Everything runs on one machine holds for the models.
 
 ### LF.3 — The loopback guard in child processes
-- **Status:** todo
+- **Status:** doing (agent abd8d3259005c72c9)
 - **Depends on:** LF.1
 - **Files:** `vitest.setup.ts` and its test, `loopback-only.ts` and its test, `vite.config.ts`,
   `tsconfig.node.json`, `server/README.md`
@@ -49,7 +49,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.1 — The `infra/` app and the access stack
-- **Status:** todo
+- **Status:** doing (agent a1e12c678639005f4)
 - **Depends on:** LF.1
 - **Files:** `infra/**`, `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`,
   `ARCHITECTURE.md`, `README.md`, `server/README.md`, `CLAUDE.md`, `PROCESS.md`
