@@ -1,5 +1,16 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -239,6 +250,19 @@ describe("in a git repository", () => {
       expect(index().equals(before)).toBe(true);
     });
 
+    it("refuses on a branch other than main, and on a detached HEAD", () => {
+      write("README.md", "# Readme\n\nWidgets.\n");
+      git("switch", "--quiet", "-c", "side");
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(
+        "The main checkout is on branch side, not main. Check out main there first.",
+      );
+      git("switch", "--quiet", "--detach", "main");
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(
+        "The main checkout is on a detached HEAD, not main. Check out main there first.",
+      );
+      expect(git("log", "--format=%s", "side")).toBe("Start\n");
+    });
+
     it("refuses an unknown task", () => {
       expect(() => commitTask(repo, "XX.9", { reviewedBy: "a7f3" })).toThrow(/no task XX\.9/);
     });
@@ -401,6 +425,19 @@ describe("in a git repository", () => {
       expect(gitIn(worktree, "status", "--porcelain")).toBe("");
       expect(git("rev-parse", "main")).toBe(mainBefore);
       expect(git("status", "--porcelain")).toBe(" M WORKLIST.md\n M src/other.ts\n");
+    });
+
+    it("refuses to run in a linked worktree, naming the main checkout", () => {
+      writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
+      const message =
+        `${realpathSync(worktree)} is a linked worktree, not the main checkout. ` +
+        `Run this command in the main checkout, ${realpathSync(repo)}.`;
+
+      expect(() => commitTask(worktree, "XX.1", { reviewedBy: "a7f3" })).toThrow(message);
+      const result = spawnSync("node", [SCRIPT, "XX.1", "--reviewed-by", "a7f3"], { cwd: worktree, encoding: "utf8" });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toBe(`${message}\n`);
+      expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
     });
 
     it("refuses changed files in the worktree that the task's Files don't match, listing them", () => {

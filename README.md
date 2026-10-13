@@ -50,24 +50,48 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 The API server listens on `127.0.0.1` only; `server/api/README.md` › Only this machine's own pages
 has the checks it makes.
 
-| Script                | What it does                                                                 |
-| --------------------- | ---------------------------------------------------------------------------- |
-| `npm run dev`         | Starts Vite (5173) and the API server (8787) together.                       |
-| `npm run server`      | Starts the API server alone, for `curl` or `npm run preview`.                |
-| `npm test`            | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock.   |
-| `npm run build`       | Type-checks everything and builds the app.                                   |
-| `npm run preview`     | Serves the built app, passing `/api` to `npm run server` on 8787.            |
-| `npm run shot`        | Screenshots both pages in every state; `--compare` diffs against a baseline. |
-| `npm run serve-temp`  | A throwaway copy of the app, on free ports and a new data folder. See below. |
-| `npm run usage`       | Today's and this month's model spend, by model and by job. See below.        |
-| `npm run logs`        | The server's recent log entries, filtered or followed. See below.            |
-| `npm run audit`       | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
-| `npm run commit-task` | Commits a task's work with its review trailer. See below.                    |
-| `npm run task-prompt` | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
+| Script                       | What it does                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `npm run dev`                | Starts Vite (5173) and the API server (8787) together.                       |
+| `npm run server`             | Starts the API server alone, for `curl` or `npm run preview`.                |
+| `npm test`                   | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock.   |
+| `npm run build`              | Type-checks everything and builds the app.                                   |
+| `npm run preview`            | Serves the built app, passing `/api` to `npm run server` on 8787.            |
+| `npm run shot`               | Screenshots both pages in every state; `--compare` diffs against a baseline. |
+| `npm run serve-temp`         | A throwaway copy of the app, on free ports and a new data folder. See below. |
+| `npm run usage`              | Today's and this month's model spend, by model and by job. See below.        |
+| `npm run logs`               | The server's recent log entries, filtered or followed. See below.            |
+| `npm run audit`              | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
+| `npm run orchestrator-check` | Checks the orchestrator can start here, and lists leftovers. See below.      |
+| `npm run commit-task`        | Commits a task's work with its review trailer. See below.                    |
+| `npm run task-prompt`        | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
 
 The `rule-audit` skill (`.claude/skills/rule-audit/SKILL.md`) builds on `npm run audit`: told to
 "run the rule audit", a session ranks the written rules agents break by how often and what each
 break cost, and proposes tasks that turn the top ones into code. It changes no files.
+
+### The orchestrator's preflight
+
+`npm run orchestrator-check` checks that the orchestrator can start where it runs. It fails, with
+exit code 1, saying what to fix, when:
+
+- it runs outside the main checkout, such as in a task's worktree: it names the main checkout;
+- the main checkout isn't on `main`;
+- the main checkout has uncommitted changes: it lists them;
+- `core.hooksPath`, resolved against the main checkout, isn't its `.githooks` (below).
+
+When those pass, it lists what an earlier run may have left, and still passes:
+
+- each `doing` task in `WORKLIST.md`, with the agent its status records as `agent <id>`;
+- each task worktree, on a `worktree-agent-<id>` branch, with its commits ahead of `main` and its
+  uncommitted files. Other worktrees, such as `claude/*` ones, are left out.
+
+Claude Code puts an agent's worktree at `.claude/worktrees/agent-<id>`, on the branch
+`worktree-agent-<id>`, so each `doing` task is paired with the worktree whose branch carries its
+agent's ID, and says "no worktree" when there is none. Each task worktree is paired with the task
+whose status records its agent, whatever that status is (a `needs-human` task keeps its
+worktree), and shows the task's ID and status; a worktree no task records says "no task records
+its agent".
 
 ### Committing task work
 
@@ -86,7 +110,9 @@ npm run commit-task -- RC.1 --worktree .claude/worktrees/<name> --reviewed-by <r
 - **Files** are read from their code spans: `**` matches any number of folders and `*` anything
   within one name, notes in parentheses are skipped, "`x.ts` and its test" adds `x.test.*`, and
   "except …" or a note starting with "except" or "not" leaves its paths out.
-- With `--worktree <path>`, it reads the task from this checkout's `WORKLIST.md` and stages and
+- It runs only in the main checkout with `main` checked out. Anywhere else it refuses with the
+  preflight's message (above).
+- With `--worktree <path>`, it reads the task from the main checkout's `WORKLIST.md` and stages and
   commits in that worktree, on its branch. It refuses a folder that isn't the top of one of this
   repository's worktrees, and refuses when a changed file there isn't in the task's **Files**.
 - It refuses when nothing it matches differs from the last commit, during a merge, cherry-pick or
