@@ -175,7 +175,7 @@ When this phase is done:
   logs and reports alike.
 - **The audit writes nothing inside the repo.** Its output goes to a folder outside it.
 - **One at a time where files overlap:** DC.1 and AP.1 change `README.md`, so they run after RC.3,
-  in that order. DC.1 may also fix `scripts/audit/README.md`, so it waits for RA.3 too.
+  in that order.
 
 ### DC.1 — A test that docs name only what exists
 - **Status:** todo
