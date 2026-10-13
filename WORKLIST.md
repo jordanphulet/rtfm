@@ -69,16 +69,6 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
-### IN.6 — Arguments reach AWS as given
-- **Status:** doing (agent a89e145766bb4f5b9)
-- **Depends on:** IN.2
-- **Files:** `infra/run-aws.ts` and its test, `package.json`, `infra/README.md`
-- **Do:** find why `npm run aws -- … --query 'Stacks[0].{Status:StackStatus,Protected:EnableTerminationProtection}'`
-  reaches the AWS CLI with its braces gone and split at the comma (npm runs scripts through a
-  shell), and make every argument after `--` reach the command unchanged.
-- **Done when:** `npm test` passes, and a test shows arguments with braces, commas, spaces,
-  quotes and `$` reach the spawned command exactly as given.
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
