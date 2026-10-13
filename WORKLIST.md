@@ -50,8 +50,10 @@ aren't RTFM's.
 - **Nothing outside RTFM.** Every role and policy reaches only resources named for RTFM (`rtfm-*`,
   `Rtfm*`) wherever the service allows it, and RTFM's CDK bootstrap uses its own qualifier
   (`rtfm`), so it never touches another project's.
-- **Agents never see AWS secrets.** No task reads `.env.local` or `~/.aws/credentials`; agents
-  use the `rtfm-read` and `rtfm-deploy` profiles by name.
+- **RTFM's AWS setup is its own.** RTFM's profiles live in `~/.aws/rtfm/config` and
+  `~/.aws/rtfm/credentials`, never in the user's own `~/.aws/config`, which holds work profiles.
+  Agents read nothing under `~/.aws` and never `.env.local`, and run AWS only through
+  `npm run aws` and `npm run cdk`.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.1 — The `infra/` app and the access stack
@@ -60,7 +62,14 @@ aren't RTFM's.
 - **Files:** `infra/**`, `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`,
   `ARCHITECTURE.md`, `README.md`, `server/README.md`, `CLAUDE.md`, `PROCESS.md`
 - **Do:**
-  - A CDK app in TypeScript in `infra/`, with `npm run cdk`. Its stacks use
+  - `npm run aws -- <args>` and `npm run cdk -- <args>`, the only way to reach AWS from this repo.
+    Each runs its command with `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE` pointing at
+    `~/.aws/rtfm/`, with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
+    `AWS_PROFILE` and `AWS_DEFAULT_PROFILE` removed from its environment, and with the profile it
+    chooses: `rtfm-read`, or `rtfm-deploy` for `cdk deploy`. Before the command, it checks with
+    `sts get-caller-identity` that it acts as an RTFM role in the account `infra/` names, and
+    refuses otherwise. Tests cover the environment it builds, without calling AWS.
+  - A CDK app in TypeScript in `infra/`. Its stacks use
     `DefaultStackSynthesizer` with the qualifier `rtfm`, and name the account and region in code,
     with no context lookups, so synthesis and its tests run offline.
   - The `RtfmAccess` stack:
@@ -82,11 +91,12 @@ aren't RTFM's.
     1. `cdk bootstrap` with the qualifier, the boundary and the execution policy;
     2. deploy `RtfmAccess` with their own admin sign-in;
     3. make `rtfm-local`'s key, swap it into `.env.local`, delete the hand-made user;
-    4. make `rtfm-agent`'s key and add the profiles to `~/.aws/config` and `~/.aws/credentials`.
+    4. make `rtfm-agent`'s key and create `~/.aws/rtfm/credentials` with it and
+       `~/.aws/rtfm/config` with the two profiles, leaving `~/.aws/config` alone.
 
     List what the boundary can't scope by name, and why.
-  - `CLAUDE.md` › Shell: never read, print, copy or edit `~/.aws/credentials`; run AWS commands
-    with `--profile rtfm-read` or `--profile rtfm-deploy`. `PROCESS.md` › Authority: the
+  - `CLAUDE.md` › Shell: never read, print, copy or edit anything under `~/.aws`; run AWS only
+    through `npm run aws` and `npm run cdk`, never `aws` or `cdk` directly. `PROCESS.md` › Authority: the
     `RtfmAccess` stack joins the files only the user approves. Give both diffs in full; the user
     approves them.
 - **Done when:** `npm run build` and `npm test` pass, offline; `npm run cdk -- synth` produces
@@ -97,14 +107,15 @@ aren't RTFM's.
 - **Depends on:** IN.1
 - **Files:** `infra/**`, `README.md`, `PROCESS.md`
 - **Do:**
-  - With `rtfm-read`, read `RtfmAccess`'s stack and its outputs.
-  - With `rtfm-deploy`, deploy an `RtfmApp` stack holding one log group, then show that it can't
+  - With `npm run aws`, read `RtfmAccess`'s stack and its outputs, and show that a work profile
+    in the user's own `~/.aws/config` isn't reachable from it.
+  - With `npm run cdk`, deploy an `RtfmApp` stack holding one log group, then show that it can't
     change `RtfmAccess`, create a role without the boundary, or touch a resource not named for
     RTFM.
   - Check the server still calls Bedrock with `rtfm-local`'s key (`npm run dev` with
     `RTFM_MODELS=bedrock`, one section, under $0.01).
   - `PROCESS.md` › Review loop: after merging a change to an app stack, the orchestrator runs
-    `npm run cdk -- deploy` with `rtfm-deploy`, then a smoke check. Give the diff in full; the user
+    `npm run cdk -- deploy`, then a smoke check. Give the diff in full; the user
     approves it.
 - **Done when:** each check above passed and is recorded in `infra/README.md`, and the user has
   approved the `PROCESS.md` change.
