@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.2 — Prove the deploy path
-- **Status:** blocked (the user follows `infra/README.md`'s steps)
+- **Status:** doing (agent a8e21f88b7c3c399f)
 - **Depends on:** IN.1
 - **Files:** `infra/**`, `README.md`, `PROCESS.md`
 - **Do:**
@@ -35,6 +35,9 @@ aren't RTFM's.
     another filter, or the server's calls a tagged application inference profile.
   - Check the server still calls Bedrock with `rtfm-local`'s key (`npm run dev` with
     `RTFM_MODELS=bedrock`, one section, under $0.01).
+  - `infra/README.md` › Your steps: the CloudShell route the user took (synthesize locally, upload
+    both templates, `aws cloudformation deploy` each, `aws iam create-access-key` for both users),
+    in place of `npx cdk bootstrap` with an admin profile.
   - `PROCESS.md` › Review loop: after merging a change to an app stack, the orchestrator runs
     `npm run cdk -- deploy`, then a smoke check. Give the diff in full; the user
     approves it.
