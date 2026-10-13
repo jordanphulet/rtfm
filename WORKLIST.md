@@ -110,7 +110,7 @@ Make the repo quicker to find your way around, for agents and people. When this 
 - **No task changes `CLAUDE.md`.** Only the user approves changes to it.
 
 ### RS.4 — Split `DESIGN.md` by page
-- **Status:** todo
+- **Status:** doing (agent: a8f84826494518847)
 - **Depends on:** RS.1, RS.2, RS.3 (both change `README.md` and the folder READMEs)
 - **Files:** `DESIGN.md`, `src/home/DESIGN.md` (new), `src/reader/DESIGN.md` (new), `README.md`;
   for links to moved headings only: `src/*/README.md`, `ARCHITECTURE.md`, `server/**/README.md`,
