@@ -257,6 +257,8 @@ The fake model (`agent/librarian/fake-model.ts`) is the default (`config.models`
 - It waits before each turn (and before a plan) and streams text in the fake writer's chunks
   (`chunkEnds`), at the pace `README.md` › The models gives. Its fixed replies are
   `FAKE_REPLIES`, which the tests and the shot script match.
+- It stops as the gateway does: a signal that has already aborted is refused before any event,
+  and once the signal aborts, the next read throws the abort, whichever event the caller holds.
 
 ## Previews
 
@@ -273,6 +275,16 @@ The tests, all offline, cover the route, the tools, the page notes, narration ke
 replies whose last turn is empty, with the fake model and with scripted turns through the real
 gateway, the turn limit, the planner's one retry and its checks, and finding; previews call no
 model and save nothing.
+
+`model.test.ts` is the shared suite of the librarian's and the planner's model, the `Gateway`
+that `config.models` chooses: its tests run once against the fake model and once against the
+real gateway with a scripted `ModelClient` (`scripted-client.ts`). Each test gives the turns
+Claude would send; the fake model reads the request itself. It checks the contract, not the
+text: a librarian turn streams its text in several events and ends with one `stop`, a tool call
+has an id and an input and stops with `tool_use`, an aborted signal ends the stream at the next
+read, and a plan passes the planner's checks and is saved, or nothing is saved once the plan is
+aborted. The caps, the kill switch, stalls and the ledger are the gateway's alone, since the fake
+model never reaches it, and stay in the gateway's and the agents' own tests.
 
 ## Files
 

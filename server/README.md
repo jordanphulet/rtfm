@@ -186,8 +186,8 @@ the machine.
 - `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, models, gateway,
   routes; `close()` waits for model calls to settle.
 - `testing.ts`: helpers shared by the tests: temp folders, fast fake writers, the test model's
-  prices and gateway config (`testGatewayConfig`), `collect`, and `readEvents` for server-sent
-  events.
+  prices and gateway config (`testGatewayConfig`), the real gateway over a fake `ModelClient`
+  (`testGateway`), `inPieces`, `collect`, and `readEvents` for server-sent events.
 - `usage.ts`: `npm run usage`.
 - `logs.ts`: `npm run logs` (`server/logging/README.md`).
 - `escape-tags.ts`: escapes `<` in text inserted in a prompt (the section writer's and the

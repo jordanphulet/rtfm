@@ -5,7 +5,7 @@ import { readSeedBody } from "../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
 import { sectionPrompt, sectionsNearestFirst, type WrittenExample } from "./prompt.ts";
 import { createSectionText } from "./section-text.ts";
-import { WriteFailed, type SectionWriter, type WrittenChunk } from "./types.ts";
+import { sectionToWrite, WriteFailed, type SectionWriter, type WrittenChunk } from "./types.ts";
 import { sectionProblems } from "./validate.ts";
 
 const MAX_ESTIMATED_PROGRESS = 0.99;
@@ -23,10 +23,8 @@ export function createBedrockWriter({ gateway, store, wordsRequested, expectedCh
   expectedCharacters: number;
 }): SectionWriter {
   async function* writeSection(manual: StoredManual, sectionId: string, signal: AbortSignal): AsyncGenerator<WrittenChunk> {
-    const sections = sectionsInReadingOrder(manual);
-    const sectionIds = new Set(sections.map(({ id }) => id));
-    const section = sections.find(({ id }) => id === sectionId);
-    if (!section) throw new Error(`The manual has no section "${sectionId}"`);
+    const section = sectionToWrite(manual, sectionId);
+    const sectionIds = new Set(sectionsInReadingOrder(manual).map(({ id }) => id));
     const example = await exampleSection(store, manual, sectionId);
     const prompt = sectionPrompt(manual, { section, wordsRequested, example });
 

@@ -56,30 +56,38 @@ export const FAKE_REPLIES = {
 export function fakeLibrarianModel(pace: FakeLibrarianPace = CONVERSATION_PACE): Gateway {
   return {
     async *stream(job, { messages }, signal): AsyncGenerator<ModelEvent> {
-      if (job === "plan-manual") {
-        await sleep(pace.firstEventDelayMs, undefined, { signal });
-        for (const event of fakePlannerTurn(messages)) {
-          yield event;
-          if (event.type === "tool-input") await sleep(pace.planDelayMs, undefined, { signal });
-        }
-        return;
+      const turn = job === "plan-manual" ? plannerTurn(messages, pace, signal) : librarianTurn(messages, pace, signal);
+      for await (const event of turn) {
+        yield event;
+        signal.throwIfAborted();
       }
-      const step = nextStep(messages);
-      await sleep(pace.firstEventDelayMs, undefined, { signal });
-      if ("tool" in step) {
-        yield { type: "tool-use", id: `fake-call-${messages.length}`, name: step.tool, input: step.input };
-        yield { type: "stop", reason: "tool_use" };
-        return;
-      }
-      let start = 0;
-      for (const end of chunkEnds(step.text)) {
-        if (start > 0) await sleep(pace.chunkIntervalMs, undefined, { signal });
-        yield { type: "text", text: step.text.slice(start, end) };
-        start = end;
-      }
-      yield { type: "stop", reason: "end_turn" };
     },
   };
+}
+
+async function* plannerTurn(messages: PromptMessage[], pace: FakeLibrarianPace, signal: AbortSignal): AsyncGenerator<ModelEvent> {
+  await sleep(pace.firstEventDelayMs, undefined, { signal });
+  for (const event of fakePlannerTurn(messages)) {
+    yield event;
+    if (event.type === "tool-input") await sleep(pace.planDelayMs, undefined, { signal });
+  }
+}
+
+async function* librarianTurn(messages: PromptMessage[], pace: FakeLibrarianPace, signal: AbortSignal): AsyncGenerator<ModelEvent> {
+  const step = nextStep(messages);
+  await sleep(pace.firstEventDelayMs, undefined, { signal });
+  if ("tool" in step) {
+    yield { type: "tool-use", id: `fake-call-${messages.length}`, name: step.tool, input: step.input };
+    yield { type: "stop", reason: "tool_use" };
+    return;
+  }
+  let start = 0;
+  for (const end of chunkEnds(step.text)) {
+    if (start > 0) await sleep(pace.chunkIntervalMs, undefined, { signal });
+    yield { type: "text", text: step.text.slice(start, end) };
+    start = end;
+  }
+  yield { type: "stop", reason: "end_turn" };
 }
 
 function nextStep(messages: PromptMessage[]): Step {

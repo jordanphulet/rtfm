@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createGateway } from "../../gateway/gateway.ts";
 import type { ModelEvent } from "../../gateway/types.ts";
 import { silentLogger } from "../../logging/logger.ts";
-import { createFileLedger, monthOf } from "../../storage/file-ledger.ts";
 import { createFileManualStore } from "../../storage/file-manual-store.ts";
 import { seedStore } from "../../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../../storage/types.ts";
-import { tempDataDir, TEST_PRICES, testGatewayConfig } from "../../testing.ts";
-import { scriptedClient, textTurn, toolUseTurn } from "../scripted-client.ts";
+import { tempDataDir, testGateway } from "../../testing.ts";
+import { scriptedClient, streamedToolUseTurn, textTurn, toolUseTurn } from "../scripted-client.ts";
 import { fakePlan } from "./fake-planner.ts";
 import { planManual, REVISING_STATUS } from "./plan.ts";
 
@@ -19,12 +17,8 @@ function planTurn(input: unknown): ModelEvent[] {
   return toolUseTurn([{ id: "plan", name: "save_manual", input }]);
 }
 
-/** A plan turn whose input also streams in, in fragments a few characters long, as Bedrock sends it. */
 function streamedPlanTurn(input: unknown): ModelEvent[] {
-  const json = JSON.stringify(input);
-  const fragments = json.match(/[\s\S]{1,7}/g)!.map((fragment): ModelEvent => ({ type: "tool-input", json: fragment }));
-  const [usage, ...rest] = planTurn(input);
-  return [usage!, ...fragments, ...rest];
+  return streamedToolUseTurn({ id: "plan", name: "save_manual", input });
 }
 
 function withRepeatedId(plan: StoredManual): StoredManual {
@@ -37,16 +31,8 @@ async function planner(turns: ModelEvent[][], { request = REQUEST, store: wrapSt
   const seeded = createFileManualStore(dataDir, silentLogger);
   await seedStore(seeded);
   const store = wrapStore(seeded);
-  const ledger = createFileLedger(dataDir, silentLogger);
   const { client, prompts } = scriptedClient(turns);
-  const gateway = await createGateway({
-    logger: silentLogger,
-    createClient: () => client,
-    ledger,
-    config: testGatewayConfig(),
-    prices: TEST_PRICES,
-    dataDir,
-  });
+  const { gateway, ledgerEntries } = await testGateway(client, dataDir);
   const statuses: string[] = [];
   const result = await planManual({
     gateway,
@@ -55,9 +41,7 @@ async function planner(turns: ModelEvent[][], { request = REQUEST, store: wrapSt
     signal: new AbortController().signal,
     onStatus: (text) => statuses.push(text),
   });
-  const settles = (await ledger.entriesForMonth(monthOf(new Date().toISOString()))).filter(
-    (entry) => entry.kind === "settle",
-  );
+  const settles = (await ledgerEntries()).filter((entry) => entry.kind === "settle");
   const requestMessages = prompts.map(({ messages }) => messages[0]!.content as string);
   return { result, store: seeded, prompts, requestMessages, statuses, settles };
 }

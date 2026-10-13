@@ -5,7 +5,13 @@ fake writer or with Claude through the gateway.
 
 A `SectionWriter` (`writer/types.ts`) takes the stored manual, a section id and a signal, and
 yields chunks of `{ text, progress, placeholder? }`; the body is exactly all the text joined. It
-fails with `WriteFailed("budget" | "error")` or any other error.
+fails with `WriteFailed("budget" | "error")` or any other error. Both writers keep the same
+contract:
+
+- Chunks end on whole words, and `progress` rises to at most 1.
+- A section the manual doesn't have is refused (`sectionToWrite`).
+- Once the signal aborts, no chunk follows: the write throws the abort, or ends if it had nothing
+  left to send.
 
 ## The fake writer
 
@@ -119,9 +125,17 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   so this keeps the page's other requests flowing. The reader keeps a section's stream open while
   it navigates elsewhere.
 
+## Tests
+
+`section-writer.test.ts` is the `SectionWriter`'s shared suite: its tests run once against the fake
+writer and once against the Bedrock writer, through the real gateway with a scripted
+`ModelClient`. It checks the contract above, and that a run stores exactly the text that
+streamed. `fake.test.ts` and `bedrock.test.ts` cover what only one writer does, and `runs.test.ts`
+covers the runs.
+
 ## Files
 
-- `types.ts`: `SectionWriter`, `WriteFailed`.
+- `types.ts`: `SectionWriter`, `WriteFailed`, `sectionToWrite`.
 - `runs.ts`: one run per section; later requests join it.
 - `fake.ts`: plays the seed body at a steady pace.
 - `bedrock.ts`: writes through the gateway, choosing an example section.

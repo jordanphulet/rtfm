@@ -1,5 +1,6 @@
 import type { FailureReason } from "../api/types.ts";
-import type { StoredManual } from "../storage/types.ts";
+import { sectionsInReadingOrder } from "../storage/manual.ts";
+import type { StoredManual, StoredSection } from "../storage/types.ts";
 
 export interface WrittenChunk {
   text: string;
@@ -18,4 +19,10 @@ export class WriteFailed extends Error {
     super(reason);
     this.reason = reason;
   }
+}
+
+export function sectionToWrite(manual: StoredManual, sectionId: string): StoredSection {
+  const section = sectionsInReadingOrder(manual).find(({ id }) => id === sectionId);
+  if (!section) throw new Error(`The manual has no section "${sectionId}"`);
+  return section;
 }
