@@ -113,7 +113,7 @@ aren't RTFM's.
   can read holds the passcode.
 
 ### IN.17 — The user's steps, repeatable from scratch
-- **Status:** doing (agent aed8798f9d5fd6aa4)
+- **Status:** doing (agent aed8798f9d5fd6aa4; on 2026-10-13 the user approved its `PROCESS.md` text for the first `RtfmApp` deploy)
 - **Depends on:** —
 - **Files:** `infra/README.md`, `README.md`, `PROCESS.md` (the first `RtfmApp` deploy, with the user's approval)
 - **Do:** make `infra/README.md` › Your steps work for someone setting RTFM up in a fresh account:
