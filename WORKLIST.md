@@ -33,20 +33,6 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
-### IN.7 — Let `rtfm-read` see a Web Function
-- **Status:** doing (agent ac91ad0f4c2110ce8)
-- **Depends on:** IN.4
-- **Files:** `infra/access-stack.ts` and its test, `infra/README.md`, `research/aws-design.md`
-- **Do:** `rtfm-read` gains reading the Web Functions `rtfm-*`, their revisions, endpoints and
-  resource policy (`lambda:GetWebFunction`, `GetWebFunctionRevision`, `GetWebFunctionEndpoint`,
-  `ListWebFunctionEndpoints`, `ListWebFunctionRevisions`, `GetResourcePolicy`), and describing the
-  stacks `RtfmEdge*` in us-east-1 too, where the certificate's stack is (`RtfmAccess`, which the
-  user approves and deploys). Its log reads already cover `/rtfm/*`. Replace
-  `research/aws-design.md` › Build tasks with a pointer to these tasks in `WORKLIST.md`, which
-  hold the planned work.
-- **Done when:** the tests show `rtfm-read` reads those and changes nothing, `infra/README.md` ›
-  The identities says so, and the user has deployed `RtfmAccess`.
-
 ### IN.8 — Put the app on a Web Function
 - **Status:** todo
 - **Depends on:** IN.7
