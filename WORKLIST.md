@@ -19,21 +19,6 @@ aren't RTFM's.
   `npm run aws` and `npm run cdk`.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
-### IN.3 — Keep the development loop local
-- **Status:** doing (agent a836d08475935f871)
-- **Depends on:** IN.2
-- **Files:** `ARCHITECTURE.md`, `PROCESS.md`
-- **Do:**
-  - `PROCESS.md`, next to IN.2's deploy step in › Review loop: "Only the orchestrator deploys an
-    app stack, and only from `main` after a merge. A task agent reaches AWS only when its task's
-    **Do** says so."
-  - `ARCHITECTURE.md` › Everything runs on one machine, two more bullets:
-    - "No task's **Done when** needs the deployed app; a smoke check after each deploy covers what
-      local can't show."
-    - "Agents try out stored-data changes on throwaway data. Deployed data changes only when a
-      change merges, and that change carries its migration or reads the old form."
-- **Done when:** both changes are in, and the user has approved the `PROCESS.md` diff.
-
 ### IN.4 — Settle the AWS design
 - **Status:** todo
 - **Depends on:** IN.3
