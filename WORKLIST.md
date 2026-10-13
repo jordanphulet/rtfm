@@ -39,7 +39,8 @@ aren't RTFM's.
 - **Files:** `server/web-function.ts` and its test, `server/main.ts`, `server/app.ts`,
   `server/config.ts` and its test, `server/api/**`, `server/logging/**`, `server/README.md`,
   `README.md`, `infra/app-stack.ts` and its test, `infra/README.md`, `package.json`,
-  `package-lock.json`, `scripts/**`, `vite.config.ts`, `ARCHITECTURE.md`
+  `package-lock.json`, `scripts/**`, `vite.config.ts`, `ARCHITECTURE.md`, `server/testing.ts`,
+  `src/librarian/api.ts` and its test (their stream parsers skip the heartbeat comment)
 - **Do:**
   - An entry for the Web Function, `server/web-function.ts`: listens on
     `AWS_LAMBDA_HTTP_ENDPOINT`; the fake models only; a throwaway data folder in `/tmp` that each
