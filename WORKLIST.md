@@ -28,17 +28,6 @@ machine.
   `npm run shot -- --compare` shows no change; `README.md` and `ARCHITECTURE.md` no longer say
   the caps and kill switch apply only to Bedrock.
 
-### LF.5 — The loopback guard and a custom `lookup`
-- **Status:** doing (agent a231ed7599933c366)
-- **Depends on:** LF.3
-- **Files:** `loopback-only.ts` and its test, `server/README.md`
-- **Do:** block a connection whose own `lookup` (the `lookup` option of `net` and `tls`, or
-  undici's `connect.lookup`) turns a loopback name into another address, for example by checking
-  the address the socket's `lookup` event reports.
-- **Done when:** `npm test` passes, and a test shows `net.connect({ host: "localhost", lookup })`
-  with a `lookup` that answers `192.0.2.1` blocked, and an ordinary connection to `localhost`
-  still allowed.
-
 ## Into AWS
 
 Infrastructure as code in `infra/`, a CDK app, in an AWS account that also holds things that
