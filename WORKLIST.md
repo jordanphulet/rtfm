@@ -79,7 +79,7 @@ aren't RTFM's.
   orchestrator has a task to move to B.
 
 ### IN.11 — Store the library in DynamoDB
-- **Status:** doing (agent a31e9f93c83c3faa0)
+- **Status:** doing (agent a31e9f93c83c3faa0; review round 1: credentials, retries, delete condition)
 - **Depends on:** IN.8 (storage is the same for A and its fallback, so it doesn't wait for IN.10)
 - **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts`, `server/README.md`,
   `infra/app-stack.ts` and its test, `package.json`, `package-lock.json`, `scripts/**`,
@@ -162,7 +162,7 @@ aren't RTFM's.
   can read holds the passcode.
 
 ### IN.16 — Let `rtfm-read` check schemas and tables
-- **Status:** todo
+- **Status:** doing (agent a6feaf98718c97c0c)
 - **Depends on:** —
 - **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
 - **Do:** `rtfm-read` gains `cloudformation:DescribeType` on resource types (to check a live
