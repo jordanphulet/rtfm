@@ -8,19 +8,6 @@ The work still to do, with each task's status. **This file is the source of trut
 The app is moving into AWS, and agents must still be able to run, test and check all of it on one
 machine.
 
-### LF.2 — One shared suite per model interface
-- **Status:** doing (agent afce95d7c34d819e6)
-- **Depends on:** LF.1
-- **Files:** `server/writer/**`, `server/agent/**`, `server/gateway/**`, `server/testing.ts`,
-  `server/README.md`
-- **Do:** find each interface with a fake and a Bedrock implementation (the `SectionWriter`, the
-  librarian's and the planner's model), and give each one test suite that runs against both: the
-  Bedrock one through a fake `ModelClient` or the local event-stream server, never Bedrock. The
-  suite checks the contract (streaming, cancelling, errors, what is saved), not the text, since the
-  fakes are scripted on purpose. Fold the tests it replaces into it.
-- **Done when:** `npm test` passes, each such interface's suite runs once per implementation, and
-  `ARCHITECTURE.md` › Everything runs on one machine holds for the models.
-
 ### LF.3 — The loopback guard in child processes
 - **Status:** doing (agent abd8d3259005c72c9)
 - **Depends on:** LF.1
@@ -31,6 +18,37 @@ machine.
   get it through `NODE_OPTIONS`, and a blocked connection there fails the process loudly.
 - **Done when:** `npm test` passes, a test shows a child Node process refused a non-loopback
   connection, and `server/README.md` › Tests no longer lists child processes as uncovered.
+
+### LF.4 — The fake models behind the real gateway
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/**`, `scripts/serve-temp.ts`, `scripts/shot.ts`, `README.md`, `ARCHITECTURE.md`
+- **Do:**
+  - Run the fake models through the same gateway as Bedrock, so the caps, the kill switch, the
+    ledger and the stall timeout run under `npm run dev`, `serve-temp` and `shot` too.
+  - Prefer the deepest seam: a fake `ModelClient` that answers each job, so the Bedrock writer's
+    prompt, output handling and checks run as well. Where a fake can't do its job from the request
+    alone (the fake writer replays a section's sample text), say why in the report and keep that
+    fake one level up, still behind the gateway.
+  - The fake models are priced at $0 in the price table, and their ledger entries name the fake
+    model, so `npm run usage` keeps them apart from real spend.
+  - Fold the hand-built gateways in `server/api/librarian.test.ts`, `server/config.test.ts` and
+    `server/app.test.ts` into `testGateway`.
+- **Done when:** `npm test` passes; under `serve-temp`, opening a section and asking the librarian
+  each write ledger entries at $0, and a `STOP` file in its data folder stops them;
+  `npm run shot -- --compare` shows no change; `README.md` and `ARCHITECTURE.md` no longer say
+  the caps and kill switch apply only to Bedrock.
+
+### LF.5 — The loopback guard and a custom `lookup`
+- **Status:** todo
+- **Depends on:** LF.3
+- **Files:** `loopback-only.ts` and its test, `server/README.md`
+- **Do:** block a connection whose own `lookup` (the `lookup` option of `net` and `tls`, or
+  undici's `connect.lookup`) turns a loopback name into another address, for example by checking
+  the address the socket's `lookup` event reports.
+- **Done when:** `npm test` passes, and a test shows `net.connect({ host: "localhost", lookup })`
+  with a `lookup` that answers `192.0.2.1` blocked, and an ordinary connection to `localhost`
+  still allowed.
 
 ## Into AWS
 
