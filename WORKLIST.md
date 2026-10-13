@@ -133,6 +133,69 @@ makes the right way the easy way. When this phase is done:
 
 ---
 
+## Agents in their own worktrees
+
+Every task agent works in its own git worktree on its own branch, and the orchestrator merges each
+approved task into `main`. Tasks that share a file can run at the same time: git merges their
+edits and stops only where two tasks changed the same lines. When this phase is done:
+
+- the orchestrator starts every task agent in its own worktree and merges approved work into
+  `main`;
+- an agent that needs a file outside its task's **Files** changes it and says why, and the
+  orchestrator adds it to the task before committing;
+- the server reads `.env.local` from the main checkout, so no worktree holds a copy.
+
+### Rules for this phase
+
+- **The user approves `PROCESS.md` before it is committed.** WT.2 stops at `needs-human` with the
+  exact text to approve.
+- **No copies of `.env.local`.** WT.1 changes where the code looks, not where the file is. Tests
+  never touch the real file.
+
+### WT.1 — Read `.env.local` from the main checkout
+- **Status:** todo
+- **Depends on:** RC.2, RC.3 (all change `README.md`; RC.3 also `ARCHITECTURE.md`)
+- **Files:** `server/gateway/credentials.ts` and its test, `README.md` (the setup step that names
+  `.env.local`), `ARCHITECTURE.md` (the Configuration line)
+- **Do:**
+  - `ENV_LOCAL_FILE` is `.env.local` in the main checkout's root: the parent of
+    `git rev-parse --path-format=absolute --git-common-dir`, resolved once. Where git isn't
+    available, it is the repo root as before.
+  - Tests build a throwaway repo and linked worktree in a temp folder: the worktree resolves to
+    the main checkout, the main checkout to itself, and no git to the repo root.
+- **Done when:** `npm run build` and `npm test` pass, and the server started in a linked worktree
+  finds the credentials, checked without printing any value.
+
+### WT.2 — Task agents in their own worktrees
+- **Status:** todo
+- **Depends on:** RC.2 (both change `PROCESS.md`)
+- **Files:** `PROCESS.md` (the loop, the review loop and Rules; the user approves),
+  `scripts/commit-task.ts` and its test
+- **Do:**
+  - `npm run commit-task -- <ID> --worktree <path> …` reads the task from this checkout's
+    `WORKLIST.md` and stages and commits in the given worktree. Without `--worktree` it works as
+    it does now. Tests cover both.
+  - `PROCESS.md`:
+    - **Starting:** every task agent starts with `isolation: "worktree"` from `main`. Its first
+      step is `npm ci`; any server it starts uses its own `dataDir` and `port: 0`.
+    - **Files outside the list:** an agent may change a file its task's **Files** don't name, and
+      lists it in its report under "Outside Files" with the reason. Working around a missing
+      file (duplicating code, putting code in the wrong place, editing through the shell) is a
+      failure, not compliance. The orchestrator adds each accepted file to the task's **Files**
+      before committing, or sends the change back.
+    - **Committing:** once approved, the orchestrator runs `commit-task --worktree`, then merges
+      `main` into the task's branch in the agent's worktree. On a conflict, the agent resolves
+      the marked files (editing files only, no git) and the orchestrator commits the merge. With
+      `npm test` passing there, `main` fast-forwards to the branch, and the worktree and branch
+      are removed.
+    - **Scheduling:** tasks that touch the same file may run at the same time. **Depends on**
+      means one task needs another's result. At most 3 agents run at once.
+    - The rule that agents share one checkout is removed.
+- **Done when:** the user has approved the `PROCESS.md` text, `npm test` passes, and
+  `PROCESS.md` says each point above.
+
+---
+
 ## Docs and prompts that hold
 
 The second rule audit (2026-10-12, the first run of the `rule-audit` skill) found two more rules
@@ -208,7 +271,8 @@ When this phase is done:
 
 ### AP.1 — Agent prompts from the task block
 - **Status:** todo
-- **Depends on:** DC.1 (both change `README.md`)
+- **Depends on:** DC.1 (both change `README.md`), WT.2 (both change `PROCESS.md`, and AP.1 reuses
+  `scripts/commit-task.ts`)
 - **Files:** `scripts/task-prompt.ts` and its test (new), `package.json`, `PROCESS.md` (its rules
   for agent prompts; the user approves), `README.md` (the scripts table)
 - **Do:**
