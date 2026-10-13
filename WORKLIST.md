@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.10 — Measure the deployed app
-- **Status:** todo
+- **Status:** doing (agent a7748e10835ba97ca)
 - **Depends on:** —
 - **Files:** `research/aws-design.md`, `infra/README.md`
 - **Do:** through `https://rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is
