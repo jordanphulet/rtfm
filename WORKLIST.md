@@ -62,10 +62,11 @@ makes the right way the easy way. When this phase is done:
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.1 — Commit task work through one script
-- **Status:** doing (agent abbd8bf3721f7eda2; in review by ac723994f5cb6cd57)
+- **Status:** doing (agent abbd8bf3721f7eda2; review round 2)
 - **Depends on:** —
 - **Files:** `scripts/commit-task.ts` and its test (new), `.githooks/commit-msg` (new, the user
-  approves), `package.json`, `PROCESS.md` (the review loop's commit step; the user approves),
+  approves), `package.json`, `PROCESS.md` (the review loop's commit step, how the orchestrator commits
+  its own reviewed work, and how to write a task's **Files** under "Adding work"; the user approves),
   `ARCHITECTURE.md` (the `scripts/` codemap entry), `README.md`
 - **Do:**
   - `npm run commit-task -- <ID> --reviewed-by <agent id>`, or `--no-review "<reason>"` for a
