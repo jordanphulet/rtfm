@@ -20,7 +20,7 @@ machine.
   connection, and `server/README.md` › Tests no longer lists child processes as uncovered.
 
 ### LF.4 — The fake models behind the real gateway
-- **Status:** todo
+- **Status:** doing (agent af334ef91305601dd)
 - **Depends on:** —
 - **Files:** `server/**`, `scripts/serve-temp.ts`, `scripts/shot.ts`, `README.md`, `ARCHITECTURE.md`
 - **Do:**
