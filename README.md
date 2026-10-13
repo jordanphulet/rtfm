@@ -50,21 +50,55 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 The API server listens on `127.0.0.1` only; `server/api/README.md` › Only this machine's own pages
 has the checks it makes.
 
-| Script            | What it does                                                                 |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `npm run dev`     | Starts Vite (5173) and the API server (8787) together.                       |
-| `npm run server`  | Starts the API server alone, for `curl` or `npm run preview`.                |
-| `npm test`        | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock.   |
-| `npm run build`   | Type-checks everything and builds the app.                                   |
-| `npm run preview` | Serves the built app, passing `/api` to `npm run server` on 8787.            |
-| `npm run shot`    | Screenshots both pages in every state; `--compare` diffs against a baseline. |
-| `npm run usage`   | Today's and this month's model spend, by model and by job. See below.        |
-| `npm run logs`    | The server's recent log entries, filtered or followed. See below.            |
-| `npm run audit`   | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
+| Script                | What it does                                                                 |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `npm run dev`         | Starts Vite (5173) and the API server (8787) together.                       |
+| `npm run server`      | Starts the API server alone, for `curl` or `npm run preview`.                |
+| `npm test`            | Tests (Vitest; page and component tests in happy-dom). Never call Bedrock.   |
+| `npm run build`       | Type-checks everything and builds the app.                                   |
+| `npm run preview`     | Serves the built app, passing `/api` to `npm run server` on 8787.            |
+| `npm run shot`        | Screenshots both pages in every state; `--compare` diffs against a baseline. |
+| `npm run usage`       | Today's and this month's model spend, by model and by job. See below.        |
+| `npm run logs`        | The server's recent log entries, filtered or followed. See below.            |
+| `npm run audit`       | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
+| `npm run commit-task` | Commits a task's work with its review trailer. See below.                    |
 
 The `rule-audit` skill (`.claude/skills/rule-audit/SKILL.md`) builds on `npm run audit`: told to
 "run the rule audit", a session ranks the written rules agents break by how often and what each
 break cost, and proposes tasks that turn the top ones into code. It changes no files.
+
+### Committing task work
+
+The orchestrator commits a task's work with `npm run commit-task` (`PROCESS.md` › Review loop):
+
+```sh
+npm run commit-task -- RC.1 --reviewed-by <review agent id>
+npm run commit-task -- RC.1 --no-review "<reason>"   # reviewed by the orchestrator alone
+```
+
+- It reads the task's block in `WORKLIST.md` and commits only the changed, new and deleted files
+  its **Files** match, one by one, as `<ID>: <the task's title>`, with a `Reviewed-by:` trailer
+  (the agent's id, or `none (<reason>)`) and Claude's co-author line. It lists the changed files
+  it left alone.
+- **Files** are read from their code spans: `**` matches any number of folders and `*` anything
+  within one name, notes in parentheses are skipped, "`x.ts` and its test" adds `x.test.*`, and
+  "except …" or a note starting with "except" or "not" leaves its paths out.
+- It refuses when nothing it matches differs from the last commit, during a merge, cherry-pick or
+  revert, or with unmerged files. It refuses `--no-review` for a binary change or more than 40
+  changed lines, not counting pure renames. A refusal leaves what is staged as it was.
+
+`.githooks/commit-msg` refuses a commit without a `Reviewed-by:` trailer when its subject starts
+with a task ID (`RC.1: …`), or when it has Claude's co-author line and changes any file but
+`WORKLIST.md`. Other commits pass, such as "Update work list statuses" and your own. The hook
+can't tell an amend from a new commit, so amend a commit only to add its trailer.
+
+Git runs the hook only when `core.hooksPath` points at `.githooks`, which is set once per clone.
+Its worktrees share the setting, but the path is relative, so a worktree whose branch is older
+than `.githooks/commit-msg` runs no hook:
+
+```sh
+git config core.hooksPath .githooks
+```
 
 ### Another data folder or port
 

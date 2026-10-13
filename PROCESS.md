@@ -63,23 +63,32 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
    review, then weigh its findings.
 3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
    keeps its context), then wait for it to report back and repeat from step 1.
-4. **Approved:** commit **only that task's files**, with the message `<task id>: <summary>`. Then
-   remove the task from `WORKLIST.md`, and its phase once no task is left in it.
+4. **Approved:** commit with `npm run commit-task -- <task id> --reviewed-by <review agent's id>`,
+   or `--no-review "<reason>"` when the orchestrator reviewed the change alone (40 changed lines
+   at most). It commits only the changed files the task's **Files** match, as
+   `<task id>: <task title>` with a `Reviewed-by:` trailer, and lists the changed files it left
+   alone. Then remove the task from `WORKLIST.md`, and its phase once no task is left in it.
 5. **Three rounds without approval:** mark it `needs-human`, write down what's unresolved, and
    tell the user.
 
 ### When the orchestrator does work itself
 
 Avoid it. If it does happen (for example, a small fix while reconciling two tasks), start a
-review subagent on that change and only commit once the review passes. Keeping `WORKLIST.md` up
-to date, and git operations such as tags, don't count as work. `WORKLIST.md` changes are committed
-on their own, as "Update work list statuses".
+review subagent on that change and only commit once the review passes, with a
+`Reviewed-by: <review agent's id>` trailer, which the commit hook requires. Keeping
+`WORKLIST.md` up to date, and git operations such as tags, don't count as work. `WORKLIST.md`
+changes are committed on their own, as "Update work list statuses".
 
 ### Adding work
 
 When the orchestrator discovers work that should be done, it **adds a task** to the right phase
 of `WORKLIST.md`: a new ID, **Depends on**, **Files**, **Do** and **Done when**. It also updates
 the dependencies of any existing task that must now wait for it.
+
+`npm run commit-task` commits what **Files** names, so every path the task may change goes in a
+code span: a path, or a glob with `**` or `*`. "`x.ts` and its test" also names `x.test.*`, and
+"except `…`" leaves paths out. Other notes in parentheses are ignored, and so is prose such as "the
+folder READMEs", which matches nothing.
 
 ### Rules
 

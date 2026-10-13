@@ -1,0 +1,25 @@
+#!/bin/sh
+# A task commit, and a commit of Claude's that changes more than WORKLIST.md, must name its
+# reviewer in a Reviewed-by: trailer. npm run commit-task writes it (PROCESS.md › Review loop).
+
+message=$(grep -v '^#' "$1")
+
+if printf '%s\n' "$message" | grep -qi '^Reviewed-by: *[^ ]'; then
+  exit 0
+fi
+
+subject=$(printf '%s\n' "$message" | sed -n '/[^[:space:]]/{p;q;}')
+if printf '%s\n' "$subject" | grep -Eq '^[A-Z][A-Z0-9]*\.[0-9]+([^0-9]|$)'; then
+  echo 'commit-msg: a task commit needs a Reviewed-by: trailer. Commit it with' >&2
+  echo '  npm run commit-task -- <ID> --reviewed-by <agent id>' >&2
+  echo '  npm run commit-task -- <ID> --no-review "<reason>"' >&2
+  exit 1
+fi
+
+if printf '%s\n' "$message" | grep -qi '^Co-Authored-By: Claude' &&
+  git diff --cached --name-only | grep -qvxF 'WORKLIST.md'; then
+  echo "commit-msg: a commit of Claude's that changes more than WORKLIST.md needs a Reviewed-by:" >&2
+  echo "trailer with the review agent's id, or none (<reason>). Task work is committed with" >&2
+  echo '  npm run commit-task -- <ID> --reviewed-by <agent id>' >&2
+  exit 1
+fi

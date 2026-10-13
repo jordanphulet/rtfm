@@ -15,7 +15,8 @@
     "shot": "node scripts/shot.ts",
     "usage": "node server/usage.ts",
     "logs": "node server/logs.ts",
-    "audit": "node scripts/audit/audit.ts"
+    "audit": "node scripts/audit/audit.ts",
+    "commit-task": "node scripts/commit-task.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "0.34.4",
