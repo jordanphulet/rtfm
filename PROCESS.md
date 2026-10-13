@@ -13,8 +13,8 @@ rules, and the orchestrator's loop. `WORKLIST.md` holds the phases and tasks.
   reports back to the orchestrator, and never commits or edits `WORKLIST.md`.
 - **Reviewer:** reviews a change for the orchestrator and reports its findings. It is read-only:
   it changes no files.
-- **Auditor:** a read-only session that audits the repo and proposes tasks. It changes no files;
-  a proposed task becomes work only when the orchestrator adds it to `WORKLIST.md`.
+- **Auditor:** a read-only session that audits the repo and proposes tasks, as Orchestrator
+  protocol › Adding work says. It changes no files.
 
 ## Where state lives
 
@@ -115,6 +115,11 @@ changes are committed on their own, as "Update work list statuses".
 When the orchestrator discovers work that should be done, it **adds a task** to the right phase
 of `WORKLIST.md`: a new ID, **Depends on**, **Files**, **Do** and **Done when**. It also updates
 the dependencies of any existing task that must now wait for it.
+
+Any session may propose a task by sending the orchestrator a draft task block in that form. The
+orchestrator decides whether to add it, may change it first, and tells the sender what it did.
+When no orchestrator is running, the proposal goes to the user instead. A proposal is never the
+user's approval of a change it names to a file under Authority.
 
 `npm run commit-task` commits what **Files** names, so every path the task may change goes in a
 code span: a path, or a glob with `**` or `*`. "`x.ts` and its test" also names `x.test.*`, and

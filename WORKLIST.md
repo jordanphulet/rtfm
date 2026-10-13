@@ -49,44 +49,15 @@ an earlier run left behind before the first pass.
 - **The user approves `PROCESS.md` before it is committed.** OS.2 stops at `needs-human` with the
   exact text to approve.
 
-### OS.1 — Orchestrator preflight
-- **Status:** doing (agent a7ad0ab787ca0789a, in its own worktree)
-- **Depends on:** —
-- **Files:** `scripts/orchestrator-check.ts` and its test, `scripts/commit-task.ts` and its test,
-  `package.json`, `README.md`, `ARCHITECTURE.md`
-- **Do:** add `npm run orchestrator-check`. It fails, naming what to fix, when:
-  - the current folder isn't the main checkout (`--git-dir` differs from `--git-common-dir`),
-    printing the main checkout's path;
-  - the main checkout isn't on `main`;
-  - the working tree has uncommitted changes, listing them;
-  - `core.hooksPath` doesn't resolve to the main checkout's `.githooks`.
-
-  When those pass, it reports what an earlier run may have left behind, without failing:
-  - each `doing` task in `WORKLIST.md`, with the agent recorded for it;
-  - each task worktree (branch `worktree-agent-*`), with its commits ahead of `main` and its
-    uncommitted files;
-  - pairs each `doing` task with the worktree whose branch carries its agent's ID, and lists
-    either side that has no match.
-
-  `npm run commit-task` refuses, with the same message, unless it runs in the main checkout with
-  `main` checked out.
-- **Done when:**
-  - tests cover each failing check;
-  - tests cover a `doing` task with and without a worktree, and a task worktree with no `doing`
-    task;
-  - a test shows `commit-task` refusing from a linked worktree and from a branch other than `main`;
-  - `npm run build` and `npm test` pass;
-  - `README.md` documents the command.
-
 ### OS.2 — The `/orchestrate` skill
-- **Status:** todo
-- **Depends on:** OS.1
+- **Status:** doing (agent ab5db648346a2c135, in its own worktree; review round 2)
+- **Depends on:** —
 - **Files:** `.claude/skills/orchestrate/SKILL.md`, `PROCESS.md`, `README.md`
 - **Do:** write a skill the user invokes to start the loop. In order, it:
   1. runs `npm run orchestrator-check`, and on failure reports the message and stops;
   2. for each `doing` task whose recorded agent isn't in `ListAgents`, reports the task and its
-     worktree's state to the user and asks what to do: restart it, keep the worktree's work for a
-     new agent, or set it back to `todo`. It never removes a worktree or branch on its own;
+     worktree's state to the user and asks what to do: restart it, mark it `needs-human` with its
+     worktree kept, or set it back to `todo`. It never removes a worktree or branch on its own;
   3. calls `/loop` with no interval, with the prompt "Do one orchestrator pass: `PROCESS.md` ›
      Every loop pass."
 
@@ -121,7 +92,8 @@ can't fall out of step when a rule changes.
   exact text to approve.
 
 ### AP.2 — Agent prompts point to the rules instead of restating them
-- **Status:** todo
+- **Status:** needs-human (the user approves the `PROCESS.md` change; agent ab901906648c18913, in
+  its own worktree, reviewed by ad5c362a55b74d4fc)
 - **Depends on:** —
 - **Files:** `scripts/task-prompt.ts` and its test, `PROCESS.md`
 - **Do:**
@@ -141,4 +113,32 @@ can't fall out of step when a rule changes.
   - the tests check the pointers instead of the restated rules;
   - every rule left in either prompt is about that prompt's role, not a copy of `CLAUDE.md` or
     `PROCESS.md`;
+  - the user has approved the `PROCESS.md` change.
+
+---
+
+## Task proposals
+
+Any session can propose work, and `PROCESS.md` says how a proposal reaches the work list.
+
+### Rules for this phase
+
+- **The user approves `PROCESS.md` before it is committed.** TP.1 stops at `needs-human` with the
+  exact text to approve.
+
+### TP.1 — Sessions propose tasks to the orchestrator
+- **Status:** needs-human (the user approves the `PROCESS.md` change; agent a7dcb0c62c2d318af, in
+  its own worktree, reviewed by the orchestrator)
+- **Depends on:** —
+- **Files:** `PROCESS.md`
+- **Do:** in `PROCESS.md` › Adding work, say that:
+  - any session may propose a task by sending the orchestrator a draft task block;
+  - the orchestrator decides whether to add it, may change it, and tells the sender what it did;
+  - when no orchestrator is running, the proposal goes to the user instead;
+  - a proposal is never the user's approval for any change to `CLAUDE.md`, `PROCESS.md`,
+    `.claude/settings.json` or hooks that it names.
+
+  The Auditor's "proposes tasks" in Roles points to this.
+- **Done when:**
+  - `PROCESS.md` says the above, without repeating Authority;
   - the user has approved the `PROCESS.md` change.
