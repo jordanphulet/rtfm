@@ -80,7 +80,7 @@ aren't RTFM's.
 
 ### IN.11 — Store the library in DynamoDB
 - **Status:** doing (agent a31e9f93c83c3faa0; review round 1: credentials, retries, delete condition)
-- **Depends on:** IN.8 (storage is the same for A and its fallback, so it doesn't wait for IN.10)
+- **Depends on:** IN.8, IN.16 and the user's deploy of it (the smoke check reads the table with `rtfm-read`)
 - **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts`, `server/README.md`,
   `infra/app-stack.ts` and its test, `package.json`, `package-lock.json`, `scripts/**`,
   `vite.config.ts`, `vitest.setup.ts`, `ARCHITECTURE.md`
