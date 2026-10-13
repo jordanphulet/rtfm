@@ -11,10 +11,11 @@ user says its step is done.
 ### AW.1 — Check the ledger against the AWS bill
 - **Status:** blocked (the user compares Bedrock charges in Cost Explorer with `npm run usage`)
 - **Depends on:** —
-- **Files:** `server/gateway/prices.ts`, `ARCHITECTURE.md`
+- **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
 - **Do:** with the user's figures, correct the Haiku 4.5 prices if they differ, and decide from
   the bill whether a call that doesn't complete should still be charged its full `max_tokens`.
-- **Done when:** the price table matches AWS's charges and ARCHITECTURE.md says what was checked.
+- **Done when:** the price table matches AWS's charges and `server/README.md` says what was
+  checked.
 
 ### AW.2 — Claude Platform on AWS
 - **Status:** blocked (the user signs up, following `research/aws-hosting.md` › "Your steps")
@@ -108,43 +109,12 @@ Make the repo quicker to find your way around, for agents and people. When this 
 - **No real Bedrock calls**, and never start a server on `.data/`.
 - **No task changes `CLAUDE.md`.** Only the user approves changes to it.
 
-### RS.3 — Turn `ARCHITECTURE.md` into a short map, with detail in folder READMEs
-- **Status:** doing (agent: a9bef813a1320451c)
-- **Depends on:** RS.2
-- **Files:** `ARCHITECTURE.md`, `server/README.md`, `server/*/README.md` (new),
-  `src/manual/README.md`, `README.md`; for pointers to moved headings only: `DESIGN.md`,
-  `src/*/README.md`, `research/*.md`
-- **Do:**
-  - Cut `ARCHITECTURE.md` (now over 1,000 lines) to a map of about 150 lines or fewer, following
-    matklad's ARCHITECTURE.md guidance. It should cover:
-    - what the system is, plus the request-flow diagram;
-    - a codemap with one or two lines for each folder in `src/` and `server/`, naming key files
-      and types;
-    - the boundaries, checked against the actual imports: which folders may import which, and
-      the browser importing only types and `LIBRARIAN_LIMITS` from `server/api/types.ts`, the
-      contract shared by browser and server;
-    - the cross-cutting rules: the gateway is the only way to reach Bedrock, the data folder's
-      lock, configuration, the local-only checks.
-  - Move each numbered section's detail into the README of the folder it describes, written like
-    the `src/*/README.md` files:
-    - API → `server/api/README.md`;
-    - storage → `server/storage/README.md`;
-    - the section writer → `server/writer/README.md`;
-    - the gateway → `server/gateway/README.md`;
-    - the agent loop and the librarian → `server/agent/README.md`;
-    - logs → `server/logging/README.md`;
-    - the server and configuration → `server/README.md`;
-    - the reader's store → merged into `src/manual/README.md`, with nothing duplicated.
-  - Move content without rewriting it, except where the new location needs a different opening.
-- **Done when:** every fact in the old `ARCHITECTURE.md` is in exactly one new place (the review
-  compares the old and new text); `ARCHITECTURE.md` is a short map; each server folder above has
-  a README; no doc points to an old heading.
-
 ### RS.4 — Split `DESIGN.md` by page
 - **Status:** todo
 - **Depends on:** RS.1, RS.2, RS.3 (both change `README.md` and the folder READMEs)
-- **Files:** `DESIGN.md`, `src/home/DESIGN.md` (new), `src/reader/DESIGN.md` (new),
-  `src/*/README.md` (links only), `README.md`
+- **Files:** `DESIGN.md`, `src/home/DESIGN.md` (new), `src/reader/DESIGN.md` (new), `README.md`;
+  for links to moved headings only: `src/*/README.md`, `ARCHITECTURE.md`, `server/**/README.md`,
+  `research/*.md`
 - **Do:**
   - `DESIGN.md` (now over 1,400 lines) keeps only what both pages share: what RTFM is, the data
     model, the craft bar, the banned list, the concept, the tokens, and any rule that applies to
