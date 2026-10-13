@@ -74,9 +74,14 @@ aren't RTFM's.
     `DefaultStackSynthesizer` with the qualifier `rtfm`, and name the account and region in code,
     with no context lookups, so synthesis and its tests run offline.
   - The `RtfmAccess` stack:
-    - the Bedrock policy (`InvokeModel` and `InvokeModelWithResponseStream` on Haiku 4.5's
-      `global.` inference profile and the foundation model it routes to), matching the user's
-      hand-made policy given in the orchestrator's notes;
+    - the Bedrock policy, from the user's hand-made one in account `438180219169`, any region:
+      `bedrock-mantle:CreateInference` and `ListModels` on `project/default`;
+      `bedrock:InvokeModel` and `InvokeModelWithResponseStream` on
+      `inference-profile/*anthropic.claude-*` and `foundation-model/anthropic.claude-*` (keep
+      the region a wildcard: a `global.` profile's foundation-model ARN has none); and
+      `aws-marketplace:ViewSubscriptions` and `Subscribe` on `*`, which a model's first call
+      needs. It leaves out the hand-made policy's `aws-marketplace:Unsubscribe`, and narrows its
+      `inference-profile/*` to Claude's, since the account isn't only RTFM's;
     - the IAM user `rtfm-local`, with that policy, for the server's `.env.local` (the user makes
       its key in the console);
     - the IAM user `rtfm-agent`, whose only permission is to assume the two roles below;
@@ -86,7 +91,8 @@ aren't RTFM's.
     - the permissions boundary: the policy `cdk bootstrap` gives CloudFormation's execution role,
       and that every role a stack creates must carry. It allows only RTFM's resources, and denies
       changing the boundary, `RtfmAccess`'s resources and the bootstrap stack;
-    - a monthly AWS Budgets alarm on RTFM's spend, emailed to the user.
+    - a monthly AWS Budgets alarm on RTFM's spend, emailed to an address given as a parameter at
+      deploy, so no address is committed.
   - Assertion tests for the stack: each role's reach, and the boundary's denials.
   - `infra/README.md`: what each identity is for, and the user's steps in order:
     1. `cdk bootstrap` with the qualifier, the boundary and the execution policy;
