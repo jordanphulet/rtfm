@@ -169,6 +169,7 @@ outlast it at least twice as long), so they hold when several test runs share th
 ## Files
 
 - `main.ts`: starts the server from `config.ts` (`npm run server`).
+- `exit.ts`: `exitOnceWritten`, which `main.ts` and `scripts/serve-temp.ts` exit through.
 - `dev.ts`: `npm run dev`: Vite plus `node --watch server/main.ts`.
 - `config.ts`: committed settings (Configuration, above).
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.

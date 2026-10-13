@@ -10,7 +10,8 @@ import { sectionsInReadingOrder } from "../server/storage/manual.ts";
 import { startServer } from "../server/app.ts";
 import { config, type ServerConfig } from "../server/config.ts";
 import { baselineProblem, compareShots } from "./compare.ts";
-import { captureAll, localUrl, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
+import { captureAll, printSummary, settle, type CaptureGroup } from "./screenshots.ts";
+import { localUrl, startViteServer } from "./vite-server.ts";
 
 const { positionals, values } = parseArgs({ allowPositionals: true, options: { compare: { type: "string" } } });
 const SHOTS_DIR = positionals[0] ?? "shots";

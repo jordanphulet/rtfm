@@ -5,7 +5,8 @@ import { parseArgs } from "node:util";
 import type { ViteDevServer } from "vite";
 import { startServer, type RunningServer } from "../server/app.ts";
 import { config } from "../server/config.ts";
-import { localUrl, startViteServer } from "./screenshots.ts";
+import { exitOnceWritten } from "../server/exit.ts";
+import { localUrl, startViteServer } from "./vite-server.ts";
 
 const USAGE = "Usage: npm run serve-temp -- [--keep]";
 
@@ -62,9 +63,4 @@ async function stop(exitCode: number) {
   if (options.keep) console.log(`Kept the data folder ${dataDir}`);
   else await rm(dataDir, { recursive: true, force: true });
   exitOnceWritten(exitCode);
-}
-
-/** Exits once standard output has taken every line: a pipe may still be holding some. */
-function exitOnceWritten(code: number) {
-  process.stdout.write("", () => process.exit(code));
 }

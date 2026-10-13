@@ -55,8 +55,9 @@ browser (Vite, :5173)                           server (node:http, :8787)
 ### The server: `server/`
 
 - The top level: `main.ts` starts the server, `app.ts` wires it (`startServer`, `createModels`),
-  `config.ts` holds the committed `ServerConfig`, `ports.ts` the `API_PORT`; `dev.ts`, `usage.ts`
-  and `logs.ts` are the `npm run` commands; `escape-tags.ts` escapes text for the prompts, and
+  `config.ts` holds the committed `ServerConfig`, `ports.ts` the `API_PORT`, `exit.ts` the
+  `exitOnceWritten` that `main.ts` and `scripts/serve-temp.ts` share; `dev.ts`, `usage.ts` and
+  `logs.ts` are the `npm run` commands; `escape-tags.ts` escapes text for the prompts, and
   `testing.ts` holds the tests' helpers. See `server/README.md`.
 - `api/`: the routes (`Route`, `ApiRequest`, `EventSink` in `route.ts`), the Node adapter with the
   local-only checks and the passcode gate (`node-adapter.ts`, with `passcode.ts`), the previews (`preview.ts`) and the wire types
@@ -80,11 +81,12 @@ browser (Vite, :5173)                           server (node:http, :8787)
 
 ### `scripts/`
 
-- `shot.ts`: `npm run shot`, with the capture helpers in `screenshots.ts` and the comparison in
-  `compare.ts`.
+- `shot.ts`: `npm run shot`, with the Playwright capture helpers in `screenshots.ts` and the
+  comparison in `compare.ts`.
+- `vite-server.ts`: `startViteServer`, Vite on a free port in front of a given API server, and
+  `localUrl`, for `shot.ts` and `serve-temp.ts`.
 - `serve-temp.ts`: `npm run serve-temp`, a throwaway API server and Vite server on free ports and
-  a temporary data folder, for checks (`README.md` › A throwaway server). It starts Vite with
-  `screenshots.ts`'s `startViteServer`.
+  a temporary data folder, for checks (`README.md` › A throwaway server). It loads no Playwright.
 - `audit/`: `npm run audit`, candidate rule breaks from this repo's Claude Code transcripts. See
   `scripts/audit/README.md`.
 - `hooks/`: the Claude Code hooks `.claude/settings.json` runs, which tell a session when its

@@ -1,5 +1,6 @@
 import { startServer, type RunningServer } from "./app.ts";
 import { config } from "./config.ts";
+import { exitOnceWritten } from "./exit.ts";
 import { toLogFile } from "./logging/log-file.ts";
 import { createLogger, toStandardOutput } from "./logging/logger.ts";
 
@@ -27,9 +28,4 @@ async function stop(server: RunningServer) {
 function crash(message: string, error: unknown) {
   logger.error("server.crashed", message, {}, error);
   exitOnceWritten(1);
-}
-
-/** Exits once standard output has taken every line: a pipe may still be holding some. */
-function exitOnceWritten(code: number) {
-  process.stdout.write("", () => process.exit(code));
 }
