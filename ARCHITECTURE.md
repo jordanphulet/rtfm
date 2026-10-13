@@ -79,6 +79,8 @@ browser (Vite, :5173)                           server (node:http, :8787)
 
 - `shot.ts`: `npm run shot`, with the capture helpers in `screenshots.ts` and the comparison in
   `compare.ts`.
+- `audit/`: `npm run audit`, candidate rule breaks from this repo's Claude Code transcripts. See
+  `scripts/audit/README.md`.
 
 ## Boundaries
 

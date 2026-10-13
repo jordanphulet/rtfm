@@ -60,6 +60,7 @@ has the checks it makes.
 | `npm run shot`    | Screenshots both pages in every state; `--compare` diffs against a baseline. |
 | `npm run usage`   | Today's and this month's model spend, by model and by job. See below.        |
 | `npm run logs`    | The server's recent log entries, filtered or followed. See below.            |
+| `npm run audit`   | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
 
 ### Another data folder or port
 
