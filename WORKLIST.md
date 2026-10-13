@@ -19,23 +19,8 @@ aren't RTFM's.
   `npm run aws` and `npm run cdk`.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
-### IN.3 — Keep the development loop local
-- **Status:** todo
-- **Depends on:** IN.2
-- **Files:** `ARCHITECTURE.md`, `PROCESS.md`
-- **Do:**
-  - `PROCESS.md`, next to IN.2's deploy step in › Review loop: "Only the orchestrator deploys an
-    app stack, and only from `main` after a merge. A task agent reaches AWS only when its task's
-    **Do** says so."
-  - `ARCHITECTURE.md` › Everything runs on one machine, two more bullets:
-    - "No task's **Done when** needs the deployed app; a smoke check after each deploy covers what
-      local can't show."
-    - "Agents try out stored-data changes on throwaway data. Deployed data changes only when a
-      change merges, and that change carries its migration or reads the old form."
-- **Done when:** both changes are in, and the user has approved the `PROCESS.md` diff.
-
 ### IN.4 — Settle the AWS design
-- **Status:** todo
+- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1: research and the spike plan, then the user approves the spike boundary)
 - **Depends on:** IN.3
 - **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
   `ARCHITECTURE.md`, `infra/**`
@@ -85,7 +70,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.6 — Arguments reach AWS as given
-- **Status:** todo
+- **Status:** doing (agent a89e145766bb4f5b9)
 - **Depends on:** IN.2
 - **Files:** `infra/run-aws.ts` and its test, `package.json`, `infra/README.md`
 - **Do:** find why `npm run aws -- … --query 'Stacks[0].{Status:StackStatus,Protected:EnableTerminationProtection}'`

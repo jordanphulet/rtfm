@@ -203,5 +203,8 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
   - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
     adapters on purpose, or the test fails.
   - A feature that works only in AWS needs the user's approval.
-  - Local can't show IAM permissions, Lambda response streaming and its disconnects, or cold
-    starts. A smoke check against the deployed app covers those.
+  - No task's **Done when** needs the deployed app. Local can't show IAM permissions, Lambda
+    response streaming and its disconnects, or cold starts; a smoke check after each deploy covers
+    those.
+  - Agents try out stored-data changes on throwaway data. Deployed data changes only when a change
+    merges, and that change carries its migration or reads the old form.
