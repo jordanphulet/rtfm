@@ -129,26 +129,6 @@ Make the repo quicker to find your way around, for agents and people. When this 
   CSS change (made in a scratch copy or reverted before reporting) is reported, with its diff
   image.
 
-### RS.1 — Name each stylesheet after its component
-- **Status:** doing (agent: aaa4767337b69b029)
-- **Depends on:** BA.1
-- **Files:** `src/home/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`
-- **Do:**
-  - Rename every stylesheet that belongs to one component to that component's name
-    (`delete-confirmation.css` → `DeleteConfirmation.css`, `sheet.css` → `Sheet.css`), and
-    update its import. Stylesheets shared by more than one component (`tokens.css`, `page.css`,
-    `base.css`, `controls.css`, `markdown.css`, `write-head.css`, and any others like them) keep
-    their lowercase names.
-  - Update every doc that names a renamed file (`DESIGN.md`, `src/ui/README.md`), and state the
-    rule in each page's "Build structure" section of `DESIGN.md`: a component's stylesheet takes
-    its name; a shared stylesheet has a lowercase name.
-  - Many renames only change case (`sheet.css` → `Sheet.css`). macOS's file system ignores case,
-    so git may not see them. Agents can't run git, so the report lists every rename, and the
-    orchestrator commits the case-only ones with `git mv -f`.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; the screenshots don't
-  change; every component stylesheet in `git ls-files 'src/**/*.css'` has its component's name;
-  no doc names an old file.
-
 ### RS.2 — Rename `src/agent/` to `src/librarian/`
 - **Status:** todo
 - **Depends on:** RS.1, RS.6 (it changes `README.md`)
