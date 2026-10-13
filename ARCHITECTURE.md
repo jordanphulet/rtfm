@@ -94,6 +94,10 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `commit-task.ts`: `npm run commit-task`, which commits a task's work with its `Reviewed-by:`
   trailer. `.githooks/commit-msg` refuses, without one, a task commit or a commit of Claude's
   that changes more than `WORKLIST.md` (`README.md` › Committing task work).
+- `orchestrator-check.ts`: `npm run orchestrator-check`, which checks the orchestrator runs in the
+  main checkout on `main`, clean and with its hooks, and lists the `doing` tasks and task
+  worktrees an earlier run left (`README.md` › The orchestrator's preflight). It shares
+  `commit-task.ts`'s check of where it runs, and its parsing of `WORKLIST.md`.
 - `task-prompt.ts`: `npm run task-prompt`, which prints the prompt that starts a task's agent or
   its reviewer, from the task's block in `WORKLIST.md`, using `commit-task.ts`'s parsing.
 

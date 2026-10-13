@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const NO_REVIEW_LINE_LIMIT = 40;
+export const MAIN = "main";
 export const CO_AUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 
 const USAGE = `Usage: npm run commit-task -- <ID> --reviewed-by <agent id> [--worktree <path>]
@@ -20,14 +21,16 @@ type LineRange = { start: number; end: number };
 
 /**
  * Commits the changed files that task `id`'s **Files** match, with its review trailer, in
- * `repoDir` or, given `worktreeDir`, in that worktree of it. The task is read from `repoDir`'s
- * `WORKLIST.md`, since a worktree's copy may be stale. A worktree holds one task's work, so every
- * changed file in it must match. The commit is built in a separate index holding HEAD and those
- * files, so a refusal or a failed commit leaves the real index as it was; after the commit, the
- * real index takes the committed files. Both folders are top folders, since git status names
- * files relative to the top.
+ * `repoDir` or, given `worktreeDir`, in that worktree of it. `repoDir` must be the main checkout,
+ * on `main`. The task is read from its `WORKLIST.md`, since a worktree's copy may be stale. A
+ * worktree holds one task's work, so every changed file in it must match. The commit is built in a
+ * separate index holding HEAD and those files, so a refusal or a failed commit leaves the real
+ * index as it was; after the commit, the real index takes the committed files. Both folders are
+ * top folders, since git status names files relative to the top.
  */
 export function commitTask(repoDir: string, id: string, review: Review, worktreeDir?: string): CommitResult {
+  const problem = mainCheckoutProblem(repoDir);
+  if (problem) throw new Error(problem);
   const task = findTask(readFileSync(path.join(repoDir, "WORKLIST.md"), "utf8"), id);
   if (!task) throw new Error(`There is no task ${id} in WORKLIST.md.`);
   if (worktreeDir !== undefined) refuseUnlessWorktree(repoDir, worktreeDir);
@@ -65,6 +68,24 @@ export function commitTask(repoDir: string, id: string, review: Review, worktree
     );
   }
   return { subject, committed, leftAlone: changed.filter((file) => !committed.includes(file)) };
+}
+
+/**
+ * What is wrong with running the orchestrator's commands in `dir`, or undefined when it is in the
+ * main checkout with `main` checked out. `orchestrator-check.ts` and `commitTask` both refuse with it.
+ */
+export function mainCheckoutProblem(dir: string): string | undefined {
+  const args = ["rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir"];
+  const [top, gitDir, commonDir] = git(dir, args).trim().split("\n");
+  if (gitDir !== commonDir) {
+    const mainCheckout = path.dirname(commonDir);
+    return `${top} is a linked worktree, not the main checkout. Run this command in the main checkout, ${mainCheckout}.`;
+  }
+  const branch = git(dir, ["branch", "--show-current"]).trim();
+  if (branch !== MAIN) {
+    const checkedOut = branch ? `branch ${branch}` : "a detached HEAD";
+    return `The main checkout is on ${checkedOut}, not ${MAIN}. Check out ${MAIN} there first.`;
+  }
 }
 
 /** Refuses a folder that isn't the top folder of one of `repoDir`'s worktrees. */
@@ -146,7 +167,7 @@ export function findTask(worklist: string, id: string): Task | undefined {
   const block = findTaskBlock(lines, id);
   if (!block) return undefined;
   const title = lines[block.start].slice(taskHeading(id).length).trim();
-  return { id, title, files: parseFiles(filesText(lines.slice(block.start + 1, block.end))) };
+  return { id, title, files: parseFiles(itemText(lines.slice(block.start + 1, block.end), "- **Files:**")) };
 }
 
 function taskHeading(id: string): string {
@@ -174,9 +195,8 @@ export function findItem(block: string[], label: string): LineRange | undefined 
   return { start, end: end === -1 ? block.length : end };
 }
 
-/** The **Files** item of a task block, with its continuation lines joined. */
-function filesText(block: string[]): string {
-  const label = "- **Files:**";
+/** The text after `label` of a task block's item, with its continuation lines joined; empty if it has none. */
+export function itemText(block: string[], label: string): string {
   const item = findItem(block, label);
   if (!item) return "";
   return block.slice(item.start, item.end).join(" ").slice(label.length);
@@ -253,7 +273,7 @@ function changedFiles(status: StatusEntry[]): string[] {
   return [...new Set(status.filter(({ code }) => code !== "AD").map(({ file }) => file))];
 }
 
-function git(repoDir: string, args: string[], options: { input?: string; env?: NodeJS.ProcessEnv } = {}): string {
+export function git(repoDir: string, args: string[], options: { input?: string; env?: NodeJS.ProcessEnv } = {}): string {
   try {
     return execFileSync("git", ["--literal-pathspecs", ...args], {
       cwd: repoDir,

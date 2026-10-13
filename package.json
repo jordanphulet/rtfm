@@ -18,6 +18,7 @@
     "logs": "node server/logs.ts",
     "audit": "node scripts/audit/audit.ts",
     "commit-task": "node scripts/commit-task.ts",
+    "orchestrator-check": "node scripts/orchestrator-check.ts",
     "task-prompt": "node scripts/task-prompt.ts"
   },
   "dependencies": {

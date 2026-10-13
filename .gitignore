@@ -6,5 +6,6 @@ shots/
 *.swo
 .DS_Store
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 
 .env*.local
