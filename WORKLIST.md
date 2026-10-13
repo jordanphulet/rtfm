@@ -95,6 +95,20 @@ aren't RTFM's.
   decision then goes into `ARCHITECTURE.md`, the two older research docs' status lines say what
   was adopted, and the orchestrator adds the build tasks.
 
+### IN.5 — Check the budget counts Bedrock
+- **Status:** blocked (the user activates the `project` cost allocation tag, both the user-defined
+  and the IAM principal one, a day after `rtfm-local` has called Bedrock)
+- **Depends on:** IN.2
+- **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
+- **Do:** with `npm run aws -- ce get-cost-and-usage`, group a day's Bedrock cost (the services
+  "Claude Haiku 4.5 (Amazon Bedrock Edition)" and "Amazon Bedrock") by the `project` tag, and
+  find whether `rtfm-local`'s calls carry `project=rtfm` and under which tag key. If the budget's
+  `user:project` filter misses them, change its filter to the IAM principal tag if AWS Budgets
+  accepts it, or propose a tagged application inference profile for the server. A change to
+  `access-stack.ts` needs the user's approval and their redeploy from CloudShell.
+- **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
+  `infra/README.md` › The budget says how.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
