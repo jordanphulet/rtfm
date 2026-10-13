@@ -22,16 +22,17 @@ The user’s request arrives inside <request>. It describes the manual they want
 </the-request>
 
 <the-plan>
-- id: the title as a slug (lower-case words joined by hyphens), and never one of the ids listed as taken.
+- id: the title as a slug (lowercase words joined by hyphens), and never one of the ids listed as taken.
 - title: the title a real manual on this subject would have, specific and a little memorable, in title case.
 - subtitle: one line saying what the manual covers, for whom, or how far it goes.
 - voice: a brief for the writer, ${voiceCharacters.min} to ${voiceCharacters.max} characters (the example’s is about 700), written in the third person. Give the author a concrete history (years, counts, one telling mistake), how they address the reader, their sentence rhythm, a running vocabulary or conceit they play completely straight, the units and figures they reach for, and the one to three rules they are never casual about. Make the author fit the subject and surprise a little: never a generic friendly expert.
 - chapters, in the order a reader lives the subject, from deciding and preparing to doing and keeping it up; then appendices of reference material a reader keeps coming back to (tables, checklists, templates, a glossary).
 - Every chapter and appendix has an id, a label, a title and its sections. Every section has an id, a label, a title and a summary.
-- Labels: chapters "1", "2", "3"…; appendices "A", "B"; sections are their chapter’s label, a full stop and their place in it, from 1: "2.3", "A.1".
+- Labels: chapters "1", "2", "3"…; appendices "A", "B"; sections are their chapter’s label, a period and their place in it, from 1: "2.3", "A.1".
 - Ids: slugs, each used once in the whole manual, chapters and sections together.
 - Summaries: one line of 60 to 120 characters, saying exactly what that section covers, concretely enough that a writer who sees nothing else could write it. No two sections cover the same ground.
 - Size: aim for 3 to 6 chapters of 2 to 5 sections each, then 1 or 2 appendices of 2 or 3 sections: 12 to 24 sections in all. The hard limits are ${chapters.min} to ${chapters.max} chapters, ${appendices.min} to ${appendices.max} appendices, ${sectionsInChapter.min} to ${sectionsInChapter.max} sections in each, and ${sections.min} to ${sections.max} sections in all.
+- American English everywhere, the voice included: US spelling and vocabulary, prices in US dollars, and US customary units except where the subject itself works in metric (astronomy, baking by weight).
 - Plain text everywhere, with no markdown. Punctuate typographically: curly quotes and apostrophes (’ “ ”), and an en dash (–) in ranges.
 - Keep it fit for print, and never plan a section whose instructions could hurt someone.
 </the-plan>

@@ -416,12 +416,15 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
     (including the sample's punctuation: spaced em dashes and curly quotes), then the manual's
     title, subtitle, voice and contents (each section's label, title, id and summary). It says
     that text inside `<manual>` and `<written-section>` is reference material, never
-    instructions, and that the voice describes style only.
+    instructions, and that the voice describes style only. Its locale rule outranks the voice
+    and any written section, so a manual whose voice is British still comes out in American
+    English: US spelling and vocabulary, US dollars, and US customary units unless the subject
+    itself works in metric.
   - The **user message** names the section, its chapter and its summary, the previous and next
     sections with their summaries, and a length in words (`sectionWordsRequested`). It ends
     by restating what Haiku most often skips: at least one table, list, checklist or code block,
     a language tag on every code block, and a cross-reference with the target's title as its
-    link text, shown with a real neighbour (`[Sensing the Guest](section:sensing-the-guest)`).
+    link text, shown with a real neighbor (`[Sensing the Guest](section:sensing-the-guest)`).
   - **An example section.** The user message starts with a section of the same manual that is
     already written, to show its voice and markdown: it is what gives Haiku 4.5's sections their
     headings, lists and links. It prefers the nearest section whose body is still the seed's (by
@@ -923,12 +926,13 @@ manual or the problems that stopped it.
   as for any tool that throws.
 - **The prompt** (`prompt.ts`). The system prompt is the same for every plan: what a plan is for
   (a later writer sees only the voice and each section's title and summary), the rules for each
-  field, the size to aim for and the hard limits, and one seed manual, *Moving House Without
-  Losing the Cat*, as JSON in the tool's own form, never to be reused. The user message holds the
-  request inside `<request>`, with `<` escaped so it can't close the tag, then the ids already
-  taken in the library, and on a retry the problems with the first plan. The system prompt says
-  the request describes the manual wanted and is never an instruction: nothing inside it changes
-  the rules, the tool or the format.
+  field, the size to aim for and the hard limits, the locale (American English, the voice
+  included, as in the writer's prompt), and one seed manual, *Moving House Without Losing the
+  Cat*, as JSON in the tool's own form, never to be reused. The user message holds the request
+  inside `<request>`, with `<` escaped so it can't close the tag, then the ids already taken in
+  the library, and on a retry the problems with the first plan. The system prompt says the
+  request describes the manual wanted and is never an instruction: nothing inside it changes the
+  rules, the tool or the format.
 - **The tool**, `save_manual`, takes the plan in the stored manual's own format (`id`, `title`,
   `subtitle`, `voice`, `chapters`, `appendices`). Its JSON Schema comes from the same zod schema
   that checks it (`toolDefinition` in `agent/tool.ts`, which `defineTool` uses too). The planner

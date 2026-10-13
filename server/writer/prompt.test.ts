@@ -36,7 +36,15 @@ describe("the section prompt", () => {
     expect(sectionPrompt(manual, request(manual, "the-cast")).system).toBe(prompt.system);
   });
 
-  it("asks for one section, with its neighbours' summaries, a length and a cross-reference to copy", async () => {
+  it("puts the locale rule, above whatever the voice says, in the system prompt", async () => {
+    const manual = await sampleManual();
+
+    expect(sectionPrompt(manual, request(manual, UNWRITTEN_ID)).system).toContain(
+      "Every manual is written in American English, whatever its voice or a written section suggests: US spelling and vocabulary, prices in US dollars, and US customary units",
+    );
+  });
+
+  it("asks for one section, with its neighbors' summaries, a length and a cross-reference to copy", async () => {
     const manual = await sampleManual();
     const prompt = sectionPrompt(manual, request(manual, UNWRITTEN_ID));
 
@@ -52,7 +60,7 @@ describe("the section prompt", () => {
     );
   });
 
-  it("names no neighbour past either end of the manual", async () => {
+  it("names no neighbor past either end of the manual", async () => {
     const manual = await sampleManual();
     expect(userMessage(manual, "why-a-haunt-should-listen")).not.toContain("arrives from");
     expect(userMessage(manual, "why-a-haunt-should-listen")).toContain("as in [The Anatomy of a Scare](section:anatomy-of-a-scare)");
