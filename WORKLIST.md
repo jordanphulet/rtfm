@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.4 — Settle the AWS design
-- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1 in a second round after the security review: the distribution moves to a user-deployed `RtfmSpikeEdge`, and the boundary denies `lambda:PutResourcePolicy`)
+- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1 done; waiting for the user to approve the spike boundary change and redeploy `RtfmToolkit` from the worktree's template)
 - **Depends on:** IN.3
 - **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
   `ARCHITECTURE.md`, `infra/**`
