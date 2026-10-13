@@ -40,6 +40,75 @@ machine.
   reachable; `ARCHITECTURE.md` has the rule and `server/README.md` › Tests says tests reach only
   loopback.
 
+## Into AWS
+
+Infrastructure as code in `infra/`, a CDK app, in an AWS account that also holds things that
+aren't RTFM's.
+
+### Rules for this phase
+
+- **Nothing outside RTFM.** Every role and policy reaches only resources named for RTFM (`rtfm-*`,
+  `Rtfm*`) wherever the service allows it, and RTFM's CDK bootstrap uses its own qualifier
+  (`rtfm`), so it never touches another project's.
+- **Agents never see AWS secrets.** No task reads `.env.local` or `~/.aws/credentials`; agents
+  use the `rtfm-read` and `rtfm-deploy` profiles by name.
+- **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
+
+### IN.1 — The `infra/` app and the access stack
+- **Status:** todo
+- **Depends on:** LF.1
+- **Files:** `infra/**`, `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`,
+  `ARCHITECTURE.md`, `README.md`, `server/README.md`, `CLAUDE.md`, `PROCESS.md`
+- **Do:**
+  - A CDK app in TypeScript in `infra/`, with `npm run cdk`. Its stacks use
+    `DefaultStackSynthesizer` with the qualifier `rtfm`, and name the account and region in code,
+    with no context lookups, so synthesis and its tests run offline.
+  - The `RtfmAccess` stack:
+    - the Bedrock policy (`InvokeModel` and `InvokeModelWithResponseStream` on Haiku 4.5's
+      `global.` inference profile and the foundation model it routes to), matching the user's
+      hand-made policy given in the orchestrator's notes;
+    - the IAM user `rtfm-local`, with that policy, for the server's `.env.local` (the user makes
+      its key in the console);
+    - the IAM user `rtfm-agent`, whose only permission is to assume the two roles below;
+    - `rtfm-read`: CloudWatch Logs, CloudFormation and S3 read on RTFM's resources, the lookups
+      `cdk diff` needs, and Cost Explorer read;
+    - `rtfm-deploy`: may assume the `rtfm`-qualified bootstrap roles and nothing else;
+    - the permissions boundary: the policy `cdk bootstrap` gives CloudFormation's execution role,
+      and that every role a stack creates must carry. It allows only RTFM's resources, and denies
+      changing the boundary, `RtfmAccess`'s resources and the bootstrap stack;
+    - a monthly AWS Budgets alarm on RTFM's spend, emailed to the user.
+  - Assertion tests for the stack: each role's reach, and the boundary's denials.
+  - `infra/README.md`: what each identity is for, and the user's steps in order:
+    1. `cdk bootstrap` with the qualifier, the boundary and the execution policy;
+    2. deploy `RtfmAccess` with their own admin sign-in;
+    3. make `rtfm-local`'s key, swap it into `.env.local`, delete the hand-made user;
+    4. make `rtfm-agent`'s key and add the profiles to `~/.aws/config` and `~/.aws/credentials`.
+
+    List what the boundary can't scope by name, and why.
+  - `CLAUDE.md` › Shell: never read, print, copy or edit `~/.aws/credentials`; run AWS commands
+    with `--profile rtfm-read` or `--profile rtfm-deploy`. `PROCESS.md` › Authority: the
+    `RtfmAccess` stack joins the files only the user approves. Give both diffs in full; the user
+    approves them.
+- **Done when:** `npm run build` and `npm test` pass, offline; `npm run cdk -- synth` produces
+  both templates; and the user has approved the `CLAUDE.md` and `PROCESS.md` changes.
+
+### IN.2 — Prove the deploy path
+- **Status:** blocked (the user follows `infra/README.md`'s steps)
+- **Depends on:** IN.1
+- **Files:** `infra/**`, `README.md`, `PROCESS.md`
+- **Do:**
+  - With `rtfm-read`, read `RtfmAccess`'s stack and its outputs.
+  - With `rtfm-deploy`, deploy an `RtfmApp` stack holding one log group, then show that it can't
+    change `RtfmAccess`, create a role without the boundary, or touch a resource not named for
+    RTFM.
+  - Check the server still calls Bedrock with `rtfm-local`'s key (`npm run dev` with
+    `RTFM_MODELS=bedrock`, one section, under $0.01).
+  - `PROCESS.md` › Review loop: after merging a change to an app stack, the orchestrator runs
+    `npm run cdk -- deploy` with `rtfm-deploy`, then a smoke check. Give the diff in full; the user
+    approves it.
+- **Done when:** each check above passed and is recorded in `infra/README.md`, and the user has
+  approved the `PROCESS.md` change.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
