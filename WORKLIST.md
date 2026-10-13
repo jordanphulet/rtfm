@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.2 — Prove the deploy path
-- **Status:** doing (agent a8e21f88b7c3c399f)
+- **Status:** doing (agent a8e21f88b7c3c399f; in review; on 2026-10-13 the user approved its `PROCESS.md` deploy step with `--require-approval never`)
 - **Depends on:** IN.1
 - **Files:** `infra/**`, `README.md`, `PROCESS.md`
 - **Do:**
