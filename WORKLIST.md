@@ -177,38 +177,9 @@ When this phase is done:
 - **One at a time where files overlap:** DC.1 and AP.1 change `README.md`, so they run after RC.3,
   in that order. DC.1 may also fix `scripts/audit/README.md`, so it waits for RA.3 too.
 
-### RA.3 — Sharper audit detectors
-- **Status:** doing (agent ae6de641e0af74280; review round 3, the last)
-- **Depends on:** —
-- **Files:** `scripts/audit/**`
-- **Do:**
-  - **Task commit reviews:**
-    - match a review agent by the task's title words or a design letter, or by its prompt
-      naming the ID, not only its description;
-    - add each commit's changed-line count;
-    - also list the orchestrator's own commits other than `WORKLIST.md`-only ones.
-  - **Process stops:**
-    - treat `kill $(cat <file>)` as the agent's own when the same agent wrote that file from `$!`;
-    - treat a literal PID as its own when it appeared earlier in that agent's own launch output;
-    - mark PIDs that came from `lsof`/`ps`/`pgrep`, and `pkill -f`, as found by port or pattern.
-  - **Sensitive paths:** split reads from writes; ignore `--exclude-dir=.data` and
-    `--exclude .env.local`; treat a script given the `.env.local` path as runtime loading.
-  - **Rule file edits:** count only paths inside this repo or its worktrees; for `cp` count only
-    the destination.
-  - **New detectors:**
-    - zsh `=` and "no matches found" errors after the zsh rule;
-    - each orchestrator loop pass, and whether it re-read `CLAUDE.md` and `PROCESS.md`;
-    - agent prompts missing the standing rules;
-    - a task agent's Edit/Write outside the task's Files (from the task block in `WORKLIST.md`'s
-      history at that time);
-    - a reviewer or auditor session writing files.
-- **Done when:** `npm run build` and `npm test` pass; synthetic fixtures cover each new case and
-  each dropped false positive; on the real transcripts, unreviewed task commits fall from 55 to
-  close to the 27 confirmed, and process stops no longer list kills of the agent's own PID.
-
 ### DC.1 — A test that docs name only what exists
 - **Status:** todo
-- **Depends on:** RC.3 (both change `README.md` and `ARCHITECTURE.md`), RA.3 (`scripts/audit/README.md`)
+- **Depends on:** RC.3 (both change `README.md` and `ARCHITECTURE.md`)
 - **Files:** `scripts/doc-references.test.ts` (new); `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
   `src/**/README.md`, `src/**/DESIGN.md`, `server/**/README.md`, `scripts/audit/README.md` (only
   to fix references the test flags)
