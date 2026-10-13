@@ -61,54 +61,9 @@ makes the right way the easy way. When this phase is done:
 - **One at a time.** These tasks share `README.md`, `package.json`, `ARCHITECTURE.md` or
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
-### RC.2 — Tell a session when its rules are out of date
-- **Status:** needs-human (the user approves `.claude/settings.json` and the `PROCESS.md` change; agent
-  a0083ed43e106a6c4, reviewed by ae65fd5555d52ee19)
-- **Depends on:** —
-- **Files:** `scripts/hooks/**` and their tests (new), `.claude/settings.json` (new, the user
-  approves), `PROCESS.md` ("How rules spread"; the user approves), `README.md`,
-  `ARCHITECTURE.md` (the `scripts/` codemap entry)
-- **Do:**
-  - **Behind `main`.** A `SessionStart` hook that blocks nothing. In a worktree whose `HEAD` is
-    behind the local `main`, it tells the session:
-    - how many commits behind it is;
-    - which of `CLAUDE.md`, `PROCESS.md`, `WORKLIST.md` and `README.md` differ from `main`;
-    - to read those with `git show main:<file>`.
-    In the main checkout, or when up to date, it says nothing.
-  - **Changed since the session started.** A session's copy of `CLAUDE.md` is a snapshot taken
-    when it starts or resumes, and subagents get their orchestrator's snapshot. The first audit
-    found 55 of 85 subagents started with an out-of-date `CLAUDE.md`, and agents already running
-    never see a rule added after they started. So:
-    - at `SessionStart`, the hook saves a copy of `CLAUDE.md` and `PROCESS.md` for that session,
-      outside the repository (the system's temporary folder);
-    - a `PostToolUse` hook compares the files on disk with that copy. When one has changed, it
-      tells the session, once per change, which file changed and the change itself (`git diff
-      --no-index` between the copy and the file, cut short if long), and that the file on disk
-      wins over the copy in its context;
-    - a subagent is told about changes since its orchestrator's copy, including changes made
-      before the subagent started, since that copy is the one it was given. This needs the hook
-      input to identify a subagent's tool calls; if it can't, the agent reports that and the
-      notice covers the orchestrator only.
-  - **Resolve a contradiction.** `PROCESS.md` says a session in a worktree "syncs with main", but
-    `CLAUDE.md` lets only the orchestrator run git commands that change anything. The repository
-    also has no `origin` for the app's sync tool. Replace the line: a session in a worktree reads
-    the rule files from `main` (`git show main:<file>`), and bases anything it drafts on `main`'s
-    version.
-  - Measure and report what each hook adds to a tool call.
-  - Tests, against temporary git repositories and folders:
-    - a worktree behind, one up to date, and the main checkout;
-    - an unchanged file (silence), a changed file (one notice, then silence until the next
-      change), a change in two distant places (the diff shows both correctly);
-    - a subagent started after a change is told about it;
-    - a failure (no git, not a repository, no saved copy), which prints nothing and exits 0.
-- **Done when:** `npm run build` and `npm test` pass; a new session in a stale worktree sees the
-  behind-`main` notice; a session in the main checkout sees nothing; after `PROCESS.md` changes,
-  a running session and a running subagent are each told once, at their next tool call; the user
-  has approved `.claude/settings.json` and the `PROCESS.md` change.
-
 ### RC.3 — A throwaway server that agents stop by its PID
-- **Status:** todo
-- **Depends on:** RC.2
+- **Status:** doing (agent ad4fbd1d743526385)
+- **Depends on:** —
 - **Files:** `scripts/serve-temp.ts` and its test (new), `package.json`, `CLAUDE.md` (the line
   about stopping processes; the user approves), `ARCHITECTURE.md` (the `scripts/` codemap entry),
   `README.md`
@@ -155,7 +110,7 @@ edits and stops only where two tasks changed the same lines. When this phase is 
 
 ### WT.1 — Read `.env.local` from the main checkout
 - **Status:** todo
-- **Depends on:** RC.2, RC.3 (all change `README.md`; RC.3 also `ARCHITECTURE.md`)
+- **Depends on:** RC.3 (both change `README.md` and `ARCHITECTURE.md`)
 - **Files:** `server/gateway/credentials.ts` and its test, `README.md` (the setup step that names
   `.env.local`), `ARCHITECTURE.md` (the Configuration line)
 - **Do:**
@@ -168,8 +123,8 @@ edits and stops only where two tasks changed the same lines. When this phase is 
   finds the credentials, checked without printing any value.
 
 ### WT.2 — Task agents in their own worktrees
-- **Status:** todo
-- **Depends on:** RC.2 (both change `PROCESS.md`)
+- **Status:** doing (agent a60214f124cbcf535)
+- **Depends on:** —
 - **Files:** `PROCESS.md` (the loop, the review loop and Rules; the user approves),
   `scripts/commit-task.ts` and its test
 - **Do:**
