@@ -128,6 +128,16 @@ aren't RTFM's.
   the old cookie, and the set command refusing to run without a terminal; no file or log an agent
   can read holds the passcode.
 
+### IN.19 — Statuses and deletes see every environment's runs
+- **Status:** todo
+- **Depends on:** IN.13
+- **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`
+- **Do:** the manual route's written and writing statuses, and the delete route's refusal while a
+  section is being written (`409`), see only the answering environment's runs. Make them also see
+  other environments' live leases in the manual's partition, so a section being written elsewhere
+  shows as writing and its manual can't be deleted mid-run.
+- **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
