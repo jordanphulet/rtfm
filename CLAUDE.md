@@ -10,7 +10,8 @@ Start with `README.md`: how to run it, and where every other doc and folder is.
 Every session has one role. `PROCESS.md` says what each may do.
 
 - **Orchestrator:** works through `WORKLIST.md`, starts agents, reviews their work and commits it.
-- **Task agent:** does one task, changes only that task's Files, and reports back.
+- **Task agent:** does one task in its own worktree, changes its task's Files and any other file
+  it needs (named in its report: `PROCESS.md` › Files outside the list), and reports back.
 - **Reviewer:** reviews a change and reports its findings; it changes no files.
 - **Auditor:** audits the repo and proposes tasks; it changes no files.
 

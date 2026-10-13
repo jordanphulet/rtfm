@@ -8,8 +8,9 @@ rules, and the orchestrator's loop. `WORKLIST.md` holds the phases and tasks.
 - **Orchestrator:** works through `WORKLIST.md` under `/loop`. It coordinates, reviews and
   commits, and it is the only session that edits `WORKLIST.md` (statuses and tasks). It doesn't
   do task work itself (see "When the orchestrator does work itself").
-- **Task agent:** does one task. It changes only the files in its task's **Files**, reports back
-  to the orchestrator, and never commits or edits `WORKLIST.md`.
+- **Task agent:** does one task, in its own git worktree on its own branch. It changes the files
+  in its task's **Files**, and any other file it needs as Rules › Files outside the list says. It
+  reports back to the orchestrator, and never commits or edits `WORKLIST.md`.
 - **Reviewer:** reviews a change for the orchestrator and reports its findings. It is read-only:
   it changes no files.
 - **Auditor:** a read-only session that audits the repo and proposes tasks. It changes no files;
@@ -20,6 +21,7 @@ rules, and the orchestrator's loop. `WORKLIST.md` holds the phases and tasks.
 - `WORKLIST.md`: the work still to do, as phases and tasks with their statuses. Finished work is
   removed from it.
 - Git history: what happened.
+- Each running task's worktree and branch: its work, until the orchestrator merges it into `main`.
 - The docs (`README.md`, `ARCHITECTURE.md`, `DESIGN.md`, the folder READMEs): what exists.
 - `research/`: what might be.
 - `.data/`: the user's manuals and the usage ledger.
@@ -34,8 +36,8 @@ proposed, the orchestrator asks the user in its own session.
 
 - Through files, never through messages alone. A rule that should hold is written into the file
   that governs it; a message may point to it but doesn't replace it.
-- A session in a git worktree reads the rule files from `main` (`git show main:<file>`), and
-  bases anything it drafts on `main`'s version.
+- A session in a git worktree reads the rule files from `main` (`git show main:<file>`). A task
+  agent edits its worktree's files, and the merge brings in what `main` has gained since.
 - Hooks tell a session when its rules are out of date (`README.md` › Rule-change notices): a
   session in a worktree behind `main` hears, when it starts, which rule files `main` has changed;
   and a session or subagent hears at its next tool call when the main checkout's `CLAUDE.md` or
@@ -54,34 +56,54 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
    loop**.
 2. **Review finished work.** Run the review loop below for every `doing` task whose agent has
    reported back.
-3. **Start ready tasks.** Start every `todo` task whose dependencies are all gone from
-   `WORKLIST.md` as a **background subagent**, with **at most 3 running at once**. Mark it `doing`
+3. **Start ready tasks.** Start every `todo` task that Rules › Scheduling allows as a
+   **background subagent** in its own worktree (Rules › Starting a task agent). Mark it `doing`
    and record the agent's name.
 4. **Save `WORKLIST.md`**, then schedule a fallback wake-up in 20–30 minutes. Agents announce
    when they finish, so there's no need to poll.
 
 ### Review loop (required before any commit)
 
-1. **Check the basics:** every item in the task's **Done when** list, and the task's own changes
-   are only inside its **Files**.
-2. **Read the full diff** against `CLAUDE.md` › Code standards and, for UI work, the design doc.
-   For anything beyond a trivial change, also start a **review subagent** for an independent code
-   review, then weigh its findings.
+1. **Check the basics:** every item in the task's **Done when** list, and every changed file is
+   in its **Files** or listed under "Outside Files" with a reason (Rules › Files outside the list).
+2. **Read the full diff** in the agent's worktree against `CLAUDE.md` › Code standards and, for UI
+   work, the design doc. For anything beyond a trivial change, also start a **review subagent**
+   on that worktree for an independent code review, then weigh its findings.
 3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
-   keeps its context), then wait for it to report back and repeat from step 1.
-4. **Approved:** commit with `npm run commit-task -- <task id> --reviewed-by <review agent's id>`,
-   or `--no-review "<reason>"` when the orchestrator reviewed the change alone (40 changed lines
-   at most). It commits only the changed files the task's **Files** match, as
-   `<task id>: <task title>` with a `Reviewed-by:` trailer, and lists the changed files it left
-   alone. Then remove the task from `WORKLIST.md`, and its phase once no task is left in it.
+   keeps its context and its worktree), then wait for it to report back and repeat from step 1.
+4. **Approved:** from the main checkout, with the agent's worktree at `<path>` on `<branch>`:
+   1. `npm run commit-task -- <task id> --worktree <path> --reviewed-by <review agent's id>`, or
+      `--no-review "<reason>"` when the orchestrator reviewed the change alone (40 changed lines
+      at most). It reads the task from the main checkout's `WORKLIST.md` and commits on the
+      task's branch the changed files its **Files** match, as `<task id>: <task title>` with a
+      `Reviewed-by:` trailer. It refuses when a changed file in the worktree isn't in **Files**:
+      the orchestrator adds the file to **Files** (an accepted Outside Files case) or sends the
+      change back.
+   2. `git -C <path> merge --no-edit main`. On a conflict, the orchestrator sends the agent the
+      conflicted files, and the agent resolves them, editing files only and running no git
+      command. `git -C <path> diff --check` must find no conflict marker left, and the
+      orchestrator reads the resolution in `git -C <path> diff`. Then it runs
+      `git -C <path> add <those files>` and `git -C <path> commit --no-edit`: git's own message,
+      with no co-author line, which the commit hook lets through.
+   3. `npm ci`, then `npm test`, in `<path>`: the merge may have brought a new
+      `package-lock.json`. If the tests fail, the agent gets the change back as changes needed.
+   4. `git merge --ff-only <branch>`, which fast-forwards `main` to the branch. If `main` has
+      moved on since the merge, repeat from the merge.
+   5. `git worktree remove <path>`, then `git branch -d <branch>`. Claude Code locks a worktree
+      while its agent runs, so remove it only after the agent has finished. If
+      `git worktree remove` refuses because files are left, the orchestrator finds out what they
+      are, and never uses `--force`.
+
+   Then remove the task from `WORKLIST.md`, and its phase once no task is left in it.
 5. **Three rounds without approval:** mark it `needs-human`, write down what's unresolved, and
-   tell the user.
+   tell the user. Its worktree and branch stay until the user decides.
 
 ### When the orchestrator does work itself
 
-Avoid it. If it does happen (for example, a small fix while reconciling two tasks), start a
-review subagent on that change and only commit once the review passes, with a
-`Reviewed-by: <review agent's id>` trailer, which the commit hook requires. Keeping
+Avoid it. If it does happen (for example, a small fix after two tasks have merged), the
+orchestrator works in the main checkout and commits the change before it fast-forwards `main` to
+any task's branch. It starts a review subagent on the change and commits only once the review
+passes, with a `Reviewed-by: <review agent's id>` trailer, which the commit hook requires. Keeping
 `WORKLIST.md` up to date, and git operations such as tags, don't count as work. `WORKLIST.md`
 changes are committed on their own, as "Update work list statuses".
 
@@ -99,16 +121,32 @@ folder READMEs", which matches nothing.
 ### Rules
 
 - **Every agent runs on Opus 5.5** (`model: "opus"`), in the background.
+- **Starting a task agent:** the orchestrator starts every task agent with
+  `isolation: "worktree"`. Given `worktree.baseRef: "head"` in `.claude/settings.json`, that
+  branches from the main checkout's `HEAD`, which is `main`. Its first step is `npm ci`. Any
+  server it starts is `npm run serve-temp`, in the background, stopped by its handle or the PID
+  it prints (`README.md` › A throwaway server: free ports, a temporary data folder, the fake
+  models). Never `npm run dev`, whose ports are fixed.
+- **Files outside the list:** an agent may change a file its task's **Files** don't name, and
+  lists it in its report under "Outside Files" with the reason. Working around a missing file
+  (duplicating code, putting code in the wrong place, editing through the shell) is a failure,
+  not compliance. The orchestrator adds each accepted file to the task's **Files** before
+  committing, or sends the change back.
+- **Scheduling:** tasks that touch the same file may run at the same time: git merges their edits
+  and stops only where two tasks changed the same lines. **Depends on** means one task needs
+  another's result, so a task starts once every task it depends on is gone from `WORKLIST.md`.
+  At most 3 task agents run at once.
 - **Only the orchestrator commits.** Agents never run git commands that change anything.
 - **Agents never edit `WORKLIST.md`.** They report back, and the orchestrator updates it.
 - Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
-  `src/manual/README.md`. It asks the agent to report back with the files it changed, how it
-  checked its work, and anything left unresolved.
+  `src/manual/README.md`. Its paths are relative to the repo root, never the main checkout's
+  absolute path, since the agent works in its worktree. It asks the agent to report back with its
+  worktree's path and branch, the files it changed (and any "Outside Files", with the reason), how
+  it checked its work, and anything left unresolved. The orchestrator's `SendMessage` notes to an
+  agent name its worktree's path.
 - Every agent prompt carries the rule that docs describe what exists (`CLAUDE.md` › Code
   standards): no decision lists, plans or status in docs; a decision changes the doc, code or task
   it governs, and planned work goes into `WORKLIST.md`.
-- Agents work in the same checkout at the same time, so they **must stay inside their task's
-  Files**. Two tasks that touch the same file never run at the same time.
 
 **Statuses:** `todo` · `doing` · `blocked` · `needs-human`. A status may carry a short reason in
 parentheses, for example `blocked (waiting for the user's AWS sign-up)`.

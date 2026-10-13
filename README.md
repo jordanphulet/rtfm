@@ -75,6 +75,7 @@ The orchestrator commits a task's work with `npm run commit-task` (`PROCESS.md` 
 ```sh
 npm run commit-task -- RC.1 --reviewed-by <review agent id>
 npm run commit-task -- RC.1 --no-review "<reason>"   # reviewed by the orchestrator alone
+npm run commit-task -- RC.1 --worktree .claude/worktrees/<name> --reviewed-by <review agent id>
 ```
 
 - It reads the task's block in `WORKLIST.md` and commits only the changed, new and deleted files
@@ -84,6 +85,9 @@ npm run commit-task -- RC.1 --no-review "<reason>"   # reviewed by the orchestra
 - **Files** are read from their code spans: `**` matches any number of folders and `*` anything
   within one name, notes in parentheses are skipped, "`x.ts` and its test" adds `x.test.*`, and
   "except …" or a note starting with "except" or "not" leaves its paths out.
+- With `--worktree <path>`, it reads the task from this checkout's `WORKLIST.md` and stages and
+  commits in that worktree, on its branch. It refuses a folder that isn't the top of one of this
+  repository's worktrees, and refuses when a changed file there isn't in the task's **Files**.
 - It refuses when nothing it matches differs from the last commit, during a merge, cherry-pick or
   revert, or with unmerged files. It refuses `--no-review` for a binary change or more than 40
   changed lines, not counting pure renames. A refusal leaves what is staged as it was.

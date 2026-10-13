@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -134,12 +134,20 @@ describe("in a git repository", () => {
   afterEach(() => rmSync(repo, { recursive: true, force: true }));
 
   function git(...args: string[]): string {
-    return execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+    return gitIn(repo, ...args);
+  }
+
+  function gitIn(dir: string, ...args: string[]): string {
+    return execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
   }
 
   function write(file: string, text: string) {
-    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
-    writeFileSync(path.join(repo, file), text);
+    writeIn(repo, file, text);
+  }
+
+  function writeIn(dir: string, file: string, text: string) {
+    mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    writeFileSync(path.join(dir, file), text);
   }
 
   function lines(count: number, word: string): string {
@@ -345,9 +353,140 @@ describe("in a git repository", () => {
       write("README.md", "# Readme\n\nWidgets.\n");
 
       expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(
-        /^Committed XX\.1: Build the widget, but couldn't update the index \(.*index\.lock.*\)\. Run: git reset -- README\.md$/s,
+        /^Committed XX\.1: Build the widget, but couldn't update the index \(.*index\.lock.*\)\. Run in .+: git reset -- README\.md$/s,
       );
       expect(git("log", "-1", "--format=%s")).toBe("XX.1: Build the widget\n");
+    });
+  });
+
+  describe("commitTask in another worktree", () => {
+    let worktree: string;
+    let worktreeParent: string;
+
+    beforeEach(() => {
+      mkdirSync(path.join(repo, ".githooks"));
+      copyFileSync(path.join(HOOKS_DIR, "commit-msg"), path.join(repo, ".githooks", "commit-msg"));
+      git("add", ".githooks");
+      git("commit", "--quiet", "-m", "Add the hooks");
+      git("config", "core.hooksPath", ".githooks");
+      worktreeParent = mkdtempSync(path.join(tmpdir(), "rtfm-commit-task-worktree-"));
+      worktree = path.join(worktreeParent, "task");
+      git("worktree", "add", "--quiet", "-b", "task", worktree);
+    });
+
+    afterEach(() => rmSync(worktreeParent, { recursive: true, force: true }));
+
+    const TASK_ONLY_IN_THE_CHECKOUT = `
+### XX.3 — Added after the worktree
+- **Status:** doing (agent a2)
+- **Files:** \`src/widget/**\`
+`;
+
+    it("reads the task from the checkout's WORKLIST.md and commits on the worktree's branch, through its hook", () => {
+      write("WORKLIST.md", `${WORKLIST}${TASK_ONLY_IN_THE_CHECKOUT}`);
+      write("src/other.ts", "export const other = 2;\n");
+      writeIn(worktree, "src/widget/new.ts", "export const widget = 1;\n");
+      const mainBefore = git("rev-parse", "main");
+
+      const result = commitTask(repo, "XX.3", { reviewedBy: "a7f3" }, worktree);
+
+      expect(result).toEqual({
+        subject: "XX.3: Added after the worktree",
+        committed: ["src/widget/new.ts"],
+        leftAlone: [],
+      });
+      expect(gitIn(worktree, "log", "-1", "--format=%B", "task")).toBe(
+        `XX.3: Added after the worktree\n\nReviewed-by: a7f3\n${CO_AUTHOR}\n\n`,
+      );
+      expect(gitIn(worktree, "status", "--porcelain")).toBe("");
+      expect(git("rev-parse", "main")).toBe(mainBefore);
+      expect(git("status", "--porcelain")).toBe(" M WORKLIST.md\n M src/other.ts\n");
+    });
+
+    it("refuses changed files in the worktree that the task's Files don't match, listing them", () => {
+      writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
+      writeIn(worktree, "src/other.ts", "export const other = 2;\n");
+      writeIn(worktree, "notes/new.md", "Notes.\n");
+      gitIn(worktree, "add", "src/other.ts");
+      const status = gitIn(worktree, "status", "--porcelain", "--untracked-files=all");
+
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, worktree)).toThrow(
+        "XX.1's Files don't match these changed files in the worktree:\n  src/other.ts\n  notes/new.md\n" +
+          "Add them to XX.1's Files in WORKLIST.md, or have the agent undo them.",
+      );
+      expect(gitIn(worktree, "status", "--porcelain", "--untracked-files=all")).toBe(status);
+      expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
+    });
+
+    it("refuses another task's worktree, listing its changed files", () => {
+      writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
+      expect(() => commitTask(repo, "XX.2", { reviewedBy: "a7f3" }, worktree)).toThrow(
+        /^XX\.2's Files don't match these changed files in the worktree:\n {2}README\.md\n/,
+      );
+      expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
+    });
+
+    it("runs the hook in the worktree from the relative core.hooksPath", () => {
+      writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
+      gitIn(worktree, "add", "README.md");
+      const result = spawnSync("git", ["commit", "--quiet", "-m", "XX.1: Build the widget"], {
+        cwd: worktree,
+        encoding: "utf8",
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/needs a Reviewed-by: trailer/);
+    });
+
+    it("refuses --no-review over 40 changed lines, and stages nothing in the worktree", () => {
+      writeIn(worktree, "src/widget/new.ts", lines(41, "line"));
+      expect(() => commitTask(repo, "XX.1", { noReviewReason: "small" }, worktree)).toThrow(/changes 41 lines/);
+      expect(gitIn(worktree, "status", "--porcelain")).toBe("?? src/widget/new.ts\n");
+      expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
+    });
+
+    it("refuses during a merge in the worktree, and with unmerged files", () => {
+      writeIn(worktree, "README.md", "# Readme\n\nTask.\n");
+      gitIn(worktree, "commit", "--quiet", "-am", "Task change");
+      write("README.md", "# Readme\n\nMain.\n");
+      git("commit", "--quiet", "-am", "Main change");
+      expect(spawnSync("git", ["merge", "main"], { cwd: worktree }).status).not.toBe(0);
+      writeIn(worktree, "src/widget/new.ts", "export {};\n");
+
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, worktree)).toThrow(/A merge is in progress/);
+
+      unlinkSync(path.resolve(worktree, gitIn(worktree, "rev-parse", "--git-path", "MERGE_HEAD").trim()));
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, worktree)).toThrow(/unmerged/);
+      expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Task change\n");
+    });
+
+    it("refuses a folder that isn't the top of one of the repository's worktrees", () => {
+      const otherRepo = path.join(worktreeParent, "other");
+      mkdirSync(otherRepo);
+      gitIn(otherRepo, "init", "--quiet");
+      writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
+
+      const subfolder = path.join(worktree, "src");
+      const missing = path.join(worktreeParent, "missing");
+      for (const folder of [otherRepo, subfolder, missing, worktreeParent]) {
+        expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, folder)).toThrow(
+          `${folder} is not a worktree of this repository.`,
+        );
+      }
+      expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
+    });
+
+    it("commits in the worktree that --worktree names, relative to the working folder", () => {
+      writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
+      const result = spawnSync(
+        "node",
+        [SCRIPT, "XX.1", "--worktree", path.relative(repo, worktree), "--reviewed-by", "a7f3"],
+        { cwd: repo, encoding: "utf8" },
+      );
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe("Committed XX.1: Build the widget\n  README.md\n");
+      expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("XX.1: Build the widget\n");
+      expect(git("log", "-1", "--format=%s")).toBe("Add the hooks\n");
     });
   });
 

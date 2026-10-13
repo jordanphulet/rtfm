@@ -8,8 +8,8 @@ import { parseArgs } from "node:util";
 const NO_REVIEW_LINE_LIMIT = 40;
 export const CO_AUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 
-const USAGE = `Usage: npm run commit-task -- <ID> --reviewed-by <agent id>
-       npm run commit-task -- <ID> --no-review "<reason>"`;
+const USAGE = `Usage: npm run commit-task -- <ID> --reviewed-by <agent id> [--worktree <path>]
+       npm run commit-task -- <ID> --no-review "<reason>" [--worktree <path>]`;
 
 export type FilePatterns = { include: string[]; exclude: string[] };
 export type Task = { id: string; title: string; files: FilePatterns };
@@ -18,46 +18,82 @@ type CommitResult = { subject: string; committed: string[]; leftAlone: string[] 
 type StatusEntry = { code: string; file: string };
 
 /**
- * Commits the changed files that task `id`'s **Files** match, with its review trailer. The commit
- * is built in a separate index holding HEAD and those files, so a refusal or a failed commit
- * leaves the real index as it was; after the commit, the real index takes the committed files.
- * `repoDir` is the repository's top folder, since git status names files relative to it.
+ * Commits the changed files that task `id`'s **Files** match, with its review trailer, in
+ * `repoDir` or, given `worktreeDir`, in that worktree of it. The task is read from `repoDir`'s
+ * `WORKLIST.md`, since a worktree's copy may be stale. A worktree holds one task's work, so every
+ * changed file in it must match. The commit is built in a separate index holding HEAD and those
+ * files, so a refusal or a failed commit leaves the real index as it was; after the commit, the
+ * real index takes the committed files. Both folders are top folders, since git status names
+ * files relative to the top.
  */
-export function commitTask(repoDir: string, id: string, review: Review): CommitResult {
+export function commitTask(repoDir: string, id: string, review: Review, worktreeDir?: string): CommitResult {
   const task = findTask(readFileSync(path.join(repoDir, "WORKLIST.md"), "utf8"), id);
   if (!task) throw new Error(`There is no task ${id} in WORKLIST.md.`);
+  if (worktreeDir !== undefined) refuseUnlessWorktree(repoDir, worktreeDir);
+  const dir = worktreeDir ?? repoDir;
 
-  refuseUnfinishedOperation(repoDir);
-  const status = readStatus(repoDir);
+  refuseUnfinishedOperation(dir);
+  const status = readStatus(dir);
   if (status.some(({ code }) => isUnmerged(code))) {
     throw new Error("Some files are unmerged: resolve them before committing a task.");
   }
   const changed = changedFiles(status);
   const matched = changed.filter((file) => matchesFiles(file, task.files));
+  if (worktreeDir !== undefined) refuseUnmatched(id, changed.filter((file) => !matched.includes(file)));
   if (matched.length === 0) {
     throw new Error(`No changed file matches ${id}'s Files: ${task.files.include.join(", ") || "none named"}.`);
   }
 
   const subject = `${id}: ${task.title}`;
-  const committed = withTaskIndex(repoDir, matched, (env) => {
-    const staged = git(repoDir, ["diff", "--cached", "--name-only", "--no-renames", "-z"], { env });
+  const committed = withTaskIndex(dir, matched, (env) => {
+    const staged = git(dir, ["diff", "--cached", "--name-only", "--no-renames", "-z"], { env });
     const files = staged.split("\0").filter(Boolean);
     if (files.length === 0) throw new Error(`The files ${id}'s Files match have nothing to commit.`);
     if ("noReviewReason" in review) {
-      refuseLargeChange(id, git(repoDir, ["diff", "--cached", "--numstat", "-M", "-z"], { env }));
+      refuseLargeChange(id, git(dir, ["diff", "--cached", "--numstat", "-M", "-z"], { env }));
     }
-    git(repoDir, ["commit", "--file=-"], { env, input: commitMessage(subject, review) });
+    git(dir, ["commit", "--file=-"], { env, input: commitMessage(subject, review) });
     return files;
   });
   try {
-    git(repoDir, ["reset", "--quiet", "--", ...committed]);
+    git(dir, ["reset", "--quiet", "--", ...committed]);
   } catch (error) {
     throw new Error(
       `Committed ${subject}, but couldn't update the index (${(error as Error).message}). ` +
-        `Run: git reset -- ${committed.join(" ")}`,
+        `Run in ${dir}: git reset -- ${committed.join(" ")}`,
     );
   }
   return { subject, committed, leftAlone: changed.filter((file) => !committed.includes(file)) };
+}
+
+/** Refuses a folder that isn't the top folder of one of `repoDir`'s worktrees. */
+function refuseUnlessWorktree(repoDir: string, worktreeDir: string) {
+  const worktree = repositoryOf(worktreeDir);
+  const isWorktree =
+    worktree !== undefined &&
+    worktree.top === realpathSync(worktreeDir) &&
+    worktree.commonDir === repositoryOf(repoDir)?.commonDir;
+  if (!isWorktree) throw new Error(`${worktreeDir} is not a worktree of this repository.`);
+}
+
+/** Refuses changed files in a task's worktree that its **Files** don't match. */
+function refuseUnmatched(id: string, unmatched: string[]) {
+  if (unmatched.length === 0) return;
+  throw new Error(
+    `${id}'s Files don't match these changed files in the worktree:\n` +
+      unmatched.map((file) => `  ${file}\n`).join("") +
+      `Add them to ${id}'s Files in WORKLIST.md, or have the agent undo them.`,
+  );
+}
+
+/** The top folder of the worktree `dir` is in, and the git folder its repository's worktrees share. */
+function repositoryOf(dir: string): { top: string; commonDir: string } | undefined {
+  try {
+    const [top, commonDir] = git(dir, ["rev-parse", "--show-toplevel", "--git-common-dir"]).trim().split("\n");
+    return { top: realpathSync(top), commonDir: realpathSync(path.resolve(dir, commonDir)) };
+  } catch {
+    return undefined;
+  }
 }
 
 /** Refuses during a merge, cherry-pick or revert, which a commit from a separate index would end. */
@@ -222,7 +258,7 @@ function main(args: string[]): number {
     const { values, positionals } = parseArgs({
       args,
       allowPositionals: true,
-      options: { "reviewed-by": { type: "string" }, "no-review": { type: "string" } },
+      options: { "reviewed-by": { type: "string" }, "no-review": { type: "string" }, worktree: { type: "string" } },
     });
     const review = reviewFrom(values);
     if (positionals.length !== 1 || !review) {
@@ -230,7 +266,8 @@ function main(args: string[]): number {
       return 1;
     }
     const repoDir = git(process.cwd(), ["rev-parse", "--show-toplevel"]).trim();
-    const { subject, committed, leftAlone } = commitTask(repoDir, positionals[0], review);
+    const worktreeDir = values.worktree === undefined ? undefined : path.resolve(values.worktree);
+    const { subject, committed, leftAlone } = commitTask(repoDir, positionals[0], review, worktreeDir);
     console.log(`Committed ${subject}`);
     for (const file of committed) console.log(`  ${file}`);
     if (leftAlone.length > 0) console.log("Left alone:");
