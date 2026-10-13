@@ -129,6 +129,10 @@ aren't RTFM's. See `infra/README.md`.
   groups, the table `rtfm-app`, and the bucket. The orchestrator deploys it.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`, which run the AWS and CDK CLIs as RTFM's own
   roles from `~/.aws/rtfm/`.
+- `edge-certificate-stack.ts` and `edge-stack.ts`: `RtfmEdgeCertificate` and `RtfmEdge`, which
+  put the app at `https://rtfm.moonfetus.com`: its certificate, the CloudFront distribution in
+  front of the Web Function, the domain's records, and the resource policy that lets only that
+  distribution invoke the Web Function. The user deploys them.
 
 ## Boundaries
 

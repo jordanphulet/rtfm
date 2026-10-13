@@ -33,42 +33,9 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
-### IN.9 — Put the app at rtfm.moonfetus.com
-- **Status:** todo
-- **Depends on:** IN.8
-- **Files:** `infra/edge-*.ts` and their tests, `infra/app.ts`, `infra/README.md`, `PROCESS.md`
-  (with the user's approval)
-- **Do:**
-  - Stacks the user approves and deploys from CloudShell, like `RtfmAccess`:
-    - **`RtfmEdgeCertificate`** (us-east-1): the ACM certificate for `rtfm.moonfetus.com`,
-      validated by DNS in the zone `moonfetus.com`, whose ID is a parameter.
-    - **`RtfmEdge`** (us-west-2): the origin access control (`always-amz-auth`); a CloudFront
-      Function on viewer requests that refuses any `Host` but `rtfm.moonfetus.com`, so
-      CloudFront's default domain is refused; the distribution (alias `rtfm.moonfetus.com`, no
-      caching for `/api/*`, every viewer header but `Host`, one connection attempt, a 60s read
-      timeout); the Route 53 alias records; and the Web Function's resource policy letting only
-      that distribution invoke `rtfm-app` (`aws:SourceArn`). Parameters: the certificate's ARN
-      (from `RtfmEdgeCertificate`'s output), the zone's ID, and the Web Function's domain (from
-      `RtfmApp`'s output).
-  - Edge stacks use `LegacyStackSynthesizer` and carry no assets at all: no CDK custom
-    resources, no `crossRegionReferences`, no `DnsValidatedCertificate`, no `BucketDeployment`.
-    Any asset goes through the staging bucket, which `rtfm-deploy` can write. The CloudFront
-    Function's code is inline in the template. A test fails any edge stack with an asset or a
-    custom resource, or a template over the inline limit.
-  - Tag every edge resource `project=rtfm`.
-  - `PROCESS.md` › Authority names the `RtfmEdge*` stack files among those only the user approves.
-  - Note in `infra/README.md`: RTFM's roles can still delete the Web Function or its resource
-    policy (`lambda:DeleteResourcePolicy`), which cuts CloudFront off without a word, so the Web
-    Function's name stays fixed and the smoke check goes through the domain.
-  - The smoke check adds a request through `https://rtfm.moonfetus.com`, with the throwaway
-    passcode's cookie, and one to CloudFront's default domain, which must be refused.
-  - `infra/README.md` › Your steps gains the edge stacks' CloudShell steps, in order.
-- **Done when:** the edge stacks synthesize and pass their tests, the user has approved the
-  `PROCESS.md` change, and the steps are in `infra/README.md`. The user's deploy follows.
-
 ### IN.10 — Measure the deployed app
-- **Status:** todo
-- **Depends on:** IN.9, and the user's deploy of the edge stacks
+- **Status:** blocked (the user deploys `RtfmEdgeCertificate` and `RtfmEdge` from CloudShell)
+- **Depends on:** the user's deploy of the edge stacks (`infra/README.md` › Your steps › The edge stacks)
 - **Files:** `research/aws-design.md`
 - **Do:** through `rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is in
   AWS): events arriving one by one; a `POST` with a body; a disconnect aborting the run; the cold
@@ -79,11 +46,14 @@ aren't RTFM's.
   orchestrator has a task to move to B.
 
 ### IN.11 — Store the library in DynamoDB
-- **Status:** todo
-- **Depends on:** IN.8 (storage is the same for A and its fallback, so it doesn't wait for IN.10)
-- **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts`, `server/README.md`,
+- **Status:** doing (agent a31e9f93c83c3faa0; review round 1: credentials, retries, delete condition)
+- **Depends on:** IN.8, IN.16 and the user's deploy of it (the smoke check reads the table with `rtfm-read`)
+- **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts` and its test, `server/README.md`,
   `infra/app-stack.ts` and its test, `package.json`, `package-lock.json`, `scripts/**`,
-  `vite.config.ts`, `vitest.setup.ts`, `ARCHITECTURE.md`
+  `vite.config.ts`, `vitest.setup.ts`, `ARCHITECTURE.md`, and for the Web Function on the table and
+  the new SDK adapter: `server/web-function.ts` and its test, `server/gateway/sdk-boundary.test.ts`,
+  `server/gateway/README.md`, `server/logging/README.md`, `infra/README.md`, `README.md`,
+  `.gitignore`
 - **Do:**
   - `ManualStore` on the table `rtfm-app`, with its shared suite run against the file store and
     against DynamoDB Local; the table in `RtfmApp`; the Web Function on it, seeding once.
@@ -111,6 +81,8 @@ aren't RTFM's.
     and deploys); the Web Function's role, the same.
   - `ARCHITECTURE.md` and `README.md` say `RTFM_MODELS` chooses the ledger, and that with Bedrock
     the data folder's lock no longer guards money.
+  - Share IN.11's DynamoDB client builder (`dynamoDbClient` in `server/storage/`, pinned, with no
+    credential chain) rather than writing a second one.
 - **Done when:** both implementations pass one shared suite, two servers with Bedrock share the
   caps in a test against DynamoDB Local, and the docs say so.
 
@@ -122,6 +94,9 @@ aren't RTFM's.
 - **Do:** section leases behind an interface in `runs.ts`, in memory locally and on the section
   item in `rtfm-app`; a reader on another environment waits for the stored body, then gets it as
   one `append` and `written`, or `failed`.
+  - `deleteManual` deletes only the ids in the manual's `written` set, so a section item holding only
+    a lease would be left behind and block a recreated manual's section: delete those too (for
+    example by querying `pk = MANUAL#<id>`).
 - **Done when:** the shared suite covers two runs racing for one section on both implementations.
 
 ### IN.14 — `rtfm-ops` and the ops tools

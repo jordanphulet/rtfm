@@ -40,6 +40,15 @@ shell's quoting. npm runs a script through `sh` and leaves some arguments unquot
 braces and brackets, so the `aws` and `cdk` scripts first turn off brace expansion and globbing
 (`set +o braceexpand`, `set -f`), then `exec` the wrapper, which runs the command without a shell.
 
+Agents diff a stack with `npm run cdk -- diff <stack> --method=template`, which compares the
+synthesized template with the deployed one and does nothing else. Without it, `cdk diff` first
+tries to publish the template to the staging bucket as the file publishing role, then to make a
+read-only change set, and falls back to the same comparison when `rtfm-read` can do neither.
+
+The CDK's own CloudFormation schemas can lag behind AWS's, so agents check what CloudFormation
+accepts against the live schema of a resource type, with
+`npm run aws -- cloudformation describe-type --type RESOURCE --type-name <type> --query Schema --output text`.
+
 Before any other command, it runs `aws sts get-caller-identity` and refuses unless the answer is
 the chosen role, assumed in account `438180219169`. The tests cover the environment it builds,
 the identity check and the arguments passed through `npm run aws`, without calling AWS.
@@ -50,7 +59,7 @@ the identity check and the arguments passed through `npm run aws`, without calli
 | --- | --- | --- |
 | `rtfm-local` (user) | The key in the server's `.env.local` | Claude on Bedrock, through the policy `rtfm-bedrock` |
 | `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read` and `rtfm-deploy`, nothing else |
-| `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks, buckets and Web Functions, assuming the lookup role (`cdk diff`), and Cost Explorer |
+| `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
 | `cdk-rtfm-deploy-role-…` | The CDK CLI's deploys | CloudFormation on `Rtfm*` stacks, but only reading `RtfmAccess` and `RtfmToolkit`; passing the execution role |
 | `cdk-rtfm-file-publishing-role-…` | Uploading assets | The staging bucket |
@@ -73,20 +82,29 @@ region (a `global.` profile's foundation-model ARN has no region),
 - the Web Functions `rtfm-*`, with their revisions, endpoints and resource policy
   (`lambda:GetWebFunction`, `GetWebFunctionRevision`, `GetWebFunctionEndpoint`,
   `ListWebFunctionRevisions`, `ListWebFunctionEndpoints` and `GetResourcePolicy`). It can't list
-  the account's Web Functions (`ListWebFunctions` takes only `*`), and can't invoke an endpoint.
+  the account's Web Functions (`ListWebFunctions` takes only `*`), and can't invoke an endpoint;
+- the tables `rtfm-*`, their settings and their point-in-time recovery only
+  (`dynamodb:DescribeTable` and `DescribeContinuousBackups`): it reads no item, and can't list
+  the account's tables.
 
 It also has actions on `*` that take no narrower resource: listing log groups, reading the results
-of a Logs Insights query by the ID its own `StartQuery` returned, and Cost Explorer, which covers
-the whole account. It can't list other queries (`DescribeQueries`) or stop them.
+of a Logs Insights query by the ID its own `StartQuery` returned, Cost Explorer, which covers the
+whole account, and reading a CloudFormation resource type's live schema, such as
+`AWS::Lambda::ResourcePolicy`'s (`cloudformation:DescribeType`). It can't list other queries
+(`DescribeQueries`) or stop them. The Service Authorization Reference (read 2026-10-13) gives
+`DescribeType` no resource type and no condition key, so it reads any type in any region, another
+project's private extensions among them; CloudFormation's `type` resource
+(`…:type/resource/<type>`) applies only to stack set actions. It can't register, deregister,
+activate or configure a type.
 
-You deploy `RtfmToolkit` and `RtfmAccess` yourself, with your own admin sign-in. Both use
-`LegacyStackSynthesizer`: no bootstrap role, so `rtfm-deploy` can change neither, and no template
-asset, so the CLI sends the template inline (both are well under its 50 KiB limit, which the
-tests check) rather than through the staging bucket, which `rtfm-deploy` can write. Stacks named
-`RtfmEdge*` are yours too (`research/aws-design.md`); RTFM's roles may only read them. Every
-other stack is named `Rtfm*` and deploys through the bootstrap: the app's default synthesizer is
-`DefaultStackSynthesizer` with the qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which
-the tests check.
+You deploy `RtfmToolkit`, `RtfmAccess` and the edge stacks, `RtfmEdgeCertificate` and
+`RtfmEdge`, yourself, with your own admin sign-in. Every stack named `RtfmEdge*` is yours, and
+RTFM's roles may only read them. All four use `LegacyStackSynthesizer`: no bootstrap role, so
+`rtfm-deploy` can change none of them, and no template asset, so the CLI sends the template
+inline (each is well under its 50 KiB limit, which the tests check) rather than through the
+staging bucket, which `rtfm-deploy` can write. Every other stack is named `Rtfm*` and deploys
+through the bootstrap: the app's default synthesizer is `DefaultStackSynthesizer` with the
+qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests check.
 
 ## The stacks
 
@@ -141,6 +159,59 @@ the tests check.
   - **the bucket `rtfm-app-438180219169-us-west-2`**, with S3's default Block Public Access. The
     bucket is kept when it leaves the stack (`RemovalPolicy.RETAIN`), since it may hold data:
     deleting it is a step you take yourself.
+- **`RtfmEdgeCertificate`** (`edge-certificate-stack.ts`), in `us-east-1`, the only region
+  CloudFront takes certificates from: the ACM certificate for `rtfm.moonfetus.com`, validated by
+  DNS. Given the zone `moonfetus.com`'s ID (`HostedZoneId`), CloudFormation writes the validation
+  record into the zone itself, and the stack completes only once ACM has issued the certificate:
+  ACM says up to 30 minutes, and gives up after 72 hours. Its output `CertificateArn` is
+  `RtfmEdge`'s parameter.
+- **`RtfmEdge`** (`edge-stack.ts`), in `us-west-2` beside the Web Function, whose resource policy
+  it holds (CloudFront and Route 53 are global). Its parameters are `CertificateArn`,
+  `HostedZoneId` and `EndpointDomain`, `RtfmApp`'s output. It holds:
+  - **the distribution**, at `rtfm.moonfetus.com` with the certificate, over HTTP/2 and IPv6, in
+    price class 100 (North America and Europe), redirecting HTTP to HTTPS. Its one origin is the
+    Web Function's endpoint over HTTPS, which the origin access control `rtfm-app` signs (origin
+    type `lambda`, `always-amz-auth` and `sigv4`, the only signing a Web Function origin takes).
+    It makes one connection attempt: for a custom origin that is also how many times CloudFront
+    asks for a response, and it would ask again for a `GET` whose response times out, paying for
+    a second run of a section. Its read timeout is 60s, between packets as well as before the
+    first, well above the 15s between the heartbeats of the server's event streams.
+  - **its three behaviors**: `/api/*` is never cached (`CachingDisabled`) and passes every method
+    and every viewer header but `Host`, with cookies and query strings
+    (`AllViewerExceptHostHeader`: the endpoint answers `404` to any `Host` but its own);
+    `/assets/*`, named by content, is cached as the server says (`CachingOptimized`); every other
+    path, `index.html` and the page routes, is never cached, so a deploy shows at once. All three
+    add AWS's managed `SecurityHeadersPolicy` to every response: `Strict-Transport-Security`
+    (a year), `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
+    `Referrer-Policy: strict-origin-when-cross-origin` and `X-XSS-Protection`, each unless the
+    server sends its own, but `nosniff` always.
+  - **the CloudFront Function `rtfm-app-host-check`**, inline in the template, on every
+    behavior's viewer requests: `403` for any `Host` but `rtfm.moonfetus.com`, so the
+    distribution's own `*.cloudfront.net` domain is refused. The server can't refuse it, since
+    CloudFront sends it the endpoint's domain as the `Host`.
+  - **the alias records** `A` and `AAAA` for `rtfm.moonfetus.com`, in the zone.
+  - **the Web Function's resource policy**: `cloudfront.amazonaws.com` may
+    `lambda:InvokeWebFunctionEndpoint` on `rtfm-app`'s endpoints, only with `aws:SourceArn` this
+    distribution.
+
+  Its output `DistributionDomain` is the distribution's own domain.
+
+  RTFM's roles can still delete the Web Function or its resource policy: the boundary leaves
+  `lambda:DeleteResourcePolicy` on `rtfm-*`. Either cuts CloudFront off without a word, so the
+  Web Function's name never changes, and the smoke check goes through the domain.
+
+  The resource policy isn't the only way in. With `IamAuth`, the endpoint also takes a request
+  signed by any principal in this account whose own policies allow
+  `lambda:InvokeWebFunctionEndpoint` on it: an admin, the bootstrap's execution role (which only
+  CloudFormation assumes), or a role an app stack makes with that permission, since the boundary
+  allows `lambda:*` on `rtfm-*`. Such a request skips CloudFront and the host check, and meets
+  only the server's own checks: the `Host` (the endpoint's, so it passes), the `Origin` and the
+  passcode. `rtfm-read`, `rtfm-deploy` and the bootstrap's other roles can't invoke it.
+
+Both edge stacks carry no asset at all: no CDK custom resource, no `crossRegionReferences`, no
+`DnsValidatedCertificate`, no `BucketDeployment`. An asset would go through the staging bucket,
+which `rtfm-deploy` can write, so it could change what you deploy. The tests fail an edge stack
+with an asset or a custom resource, or a template over the inline limit.
 
 ### The Web Function's package
 
@@ -212,6 +283,32 @@ It passes when they print, in order:
 These read the deployed resources' settings and send no request to the server, so they don't
 show that it starts: Lambda doesn't check that a revision's server listens.
 
+With the edge stacks deployed (Your steps › The edge stacks), these requests go through the domain
+and the whole path to the server: CloudFront, the host check, the origin access control, the Web
+Function's resource policy and the server itself. The passcode is the throwaway one in
+`app-stack.ts` (`THROWAWAY_PASSCODE`), whose cookie `curl` keeps in a temporary file:
+
+```sh
+cookies=$(mktemp)
+curl -sS -o /dev/null -w '%{http_code}\n' https://rtfm.moonfetus.com/
+curl -sS -o /dev/null -w '%{http_code}\n' https://rtfm.moonfetus.com/api/manuals
+curl -sS -o /dev/null -w '%{http_code}\n' -c "$cookies" -H 'content-type: application/json' \
+  --data '{"passcode":"throwaway passcode for the fake models"}' https://rtfm.moonfetus.com/api/passcode
+curl -sS -o /dev/null -w '%{http_code}\n' -b "$cookies" https://rtfm.moonfetus.com/api/manuals
+rm "$cookies"
+distribution=$(npm run -s aws -- cloudformation describe-stacks --stack-name RtfmEdge \
+  --query "Stacks[0].Outputs[?OutputKey=='DistributionDomain'].OutputValue" --output text)
+curl -sS -o /dev/null -w '%{http_code}\n' "https://$distribution/"
+```
+
+They pass when they print, in order:
+
+- `200`: the app's page, from the server through CloudFront.
+- `401`: the API refuses a request without the passcode's cookie.
+- `204`: the passcode is accepted, and its cookie saved.
+- `200`: the library, with the cookie.
+- `403`: the distribution's own `*.cloudfront.net` domain, refused by the host check.
+
 ## The boundary
 
 `rtfm-boundary` (`boundary.ts`) is the permissions boundary the execution role carries, and
@@ -261,8 +358,9 @@ A CDK `Bucket` must leave `blockPublicAccess` unset. Unset, the bucket's templat
 `BlockPublicAccess.BLOCK_ALL`, it makes CloudFormation call `PutBucketPublicAccessBlock`, which
 the boundary refuses. `publicReadAccess` needs it set, so it can't be used either.
 
-Making the app public, to anyone without AWS credentials, or letting a service invoke a function,
-needs a change to the boundary, which only the user approves (`PROCESS.md` › Authority).
+So no app stack can make the app public, to anyone without AWS credentials, or let a service
+invoke a function: that would need a change to the boundary, which only the user approves
+(`PROCESS.md` › Authority). `RtfmEdge`, which you deploy, puts the app on the web instead.
 
 ### What it allows beyond RTFM's names
 
@@ -421,15 +519,84 @@ CLI on the `PATH`. The smoke check's `lambda-web` commands were checked with
    and as an IAM principal tag, once `rtfm-local` has called Bedrock. Activate both. Until then the
    budget counts nothing.
 
+### The edge stacks
+
+These put the app at `https://rtfm.moonfetus.com`, from CloudShell as above. Neither needs an IAM
+capability: they make no role or policy. CloudShell keeps the variables below for its session; in
+a new session, run the commands that set them again.
+
+1. **Write the templates.** In the main checkout on the laptop, with no credentials:
+
+   ```sh
+   npm run cdk -- synth --quiet
+   ```
+
+   Upload `infra/cdk.out/RtfmEdgeCertificate.template.json` and
+   `infra/cdk.out/RtfmEdge.template.json` to CloudShell (Actions › Upload file).
+
+2. **Find the zone's ID.** CloudFormation takes it without the `/hostedzone/` that Route 53
+   prints, and this prints it without:
+
+   ```sh
+   ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name moonfetus.com \
+     --query "HostedZones[?Name=='moonfetus.com.'].Id" --output text | cut -d/ -f3)
+   echo "$ZONE_ID"
+   ```
+
+3. **Deploy `RtfmEdgeCertificate`**, in `us-east-1`. It returns once ACM has issued the
+   certificate, which takes up to 30 minutes:
+
+   ```sh
+   aws cloudformation deploy --region us-east-1 --stack-name RtfmEdgeCertificate \
+     --template-file RtfmEdgeCertificate.template.json --parameter-overrides HostedZoneId=$ZONE_ID
+   ```
+
+   If CloudShell's session ends first, the deploy goes on without it. In a new session, set
+   `ZONE_ID` again (step 2), and wait for the stack:
+
+   ```sh
+   aws cloudformation wait stack-create-complete --region us-east-1 --stack-name RtfmEdgeCertificate
+   ```
+
+4. **Read the certificate's ARN and the Web Function's domain**, the outputs of
+   `RtfmEdgeCertificate` and `RtfmApp`:
+
+   ```sh
+   CERTIFICATE_ARN=$(aws cloudformation describe-stacks --region us-east-1 \
+     --stack-name RtfmEdgeCertificate \
+     --query "Stacks[0].Outputs[?OutputKey=='CertificateArn'].OutputValue" --output text)
+   ENDPOINT_DOMAIN=$(aws cloudformation describe-stacks --region us-west-2 --stack-name RtfmApp \
+     --query "Stacks[0].Outputs[?OutputKey=='EndpointDomain'].OutputValue" --output text)
+   echo "$CERTIFICATE_ARN $ENDPOINT_DOMAIN"
+   ```
+
+5. **Deploy `RtfmEdge`**, in `us-west-2`. It returns once CloudFront has deployed the
+   distribution, which takes several minutes:
+
+   ```sh
+   aws cloudformation deploy --region us-west-2 --stack-name RtfmEdge \
+     --template-file RtfmEdge.template.json --parameter-overrides \
+       CertificateArn=$CERTIFICATE_ARN HostedZoneId=$ZONE_ID EndpointDomain=$ENDPOINT_DOMAIN
+   ```
+
+   Its resource policy names the Web Function by its ARN (`ResourceArn`), which the live schema
+   of `AWS::Lambda::ResourcePolicy` in `us-west-2` accepts as a `WebFunctionResourceArn`,
+   `…:web-function/<name>` (read on 2026-10-13).
+
+   If CloudShell's session ends first, wait for it as in step 3, with `--region us-west-2
+   --stack-name RtfmEdge`. Then the smoke check (Deploying the app stack, above) goes through
+   the domain.
+
 ### Updating a stack you deploy
 
-When `access-stack.ts` or `toolkit-stack.ts` changes, you update its stack from CloudShell, as
-your own admin sign-in. These steps update `RtfmAccess`; for `RtfmToolkit`, change the stack
-name and the template.
+When `access-stack.ts`, `toolkit-stack.ts` or an `edge-*.ts` changes, you update its stack from
+CloudShell, as your own admin sign-in. These steps update `RtfmAccess`; for another stack, change
+the stack name and the template, and for `RtfmEdgeCertificate` the region too (`us-east-1`). The
+edge stacks need no `--capabilities`.
 
 1. **Write the template** with `npm run cdk -- synth --quiet`, and upload
    `infra/cdk.out/RtfmAccess.template.json` to CloudShell in `us-west-2`, as in Your steps › 1.
-   `npm run cdk -- diff RtfmAccess` shows the change on the laptop beforehand.
+   `npm run cdk -- diff RtfmAccess --method=template` shows the change on the laptop beforehand.
 2. **Make a change set without running it.** A parameter left out, here `BudgetEmail`, keeps the
    stack's current value, so the budget alarm's address needn't be typed again:
 
@@ -517,12 +684,16 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
 
 ## Files
 
-- `app.ts`: `createApp`, the three stacks and the default synthesizer; `cdk.json` runs it.
+- `app.ts`: `createApp`, the five stacks and the default synthesizer; `cdk.json` runs it.
 - `rtfm.ts`: the account, region and qualifier, and the names and ARNs of the bootstrap's and
   `RtfmAccess`'s resources.
-- `toolkit-stack.ts`, `access-stack.ts`: the two stacks you deploy. `app-stack.ts`: `RtfmApp`,
-  with its resources' names, the throwaway passcode, and the asset that builds the Web Function's
-  package (`scripts/build-web-function.ts`).
+- `toolkit-stack.ts`, `access-stack.ts`, `edge-certificate-stack.ts` and `edge-stack.ts`: the
+  stacks you deploy. `edge-certificate-stack.ts` also holds the app's domain, and `edge-stack.ts`
+  the host check's code and the Web Function's name, which a test keeps the same as
+  `app-stack.ts`'s: an edge stack imports nothing from `app-stack.ts`, which would make every
+  change to the app stack yours to approve (`PROCESS.md` › Authority). `app-stack.ts`:
+  `RtfmApp`, with its resources' names, the throwaway passcode, and the asset that builds the Web
+  Function's package (`scripts/build-web-function.ts`).
 - `boundary.ts`: the boundary's statements. `bedrock.ts`: Claude's.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`.
 - `testing.ts`: the tests' policy evaluator: whether a role's or user's policies, and its
@@ -534,5 +705,6 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
 The tests synthesize in process with `aws-cdk-lib/assertions`, never through the CLI, so they run
 offline, and without building the Web Function's package (The Web Function's package, above).
 `npm run cdk -- synth` builds it and writes the templates, `RtfmToolkit.template.json`,
-`RtfmAccess.template.json` and `RtfmApp.template.json`, and the package's folder,
-`asset.<hash>/`, to `infra/cdk.out/` (gitignored).
+`RtfmAccess.template.json`, `RtfmApp.template.json`, `RtfmEdgeCertificate.template.json` and
+`RtfmEdge.template.json`, and the package's folder, `asset.<hash>/`, to `infra/cdk.out/`
+(gitignored).
