@@ -12,6 +12,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "fetch-dynamodb-local": "node scripts/fetch-dynamodb-local.ts",
     "shot": "node scripts/shot.ts",
     "serve-temp": "node scripts/serve-temp.ts",
     "usage": "node server/usage.ts",
@@ -25,6 +26,10 @@
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "0.34.4",
+    "@aws-sdk/client-dynamodb": "3.1151.0",
+    "@aws-sdk/credential-provider-env": "3.972.74",
+    "@aws-sdk/credential-provider-http": "3.972.76",
+    "@aws-sdk/lib-dynamodb": "3.1151.0",
     "@fontsource-variable/ibm-plex-sans": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "react": "^19.3.0",

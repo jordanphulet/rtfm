@@ -38,6 +38,7 @@ Needs Node 22.18 or later (the server and scripts run as TypeScript directly).
 ```sh
 npm install
 npx playwright install chromium   # once, for the screenshot script
+npm run fetch-dynamodb-local      # once, for the tests: DynamoDB Local, which needs Java 17+
 npm run dev                       # then open http://localhost:5173/
 ```
 
@@ -54,7 +55,8 @@ The API server listens on `127.0.0.1` only; `server/api/README.md` › Only the 
 the checks it makes.
 
 The same server runs in AWS on a Lambda Web Function, `rtfm-app`, with the fake models and a
-throwaway passcode, serving the built app beside the API (`server/README.md` › The Web Function).
+throwaway passcode, keeping the manuals in the DynamoDB table `rtfm-app` and serving the built app
+beside the API (`server/README.md` › The Web Function).
 `npm run cdk -- deploy RtfmApp` builds and deploys it (`infra/README.md`).
 
 | Script                       | What it does                                                                 |
@@ -62,6 +64,7 @@ throwaway passcode, serving the built app beside the API (`server/README.md` ›
 | `npm run dev`                | Starts Vite (5173) and the API server (8787) together.                       |
 | `npm run server`             | Starts the API server alone, for `curl` or `npm run preview`.                |
 | `npm test`                   | Tests (Vitest; page and component tests in happy-dom). Loopback only.        |
+| `npm run fetch-dynamodb-local` | DynamoDB Local for the tests, fetched once. See `server/storage/README.md`. |
 | `npm run build`              | Type-checks everything and builds the app.                                   |
 | `npm run preview`            | Serves the built app, passing `/api` to `npm run server` on 8787.            |
 | `npm run shot`               | Screenshots both pages in every state; `--compare` diffs against a baseline. |

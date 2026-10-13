@@ -118,15 +118,23 @@ the tests check.
     Its name never changes, since the edge's resource policy names it. One revision, made from
     the package below on `nodejs24.x`, with `timeoutSeconds` 300 (a request, a whole stream
     included, may run 5 minutes) and its logs in `/rtfm/app`. Its environment holds only
-    `AWS_LAMBDA_NODEJS_ENTRYPOINT` and `RTFM_PASSCODE`, a throwaway committed in `app-stack.ts`:
-    `rtfm-read` can read a revision (`GetWebFunctionRevision`), so nothing secret goes there.
+    `AWS_LAMBDA_NODEJS_ENTRYPOINT`, `RTFM_PASSCODE`, a throwaway committed in `app-stack.ts`, and
+    `RTFM_APP_TABLE`, the table's name: `rtfm-read` can read a revision
+    (`GetWebFunctionRevision`), so nothing secret goes there.
   - **its endpoint `main`**: `HomeRegion`, `IamAuth`, at most 2 environments (`maxEnvironments`)
     and 100 requests a second (`rateLimit`). No role of RTFM's may invoke it; only the edge's
     distribution may, through the resource policy in `RtfmEdge`. The stack's output
     `EndpointDomain` is its domain, which stays as long as the endpoint does.
   - **its role `rtfm-app-web-function`**, which Lambda assumes, and which may only write log
-    streams in `/rtfm/app` and `/rtfm/app.local`: no Bedrock, since the Web Function runs only the
-    fake models.
+    streams in `/rtfm/app` and `/rtfm/app.local`, and read and write items in the table
+    `rtfm-app` (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `DeleteItem`, which also cover the
+    store's transactions): no Bedrock, since the Web Function runs only the fake models.
+  - **the table `rtfm-app`**, the library: the manuals and their sections
+    (`server/storage/README.md` › The table `rtfm-app`). On demand, with point-in-time recovery
+    and deletion protection on, and kept when it leaves the stack (`RemovalPolicy.RETAIN`), since
+    it holds the library: deleting it is a step you take yourself, after turning deletion
+    protection off. The boundary allows `dynamodb:*` on `table/rtfm-*`, which covers every action
+    CloudFormation's handler takes on it, so the deploy needs no change to the bootstrap.
   - **the log groups `/rtfm/app` and `/rtfm/app.local`**, kept 30 days and deleted with the stack.
     Lambda writes a Web Function's logs to the `.local` group first, then copies them to the
     other.
@@ -147,7 +155,7 @@ when the app synthesizes (`cdk synth`, `diff` and `deploy`), in about a second, 
 - `seed/`: the seed manuals. Every module in the bundle resolves a path against the bundle's own
   URL, so the storage's `../seed/` is this folder, and the config's `../dist` the built app.
 
-It comes to about 4 MB, 1.6 MB zipped. The asset is named by a hash of the package, so a deploy
+It comes to about 4 MB, 1.8 MB zipped. The asset is named by a hash of the package, so a deploy
 makes a new revision only when the package changes. The tests synthesize without building it:
 `vite.config.ts` gives them the CDK context `aws:cdk:bundling-stacks: []`.
 `scripts/build-web-function.test.ts` builds it and runs it on loopback.
@@ -181,6 +189,11 @@ npm run aws -- lambda-web get-web-function --function-name rtfm-app \
   --query state --output text
 npm run aws -- lambda-web get-web-function-endpoint --function-name rtfm-app --endpoint-name main \
   --query '[authType,state]' --output text
+npm run aws -- dynamodb describe-table --table-name rtfm-app \
+  --query 'Table.DeletionProtectionEnabled' --output text
+npm run aws -- dynamodb describe-continuous-backups --table-name rtfm-app \
+  --query 'ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus' \
+  --output text
 ```
 
 It passes when they print, in order:
@@ -192,6 +205,9 @@ It passes when they print, in order:
   30 days.
 - `Active`: the Web Function.
 - `IamAuth` and `Active`: its endpoint takes only signed requests.
+- `True`: the table `rtfm-app` has deletion protection on, so nothing can delete the library.
+- `ENABLED`: the table's point-in-time recovery is on, so the library can be restored to any
+  second of the last 35 days.
 
 These read the deployed resources' settings and send no request to the server, so they don't
 show that it starts: Lambda doesn't check that a revision's server listens.

@@ -7,6 +7,8 @@ import {
   APP_LOCAL_LOG_GROUP,
   APP_LOG_GROUP,
   APP_STACK,
+  APP_TABLE,
+  APP_TABLE_ARN,
   THROWAWAY_PASSCODE,
   WEB_FUNCTION,
   WEB_FUNCTION_ENDPOINT,
@@ -39,6 +41,22 @@ const ofType = (type: string) => Object.values(resources).filter((resource) => r
 const [revision] = ofType("AWS::Lambda::WebFunctionRevision").map(({ Properties }) => Properties);
 const [endpoint] = ofType("AWS::Lambda::WebFunctionEndpoint").map(({ Properties }) => Properties);
 const [role] = ofType("AWS::IAM::Role").map(({ Properties }) => Properties);
+/** The table's actions CloudFormation's handlers use for a table like this one (no stream, no customer managed key). */
+const TABLE_HANDLER_ACTIONS = [
+  "dynamodb:CreateTable",
+  "dynamodb:DescribeTable",
+  "dynamodb:UpdateTable",
+  "dynamodb:DeleteTable",
+  "dynamodb:UpdateContinuousBackups",
+  "dynamodb:DescribeContinuousBackups",
+  "dynamodb:DescribeTimeToLive",
+  "dynamodb:DescribeContributorInsights",
+  "dynamodb:DescribeKinesisStreamingDestination",
+  "dynamodb:GetResourcePolicy",
+  "dynamodb:TagResource",
+  "dynamodb:UntagResource",
+  "dynamodb:ListTagsOfResource",
+];
 /** CloudFormation can't tag a Web Function's revisions or endpoints. */
 const UNTAGGABLE = ["AWS::Lambda::WebFunctionRevision", "AWS::Lambda::WebFunctionEndpoint"];
 
@@ -53,9 +71,19 @@ function webFunctionCan(action: string, resource: string): boolean {
 describe("the RtfmApp stack", () => {
   it("names every resource for RTFM, so the execution role may create it", () => {
     const named = Object.values(resources).map(
-      ({ Properties }) => Properties.LogGroupName ?? Properties.BucketName ?? Properties.RoleName ?? Properties.FunctionName,
+      ({ Properties }) =>
+        Properties.LogGroupName ?? Properties.BucketName ?? Properties.TableName ?? Properties.RoleName ?? Properties.FunctionName,
     );
-    expect(named).toEqual([APP_BUCKET, APP_LOG_GROUP, APP_LOCAL_LOG_GROUP, WEB_FUNCTION_ROLE, WEB_FUNCTION, WEB_FUNCTION, WEB_FUNCTION]);
+    expect(named).toEqual([
+      APP_BUCKET,
+      APP_TABLE,
+      APP_LOG_GROUP,
+      APP_LOCAL_LOG_GROUP,
+      WEB_FUNCTION_ROLE,
+      WEB_FUNCTION,
+      WEB_FUNCTION,
+      WEB_FUNCTION,
+    ]);
     expect(canExecute("logs:CreateLogGroup", logGroupArn(APP_LOG_GROUP))).toBe(true);
     expect(canExecute("logs:CreateLogGroup", logGroupArn(APP_LOCAL_LOG_GROUP))).toBe(true);
     expect(canExecute("s3:CreateBucket", `arn:aws:s3:::${APP_BUCKET}`)).toBe(true);
@@ -70,6 +98,32 @@ describe("the RtfmApp stack", () => {
 
   it("keeps the bucket when it leaves the stack, since it may hold data", () => {
     template.hasResource("AWS::S3::Bucket", { DeletionPolicy: "Retain", UpdateReplacePolicy: "Retain" });
+  });
+
+  it("keeps the library in rtfm-app: on demand, recoverable, protected from deletion and kept when it leaves the stack", () => {
+    template.hasResource("AWS::DynamoDB::Table", {
+      Properties: {
+        TableName: APP_TABLE,
+        KeySchema: [
+          { AttributeName: "pk", KeyType: "HASH" },
+          { AttributeName: "sk", KeyType: "RANGE" },
+        ],
+        AttributeDefinitions: [
+          { AttributeName: "pk", AttributeType: "S" },
+          { AttributeName: "sk", AttributeType: "S" },
+        ],
+        BillingMode: "PAY_PER_REQUEST",
+        PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true },
+        DeletionProtectionEnabled: true,
+        GlobalSecondaryIndexes: Match.absent(),
+      },
+      DeletionPolicy: "Retain",
+      UpdateReplacePolicy: "Retain",
+    });
+  });
+
+  it("lets CloudFormation create, change and delete the table under the boundary", () => {
+    for (const action of TABLE_HANDLER_ACTIONS) expect(canExecute(action, APP_TABLE_ARN), action).toBe(true);
   });
 
   it("tags every resource CloudFormation can tag, for the budget", () => {
@@ -120,13 +174,18 @@ describe("the Web Function", () => {
     expect(canExecute("s3:GetObjectVersion", stagedCode)).toBe(true);
   });
 
-  it("puts nothing secret in its environment, which rtfm-read can read: the entry and the throwaway passcode", () => {
+  it("puts nothing secret in its environment, which rtfm-read can read: the entry, the throwaway passcode and the table", () => {
     expect(revision!.ServiceConfig).toMatchObject({
-      EnvironmentVariables: { AWS_LAMBDA_NODEJS_ENTRYPOINT: BUILT_ENTRYPOINT, RTFM_PASSCODE: THROWAWAY_PASSCODE },
+      EnvironmentVariables: {
+        AWS_LAMBDA_NODEJS_ENTRYPOINT: BUILT_ENTRYPOINT,
+        RTFM_PASSCODE: THROWAWAY_PASSCODE,
+        RTFM_APP_TABLE: APP_TABLE,
+      },
     });
     expect(Object.keys((revision!.ServiceConfig as { EnvironmentVariables: object }).EnvironmentVariables)).toEqual([
       "AWS_LAMBDA_NODEJS_ENTRYPOINT",
       "RTFM_PASSCODE",
+      "RTFM_APP_TABLE",
     ]);
     expect(WEB_FUNCTION_ENTRYPOINT).toBe(BUILT_ENTRYPOINT);
   });
@@ -158,6 +217,17 @@ describe("the Web Function's role", () => {
     }
     expect(webFunctionCan("logs:PutLogEvents", `${logGroupArn("/rtfm/other")}:log-stream:x`)).toBe(false);
     expect(webFunctionCan("logs:DeleteLogGroup", logGroupArn(APP_LOG_GROUP))).toBe(false);
+  });
+
+  it("reads and writes the library's items in rtfm-app, and nothing else in DynamoDB", () => {
+    for (const action of ["GetItem", "Query", "PutItem", "UpdateItem", "DeleteItem"]) {
+      expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN), action).toBe(true);
+    }
+    for (const action of ["Scan", "BatchWriteItem", "DeleteTable", "UpdateTable", "ConditionCheckItem"]) {
+      expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN), action).toBe(false);
+    }
+    expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN.replace(APP_TABLE, "rtfm-usage"))).toBe(false);
+    expect(webFunctionCan("dynamodb:Query", `${APP_TABLE_ARN}/index/any`)).toBe(false);
   });
 
   it("can't call Bedrock: the Web Function runs only the fake models", () => {

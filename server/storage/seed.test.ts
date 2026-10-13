@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { silentLogger } from "../logging/logger.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, WRITTEN_ID } from "../testing.ts";
+import { createDynamoDbManualStore } from "./dynamodb-manual-store.ts";
+import { testAppTable } from "./dynamodb-testing.ts";
 import { createFileManualStore } from "./file-manual-store.ts";
 import { sectionsInReadingOrder } from "./manual.ts";
 import { readSeedBody, seedStore } from "./seed.ts";
@@ -133,6 +135,35 @@ describe("seedStore", () => {
     expect(await store.writtenSectionIds("alpha")).toEqual(["second"]);
     expect(await store.writtenSectionIds("beta")).toEqual(["first"]);
     expect((await store.seededManualIds()).sort()).toEqual(["alpha", "beta"]);
+  });
+});
+
+describe("seedStore on one table from two servers at once", () => {
+  it("seeds each manual once, with its sections, and neither server fails", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    await addSeedManual(seedDir, "beta");
+    const table = await testAppTable();
+    const [one, other] = [createDynamoDbManualStore(table), createDynamoDbManualStore(table)];
+
+    await Promise.all([seedStore(one, seedDir), seedStore(other, seedDir)]);
+
+    expect((await one.listManuals()).map(({ id }) => id).sort()).toEqual(["alpha", "beta"]);
+    expect(await one.writtenSectionIds("alpha")).toEqual(["first"]);
+    expect(await one.getBody("beta", "first")).toBe("The first section of beta.\n");
+    expect((await one.seededManualIds()).sort()).toEqual(["alpha", "beta"]);
+  });
+
+  it("keeps a seed manual deleted while the other server starts later", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    const table = await testAppTable();
+    await seedStore(createDynamoDbManualStore(table), seedDir);
+    await createDynamoDbManualStore(table).deleteManual("alpha");
+
+    const later = createDynamoDbManualStore(table);
+    await seedStore(later, seedDir);
+    expect(await later.listManuals()).toEqual([]);
   });
 });
 

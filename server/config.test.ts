@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { config, httpEndpointFromEnv } from "./config.ts";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { config, httpEndpointFromEnv, webFunctionTableFromEnv } from "./config.ts";
 import { GatewayBusy, type Job, type ModelClient, type Prompt } from "./gateway/types.ts";
 import { collect, tempDataDir, testGateway, waitUntil } from "./testing.ts";
 
@@ -15,6 +15,54 @@ describe("a Web Function's address, from AWS_LAMBDA_HTTP_ENDPOINT", () => {
     for (const value of [undefined, "", "127.0.0.1", ":8080", "127.0.0.1:", "127.0.0.1:http", "127.0.0.1:65536"]) {
       expect(() => httpEndpointFromEnv(value), String(value)).toThrow("AWS_LAMBDA_HTTP_ENDPOINT must be");
     }
+  });
+});
+
+describe("the Web Function's table, from the environment Lambda and RtfmApp give it", () => {
+  const ROLE_VARIABLES = [
+    "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+    "AWS_CONTAINER_AUTHORIZATION_TOKEN",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+  ];
+
+  function stubEnvironment(values: Record<string, string>) {
+    onTestFinished(() => void vi.unstubAllEnvs());
+    for (const name of [...ROLE_VARIABLES, "RTFM_DYNAMODB_ENDPOINT"]) vi.stubEnv(name, undefined);
+    vi.stubEnv("RTFM_APP_TABLE", "rtfm-app");
+    vi.stubEnv("AWS_REGION", "us-west-2");
+    for (const [name, value] of Object.entries(values)) vi.stubEnv(name, value);
+  }
+
+  const environmentKeys = { AWS_ACCESS_KEY_ID: "AKIAROLE", AWS_SECRET_ACCESS_KEY: "secret", AWS_SESSION_TOKEN: "token" };
+
+  it("reaches the table as the execution role through the container credentials endpoint, when Lambda gives one", () => {
+    stubEnvironment({
+      AWS_CONTAINER_CREDENTIALS_FULL_URI: "http://127.0.0.1:9001/credentials",
+      AWS_CONTAINER_AUTHORIZATION_TOKEN: "the-token",
+      ...environmentKeys,
+    });
+    expect(webFunctionTableFromEnv()).toEqual({
+      name: "rtfm-app",
+      region: "us-west-2",
+      endpoint: "https://dynamodb.us-west-2.amazonaws.com",
+      credentials: { kind: "container-endpoint", fullUri: "http://127.0.0.1:9001/credentials", authorizationToken: "the-token" },
+    });
+  });
+
+  it("reaches the table as the execution role through the environment's keys, read by name only", () => {
+    stubEnvironment(environmentKeys);
+    expect(webFunctionTableFromEnv().credentials).toEqual({ kind: "environment" });
+  });
+
+  it("refuses to choose without the role's credentials or the table", () => {
+    stubEnvironment({ AWS_ACCESS_KEY_ID: "AKIAROLE", AWS_SECRET_ACCESS_KEY: "secret" });
+    expect(() => webFunctionTableFromEnv()).toThrow(
+      "needs its execution role's credentials: AWS_CONTAINER_CREDENTIALS_FULL_URI, or AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN",
+    );
+    stubEnvironment({ ...environmentKeys, RTFM_APP_TABLE: "" });
+    expect(() => webFunctionTableFromEnv()).toThrow("needs RTFM_APP_TABLE");
   });
 });
 

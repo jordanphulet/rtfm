@@ -9,6 +9,7 @@ import {
   Validations,
   type ILocalBundling,
 } from "aws-cdk-lib";
+import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
 import {
   ManagedPolicy,
   PermissionsBoundary,
@@ -30,6 +31,17 @@ export const APP_LOG_GROUP = "/rtfm/app";
 export const APP_LOCAL_LOG_GROUP = `${APP_LOG_GROUP}.local`;
 /** Bucket names are global, so the account and region keep it RTFM's own. */
 export const APP_BUCKET = `rtfm-app-${ACCOUNT}-${REGION}`;
+/** The manuals and their sections (`server/storage/README.md` › The table `rtfm-app`). */
+export const APP_TABLE = "rtfm-app";
+export const APP_TABLE_ARN = `arn:aws:dynamodb:${REGION}:${ACCOUNT}:table/${APP_TABLE}`;
+/** What `server/storage/dynamodb-manual-store.ts` does to the table, its transactions included. */
+const APP_TABLE_ACTIONS = [
+  "dynamodb:GetItem",
+  "dynamodb:Query",
+  "dynamodb:PutItem",
+  "dynamodb:UpdateItem",
+  "dynamodb:DeleteItem",
+];
 /** The edge's resource policy names the Web Function, so its name never changes. */
 export const WEB_FUNCTION = "rtfm-app";
 export const WEB_FUNCTION_ROLE = "rtfm-app-web-function";
@@ -73,14 +85,30 @@ export class RtfmAppStack extends Stack {
       bucketName: APP_BUCKET,
       removalPolicy: RemovalPolicy.RETAIN,
     });
-    this.webFunction();
+    this.webFunction(this.appTable());
+  }
+
+  /**
+   * The library, kept whatever happens to the stack: nothing can delete it while its deletion
+   * protection is on, and point-in-time recovery can restore it to any second of the last 35 days.
+   */
+  private appTable(): Table {
+    return new Table(this, "AppTable", {
+      tableName: APP_TABLE,
+      partitionKey: { name: "pk", type: AttributeType.STRING },
+      sortKey: { name: "sk", type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      deletionProtection: true,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
   }
 
   /**
    * The server on a Lambda Web Function, behind an `IamAuth` endpoint that only the edge's
    * CloudFront distribution may invoke, once the user's edge stack lets it.
    */
-  private webFunction(): void {
+  private webFunction(table: Table): void {
     const logGroups = [this.logGroup("AppLogs", APP_LOG_GROUP), this.logGroup("AppLocalLogs", APP_LOCAL_LOG_GROUP)];
     const role = new Role(this, "WebFunctionRole", {
       roleName: WEB_FUNCTION_ROLE,
@@ -93,6 +121,9 @@ export class RtfmAppStack extends Stack {
               resources: [APP_LOG_GROUP, APP_LOCAL_LOG_GROUP].map((name) => `${logGroupArn(name)}:*`),
             }),
           ],
+        }),
+        ReadAndWriteLibrary: new PolicyDocument({
+          statements: [new PolicyStatement({ actions: APP_TABLE_ACTIONS, resources: [APP_TABLE_ARN] })],
         }),
       },
     });
@@ -116,12 +147,13 @@ export class RtfmAppStack extends Stack {
         environmentVariables: {
           AWS_LAMBDA_NODEJS_ENTRYPOINT: WEB_FUNCTION_ENTRYPOINT,
           RTFM_PASSCODE: THROWAWAY_PASSCODE,
+          RTFM_APP_TABLE: APP_TABLE,
         },
         telemetryConfig: { loggingConfig: { logGroup: APP_LOG_GROUP } },
       },
     });
     revision.addResourceDependency(webFunction);
-    revision.node.addDependency(...logGroups);
+    revision.node.addDependency(...logGroups, table);
 
     const endpoint = new CfnWebFunctionEndpoint(this, "WebFunctionEndpoint", {
       functionName: WEB_FUNCTION,

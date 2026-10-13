@@ -70,9 +70,34 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 - **The fake models only.** With `RTFM_MODELS=bedrock` it refuses to start: Bedrock's spend needs
   one ledger shared by every environment, which a data folder can't be. Its role has no Bedrock
   permission either.
-- **A throwaway data folder**, `rtfm-data-<random>` in the system's temporary folder (`/tmp` on
-  Lambda), made and seeded when each environment starts. `RTFM_DATA_DIR` is ignored, and nothing
-  written there outlives the environment: two environments have two libraries.
+- **The manuals in the table `rtfm-app`** (`server/storage/README.md` › The table `rtfm-app`),
+  which every environment shares and each seeds when it starts, once across all of them. The
+  table's name is `RTFM_APP_TABLE`, which `RtfmApp` sets in the revision's environment.
+- **The table as the execution role.** AWS documents that a Web Function's code runs with its
+  execution role, but not how the role's credentials reach the process: its environment-variable
+  page reserves `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` and warns that
+  a Web Function doesn't get every variable an Event Function does, and an environment has no
+  set lifetime and is never frozen, so the credentials must be refreshed while it runs.
+  `webFunctionTableFromEnv` (`config.ts`) chooses the source by the names Lambda sets, reading no
+  key itself: Lambda's container credentials endpoint when `AWS_CONTAINER_CREDENTIALS_FULL_URI` is
+  set (with `AWS_CONTAINER_AUTHORIZATION_TOKEN`), as Lambda's other long-lived environments use,
+  or else the three key variables (`server/storage/README.md` › The table `rtfm-app`). The
+  endpoint hands out new credentials whenever the store asks as the old ones near expiry. The key
+  variables are read when the store asks too, but a running process's environment never changes,
+  so they are never renewed: if Lambda gives only those and an environment outlives them, its
+  DynamoDB calls fail. With neither, or without `RTFM_APP_TABLE` or `AWS_REGION`, the Web Function
+  refuses to start and names what it needs. `server.started` logs which source it chose
+  (`credentials`: `container-endpoint` or `environment`), never a value, so the deployed app's log
+  shows which one Lambda really gives.
+- **Only here.** This is the one place the server takes AWS credentials from the environment, and
+  only `web-function.ts` asks for the execution role. On this machine `main.ts` keeps the manuals
+  in files and the server reads AWS keys from `.env.local` alone (Configuration, below); no client
+  falls back to the environment, a profile or `~/.aws`. The table's endpoint is DynamoDB's in that
+  region, or `RTFM_DYNAMODB_ENDPOINT`, which only the tests set, to DynamoDB Local.
+- **A throwaway data folder** for the rest: the ledger, the kill switch and the lock,
+  `rtfm-data-<random>` in the system's temporary folder (`/tmp` on Lambda), made when each
+  environment starts. `RTFM_DATA_DIR` is ignored, and nothing written there outlives the
+  environment.
 - **Logs to standard output only**, which Lambda sends to CloudWatch (`/rtfm/app`), and no log
   file.
 - **It serves the built app** from `dist/` beside the API (`server/api/README.md` › The built
@@ -95,10 +120,14 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 package). To run it on this machine as Lambda would, on any free port:
 
 ```sh
-AWS_LAMBDA_HTTP_ENDPOINT=127.0.0.1:0 RTFM_PASSCODE=try node server/web-function.ts
+AWS_LAMBDA_HTTP_ENDPOINT=127.0.0.1:0 RTFM_PASSCODE=try RTFM_APP_TABLE=<table> \
+  RTFM_DYNAMODB_ENDPOINT=<DynamoDB Local> AWS_REGION=us-west-2 AWS_ACCESS_KEY_ID=<dummy> \
+  AWS_SECRET_ACCESS_KEY=<dummy> AWS_SESSION_TOKEN=<dummy> node server/web-function.ts
 ```
 
-It answers only a request whose `Host` is an endpoint's domain, so `curl` must send one:
+It needs DynamoDB Local running with a table shaped as `rtfm-app`, as its test sets up
+(`server/storage/README.md` › DynamoDB Local, for the tests). It answers only a request whose
+`Host` is an endpoint's domain, so `curl` must send one:
 `curl -H 'Host: x.lambda-web.us-west-2.on.aws' http://127.0.0.1:<port>/`. `npm run build` first
 puts the app in `dist/`.
 
@@ -108,9 +137,10 @@ puts the app in `dist/`.
 section writer and the librarian's model, which also plans new manuals (`createModels` in `app.ts`);
 `RTFM_MODELS=bedrock` selects Claude for both.
 
-- Either way, `startServer` builds one gateway on the file ledger, and the writer on it, all before
-  it seeds or listens. The librarian and its planner use the same gateway, so one set of caps, the
-  kill switch and the ledger cover every job.
+- Either way, `startServer` builds the manual store `config.manualStorage` names (files in the
+  data folder, unless the Web Function names its table), then one gateway on the file ledger, and
+  the writer on it, all before it seeds or listens. The librarian and its planner use the same
+  gateway, so one set of caps, the kill switch and the ledger cover every job.
 - With `"fake"`, every job's model is `FAKE_MODEL` (`server/gateway/README.md` › The fake model),
   with the job's own `maxTokens` and idle timeout, and the gateway calls the fake model
   (`agent/fake-model.ts`); the fake writer (`writer/fake.ts`) sends the section's sample
@@ -135,6 +165,7 @@ section writer and the librarian's model, which also plans new manuals (`createM
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | The passcode: `RTFM_PASSCODE` | the environment, read by `server/config.ts` | yes |
 | The Web Function's address and built app: `AWS_LAMBDA_HTTP_ENDPOINT`, `RTFM_APP_DIR` | the environment, read by `server/config.ts` for `server/web-function.ts` (The Web Function, above) | no |
+| The Web Function's table: `RTFM_APP_TABLE`, `AWS_REGION`, where the execution role's credentials come from (`AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN`, or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`), and, in tests, `RTFM_DYNAMODB_ENDPOINT` | the environment Lambda and `RtfmApp` set, read by `server/config.ts` and the DynamoDB store for `server/web-function.ts` alone (The Web Function, above) | the credentials |
 | The Web Function's own `Host`s and `Origin` | `server/web-function.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
@@ -242,6 +273,12 @@ blocked DNS call with `ENOTFOUND`.
 A `worker_threads` worker loads it too, and the thread itself exits with code 1, but what it blocks
 fails neither the test nor the process's exit code. UDP (`node:dgram`) isn't covered.
 
+**DynamoDB Local** is the one other process the tests reach: Vitest's global setup starts it on
+`127.0.0.1` for the run, and the DynamoDB store's tests, the Web Function's and its package's use
+it, each on a table of its own (`server/storage/README.md` › DynamoDB Local, for the tests). It is
+a `java` process, which the guard doesn't load into, so it is started listening on loopback only
+and with its telemetry off. Without it, those tests fail saying how to fetch it.
+
 Any test that starts a server binds port 0 and sets its own `passcode` (`undefined` unless it
 tests the gate), so a `RTFM_PASSCODE` in the environment changes nothing. Tests that race a timer
 against real time leave wide margins (a pause meant to stay inside a timeout is at most a quarter
@@ -256,7 +293,7 @@ the machine.
   exit through.
 - `dev.ts`: `npm run dev`: Vite plus `node --watch server/main.ts`.
 - `config.ts`: committed settings (Configuration, above), and the Web Function's
-  (`httpEndpointFromEnv`, `builtAppDirFromEnv`).
+  (`httpEndpointFromEnv`, `builtAppDirFromEnv`, `webFunctionTableFromEnv`).
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
 - `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, models, gateway,
   routes; `close()` waits for model calls to settle. `runServerProcess(config, logger)`: the

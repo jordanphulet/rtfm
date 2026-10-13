@@ -24,7 +24,8 @@ browser (Vite, :5173)                           server (node:http, :8787)
                                                      │                                                 │
                                                      ├──▶ librarian ──▶ agent loop ────────────────────┼──▶ gateway ──▶ Bedrock,
                                                      │       └──▶ planner ─────────────────────────────┘              or the fake model
-                                                     └──▶ storage/ (manuals, sections, ledger: files in .data/)
+                                                     └──▶ storage/ (manuals and sections: files in .data/, or the table
+                                                                    rtfm-app on the Web Function; the ledger: files in .data/)
 ```
 
 ## Codemap
@@ -67,8 +68,9 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `passcode.ts` and `app-files.ts`), the previews (`preview.ts`) and the wire types (`types.ts`).
   See `server/api/README.md`.
 - `storage/`: `ManualStore` and `UsageLedger` (`types.ts`) as files in the data folder
-  (`file-manual-store.ts`, `file-ledger.ts`), the data folder's lock (`lock.ts`) and seeding
-  (`seed.ts`). See `server/storage/README.md`.
+  (`file-manual-store.ts`, `file-ledger.ts`), and `ManualStore` in the DynamoDB table `rtfm-app`
+  (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the data
+  folder's lock (`lock.ts`) and seeding (`seed.ts`). See `server/storage/README.md`.
 - `seed/<manualId>/`: `manual.json`, a TOC, a voice, and which sections start written; and
   `sections/*.md`, bodies (only the sample, the-haunt-that-listens, has them: all 18).
 - `writer/`: the `SectionWriter`s (`fake.ts`, `bedrock.ts`), the Bedrock writer's prompt
@@ -109,6 +111,10 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `build-web-function.ts`: the Web Function's package: the built app, the server bundled into one
   file with Rolldown, and the seed. `RtfmApp` runs it when it synthesizes (`infra/README.md` ›
   The Web Function's package).
+- `dynamodb-local.ts`, `DynamoDbLocalOnLoopback.java`, `fetch-dynamodb-local.ts` and
+  `test-global-setup.ts`: DynamoDB Local for the tests: the pinned release, `npm run
+  fetch-dynamodb-local`, which fetches it once, and Vitest's global setup, which runs it on
+  `127.0.0.1` for a test run (`server/storage/README.md` › DynamoDB Local, for the tests).
 
 ### `infra/`
 
@@ -120,7 +126,7 @@ aren't RTFM's. See `infra/README.md`.
 - `access-stack.ts`: `RtfmAccess`, RTFM's IAM users and roles and its budget alarm. The user
   deploys it and the bootstrap.
 - `app-stack.ts`: `RtfmApp`, the app: the Web Function `rtfm-app`, its role, endpoint and log
-  groups, and the bucket. The orchestrator deploys it.
+  groups, the table `rtfm-app`, and the bucket. The orchestrator deploys it.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`, which run the AWS and CDK CLIs as RTFM's own
   roles from `~/.aws/rtfm/`.
 
@@ -170,8 +176,9 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 ## Cross-cutting rules
 
 - **The gateway is the only way to reach Bedrock.** Nothing but the SDK adapters that
-  `gateway/sdk-boundary.test.ts` lists (`gateway/bedrock-client.ts` alone) imports an Anthropic or
-  AWS SDK, and nothing outside `server/gateway/` and `server/app.ts` imports that client; the test
+  `gateway/sdk-boundary.test.ts` lists (`gateway/bedrock-client.ts`, and
+  `storage/dynamodb-manual-store.ts` for DynamoDB) imports an Anthropic or AWS SDK, and nothing
+  outside `server/gateway/` and `server/app.ts` imports that client; the test
   enforces both. So every model call is reserved against the caps, checked against the kill
   switch and written to the ledger (`server/gateway/README.md`). The fake model is called through
   the same gateway, at $0, so all of this runs without Bedrock too, except in a librarian preview,
@@ -180,7 +187,10 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
   locks its data folder before it starts (`server/storage/README.md` › The data folder's lock).
 - **Configuration** is committed, apart from the AWS keys in `.env.local`, which only
   `gateway/credentials.ts` reads, from the main checkout's root even in a linked worktree
-  (`server/README.md` › Configuration).
+  (`server/README.md` › Configuration). The one exception is the Web Function, whose entry asks
+  for its execution role's temporary credentials, from Lambda's container credentials endpoint or
+  the variables Lambda sets, for the table `rtfm-app` alone (`server/README.md` › The Web
+  Function). No AWS client falls back to the environment, a profile or `~/.aws`.
 - **Only the app's own pages.** On this machine the server listens on `127.0.0.1` and answers only
   this machine's `Host`s and `Origin`s; on the Web Function, only an endpoint's `Host` and the
   origin `https://rtfm.moonfetus.com`. The Node adapter refuses any other `Host` or `Origin`, and
@@ -208,7 +218,8 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
     AWS credentials. `vitest.setup.ts` fails any test that connects to anything but loopback
     (`server/README.md` › Tests).
   - Each such interface has one shared test suite that runs against every implementation, so the
-    local one stays as strict as the AWS one.
+    local one stays as strict as the AWS one: `ManualStore`'s runs against the files and against
+    DynamoDB Local, which the tests start on loopback (`server/storage/README.md`).
   - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
     adapters on purpose, or the test fails.
   - An AWS deployment runs this same server, on a Lambda Web Function behind CloudFront

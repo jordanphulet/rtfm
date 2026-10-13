@@ -3,7 +3,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Logger } from "../logging/logger.ts";
 import { createExclusively, isErrorCode, namesInFolder, readIfExists, tempPathFor } from "./files.ts";
-import { ID_PATTERN } from "./manual.ts";
+import { ID_PATTERN, isSameManual } from "./manual.ts";
 import type { ManualStore, StoredManual } from "./types.ts";
 
 const SECTION_FILE_EXTENSION = ".md";
@@ -41,8 +41,8 @@ export function createFileManualStore(dataDir: string, logger: Logger): ManualSt
       try {
         await mkdir(manualDir(manual.id));
       } catch (error) {
-        if (isErrorCode(error, "EEXIST")) return "exists";
-        throw error;
+        if (!isErrorCode(error, "EEXIST")) throw error;
+        return isSameManual(await getManual(manual.id), manual) ? "created" : "exists";
       }
       try {
         await writeAtomically(manualFile(manual.id), JSON.stringify(manual, null, 2));
@@ -67,7 +67,9 @@ export function createFileManualStore(dataDir: string, logger: Logger): ManualSt
       });
     },
 
-    getBody: (manualId, sectionId) => readIfExists(sectionFile(manualId, sectionId)),
+    async getBody(manualId, sectionId) {
+      return readIfExists(sectionFile(manualId, sectionId));
+    },
 
     async saveBody(manualId, sectionId, body) {
       const target = sectionFile(manualId, sectionId);

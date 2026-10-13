@@ -21,7 +21,10 @@ export type StoredSection = Omit<Section, "status">;
 export interface ManualStore {
   listManuals(): Promise<StoredManual[]>;
   getManual(manualId: string): Promise<StoredManual | undefined>;
-  /** Never replaces a manual: "exists" if its id is already taken. */
+  /**
+   * Never replaces a manual: "exists" if a different manual has its id, and "created", changing
+   * nothing, if this very manual is already stored.
+   */
   createManual(manual: StoredManual): Promise<"created" | "exists">;
   deleteManual(manualId: string): Promise<void>;
   getBody(manualId: string, sectionId: string): Promise<string | undefined>;

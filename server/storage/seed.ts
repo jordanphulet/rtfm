@@ -26,9 +26,10 @@ export async function readSeedManual(manualId: string, seedDir: URL = SEED_DIR):
   return (await readSeed(seedDir, manualId)).manual;
 }
 
+/** Creates the seed manual and its written sections, unless a different manual has its id. */
 async function createSeedManual(store: ManualStore, seedDir: URL, manualId: string) {
   const seed = await readSeed(seedDir, manualId);
-  if ((await store.createManual(seed.manual)) === "exists") throw new Error(`The seed manual "${manualId}" already exists`);
+  if ((await store.createManual(seed.manual)) === "exists") return;
   for (const sectionId of seed.writtenAtStart) {
     const body = await readSeedBody(manualId, sectionId, seedDir);
     if (body === undefined) throw new Error(`The seed has no body for "${sectionId}"`);

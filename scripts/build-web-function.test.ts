@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, onTestFinished } from "vitest";
+import { DYNAMODB_LOCAL_CREDENTIALS, testAppTable } from "../server/storage/dynamodb-testing.ts";
 import { WEB_FUNCTION_ENTRYPOINT } from "./build-web-function.ts";
 
 const SCRIPT = fileURLToPath(new URL("./build-web-function.ts", import.meta.url));
@@ -22,11 +23,29 @@ function build(outDir: string) {
   return spawnSync(process.execPath, [SCRIPT, outDir], { encoding: "utf8" });
 }
 
-/** Runs the package as Lambda does: its entry, from the package's root, on a stand-in endpoint. */
+/**
+ * Runs the package as Lambda does: its entry, from the package's root, on a stand-in endpoint,
+ * with a table of its own in DynamoDB Local.
+ */
 async function runPackage(packageDir: string, tmp: string) {
+  const table = await testAppTable();
   const child = spawn(process.execPath, [WEB_FUNCTION_ENTRYPOINT], {
     cwd: packageDir,
-    env: { ...process.env, AWS_LAMBDA_HTTP_ENDPOINT: "127.0.0.1:0", RTFM_PASSCODE: PASSCODE, RTFM_MODELS: undefined, TMPDIR: tmp },
+    env: {
+      ...process.env,
+      AWS_LAMBDA_HTTP_ENDPOINT: "127.0.0.1:0",
+      RTFM_PASSCODE: PASSCODE,
+      RTFM_MODELS: undefined,
+      RTFM_APP_TABLE: table.name,
+      RTFM_DYNAMODB_ENDPOINT: table.endpoint,
+      AWS_REGION: table.region,
+      AWS_ACCESS_KEY_ID: DYNAMODB_LOCAL_CREDENTIALS.accessKeyId,
+      AWS_SECRET_ACCESS_KEY: DYNAMODB_LOCAL_CREDENTIALS.secretAccessKey,
+      AWS_SESSION_TOKEN: "a stand-in session token",
+      AWS_CONTAINER_CREDENTIALS_FULL_URI: undefined,
+      AWS_CONTAINER_AUTHORIZATION_TOKEN: undefined,
+      TMPDIR: tmp,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   onTestFinished(() => {

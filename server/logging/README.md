@@ -50,7 +50,7 @@ message and stack, since a signature error from AWS quotes the access key ID.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
-| `server.started`, `server.stopped` | INFO | `startServer` listening (`host`, `port`, `models`, `dataDir`, and `passcodeGate`: whether a passcode is set), and `close()` done |
+| `server.started`, `server.stopped` | INFO | `startServer` listening (`host`, `port`, `models`, `dataDir`, `manualStorage`: `files` or `dynamodb`, with DynamoDB `credentials`: where its keys come from, by name only, and `passcodeGate`: whether a passcode is set), and `close()` done |
 | `server.refused` | WARN | The data folder's lock is held by another server (`pid`, `dataDir`) |
 | `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use; on the Web Function, Bedrock models or no `AWS_LAMBDA_HTTP_ENDPOINT`); an uncaught exception or unhandled rejection in `runServerProcess` |
 | `request` | INFO, WARN for 5xx | Each request, the built app's files included, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |

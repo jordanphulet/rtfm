@@ -19,6 +19,7 @@ import { prices } from "./gateway/prices.ts";
 import { FAKE_MODEL, type Job, type ModelClient } from "./gateway/types.ts";
 import { toLogFile } from "./logging/log-file.ts";
 import { createLogger, type Logger } from "./logging/logger.ts";
+import { createDynamoDbManualStore } from "./storage/dynamodb-manual-store.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { DataFolderInUse, lockDataFolder, type DataFolderLock } from "./storage/lock.ts";
@@ -99,6 +100,8 @@ export async function startServer(config: ServerConfig, replaced: Replaced = {})
     port,
     models: config.models,
     dataDir: config.dataDir,
+    manualStorage: config.manualStorage.kind,
+    ...(config.manualStorage.kind === "dynamodb" && { credentials: config.manualStorage.table.credentials.kind }),
     passcodeGate: config.passcode !== undefined,
   });
 
@@ -130,7 +133,7 @@ async function serve(
   replaced: Replaced,
   logger: Logger,
 ): Promise<{ server: Server; models: Models }> {
-  const store = createFileManualStore(config.dataDir, logger);
+  const store = createManualStore(config, logger);
   const models = await modelsFor(config, store, replaced, logger);
   const { writer, librarian } = models;
   await seedStore(store);
@@ -152,6 +155,15 @@ async function serve(
     server.listen(config.port, config.host, resolve);
   });
   return { server, models };
+}
+
+function createManualStore(config: ServerConfig, logger: Logger): ManualStore {
+  switch (config.manualStorage.kind) {
+    case "files":
+      return createFileManualStore(config.dataDir, logger);
+    case "dynamodb":
+      return createDynamoDbManualStore(config.manualStorage.table);
+  }
 }
 
 /** The models passed in, and the configured ones for any that weren't. */

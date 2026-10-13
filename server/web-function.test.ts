@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, onTestFinished } from "vitest";
 import type { LogEntry } from "./logging/logger.ts";
+import { createDynamoDbManualStore } from "./storage/dynamodb-manual-store.ts";
+import { DYNAMODB_LOCAL_CREDENTIALS, testAppTable } from "./storage/dynamodb-testing.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "./testing.ts";
 
 const WEB_FUNCTION = fileURLToPath(new URL("./web-function.ts", import.meta.url));
@@ -24,10 +26,12 @@ interface Answer {
 
 /**
  * Runs `web-function.ts` as Lambda would, on a stand-in `AWS_LAMBDA_HTTP_ENDPOINT` (any free port
- * on loopback), with its `/tmp` and its built app in folders of the test's own.
+ * on loopback), with its `/tmp` and its built app in folders of the test's own, and its own table
+ * in DynamoDB Local, reached with stand-ins for the execution role's credentials.
  */
 async function startWebFunction(env: NodeJS.ProcessEnv = {}) {
   const tmp = await tempDataDir();
+  const table = await testAppTable();
   const appDir = path.join(tmp, "dist");
   await mkdir(appDir);
   await writeFile(path.join(appDir, "index.html"), INDEX);
@@ -39,6 +43,14 @@ async function startWebFunction(env: NodeJS.ProcessEnv = {}) {
       RTFM_MODELS: undefined,
       RTFM_PASSCODE: PASSCODE,
       RTFM_DATA_DIR: undefined,
+      RTFM_APP_TABLE: table.name,
+      RTFM_DYNAMODB_ENDPOINT: table.endpoint,
+      AWS_REGION: table.region,
+      AWS_ACCESS_KEY_ID: DYNAMODB_LOCAL_CREDENTIALS.accessKeyId,
+      AWS_SECRET_ACCESS_KEY: DYNAMODB_LOCAL_CREDENTIALS.secretAccessKey,
+      AWS_SESSION_TOKEN: "a stand-in session token",
+      AWS_CONTAINER_CREDENTIALS_FULL_URI: undefined,
+      AWS_CONTAINER_AUTHORIZATION_TOKEN: undefined,
       TMPDIR: tmp,
       ...env,
     },
@@ -64,7 +76,7 @@ async function startWebFunction(env: NodeJS.ProcessEnv = {}) {
       child.stdout.on("data", resolveOnceListening);
       void exited.then(() => reject(new Error(`web-function.ts exited before listening:\n${stdout}${stderr}`)));
     });
-  return { child, tmp, exited, entries, listening };
+  return { child, tmp, table, exited, entries, listening };
 }
 
 /** Sends exactly these headers, Host included, which fetch won't let a caller set. */
@@ -93,13 +105,21 @@ async function enterPasscode(port: number) {
 }
 
 describe("web-function.ts", () => {
-  it("listens on AWS_LAMBDA_HTTP_ENDPOINT with the fake models, on a data folder it seeds in /tmp", { timeout: TEST_TIMEOUT_MS }, async () => {
+  it("listens on AWS_LAMBDA_HTTP_ENDPOINT with the fake models, keeping the manuals in the table it seeds", { timeout: TEST_TIMEOUT_MS }, async () => {
     const webFunction = await startWebFunction();
     const port = await webFunction.listening();
 
-    expect(webFunction.entries()[0]).toMatchObject({ event: "server.started", host: "127.0.0.1", models: "fake", passcodeGate: true });
+    expect(webFunction.entries()[0]).toMatchObject({
+      event: "server.started",
+      host: "127.0.0.1",
+      models: "fake",
+      manualStorage: "dynamodb",
+      credentials: "environment",
+      passcodeGate: true,
+    });
+    expect(await createDynamoDbManualStore(webFunction.table).getManual(SAMPLE_ID)).toBeDefined();
     const [dataFolder] = (await readdir(webFunction.tmp)).filter((name) => name.startsWith("rtfm-data-"));
-    expect(await readdir(path.join(webFunction.tmp, dataFolder!, "manuals"))).toContain(SAMPLE_ID);
+    expect(await readdir(path.join(webFunction.tmp, dataFolder!))).not.toContain("manuals");
 
     const manuals = await send(port, "GET", "/api/manuals", await enterPasscode(port));
     expect(JSON.parse(manuals.text)).toContainEqual(expect.objectContaining({ id: SAMPLE_ID }));
@@ -178,6 +198,17 @@ describe("web-function.ts", () => {
         level: "ERROR",
         event: "server.start-failed",
         error: expect.objectContaining({ message: expect.stringContaining('not RTFM_MODELS="bedrock"') }),
+      }),
+    ]);
+  });
+
+  it("refuses to start without the execution role's credentials, naming where they could come from", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const webFunction = await startWebFunction({ AWS_SESSION_TOKEN: undefined });
+    expect(await webFunction.exited).toBe(1);
+    expect(webFunction.entries()).toEqual([
+      expect.objectContaining({
+        event: "server.start-failed",
+        error: expect.objectContaining({ message: expect.stringContaining("needs its execution role's credentials") }),
       }),
     ]);
   });

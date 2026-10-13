@@ -4,36 +4,18 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { silentLogger } from "../logging/logger.ts";
 import { capturingLogger, tempDataDir } from "../testing.ts";
 import { createFileManualStore } from "./file-manual-store.ts";
-import type { ManualStore, StoredManual } from "./types.ts";
+import { describeManualStore, manual } from "./manual-store-suite.ts";
+import type { ManualStore } from "./types.ts";
 
-const manual: StoredManual = {
-  id: "a-manual",
-  title: "A Manual",
-  subtitle: "For testing",
-  voice: "Plain",
-  chapters: [{ id: "one", label: "1", title: "One", sections: [{ id: "s", label: "1.1", title: "S", summary: "." }] }],
-  appendices: [],
-};
+describeManualStore("the file manual store", async () => createFileManualStore(await tempDataDir(), silentLogger));
 
-describe("file manual store", () => {
+describe("the file manual store's files", () => {
   let dataDir: string;
   let store: ManualStore;
 
   beforeEach(async () => {
     dataDir = await tempDataDir();
     store = createFileManualStore(dataDir, silentLogger);
-  });
-
-  it("stores and reads a manual", async () => {
-    expect(await store.getManual(manual.id)).toBeUndefined();
-    expect(await store.createManual(manual)).toBe("created");
-    expect(await store.getManual(manual.id)).toEqual(manual);
-  });
-
-  it("never replaces a manual whose id is taken", async () => {
-    await store.createManual(manual);
-    expect(await store.createManual({ ...manual, title: "Another Manual" })).toBe("exists");
-    expect(await store.getManual(manual.id)).toEqual(manual);
   });
 
   it("removes the manual's folder again when writing manual.json fails, so the id isn't left taken", async () => {
@@ -45,71 +27,43 @@ describe("file manual store", () => {
     expect(await store.getManual(manual.id)).toEqual(manual);
   });
 
-  it("treats an id that isn't a slug as no manual", async () => {
-    expect(await store.getManual("../outside")).toBeUndefined();
-  });
-
-  it("lists the stored manuals, skipping folders that aren't manuals", async () => {
-    expect(await store.listManuals()).toEqual([]);
+  it("lists only folders that are manuals", async () => {
     await store.createManual(manual);
-    await store.createManual({ ...manual, id: "another-manual" });
     await mkdir(path.join(dataDir, "manuals", "no-manual-json"));
     const leftover = path.join(dataDir, "manuals", "a-manual.leftover.deleting");
     await mkdir(leftover);
     await writeFile(path.join(leftover, "manual.json"), JSON.stringify(manual));
 
-    const ids = (await store.listManuals()).map(({ id }) => id).sort();
-    expect(ids).toEqual(["a-manual", "another-manual"]);
+    expect((await store.listManuals()).map(({ id }) => id)).toEqual(["a-manual"]);
   });
 
-  it("saves a body once and keeps the first one", async () => {
+  it("leaves no temp files after two simultaneous saves", async () => {
     await store.createManual(manual);
-    expect(await store.getBody(manual.id, "s")).toBeUndefined();
-    expect(await store.saveBody(manual.id, "s", "first")).toBe("saved");
-    expect(await store.saveBody(manual.id, "s", "second")).toBe("already-written");
-    expect(await store.getBody(manual.id, "s")).toBe("first");
-  });
-
-  it("lets only one of two simultaneous saves win, and leaves no temp files", async () => {
-    await store.createManual(manual);
-    const results = await Promise.all([
-      store.saveBody(manual.id, "s", "one"),
-      store.saveBody(manual.id, "s", "two"),
-    ]);
-    expect(results.sort()).toEqual(["already-written", "saved"]);
+    await Promise.all([store.saveBody(manual.id, "s", "one"), store.saveBody(manual.id, "s", "two")]);
     expect(await readdir(path.join(dataDir, "manuals", manual.id, "sections"))).toEqual(["s.md"]);
   });
 
-  it("refuses a section id that isn't a slug", async () => {
-    await store.createManual(manual);
-    await expect(store.saveBody(manual.id, "../s", "x")).rejects.toThrow("Not a valid id");
-  });
-
-  it("refuses to save a section into a manual that doesn't exist", async () => {
-    await expect(store.saveBody(manual.id, "s", "x")).rejects.toThrow('There is no manual "a-manual"');
+  it("makes no folder when saving into a manual that doesn't exist", async () => {
+    await expect(store.saveBody(manual.id, "s", "x")).rejects.toThrow("There is no manual");
     expect(await readdir(dataDir)).toEqual([]);
   });
 
-  it("lists the written sections, ignoring temp files", async () => {
+  it("ignores temp files when listing the written sections", async () => {
     await store.createManual(manual);
-    expect(await store.writtenSectionIds(manual.id)).toEqual([]);
     await store.saveBody(manual.id, "s", "body");
     await writeFile(path.join(dataDir, "manuals", manual.id, "sections", "t.md.1234.tmp"), "half");
     expect(await store.writtenSectionIds(manual.id)).toEqual(["s"]);
   });
 
-  it("deletes a manual with its sections, and nothing else", async () => {
+  it("deletes only the manual's folder, leaving the ledger alone", async () => {
     await store.createManual(manual);
     await store.createManual({ ...manual, id: "kept" });
-    await store.saveBody(manual.id, "s", "body");
     const ledgerFile = path.join(dataDir, "ledger", "2026-10.jsonl");
     await mkdir(path.dirname(ledgerFile));
     await writeFile(ledgerFile, '{"kind":"reserve"}\n');
 
     await store.deleteManual(manual.id);
 
-    expect(await store.getManual(manual.id)).toBeUndefined();
-    expect(await store.getBody(manual.id, "s")).toBeUndefined();
     expect(await readdir(path.join(dataDir, "manuals"))).toEqual(["kept"]);
     expect(await readFile(ledgerFile, "utf8")).toBe('{"kind":"reserve"}\n');
   });
@@ -134,22 +88,15 @@ describe("file manual store", () => {
     }
   });
 
-  it("deletes a manual that isn't there without complaint", async () => {
-    await expect(store.deleteManual("not-there")).resolves.toBeUndefined();
-  });
-
-  it("can't save a section into a deleted manual", async () => {
+  it("makes no folder when saving into a deleted manual", async () => {
     await store.createManual(manual);
     await store.deleteManual(manual.id);
     await expect(store.saveBody(manual.id, "s", "late")).rejects.toThrow("There is no manual");
     expect(await readdir(path.join(dataDir, "manuals"))).toEqual([]);
   });
 
-  it("remembers which manuals have been seeded", async () => {
-    expect(await store.seededManualIds()).toEqual([]);
+  it("keeps the record of seeded manuals in the data folder", async () => {
     await store.markSeeded("one");
-    await store.markSeeded("two");
-    await store.markSeeded("one");
-    expect(await createFileManualStore(dataDir, silentLogger).seededManualIds()).toEqual(["one", "two"]);
+    expect(await createFileManualStore(dataDir, silentLogger).seededManualIds()).toEqual(["one"]);
   });
 });

@@ -7,7 +7,7 @@ const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const SCANNED_FOLDERS = ["src", "server", "scripts"];
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const SDK_IMPORT = /["'`]@(?:anthropic-ai|aws-sdk)\//;
-const SDK_ADAPTERS = ["server/gateway/bedrock-client.ts"];
+const SDK_ADAPTERS = ["server/gateway/bedrock-client.ts", "server/storage/dynamodb-manual-store.ts"];
 const CLIENT_IMPORT = /["'`][^"'`\n]*\bbedrock-client(?:\.[cm]?[jt]s)?["'`]/;
 
 function mayImportClient(file: string): boolean {

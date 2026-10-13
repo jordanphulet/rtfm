@@ -30,6 +30,7 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, ".claude/**"],
     setupFiles: ["./vitest.setup.ts"],
+    globalSetup: ["./scripts/test-global-setup.ts"],
     env: { NODE_OPTIONS: testNodeOptions, CDK_CONTEXT_JSON: skipCdkBundling },
   },
 });

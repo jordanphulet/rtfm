@@ -3,14 +3,19 @@ import { fileURLToPath } from "node:url";
 import { LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./api/node-adapter.ts";
 import type { GatewayConfig } from "./gateway/types.ts";
 import { API_PORT } from "./ports.ts";
+import type { DynamoDbTable, TableCredentials } from "./storage/dynamodb-manual-store.ts";
 
 export type ModelSource = "fake" | "bedrock";
+
+/** Where the manuals are kept: files in the data folder, or a DynamoDB table shaped as `rtfm-app`. */
+export type ManualStorage = { kind: "files" } | { kind: "dynamodb"; table: DynamoDbTable };
 
 export interface ServerConfig extends GatewayConfig, AdapterConfig {
   /** The address the server listens on. */
   host: string;
   port: number;
   dataDir: string;
+  manualStorage: ManualStorage;
   models: ModelSource;
   maxConcurrentRuns: number;
   sectionWordsRequested: number;
@@ -27,6 +32,7 @@ export const config: ServerConfig = {
   host: "127.0.0.1",
   port: portFromEnv(process.env.RTFM_PORT),
   dataDir: dataDirFromEnv(process.env.RTFM_DATA_DIR),
+  manualStorage: { kind: "files" },
   models: modelsFromEnv(process.env.RTFM_MODELS),
   passcode: process.env.RTFM_PASSCODE || undefined,
   allowedHosts: LOOPBACK_HOSTS,
@@ -65,6 +71,46 @@ function portFromEnv(value = String(API_PORT)): number {
 /** The built app the Web Function serves: the folder `RTFM_APP_DIR` names, or else `<repo>/dist`. */
 export function builtAppDirFromEnv(value = process.env.RTFM_APP_DIR ?? ""): string {
   return value === "" ? fileURLToPath(new URL("../dist", import.meta.url)) : path.resolve(value);
+}
+
+/**
+ * The table the Web Function keeps the manuals in: `RTFM_APP_TABLE`, which `RtfmApp` sets, in
+ * `AWS_REGION`, reached as the execution role (`executionRoleCredentialsFromEnv`). Only
+ * `web-function.ts` calls this; on this machine the server reads AWS keys from `.env.local` alone.
+ * `RTFM_DYNAMODB_ENDPOINT` points it at DynamoDB Local, for its test.
+ */
+export function webFunctionTableFromEnv(): DynamoDbTable {
+  const name = process.env.RTFM_APP_TABLE;
+  const region = process.env.AWS_REGION;
+  if (!name) throw new Error("The Web Function needs RTFM_APP_TABLE, which RtfmApp sets");
+  if (!region) throw new Error("The Web Function needs AWS_REGION, which Lambda sets");
+  return {
+    name,
+    region,
+    endpoint: process.env.RTFM_DYNAMODB_ENDPOINT || `https://dynamodb.${region}.amazonaws.com`,
+    credentials: executionRoleCredentialsFromEnv(),
+  };
+}
+
+/**
+ * Where the execution role's temporary credentials come from, by the names Lambda sets: its
+ * container credentials endpoint (`AWS_CONTAINER_CREDENTIALS_FULL_URI`, with
+ * `AWS_CONTAINER_AUTHORIZATION_TOKEN`) when it gives one, or else `AWS_ACCESS_KEY_ID`,
+ * `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`. It reads no key itself: the DynamoDB store
+ * reads the chosen source each time its credentials need refreshing.
+ */
+function executionRoleCredentialsFromEnv(): TableCredentials {
+  const fullUri = process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI;
+  if (fullUri) {
+    return { kind: "container-endpoint", fullUri, authorizationToken: process.env.AWS_CONTAINER_AUTHORIZATION_TOKEN };
+  }
+  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_SESSION_TOKEN) {
+    return { kind: "environment" };
+  }
+  throw new Error(
+    "The Web Function needs its execution role's credentials: AWS_CONTAINER_CREDENTIALS_FULL_URI, " +
+      "or AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN, which Lambda sets",
+  );
 }
 
 /** The `host:port` a Web Function listens on, from `AWS_LAMBDA_HTTP_ENDPOINT`, which Lambda sets. */
