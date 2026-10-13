@@ -3,31 +3,6 @@
 The work still to do, with each task's status. **This file is the source of truth for status.**
 `PROCESS.md` says how the orchestrator works through it; finished work is removed.
 
-## Local first
-
-The app is moving into AWS, and agents must still be able to run, test and check all of it on one
-machine.
-
-### LF.4 — The fake models behind the real gateway
-- **Status:** doing (agent af334ef91305601dd)
-- **Depends on:** —
-- **Files:** `server/**`, `scripts/serve-temp.ts`, `scripts/shot.ts`, `README.md`, `ARCHITECTURE.md`
-- **Do:**
-  - Run the fake models through the same gateway as Bedrock, so the caps, the kill switch, the
-    ledger and the stall timeout run under `npm run dev`, `serve-temp` and `shot` too.
-  - Prefer the deepest seam: a fake `ModelClient` that answers each job, so the Bedrock writer's
-    prompt, output handling and checks run as well. Where a fake can't do its job from the request
-    alone (the fake writer replays a section's sample text), say why in the report and keep that
-    fake one level up, still behind the gateway.
-  - The fake models are priced at $0 in the price table, and their ledger entries name the fake
-    model, so `npm run usage` keeps them apart from real spend.
-  - Fold the hand-built gateways in `server/api/librarian.test.ts`, `server/config.test.ts` and
-    `server/app.test.ts` into `testGateway`.
-- **Done when:** `npm test` passes; under `serve-temp`, opening a section and asking the librarian
-  each write ledger entries at $0, and a `STOP` file in its data folder stops them;
-  `npm run shot -- --compare` shows no change; `README.md` and `ARCHITECTURE.md` no longer say
-  the caps and kill switch apply only to Bedrock.
-
 ## Into AWS
 
 Infrastructure as code in `infra/`, a CDK app, in an AWS account that also holds things that
