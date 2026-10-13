@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.7 — Let `rtfm-read` see a Web Function
-- **Status:** todo
+- **Status:** doing (agent ac91ad0f4c2110ce8)
 - **Depends on:** IN.4
 - **Files:** `infra/access-stack.ts` and its test, `infra/README.md`, `research/aws-design.md`
 - **Do:** `rtfm-read` gains reading the Web Functions `rtfm-*`, their revisions, endpoints and
