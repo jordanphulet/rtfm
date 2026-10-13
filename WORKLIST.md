@@ -81,7 +81,7 @@ phase is done:
 
 ### BA.3 — The passphrase: build
 - **Status:** todo
-- **Depends on:** BA.2 and the user's approval, RA.2 (both change `README.md`)
+- **Depends on:** BA.2 and the user's approval, RC.3 (the Rules into code chain)
 - **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
   `research/passphrase.md` (`server/**` and `src/**` include the folder READMEs and page design
   docs)
@@ -190,3 +190,104 @@ phase is done:
 - **Done when:** reviewed and approved by the user; a fresh session told only "run the rule audit" produces a ranking whose
   top three match the first audit's (review before commit, stopping processes the agent didn't
   start, sessions working from stale rules) without being shown them.
+
+---
+
+## Rules into code
+
+The first rule audit (2026-10-12) ranked the written rules agents break by how often and what it
+cost. Three broke with real cost: task work committed without a review, agents stopping processes
+they didn't start, and sessions working from stale rules. This phase turns each into code that
+makes the right way the easy way. When this phase is done:
+
+- task work is committed only through `npm run commit-task`, which stages only the task's Files
+  and records who reviewed it;
+- a session in a worktree that is behind `main` is told so when it starts;
+- an agent that needs a server for a check starts one with `npm run serve-temp` and stops it by
+  its PID.
+
+### Rules for this phase
+
+- **The user approves hooks and rule files before they are committed:** `.githooks/`,
+  `.claude/settings.json`, `CLAUDE.md` and `PROCESS.md`. Each task stops at `needs-human` with
+  the exact text to approve.
+- **A session-start hook never blocks work.** If it fails, it prints nothing and exits 0.
+- **One at a time.** These tasks, RA.1, RA.2 and BA.3 share `README.md`, `package.json`,
+  `ARCHITECTURE.md` or `PROCESS.md`, so they run in a chain: RA.1, RA.2, RC.1, RC.2, RC.3, BA.3.
+
+### RC.1 — Commit task work through one script
+- **Status:** todo
+- **Depends on:** RA.2
+- **Files:** `scripts/commit-task.ts` and its test (new), `.githooks/commit-msg` (new, the user
+  approves), `package.json`, `PROCESS.md` (the review loop's commit step; the user approves),
+  `ARCHITECTURE.md` (the `scripts/` codemap entry), `README.md`
+- **Do:**
+  - `npm run commit-task -- <ID> --reviewed-by <agent id>`, or `--no-review "<reason>"` for a
+    change the orchestrator reviewed alone:
+    - reads the task's block in `WORKLIST.md` and its **Files**;
+    - stages exactly the changed and new files they match, never a whole folder, and lists the
+      other changed files it left alone;
+    - refuses if nothing matches;
+    - commits as `<ID>: <summary>` with a `Reviewed-by:` trailer holding the review agent's id or
+      `none (<reason>)`, and the co-author line.
+  - `.githooks/commit-msg` refuses a commit whose subject starts with a task ID and has no
+    `Reviewed-by:` trailer, and names the script. Other commits pass (work list statuses, the
+    user's own). `README.md` says how `core.hooksPath` is set to `.githooks`.
+  - The review loop in `PROCESS.md` commits with the script.
+  - Tests:
+    - **Files** in every form the work list uses: `**`, `*`, notes such as "(new)", and lead-ins
+      such as "for pointers to moved headings only:";
+    - only matching files are staged;
+    - both trailer forms;
+    - a refusal when nothing matches;
+    - the hook passing and refusing.
+- **Done when:** `npm run build` and `npm test` pass; a reviewed commit and a `--no-review`
+  commit each carry their trailer; a hand-written `git commit -m "XX.1: …"` without one is
+  refused; the user has approved the hook and the `PROCESS.md` change.
+
+### RC.2 — Tell a session when its checkout is behind main
+- **Status:** todo
+- **Depends on:** RC.1
+- **Files:** `scripts/session-start.ts` and its test (new), `.claude/settings.json` (new, the user
+  approves), `PROCESS.md` ("How rules spread"; the user approves), `README.md`
+- **Do:**
+  - A `SessionStart` hook that blocks nothing. In a worktree whose `HEAD` is behind the local
+    `main`, it tells the session:
+    - how many commits behind it is;
+    - which of `CLAUDE.md`, `PROCESS.md`, `WORKLIST.md` and `README.md` differ from `main`;
+    - to read those with `git show main:<file>`.
+    In the main checkout, or when up to date, it says nothing.
+  - **Resolve a contradiction.** `PROCESS.md` says a session in a worktree "syncs with main", but
+    `CLAUDE.md` lets only the orchestrator run git commands that change anything. The repository
+    also has no `origin` for the app's sync tool. Replace the line: a session in a worktree reads
+    the rule files from `main` (`git show main:<file>`), and bases anything it drafts on `main`'s
+    version.
+  - Tests, against temporary git repositories: a worktree behind, one up to date, the main
+    checkout, and a failure (no git, not a repository), which prints nothing and exits 0.
+- **Done when:** `npm run build` and `npm test` pass; a new session in a stale worktree sees the
+  notice; a session in the main checkout sees nothing; the user has approved
+  `.claude/settings.json` and the `PROCESS.md` change.
+
+### RC.3 — A throwaway server that agents stop by its PID
+- **Status:** todo
+- **Depends on:** RC.2
+- **Files:** `scripts/serve-temp.ts` and its test (new), `package.json`, `CLAUDE.md` (the line
+  about stopping processes; the user approves), `ARCHITECTURE.md` (the `scripts/` codemap entry),
+  `README.md`
+- **Do:**
+  - `npm run serve-temp -- [--models fake|bedrock] [--keep]` starts the API and Vite on free
+    ports, with a new temporary data folder and fake models unless told otherwise. It reuses
+    `startServer` and `startViteServer` as `scripts/shot.ts` does, and never uses `.data/`.
+  - It prints the page's URL, the API's URL, the data folder and its own PID, then runs until
+    stopped. On `SIGINT` or `SIGTERM` it stops both servers and deletes the data folder, unless
+    `--keep` is given.
+  - Agents run it in the background and stop it with the handle or the printed PID.
+  - The line in `CLAUDE.md` about stopping processes names the script as the way to run a
+    server for a check.
+  - Tests:
+    - it starts on free ports and never on `.data/`;
+    - stopping it frees its ports and removes its folder;
+    - two copies run at once without colliding.
+- **Done when:** `npm run build` and `npm test` pass; two copies run side by side while the
+  user's dev server runs; stopping one by its PID leaves nothing of it running; the user has
+  approved the `CLAUDE.md` line.
