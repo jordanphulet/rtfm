@@ -25,8 +25,9 @@ writes each section only when a reader opens it. The app has two pages:
 - `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
   the orchestrator's protocol.
 - `WORKLIST.md`: the phases and tasks, with each task's status.
-- `infra/README.md`: RTFM's AWS setup: the CDK app, its IAM identities and permissions boundary,
-  the only way commands reach AWS, and the user's steps to set it up.
+- `infra/README.md`: RTFM's AWS setup: the CDK app and its stacks, its IAM identities and
+  permissions boundary, the only way commands reach AWS, deploying the app stack, the user's
+  steps to set it up, and what the deploy path was checked against.
 - `research/`: dated research write-ups, each opening with what was adopted.
 - `CLAUDE.md`: the session roles, the shell and credentials rules, and the code standards.
 

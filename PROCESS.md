@@ -96,7 +96,12 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
       `package-lock.json`. If the tests fail, the agent gets the change back as changes needed.
    4. `git merge --ff-only <branch>`, which fast-forwards `main` to the branch. If `main` has
       moved on since the merge, repeat from the merge.
-   5. `git worktree remove <path>`, then `git branch -d <branch>`. Claude Code locks a worktree
+   5. If the change touches `infra/` beyond its docs and tests, from the main checkout:
+      `npm run cdk -- deploy RtfmApp --require-approval never`, then the smoke check in
+      `infra/README.md` › Deploying the app stack. If either fails, the orchestrator deploys
+      nothing more, adds a `needs-human` task to `WORKLIST.md` with the command's output, and
+      tells the user. It doesn't retry or change AWS by hand.
+   6. `git worktree remove <path>`, then `git branch -d <branch>`. Claude Code locks a worktree
       while its agent runs, so remove it only after the agent has finished. If
       `git worktree remove` refuses because files are left, the orchestrator finds out what they
       are, and never uses `--force`.

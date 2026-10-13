@@ -71,22 +71,62 @@ stack is named `Rtfm*` and deploys through the bootstrap: the app's default synt
 
 ## The stacks
 
-- **`RtfmToolkit`** (`toolkit-stack.ts`) is RTFM's bootstrap, which `cdk bootstrap --template`
-  deploys in place of the CLI's own. The CLI's template gives its deploy role CloudFormation on
-  every stack in the account, so it could change or delete another project's stack through that
-  stack's own role, and its lookup role read access to the whole account. This one has the
-  names `DefaultStackSynthesizer` expects for the `rtfm` qualifier: the staging bucket
+- **`RtfmToolkit`** (`toolkit-stack.ts`) is RTFM's bootstrap, in place of the CDK CLI's own
+  template. The CLI's template gives its deploy role CloudFormation on every stack in the
+  account, so it could change or delete another project's stack through that stack's own role,
+  and its lookup role read access to the whole account. This one has the names
+  `DefaultStackSynthesizer` expects for the `rtfm` qualifier: the staging bucket
   `cdk-rtfm-assets-438180219169-us-west-2`, the four roles above, and the version parameter
   `/cdk-bootstrap/rtfm/version` (version 32, whose roles and outputs it provides). It also holds
   the boundary and the execution policy, which have to exist before the execution role does.
-  - `cdk bootstrap` passes it parameters, so it declares them, and each accepts only this
-    template's value: the qualifier `rtfm`, the execution policy `rtfm-cfn-execution` and the
-    boundary `rtfm-boundary`. Its `BootstrapVariant` keeps the CLI's own template from replacing
-    it.
+  - `cdk bootstrap` passes it parameters, as Your steps › 2 does, so it declares them, and each
+    accepts only this template's value: the qualifier `rtfm`, the execution policy
+    `rtfm-cfn-execution` and the boundary `rtfm-boundary`. Its `BootstrapVariant` keeps the
+    CLI's own template from replacing it.
   - Only `rtfm-deploy` may assume its deploy and file publishing roles, and `rtfm-read` and
     `rtfm-deploy` its lookup role, never with an external ID.
 - **`RtfmAccess`** (`access-stack.ts`): the users, the two roles, `rtfm-bedrock`, and the budget
   alarm. It has termination protection.
+- **`RtfmApp`** (`app-stack.ts`): the app, deployed through the bootstrap with
+  `npm run cdk -- deploy RtfmApp` (Deploying the app stack, below). It holds the log group
+  `/rtfm/app`, kept 30 days and deleted with the stack, and the bucket
+  `rtfm-app-438180219169-us-west-2`, with S3's default Block Public Access. The bucket is kept
+  when it leaves the stack (`RemovalPolicy.RETAIN`), since it may hold data: deleting it is a
+  step you take yourself.
+
+## Deploying the app stack
+
+`npm run cdk -- deploy RtfmApp` deploys as `rtfm-deploy`, through the bootstrap's roles: the file
+publishing role uploads the template to the staging bucket, the deploy role makes and runs the
+change set, and CloudFormation acts as the execution role, under the boundary. A deploy that the
+boundary refuses fails on the refused resource and rolls back, leaving the stack as it was.
+
+Without a terminal, `cdk deploy` stops at a change that widens access, such as a new role or
+policy statement: it prints the IAM changes and exits ("terminal (TTY) is not attached") before
+anything reaches CloudFormation. The orchestrator deploys with `--require-approval never`
+(`PROCESS.md` › Review loop): the boundary limits what such a change can reach, and the review
+reads its IAM changes in the diff.
+
+The smoke check after a deploy reads what was deployed, one command each:
+
+```sh
+npm run aws -- cloudformation describe-stacks --stack-name RtfmApp \
+  --query 'Stacks[0].StackStatus' --output text
+npm run aws -- s3api get-public-access-block --bucket rtfm-app-438180219169-us-west-2 \
+  --query 'PublicAccessBlockConfiguration.[BlockPublicAcls,IgnorePublicAcls,BlockPublicPolicy,RestrictPublicBuckets]' \
+  --output text
+npm run aws -- logs describe-log-groups --log-group-name-prefix /rtfm/app \
+  --query 'logGroups[].[logGroupName,retentionInDays]' --output text
+```
+
+It passes when they print, in order:
+
+- `CREATE_COMPLETE` or `UPDATE_COMPLETE`. A deploy with no changes ("(no changes)") leaves the
+  status as it was, so after one `UPDATE_ROLLBACK_COMPLETE` passes too: the last update failed
+  and the stack is back as it was deployed before it. The Block Public Access probe (below) left
+  `RtfmApp` in that state.
+- `True` four times: the bucket's Block Public Access is all on.
+- `/rtfm/app` and `30`: the log group, kept 30 days.
 
 ## The boundary
 
@@ -177,44 +217,62 @@ users and roles included. AWS counts a tag only once it is activated as a cost a
 
 ## Your steps
 
-Steps 1 and 2 sign in as you, an admin, shown as `--profile <admin>`. They run the pinned CDK CLI
-from `infra/` (`npx cdk`), not `npm run cdk`, which signs in only as RTFM's roles.
+You deploy `RtfmToolkit` and `RtfmAccess` with plain CloudFormation, from AWS CloudShell: the
+templates `cdk synth` writes are ordinary CloudFormation, both stacks deploy with your own
+sign-in rather than RTFM's roles, and CloudShell needs neither the CDK CLI nor an admin profile on
+the laptop.
 
-1. **Bootstrap**, with the qualifier, the boundary and the execution policy. `npm run cdk -- synth`
-   writes the template, from the repo's root and with no credentials:
+1. **Write the templates.** On the laptop, with no credentials:
 
    ```sh
    npm run cdk -- synth --quiet
-   cd infra
-   npx cdk bootstrap aws://438180219169/us-west-2 --profile <admin> \
-     --template cdk.out/RtfmToolkit.template.json --toolkit-stack-name RtfmToolkit \
-     --qualifier rtfm \
-     --cloudformation-execution-policies arn:aws:iam::438180219169:policy/rtfm-cfn-execution \
-     --custom-permissions-boundary rtfm-boundary --termination-protection
    ```
 
-2. **Deploy `RtfmAccess`** from `infra/`, with the address for the budget alarm:
+   This writes the templates to `infra/cdk.out/`. Sign in to the AWS console as an admin, open
+   CloudShell in `us-west-2`, and upload two of them, `RtfmToolkit.template.json` and
+   `RtfmAccess.template.json` (Actions › Upload file).
+
+2. **Deploy `RtfmToolkit`**, the bootstrap, in CloudShell, and protect it from deletion:
 
    ```sh
-   npx cdk deploy RtfmAccess --profile <admin> --parameters BudgetEmail=<your address>
+   aws cloudformation deploy --region us-west-2 --stack-name RtfmToolkit \
+     --template-file RtfmToolkit.template.json --capabilities CAPABILITY_NAMED_IAM \
+     --parameter-overrides Qualifier=rtfm \
+       CloudFormationExecutionPolicies=arn:aws:iam::438180219169:policy/rtfm-cfn-execution \
+       InputPermissionsBoundary=rtfm-boundary
+   aws cloudformation update-termination-protection --region us-west-2 \
+     --stack-name RtfmToolkit --enable-termination-protection
    ```
 
-   Then, in the Billing console's cost allocation tags, activate `project`. It shows there once
-   a resource carries it.
+3. **Deploy `RtfmAccess`** the same way, with a real address for the budget alarm, which AWS
+   Budgets emails. `aws cloudformation deploy` doesn't read the CDK's termination protection, so
+   turn it on here too:
 
-3. **Make `rtfm-local`'s key.** In the IAM console, under the user `rtfm-local`, create an access
-   key for code running outside AWS. Replace `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in
-   `.env.local` at the main checkout's root with it, and check that a section still writes with
-   `RTFM_MODELS=bedrock npm run dev`. Then delete the user you made by hand, with its keys and
-   its policy.
+   ```sh
+   aws cloudformation deploy --region us-west-2 --stack-name RtfmAccess \
+     --template-file RtfmAccess.template.json --capabilities CAPABILITY_NAMED_IAM \
+     --parameter-overrides BudgetEmail=<your address>
+   aws cloudformation update-termination-protection --region us-west-2 \
+     --stack-name RtfmAccess --enable-termination-protection
+   ```
 
-4. **Make `rtfm-agent`'s key** the same way, for the CLI, and create RTFM's own files, leaving
-   `~/.aws/config` and `~/.aws/credentials` alone. `~/.aws/rtfm/credentials`:
+4. **Make the two keys**, in CloudShell. Each prints a key ID and its secret:
 
-   ```ini
-   [rtfm-agent]
-   aws_access_key_id = <the key's ID>
-   aws_secret_access_key = <the key's secret>
+   ```sh
+   aws iam create-access-key --user-name rtfm-local
+   aws iam create-access-key --user-name rtfm-agent
+   ```
+
+5. **Put them on the laptop.** `rtfm-local`'s goes in `.env.local` at the main checkout's root,
+   as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, keeping `AWS_REGION`. `rtfm-agent`'s goes
+   in RTFM's own files, leaving `~/.aws/config` and `~/.aws/credentials` alone. Open both in an
+   editor, so the secret stays out of the shell's history:
+
+   ```sh
+   mkdir -p ~/.aws/rtfm
+   touch ~/.aws/rtfm/config ~/.aws/rtfm/credentials
+   chmod 600 ~/.aws/rtfm/config ~/.aws/rtfm/credentials
+   open -e ~/.aws/rtfm/config ~/.aws/rtfm/credentials
    ```
 
    `~/.aws/rtfm/config`:
@@ -231,15 +289,93 @@ from `infra/` (`npx cdk`), not `npm run cdk`, which signs in only as RTFM's role
    region = us-west-2
    ```
 
+   `~/.aws/rtfm/credentials`:
+
+   ```ini
+   [rtfm-agent]
+   aws_access_key_id = <the key's ID>
+   aws_secret_access_key = <the key's secret>
+   ```
+
    Give neither file a `[default]` profile: with none, `cdk synth` finds no credentials and
-   reaches nothing. `chmod 600` both. `npm run aws -- sts get-caller-identity` then answers with
+   reaches nothing. `npm run aws -- sts get-caller-identity` then answers with
    `assumed-role/rtfm-read/…`.
+
+6. **Check `rtfm-local`'s key, then delete the user you made by hand.** Write one section with
+   `RTFM_MODELS=bedrock npm run dev`. In the IAM console, under the user `rtfm-local`, its key's
+   "Last used" should then show Bedrock; that is what shows the server used the new key and not
+   the old one. Then delete the hand-made user, with its keys and its policy.
+
+7. **Activate the `project` cost allocation tag**, about a day after the stacks exist (Billing ›
+   Cost allocation tags). It is listed twice: as a user-defined tag, from the tagged resources,
+   and as an IAM principal tag, once `rtfm-local` has called Bedrock. Activate both. Until then the
+   budget counts nothing.
+
+## What the deploy path was checked against
+
+These checks ran on 2026-10-13, through `npm run aws` and `npm run cdk`, against the stacks as
+deployed by Your steps.
+
+**The stacks the user deploys.** `cloudformation describe-stacks` as `rtfm-read` reads both:
+`CREATE_COMPLETE`, `RtfmToolkit` with its parameters (`Qualifier=rtfm`, the execution policy,
+`InputPermissionsBoundary=rtfm-boundary`) and its outputs (`BucketName`, `BucketDomainName`,
+`BootstrapVersion` 32), and `RtfmAccess`, which has no outputs, with its `BudgetEmail` parameter.
+`cloudformation get-template` matches `npm run cdk -- synth` for both.
+
+**The user's own AWS setup is out of reach.** What a command run by the wrapper sees, printed by
+a stand-in `--app` for `cdk synth` and `cdk diff`, with `AWS_PROFILE=work`,
+`AWS_DEFAULT_PROFILE=work` and a dummy `AWS_ACCESS_KEY_ID` in the caller's environment:
+`AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE` are the files under `~/.aws/rtfm/`,
+`AWS_PROFILE` is unset (`synth`) or `rtfm-read` (`diff`), no other `AWS_*` variable is passed
+on, and `HOME` is a new temporary folder holding nothing but the CLI's cache of the `rtfm-read`
+session. `npm run aws -- sts get-caller-identity` with `AWS_PROFILE=work` still answers
+`assumed-role/rtfm-read/…`. The wrapper refuses `--profile work`, `--pro=work`, `--p work`, a
+leading `--profile`, `cdk diff --profile work` and `configure list-profiles`. `npm run aws --
+whoami`, which only an alias could answer, fails with the CLI's own "Invalid choice". This shows
+that the AWS CLI is never pointed at `~/.aws/config` or `~/.aws/cli/alias`; it doesn't show what
+those files hold, which nothing here reads.
+
+**`RtfmApp` deploys**, as `rtfm-deploy` through the bootstrap's roles, with the execution role as
+the stack's role. Its bucket's Block Public Access is S3's default, all four settings on, and the
+bucket and log group carry `project=rtfm`.
+
+**What a deploy can't do.** Each probe below was refused, and nothing it named was left behind.
+The probe stacks (`RtfmProbe…`) rolled back and were destroyed.
+
+| Probe | Refused with |
+| --- | --- |
+| `npm run cdk -- deploy RtfmAccess --no-execute` | `rtfm-deploy` is not authorized to perform `cloudformation:DescribeStacks` on `RtfmAccess`: no identity-based policy allows it |
+| A stack named `RtfmAccess` with `RtfmAccess`'s own resources, through the deploy role, `--no-execute` | the deploy role is not authorized to perform `cloudformation:DeleteChangeSet` on `RtfmAccess`, with an explicit deny |
+| `RtfmProbeAccess`: an inline policy (a harmless `Deny`) on the role `rtfm-read` | the execution role is not authorized to perform `iam:GetRolePolicy` on `rtfm-read`, with an explicit deny in `rtfm-cfn-execution` |
+| `RtfmProbeUnbounded`: the role `rtfm-probe-unbounded` with no boundary | `iam:CreateRole` on it, with an explicit deny in `rtfm-cfn-execution` (CloudFormation reports it as a tagging error) |
+| `RtfmProbeNotRtfm`: the bucket `not-rtfm-probe-q7x3k9` | `s3:CreateBucket` on it: no identity-based policy allows it |
+| `ProbeNotRtfmStack`, a stack not named for RTFM, `--no-execute` | the deploy role is not authorized to perform `cloudformation:DescribeStacks` on it |
+| `RtfmProbeFunctionUrl`: the role and function `rtfm-probe-fn`, with the boundary, then a Function URL with `AuthType` `NONE` | the role and function were created; `lambda:CreateFunctionUrlConfig` was refused with an explicit deny in `rtfm-cfn-execution` |
+| `RtfmApp` with its bucket's Block Public Access turned off | `s3:PutBucketPublicAccessBlock` on `rtfm-app-438180219169-us-west-2`, with an explicit deny in `rtfm-cfn-execution`; the stack rolled back, the bucket's four settings still on |
+| `RtfmProbeApproval`: a role with the boundary, deployed with no terminal | the CDK CLI stopped before CloudFormation: "Stack includes security-sensitive updates, but terminal (TTY) is not attached" |
+
+**Bedrock through `rtfm-local`'s key.** `RTFM_MODELS=bedrock npm run server` ran on the main
+checkout's `.data`, the user's real data, so that the ledger records the spend. Opening one
+unwritten section, 1.1 of *Blippi at the Rave*, wrote it into that data: 4,447 characters, 422
+`append` events, then `written`, for $0.0090, which `npm run usage` counted. The server reads its
+key from `.env.local`, which nothing here reads, so that the key was `rtfm-local`'s rests on Your
+steps › 5; its "Last used" in the IAM console confirms it (Your steps › 6).
+
+**What the budget sees of Bedrock.** Cost Explorer shows Claude's charges as the service
+"Claude Haiku 4.5 (Amazon Bedrock Edition)", billed by AWS Marketplace, with usage types such as
+`USW2-MP:USW2_InputTokenCount_Global-Units`, apart from "Amazon Bedrock" (AWS). Grouped by the tag
+`project`, all of it is untagged (`project$`). A model call has no resource of RTFM's to carry
+the tag: Bedrock attributes on-demand cost to the IAM user or role that called, whose tags reach
+Cost Explorer as IAM principal tags once activated (Amazon Bedrock User Guide, "IAM principal
+attribution"), a different kind from the user-defined tag `user:project` the budget filters on.
 
 ## Files
 
-- `app.ts`: `createApp`, both stacks and the default synthesizer; `cdk.json` runs it.
-- `rtfm.ts`: the account, region and qualifier, and every RTFM name and ARN.
-- `toolkit-stack.ts`, `access-stack.ts`: the two stacks.
+- `app.ts`: `createApp`, the three stacks and the default synthesizer; `cdk.json` runs it.
+- `rtfm.ts`: the account, region and qualifier, and the names and ARNs of the bootstrap's and
+  `RtfmAccess`'s resources.
+- `toolkit-stack.ts`, `access-stack.ts`: the two stacks you deploy. `app-stack.ts`: `RtfmApp`,
+  with its resources' names.
 - `boundary.ts`: the boundary's statements. `bedrock.ts`: Claude's.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`.
 - `testing.ts`: the tests' policy evaluator: whether a role's or user's policies, and its
@@ -249,5 +385,5 @@ from `infra/` (`npx cdk`), not `npm run cdk`, which signs in only as RTFM's role
   bundle or the server.
 
 The tests synthesize in process with `aws-cdk-lib/assertions`, never through the CLI, so they run
-offline. `npm run cdk -- synth` writes both templates, `RtfmToolkit.template.json` and
-`RtfmAccess.template.json`, to `infra/cdk.out/` (gitignored).
+offline. `npm run cdk -- synth` writes the templates, `RtfmToolkit.template.json`,
+`RtfmAccess.template.json` and `RtfmApp.template.json`, to `infra/cdk.out/` (gitignored).

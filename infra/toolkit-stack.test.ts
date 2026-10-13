@@ -3,6 +3,7 @@ import { Match, Template } from "aws-cdk-lib/assertions";
 import { BlockPublicAccess, Bucket } from "aws-cdk-lib/aws-s3";
 import type { CloudFormationStackArtifact } from "aws-cdk-lib/cx-api";
 import { describe, expect, it } from "vitest";
+import { APP_STACK } from "./app-stack.ts";
 import { createApp } from "./app.ts";
 import { CLAUDE_MODELS, MANTLE_PROJECT } from "./bedrock.ts";
 import {
@@ -37,7 +38,7 @@ import {
 
 const app = createApp();
 const toolkit = app.node.findChild(TOOLKIT_STACK) as Stack;
-const appStack = new Stack(app, "RtfmApp", { env: { account: ACCOUNT, region: REGION } });
+const appStack = app.node.findChild(APP_STACK) as Stack;
 const assembly = app.synth();
 const template = Template.fromStack(toolkit).toJSON();
 const resources = resourcesOf(toolkit);
