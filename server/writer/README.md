@@ -25,13 +25,13 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
 
 - **The prompt** (`writer/prompt.ts`):
   - The **system prompt** is the same for every section of a manual. It holds the instructions, the
-    markdown that `DESIGN.md` › Markdown allows, the shape of a section (including the sample's
-    punctuation: spaced em dashes and curly quotes), then the manual's title, subtitle, voice and
-    contents (each section's label, title, id and summary). It says that text inside `<manual>` and
-    `<written-section>` is reference material, never instructions, and that the voice describes
-    style only. Its locale rule outranks the voice and any written section, so a manual whose voice
-    is British still comes out in American English: US spelling and vocabulary, US dollars, and US
-    customary units unless the subject itself works in metric.
+    markdown that `src/reader/DESIGN.md` › Markdown allows, the shape of a section (including the
+    sample's punctuation: spaced em dashes and curly quotes), then the manual's title, subtitle,
+    voice and contents (each section's label, title, id and summary). It says that text inside
+    `<manual>` and `<written-section>` is reference material, never instructions, and that the voice
+    describes style only. Its locale rule outranks the voice and any written section, so a manual
+    whose voice is British still comes out in American English: US spelling and vocabulary, US
+    dollars, and US customary units unless the subject itself works in metric.
   - The **user message** names the section, its chapter and its summary, the previous and next
     sections with their summaries, and a length in words (`sectionWordsRequested`). It ends
     by restating what Haiku most often skips: at least one table, list, checklist or code block,

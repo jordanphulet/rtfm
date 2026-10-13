@@ -73,7 +73,7 @@ A section moves through these states:
 | waiting    | `writing`   | `""`          | —         | Title and summary (never a blank page).      |
 | streaming  | `writing`   | partial       | —         | `<Markdown source={text} />` in the final layout. |
 | written    | `written`   | full body     | —         | `<Markdown source={text} />`.                |
-| failed     | `unwritten` | `""` or partial | set     | Why it wasn't written (`DESIGN.md` › When a section can’t be written). |
+| failed     | `unwritten` | `""` or partial | set     | Why it wasn't written (`src/reader/DESIGN.md` › When a section can’t be written). |
 
 The stream:
 

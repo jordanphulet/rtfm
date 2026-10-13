@@ -292,8 +292,8 @@ interface ReplyMarkdownProps {
   and strikethrough render as their plain text, a code block as inline code, a checklist as a
   bulleted list, and images not at all. Footnotes and the reader's `section:` cross-references
   are not supported.
-- **Look:** the shared `.markdown` treatment (`DESIGN.md` › Markdown) at `--text-reply`, in
-  `--ink`. No margin above the first block or below the last, so it sits flush in any container.
+- **Look:** the shared `.markdown` treatment (`src/reader/DESIGN.md` › Markdown) at `--text-reply`,
+  in `--ink`. No margin above the first block or below the last, so it sits flush in any container.
 - **Streaming:** pass the repaired text as it grows (`useLibrarian()` repairs it). Text only ever
   appears at the end, and it uses ordinary wrapping (never `text-wrap: pretty`), so earlier lines
   never re-flow. It is memoized: finished messages don't re-render while another streams. Mark the

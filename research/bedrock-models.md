@@ -367,5 +367,6 @@ All checked 2026-10-10.
   https://custom.typingmind.com/tools/estimate-llm-usage-costs/amazon-bedrock/us-anthropic-claude-opus-5-5
 - Nova 2 Lite price (aggregator, unconfirmed):
   https://anotherwrapper.com/tools/llm-pricing/nova-2-lite/nova-2-pro
-- RTFM sources read: `DESIGN.md` (Markdown section, data model), `src/manual/sample/index.ts`
-  (voice brief), `src/manual/sample/sections/*.md` (18 sections, 461–660 words each)
+- RTFM sources read: `DESIGN.md` (data model), `src/reader/DESIGN.md` (Markdown section),
+  `src/manual/sample/index.ts` (voice brief), `src/manual/sample/sections/*.md` (18 sections,
+  461–660 words each)

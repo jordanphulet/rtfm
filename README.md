@@ -18,7 +18,7 @@ writes each section only when a reader opens it. The app has two pages:
 
 - `ARCHITECTURE.md`: a map of the code: what each folder holds, which folders may import which,
   and the rules that cut across them.
-- `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
+- `DESIGN.md` and `src/<page>/DESIGN.md`: the design, shared by both pages, then each page's own.
 - `src/*/README.md`: the API of each shared folder in `src/` (`librarian`, `library`, `manual`, `ui`).
 - `server/README.md` and each `server/*/README.md`: how the server and each of its folders work.
 - `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
@@ -243,8 +243,8 @@ clearing that folder first and nothing else:
 - `reader/<state>-<desktop|phone|desktop-reduced>.png`, for the states `start`, `toc`,
   `written`, `dense`, `waiting`, `streaming`, `streaming-full`, `budget`, `error` and `appendix`
   (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
-- `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in `DESIGN.md`,
-  under "States").
+- `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in
+  `src/home/DESIGN.md`, under "States").
 
 `--compare <baseline>` checks a run against an earlier one, such as a copy of `shots/` taken
 before a change:
