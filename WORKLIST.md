@@ -60,7 +60,7 @@ When this phase is done:
 - **Logs never hold secrets:** no credentials, no passcode, no cookies.
 
 ### BA.3 — The passcode gate
-- **Status:** todo
+- **Status:** doing (agent abe5e645c548c5c65)
 - **Depends on:** RA.1 (both change `README.md`, `ARCHITECTURE.md` and `package.json`)
 - **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
   (`server/**` and `src/**` include the folder READMEs and page design docs)
