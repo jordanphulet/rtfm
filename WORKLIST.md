@@ -33,42 +33,9 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
-### IN.9 — Put the app at rtfm.moonfetus.com
-- **Status:** doing (agent aa0e2649282ebf078; reviewed; on 2026-10-13 the user approved its `PROCESS.md` change; waiting for the live `AWS::Lambda::ResourcePolicy` schema, which the orchestrator reads with `rtfm-read` once IN.16 is deployed)
-- **Depends on:** IN.8
-- **Files:** `infra/edge-*.ts` and their tests, `infra/app.ts`, `infra/README.md`, `PROCESS.md`
-  (with the user's approval), `ARCHITECTURE.md` (its `infra/` file list)
-- **Do:**
-  - Stacks the user approves and deploys from CloudShell, like `RtfmAccess`:
-    - **`RtfmEdgeCertificate`** (us-east-1): the ACM certificate for `rtfm.moonfetus.com`,
-      validated by DNS in the zone `moonfetus.com`, whose ID is a parameter.
-    - **`RtfmEdge`** (us-west-2): the origin access control (`always-amz-auth`); a CloudFront
-      Function on viewer requests that refuses any `Host` but `rtfm.moonfetus.com`, so
-      CloudFront's default domain is refused; the distribution (alias `rtfm.moonfetus.com`, no
-      caching for `/api/*`, every viewer header but `Host`, one connection attempt, a 60s read
-      timeout); the Route 53 alias records; and the Web Function's resource policy letting only
-      that distribution invoke `rtfm-app` (`aws:SourceArn`). Parameters: the certificate's ARN
-      (from `RtfmEdgeCertificate`'s output), the zone's ID, and the Web Function's domain (from
-      `RtfmApp`'s output).
-  - Edge stacks use `LegacyStackSynthesizer` and carry no assets at all: no CDK custom
-    resources, no `crossRegionReferences`, no `DnsValidatedCertificate`, no `BucketDeployment`.
-    Any asset goes through the staging bucket, which `rtfm-deploy` can write. The CloudFront
-    Function's code is inline in the template. A test fails any edge stack with an asset or a
-    custom resource, or a template over the inline limit.
-  - Tag every edge resource `project=rtfm`.
-  - `PROCESS.md` › Authority names the `RtfmEdge*` stack files among those only the user approves.
-  - Note in `infra/README.md`: RTFM's roles can still delete the Web Function or its resource
-    policy (`lambda:DeleteResourcePolicy`), which cuts CloudFront off without a word, so the Web
-    Function's name stays fixed and the smoke check goes through the domain.
-  - The smoke check adds a request through `https://rtfm.moonfetus.com`, with the throwaway
-    passcode's cookie, and one to CloudFront's default domain, which must be refused.
-  - `infra/README.md` › Your steps gains the edge stacks' CloudShell steps, in order.
-- **Done when:** the edge stacks synthesize and pass their tests, the user has approved the
-  `PROCESS.md` change, and the steps are in `infra/README.md`. The user's deploy follows.
-
 ### IN.10 — Measure the deployed app
-- **Status:** todo
-- **Depends on:** IN.9, and the user's deploy of the edge stacks
+- **Status:** blocked (the user deploys `RtfmEdgeCertificate` and `RtfmEdge` from CloudShell)
+- **Depends on:** the user's deploy of the edge stacks (`infra/README.md` › Your steps › The edge stacks)
 - **Files:** `research/aws-design.md`
 - **Do:** through `rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is in
   AWS): events arriving one by one; a `POST` with a body; a disconnect aborting the run; the cold
