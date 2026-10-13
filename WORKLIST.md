@@ -112,6 +112,23 @@ aren't RTFM's.
   the old cookie, and the set command refusing to run without a terminal; no file or log an agent
   can read holds the passcode.
 
+### IN.17 — The user's steps, repeatable from scratch
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `infra/README.md`, `README.md`
+- **Do:** make `infra/README.md` › Your steps work for someone setting RTFM up in a fresh account:
+  - a short list of prerequisites first: the AWS CLI version (already there), a Route 53 public
+    hosted zone for the app's domain in the account, and Bedrock access to Claude Haiku 4.5
+    (pointing to `README.md` › The models);
+  - the whole order in one place: Your steps 1–7, then the orchestrator deploys `RtfmApp`
+    (Deploying the app stack), then The edge stacks, which read `RtfmApp`'s output;
+  - step 6 as "check `rtfm-local`'s key works", deleting a hand-made Bedrock user only if one
+    exists;
+  - termination protection for `RtfmEdgeCertificate` (us-east-1) and `RtfmEdge` (us-west-2),
+    turned on after each deploy, as for the other two stacks.
+- **Done when:** a reader can follow Your steps from an empty account to the smoke check through
+  the domain without knowing this repo's history, and nothing in them refers to it.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
