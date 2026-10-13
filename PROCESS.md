@@ -47,6 +47,9 @@ proposed, the orchestrator asks the user in its own session.
 
 ## Orchestrator protocol
 
+The user starts the loop with `/orchestrate` (`.claude/skills/orchestrate/SKILL.md`), in the main
+checkout on `main`: `npm run commit-task` refuses anywhere else.
+
 The orchestrator **coordinates, reviews and commits**. It does not do the task work itself.
 
 ### Every loop pass

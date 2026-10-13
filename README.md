@@ -70,6 +70,10 @@ The `rule-audit` skill (`.claude/skills/rule-audit/SKILL.md`) builds on `npm run
 "run the rule audit", a session ranks the written rules agents break by how often and what each
 break cost, and proposes tasks that turn the top ones into code. It changes no files.
 
+The `orchestrate` skill (`.claude/skills/orchestrate/SKILL.md`) starts the orchestrator: run as
+`/orchestrate` in the main checkout, it runs `npm run orchestrator-check`, asks about each
+`doing` task an earlier run left, and starts the loop (`PROCESS.md` › Orchestrator protocol).
+
 ### The orchestrator's preflight
 
 `npm run orchestrator-check` checks that the orchestrator can start where it runs. It fails, with
