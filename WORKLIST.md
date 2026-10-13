@@ -62,7 +62,7 @@ makes the right way the easy way. When this phase is done:
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
 ### RC.1 — Commit task work through one script
-- **Status:** todo
+- **Status:** doing (agent abbd8bf3721f7eda2)
 - **Depends on:** —
 - **Files:** `scripts/commit-task.ts` and its test (new), `.githooks/commit-msg` (new, the user
   approves), `package.json`, `PROCESS.md` (the review loop's commit step; the user approves),
@@ -194,7 +194,7 @@ When this phase is done:
   in that order. DC.1 may also fix `scripts/audit/README.md`, so it waits for RA.3 too.
 
 ### RA.3 — Sharper audit detectors
-- **Status:** todo
+- **Status:** doing (agent ae6de641e0af74280)
 - **Depends on:** —
 - **Files:** `scripts/audit/**`
 - **Do:**
