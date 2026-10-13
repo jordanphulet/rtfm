@@ -46,7 +46,7 @@ aren't RTFM's.
   orchestrator has a task to move to B.
 
 ### IN.12 — One ledger for real spend
-- **Status:** todo
+- **Status:** doing (agent a820e5dcd6453a836)
 - **Depends on:** IN.11
 - **Files:** `server/gateway/**`, `server/storage/**`, `server/app.ts`, `server/config.ts`,
   `server/usage.ts`, `server/README.md`, `README.md`, `ARCHITECTURE.md`, `infra/access-stack.ts`
@@ -68,7 +68,7 @@ aren't RTFM's.
   caps in a test against DynamoDB Local, and the docs say so.
 
 ### IN.13 — One writer per section across environments
-- **Status:** todo
+- **Status:** doing (agent a6eb3ca69062c8998)
 - **Depends on:** IN.11
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
   `server/writer/README.md`
