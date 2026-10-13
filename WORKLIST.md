@@ -246,28 +246,48 @@ makes the right way the easy way. When this phase is done:
   commit each carry their trailer; a hand-written `git commit -m "XX.1: …"` without one is
   refused; the user has approved the hook and the `PROCESS.md` change.
 
-### RC.2 — Tell a session when its checkout is behind main
+### RC.2 — Tell a session when its rules are out of date
 - **Status:** todo
 - **Depends on:** RC.1
-- **Files:** `scripts/session-start.ts` and its test (new), `.claude/settings.json` (new, the user
+- **Files:** `scripts/hooks/**` and their tests (new), `.claude/settings.json` (new, the user
   approves), `PROCESS.md` ("How rules spread"; the user approves), `README.md`
 - **Do:**
-  - A `SessionStart` hook that blocks nothing. In a worktree whose `HEAD` is behind the local
-    `main`, it tells the session:
+  - **Behind `main`.** A `SessionStart` hook that blocks nothing. In a worktree whose `HEAD` is
+    behind the local `main`, it tells the session:
     - how many commits behind it is;
     - which of `CLAUDE.md`, `PROCESS.md`, `WORKLIST.md` and `README.md` differ from `main`;
     - to read those with `git show main:<file>`.
     In the main checkout, or when up to date, it says nothing.
+  - **Changed since the session started.** A session's copy of `CLAUDE.md` is a snapshot taken
+    when it starts or resumes, and subagents get their orchestrator's snapshot. The first audit
+    found 55 of 85 subagents started with an out-of-date `CLAUDE.md`, and agents already running
+    never see a rule added after they started. So:
+    - at `SessionStart`, the hook saves a copy of `CLAUDE.md` and `PROCESS.md` for that session,
+      outside the repository (the system's temporary folder);
+    - a `PostToolUse` hook compares the files on disk with that copy. When one has changed, it
+      tells the session, once per change, which file changed and the change itself (`git diff
+      --no-index` between the copy and the file, cut short if long), and that the file on disk
+      wins over the copy in its context;
+    - a subagent is told about changes since its orchestrator's copy, including changes made
+      before the subagent started, since that copy is the one it was given. This needs the hook
+      input to identify a subagent's tool calls; if it can't, the agent reports that and the
+      notice covers the orchestrator only.
   - **Resolve a contradiction.** `PROCESS.md` says a session in a worktree "syncs with main", but
     `CLAUDE.md` lets only the orchestrator run git commands that change anything. The repository
     also has no `origin` for the app's sync tool. Replace the line: a session in a worktree reads
     the rule files from `main` (`git show main:<file>`), and bases anything it drafts on `main`'s
     version.
-  - Tests, against temporary git repositories: a worktree behind, one up to date, the main
-    checkout, and a failure (no git, not a repository), which prints nothing and exits 0.
+  - Measure and report what each hook adds to a tool call.
+  - Tests, against temporary git repositories and folders:
+    - a worktree behind, one up to date, and the main checkout;
+    - an unchanged file (silence), a changed file (one notice, then silence until the next
+      change), a change in two distant places (the diff shows both correctly);
+    - a subagent started after a change is told about it;
+    - a failure (no git, not a repository, no saved copy), which prints nothing and exits 0.
 - **Done when:** `npm run build` and `npm test` pass; a new session in a stale worktree sees the
-  notice; a session in the main checkout sees nothing; the user has approved
-  `.claude/settings.json` and the `PROCESS.md` change.
+  behind-`main` notice; a session in the main checkout sees nothing; after `PROCESS.md` changes,
+  a running session and a running subagent are each told once, at their next tool call; the user
+  has approved `.claude/settings.json` and the `PROCESS.md` change.
 
 ### RC.3 — A throwaway server that agents stop by its PID
 - **Status:** todo
