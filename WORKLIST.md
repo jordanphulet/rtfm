@@ -61,47 +61,9 @@ makes the right way the easy way. When this phase is done:
 - **One at a time.** These tasks share `README.md`, `package.json`, `ARCHITECTURE.md` or
   `PROCESS.md`, so they run in a chain: RC.1, RC.2, RC.3.
 
-### RC.1 — Commit task work through one script
-- **Status:** doing (the user approved the hook and the `PROCESS.md` change on 2026-10-13; review round 3
-  with agent abbd8bf3721f7eda2; then waiting for `scripts/audit/**` to build again)
-- **Depends on:** —
-- **Files:** `scripts/commit-task.ts` and its test (new), `.githooks/commit-msg` (new, the user
-  approves), `package.json`, `PROCESS.md` (the review loop's commit step, how the orchestrator commits
-  its own reviewed work, and how to write a task's **Files** under "Adding work"; the user approves),
-  `ARCHITECTURE.md` (the `scripts/` codemap entry), `README.md`
-- **Do:**
-  - `npm run commit-task -- <ID> --reviewed-by <agent id>`, or `--no-review "<reason>"` for a
-    change the orchestrator reviewed alone:
-    - reads the task's block in `WORKLIST.md` and its **Files**;
-    - stages exactly the changed and new files they match, never a whole folder, and lists the
-      other changed files it left alone;
-    - refuses if nothing matches;
-    - refuses `--no-review` for a change of more than 40 changed lines, not counting pure
-      renames: the second audit found 27 task commits made without a review, mostly by an
-      orchestrator that had read the change alone;
-    - commits as `<ID>: <summary>` with a `Reviewed-by:` trailer holding the review agent's id or
-      `none (<reason>)`, and the co-author line.
-  - `.githooks/commit-msg` refuses a commit whose subject starts with a task ID and has no
-    `Reviewed-by:` trailer, and names the script. It also refuses a commit with Claude's co-author
-    line that changes any file but `WORKLIST.md` and has no `Reviewed-by:` trailer, so the
-    orchestrator's own work is reviewed the same way. Other commits pass (work list statuses, the
-    user's own). `README.md` says how `core.hooksPath` is set to `.githooks`.
-  - The review loop in `PROCESS.md` commits with the script.
-  - Tests:
-    - **Files** in every form the work list uses: `**`, `*`, notes such as "(new)", and lead-ins
-      such as "for pointers to moved headings only:";
-    - only matching files are staged;
-    - both trailer forms;
-    - a refusal when nothing matches, and of `--no-review` over the size limit;
-    - the hook passing and refusing, including Claude's own commit without a trailer and a
-      `WORKLIST.md`-only commit.
-- **Done when:** `npm run build` and `npm test` pass; a reviewed commit and a `--no-review`
-  commit each carry their trailer; a hand-written `git commit -m "XX.1: …"` without one is
-  refused; the user has approved the hook and the `PROCESS.md` change.
-
 ### RC.2 — Tell a session when its rules are out of date
-- **Status:** todo
-- **Depends on:** RC.1
+- **Status:** doing (agent a0083ed43e106a6c4)
+- **Depends on:** —
 - **Files:** `scripts/hooks/**` and their tests (new), `.claude/settings.json` (new, the user
   approves), `PROCESS.md` ("How rules spread"; the user approves), `README.md`
 - **Do:**
