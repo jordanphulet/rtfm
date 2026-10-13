@@ -14,7 +14,20 @@ writes each section only when a reader opens it. The app has two pages:
   written yet has the server write it and stream it in, with a fake writer by default or with
   Claude Haiku 4.5 on Amazon Bedrock.
 
-`ARCHITECTURE.md` describes the server, its API, the model gateway and the librarian in full.
+## The docs
+
+- `ARCHITECTURE.md`: the server, its API, storage, the section writers, the model gateway, the
+  agent loop, the librarian, configuration, logs and the reader's store.
+- `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
+- `src/*/README.md`: the API of each shared folder in `src/` (`agent`, `library`, `manual`, `ui`).
+- `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
+  the orchestrator's protocol.
+- `WORKLIST.md`: the phases and tasks, with each task's status.
+- `research/`: dated research for the back-end, each opening with what was adopted:
+  `bedrock-models.md` (which Bedrock models to use), `aws-hosting.md` (Claude Platform on AWS and
+  the AgentCore harness) and `lambda-and-dynamodb.md` (running the server on Lambda and
+  DynamoDB).
+- `CLAUDE.md`: the session roles, the shell and credentials rules, and the code standards.
 
 ## Running it
 
@@ -251,15 +264,3 @@ clearing that folder first and nothing else:
   loop, the librarian and its planner, the model gateway, and the logger. The seven seed manuals
   are in `server/seed/`. `ARCHITECTURE.md` documents it.
 - `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`).
-- `research/`: dated research for the back-end, each opening with what was adopted:
-  `bedrock-models.md` (which Bedrock models to use), `aws-hosting.md` (Claude Platform on AWS and
-  the AgentCore harness) and `lambda-and-dynamodb.md` (running the server on Lambda and
-  DynamoDB).
-- `ARCHITECTURE.md`: the server, the API, storage, the writers, the gateway, the agent loop, the
-  librarian, configuration, logs and the reader's store.
-- `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
-- `WORKLIST.md`: the phases and tasks, with each task's status.
-- `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
-  the orchestrator's protocol.
-- `CLAUDE.md`: the overview and doc list, the session roles, the shell and credentials rules, and
-  the code standards.

@@ -1,24 +1,9 @@
 # RTFM
 
-A web app for reading hypothetical manuals. An LLM writes the table of contents first, then
-writes each section only when the reader opens it. The app has two pages: the landing page at `/`
-(`src/home/`), a library of manuals beside a librarian agent that lists, finds, opens and creates
-them and proposes deletes for you to confirm, and the reader at `/read/<manual>`
-(`src/reader/`), which reads any manual in the library. A local Node server (`server/`) stores
-the manuals, seeded from `server/seed/`, writes their unwritten sections and runs the librarian.
-Models are fake by default (`RTFM_MODELS=fake`) or Claude Haiku 4.5 on Amazon Bedrock, whose
-calls go through one gateway that caps spending.
+A web app for reading hypothetical manuals: an LLM writes a manual's table of contents first, then
+writes each section only when a reader opens it.
 
-- `README.md`: running it, the scripts, configuration and where things live.
-- `ARCHITECTURE.md`: the server, its API, storage, the section writers, the model gateway, the
-  agent loop, the librarian, configuration and the reader's store.
-- `DESIGN.md`: the design of both pages and the rules any change to them must keep.
-- `src/*/README.md`: the API of each shared folder (`agent`, `library`, `manual`, `ui`).
-- `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
-  the orchestrator's protocol.
-- `WORKLIST.md`: the phases and tasks, with each task's status.
-- `research/`: dated research write-ups (Bedrock models, hosting on AWS, Lambda and DynamoDB),
-  each opening with what was adopted.
+Start with `README.md`: how to run it, and where every other doc and folder is.
 
 ## How work happens here
 
