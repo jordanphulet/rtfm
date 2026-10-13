@@ -17,7 +17,8 @@ rules, and the orchestrator's loop. `WORKLIST.md` holds the phases and tasks.
 
 ## Where state lives
 
-- `WORKLIST.md`: what is happening, the phases, tasks and their statuses.
+- `WORKLIST.md`: the work still to do, as phases and tasks with their statuses. Finished work is
+  removed from it.
 - Git history: what happened.
 - The docs (`README.md`, `ARCHITECTURE.md`, `DESIGN.md`, the folder READMEs): what exists.
 - `research/`: what might be.
@@ -42,36 +43,37 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
 
 ### Every loop pass
 
-1. **Read `CLAUDE.md`, `PROCESS.md` and `WORKLIST.md`.** If every task is `done`, or nothing can
-   run because the remaining tasks are `needs-human` or `blocked`, report to the user and **stop
-   the loop**.
+1. **Read `CLAUDE.md`, `PROCESS.md` and `WORKLIST.md`.** If no task is left, or nothing can run
+   because the remaining tasks are `needs-human` or `blocked`, report to the user and **stop the
+   loop**.
 2. **Review finished work.** Run the review loop below for every `doing` task whose agent has
    reported back.
-3. **Start ready tasks.** Start every `todo` task whose dependencies are all `done` as a
-   **background subagent**, with **at most 3 running at once**. Mark it `doing` and record the
-   agent's name.
+3. **Start ready tasks.** Start every `todo` task whose dependencies are all gone from
+   `WORKLIST.md` as a **background subagent**, with **at most 3 running at once**. Mark it `doing`
+   and record the agent's name.
 4. **Save `WORKLIST.md`**, then schedule a fallback wake-up in 20–30 minutes. Agents announce
    when they finish, so there's no need to poll.
 
 ### Review loop (required before any commit)
 
-1. **Check the basics:** every item in the task's **Done when** list, and `git status` shows
-   changes only inside the task's **Files**.
+1. **Check the basics:** every item in the task's **Done when** list, and the task's own changes
+   are only inside its **Files**.
 2. **Read the full diff** against `CLAUDE.md` › Code standards and, for UI work, the design doc.
    For anything beyond a trivial change, also start a **review subagent** for an independent code
    review, then weigh its findings.
 3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
    keeps its context), then wait for it to report back and repeat from step 1.
-4. **Approved:** mark the task `done` and commit **only that task's files**, with the message
-   `<task id>: <summary>`.
+4. **Approved:** commit **only that task's files**, with the message `<task id>: <summary>`. Then
+   remove the task from `WORKLIST.md`, and its phase once no task is left in it.
 5. **Three rounds without approval:** mark it `needs-human`, write down what's unresolved, and
    tell the user.
 
 ### When the orchestrator does work itself
 
 Avoid it. If it does happen (for example, a small fix while reconciling two tasks), start a
-review subagent on that change and only commit once the review passes. Keeping `WORKLIST.md`'s
-statuses up to date, and git operations such as tags, don't count as work.
+review subagent on that change and only commit once the review passes. Keeping `WORKLIST.md` up
+to date, and git operations such as tags, don't count as work. `WORKLIST.md` changes are committed
+on their own, as "Update work list statuses".
 
 ### Adding work
 
@@ -83,7 +85,7 @@ the dependencies of any existing task that must now wait for it.
 
 - **Every agent runs on Opus 5.5** (`model: "opus"`), in the background.
 - **Only the orchestrator commits.** Agents never run git commands that change anything.
-- **Agents never edit `WORKLIST.md`.** They report back, and the orchestrator updates statuses.
+- **Agents never edit `WORKLIST.md`.** They report back, and the orchestrator updates it.
 - Every agent prompt includes the full task block and points to `CLAUDE.md`, the design doc and
   `src/manual/README.md`. It asks the agent to report back with the files it changed, how it
   checked its work, and anything left unresolved.
@@ -93,4 +95,5 @@ the dependencies of any existing task that must now wait for it.
 - Agents work in the same checkout at the same time, so they **must stay inside their task's
   Files**. Two tasks that touch the same file never run at the same time.
 
-**Statuses:** `todo` · `doing` · `done` · `blocked` · `needs-human`
+**Statuses:** `todo` · `doing` · `blocked` · `needs-human`. A status may carry a short reason in
+parentheses, for example `blocked (waiting for the user's AWS sign-up)`.
