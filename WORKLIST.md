@@ -58,37 +58,6 @@ phase is done:
   running there); use `RTFM_DATA_DIR` on a temporary folder. Never delete or edit the ledger.
 - **Logs never hold secrets:** no credentials, no passphrase, no session tokens, no cookies.
 
-### BA.1 — Structured logs
-- **Status:** doing (agent: a9e90b09702434c7d)
-- **Depends on:** —
-- **Files:** `server/**`, `src/**` (reporting browser errors only), `README.md`,
-  `ARCHITECTURE.md`, `package.json` (a `logs` script)
-- **Do:**
-  - One small logger in `server/` writes one JSON object per line to standard output and to
-    `<data folder>/logs/<UTC date>.jsonl`, with a time, a level and an event name. Keep 14 days
-    of files.
-  - Shape each line for CloudWatch, so it goes there unchanged from Lambda: written straight to
-    standard output (not `console.log`, which Lambda's text format prefixes), with `timestamp`
-    (ISO 8601, UTC), `level` as one of `DEBUG`, `INFO`, `WARN`, `ERROR` (the values Lambda's
-    log-level filtering reads), `event`, a short `message`, and flat fields after them; only an
-    error nests (`error: { name, message, stack }`). The log file is the only local part.
-  - Log: server start and stop; each API request (method, path, status, duration, a request
-    id); each model call (job, model, outcome, tokens, cost, duration, its ledger call id);
-    section runs starting, joined, finished, failed and aborted; librarian replies (turns, tools
-    called, outcome); refusals (the local-only checks, the lock, the caps, the kill switch); and
-    every error with its stack. Log sizes and ids rather than manual text, prompts or replies.
-  - Replace the server's `console.error` and `console.warn` calls with the logger.
-  - The browser reports uncaught errors, unhandled rejections and failed API requests to a new
-    `POST /api/client-errors` route (subject to the local-only checks), which logs them.
-  - `npm run logs` shows recent entries, with options to filter by level and event and to follow
-    new lines, and takes a data folder like `npm run usage` does.
-  - README.md says where the logs are and how to read them; ARCHITECTURE.md describes the logger
-    and the events.
-- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover the log file,
-  the line shape, retention, the request and model-call entries, the client-error route, and
-  that no secret reaches a log line; live, a section write, a librarian reply and a forced
-  browser error each appear in `npm run logs`.
-
 ### BA.2 — The passphrase: design
 - **Status:** todo
 - **Depends on:** BA.1, RS.3, RS.4 (so the design is written into the new doc layout)
@@ -134,7 +103,7 @@ describing a tool that no longer exists.
 - **No real Bedrock calls.** Tests use the fake models.
 
 ### LB.1 — Describe the librarian's tools only in their definitions
-- **Status:** todo
+- **Status:** doing (agent: ace5d73e86fd3d284)
 - **Depends on:** BA.1 (it changes `server/**`)
 - **Files:** `server/agent/librarian/**`, `ARCHITECTURE.md` (§7's paragraph on the system prompt
   only)
@@ -212,7 +181,7 @@ Make the repo quicker to find your way around, for agents and people. When this 
   reviews RS.0, and commits `CLAUDE.md` only once the user approves. No other task changes it.
 
 ### RS.0 — `CLAUDE.md` points to README for the docs
-- **Status:** todo
+- **Status:** doing (agent: ae64d1d4871d2fa71)
 - **Depends on:** BA.1 (it changes `README.md`)
 - **Files:** `CLAUDE.md` (the user approves), `README.md`
 - **Do:**
@@ -227,7 +196,7 @@ Make the repo quicker to find your way around, for agents and people. When this 
   used to list is in README's index; the user has approved the `CLAUDE.md` change.
 
 ### RS.1 — Name each stylesheet after its component
-- **Status:** todo
+- **Status:** doing (agent: aaa4767337b69b029)
 - **Depends on:** BA.1
 - **Files:** `src/home/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`
 - **Do:**
