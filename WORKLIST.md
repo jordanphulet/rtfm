@@ -158,6 +158,40 @@ describing a tool that no longer exists.
 - **Done when:** the system prompt names no tool, each tool's description carries its own rules,
   the new test passes, and `npm run build` and `npm test` pass.
 
+
+---
+
+## Model output
+
+Manuals come out in American English. When this phase is done, a new manual and every section
+written from now on use US spelling, vocabulary and dollars, whatever voice the manual has.
+
+### Rules for this phase
+
+- **No real Bedrock calls.** Tests use the fake models.
+
+### MO.1 — Name the locale in the planner and writer prompts
+- **Status:** todo
+- **Depends on:** BA.1, LB.1 (both change `server/**` or `ARCHITECTURE.md`)
+- **Files:** `server/agent/planner/prompt.ts`, `server/writer/prompt.ts`,
+  `server/writer/prompt.test.ts`, `server/agent/planner/plan.test.ts`,
+  `server/seed/moving-house-without-losing-the-cat/manual.json`, `ARCHITECTURE.md`
+- **Do:**
+  - Nothing in the prompts names a locale, so the model follows the British cues it is given:
+    the planner's example plan is the seed `moving-house-without-losing-the-cat`, whose voice is
+    British, and the writer puts each manual's voice into every section's system prompt.
+  - Add one rule to the planner's and the writer's instructions: manuals are written in American
+    English, with US spelling and vocabulary, prices in US dollars, and US customary units except
+    where the subject itself works in metric (astronomy, baking by weight). In the writer, the
+    rule outranks the manual's voice, so stored manuals with British voices come out American
+    too.
+  - In the planner's instructions, change "a full stop" to "a period".
+  - Rewrite the example seed's voice in American English, keeping its author and character.
+  - Add a test that each system prompt carries the locale rule.
+  - Update ARCHITECTURE.md where it describes the prompts' rules.
+- **Done when:** `npm run build` and `npm test` pass; both system prompts name the locale; the
+  planner's example voice has no British spelling or vocabulary.
+
 ---
 
 ## Repo structure
@@ -228,7 +262,7 @@ Make the repo quicker to find your way around, for agents and people. When this 
 
 ### RS.3 — Turn `ARCHITECTURE.md` into a short map, with detail in folder READMEs
 - **Status:** todo
-- **Depends on:** BA.1, RS.2, LB.1 (it changes `ARCHITECTURE.md`)
+- **Depends on:** BA.1, RS.2, LB.1, MO.1 (they change `ARCHITECTURE.md`)
 - **Files:** `ARCHITECTURE.md`, `server/README.md`, `server/*/README.md` (new),
   `src/manual/README.md`, `README.md`
 - **Do:**
