@@ -40,6 +40,30 @@ machine.
   reachable; `ARCHITECTURE.md` has the rule and `server/README.md` › Tests says tests reach only
   loopback.
 
+### LF.2 — One shared suite per model interface
+- **Status:** todo
+- **Depends on:** LF.1
+- **Files:** `server/writer/**`, `server/agent/**`, `server/gateway/**`, `server/testing.ts`,
+  `server/README.md`
+- **Do:** find each interface with a fake and a Bedrock implementation (the `SectionWriter`, the
+  librarian's and the planner's model), and give each one test suite that runs against both: the
+  Bedrock one through a fake `ModelClient` or the local event-stream server, never Bedrock. The
+  suite checks the contract (streaming, cancelling, errors, what is saved), not the text, since the
+  fakes are scripted on purpose. Fold the tests it replaces into it.
+- **Done when:** `npm test` passes, each such interface's suite runs once per implementation, and
+  `ARCHITECTURE.md` › Everything runs on one machine holds for the models.
+
+### LF.3 — The loopback guard in child processes
+- **Status:** todo
+- **Depends on:** LF.1
+- **Files:** `vitest.setup.ts` and its test, `loopback-only.ts` and its test, `vite.config.ts`,
+  `tsconfig.node.json`, `server/README.md`
+- **Do:** move the blocking itself into `loopback-only.ts`, which `vitest.setup.ts` uses and which
+  a Node process can preload (`--import`). Tests' child processes (such as `main.test.ts`'s server)
+  get it through `NODE_OPTIONS`, and a blocked connection there fails the process loudly.
+- **Done when:** `npm test` passes, a test shows a child Node process refused a non-loopback
+  connection, and `server/README.md` › Tests no longer lists child processes as uncovered.
+
 ## Into AWS
 
 Infrastructure as code in `infra/`, a CDK app, in an AWS account that also holds things that
