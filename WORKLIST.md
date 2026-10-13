@@ -84,3 +84,80 @@ user says its step is done.
   librarian sections state the limit and why.
 - **Done when:** `npm run build` and `npm test` pass; a test shows a model that keeps calling
   tools stops after exactly 8 calls, with every call settled.
+
+---
+
+## Before AWS
+
+Two things the app needs before it's hosted: logs that Claude can read without the user copying
+from a terminal, and a passphrase so a public URL can't be used by anyone who finds it. When this
+phase is done:
+
+- the server writes structured logs to a file Claude can read, and the same lines would go to
+  CloudWatch unchanged;
+- errors in the browser reach the same log;
+- nothing in the app works without the passphrase, and the sign-in page fits the design.
+
+### Rules for this phase
+
+- **AWS credentials come only from `.env.local`.** There are profiles in `~/.aws/config`, and
+  they **must never be used**. Never read, print, copy or edit `.env.local`.
+- **No real Bedrock calls.** Tests and live checks use the fake models.
+- **`.data/` is the user's data.** Never start a server on it (the user's dev server may be
+  running there); use `RTFM_DATA_DIR` on a temporary folder. Never delete or edit the ledger.
+- **Logs never hold secrets:** no credentials, no passphrase, no session tokens, no cookies.
+
+### BA.1 — Structured logs
+- **Status:** todo
+- **Depends on:** OH.11, OH.14 (they change `README.md` and `ARCHITECTURE.md`)
+- **Files:** `server/**`, `src/**` (reporting browser errors only), `README.md`,
+  `ARCHITECTURE.md`, `package.json` (a `logs` script)
+- **Do:**
+  - One small logger in `server/` writes one JSON object per line to standard output and to
+    `<data folder>/logs/<UTC date>.jsonl`, with a time, a level and an event name. Keep 14 days
+    of files.
+  - Log: server start and stop; each API request (method, path, status, duration, a request
+    id); each model call (job, model, outcome, tokens, cost, duration, its ledger call id);
+    section runs starting, joined, finished, failed and aborted; librarian replies (turns, tools
+    called, outcome); refusals (the local-only checks, the lock, the caps, the kill switch); and
+    every error with its stack. Log sizes and ids rather than manual text, prompts or replies.
+  - Replace the server's `console.error` and `console.warn` calls with the logger.
+  - The browser reports uncaught errors, unhandled rejections and failed API requests to a new
+    `POST /api/client-errors` route (subject to the local-only checks), which logs them.
+  - `npm run logs` shows recent entries, with options to filter by level and event and to follow
+    new lines, and takes a data folder like `npm run usage` does.
+  - README.md says where the logs are and how to read them; ARCHITECTURE.md describes the logger
+    and the events.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover the log file,
+  retention, the request and model-call entries, the client-error route, and that no secret
+  reaches a log line; live, a section write, a librarian reply and a forced browser error each
+  appear in `npm run logs`.
+
+### BA.2 — The passphrase: design
+- **Status:** todo
+- **Depends on:** BA.1
+- **Files:** `ARCHITECTURE.md`, `DESIGN.md`
+- **Do:** add the design for user approval, short and concrete:
+  - where the passphrase is set (a setting loaded at runtime, never committed) and what the
+    server does when it isn't set;
+  - how the server checks it (a stored hash, a constant-time comparison) and slows guessing
+    (for example a few attempts a minute);
+  - the session: an `HttpOnly`, `SameSite=Strict` cookie holding a signed token (the reader's
+    streams can't send headers), how long it lasts, signing out, and what a changed passphrase
+    does to existing sessions;
+  - which routes need it (everything except signing in), what a request without it gets, and
+    how the page responds (the sign-in page, then back to where the user was);
+  - the sign-in page's design, within DESIGN.md's rules;
+  - how it carries over to AWS (where the passphrase and signing key would live).
+- **Done when:** the design is reviewed, then marked `needs-human`; the user approves it.
+
+### BA.3 — The passphrase: build
+- **Status:** todo
+- **Depends on:** BA.2 and the user's approval
+- **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
+- **Do:** build what BA.2's approved design says, with the sign-in page and signing out; the
+  screenshot script signs in; logs record sign-ins and refusals without the passphrase or token.
+- **Done when:** `npm run build`, `npm test` and `npm run shot` pass; tests cover every route
+  refusing without a session, signing in and out, a wrong passphrase, the attempt limit, a
+  tampered or expired token, and streams working with the cookie; live, the whole app works
+  after signing in and nothing works before.
