@@ -62,6 +62,10 @@ has the checks it makes.
 | `npm run logs`    | The server's recent log entries, filtered or followed. See below.            |
 | `npm run audit`   | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
 
+The `rule-audit` skill (`.claude/skills/rule-audit/SKILL.md`) builds on `npm run audit`: told to
+"run the rule audit", a session ranks the written rules agents break by how often and what each
+break cost, and proposes tasks that turn the top ones into code. It changes no files.
+
 ### Another data folder or port
 
 `RTFM_DATA_DIR` and `RTFM_PORT` run the server on another data folder or port, with nothing
