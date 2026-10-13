@@ -1,12 +1,12 @@
 # src/librarian
 
 The librarian's conversation on the landing page (`src/home/`). You send a message; the store
-sends the conversation to the server's librarian (`POST /api/librarian`, `ARCHITECTURE.md` › The
-librarian) and streams the reply back: what the librarian is doing while it works, then its text.
-A reply can end with a page action, opening a manual or proposing a delete, which the store hands
-to the page, and a reply that creates a manual tells the page so as soon as it is saved. The
-conversation lives in memory for the life of the page (it survives route changes, not reloads),
-and only the browser keeps it.
+sends the conversation to the server's librarian (`POST /api/librarian`,
+`server/agent/README.md` › The librarian) and streams the reply back: what the librarian is doing
+while it works, then its text. A reply can end with a page action, opening a manual or proposing a
+delete, which the store hands to the page, and a reply that creates a manual tells the page so as
+soon as it is saved. The conversation lives in memory for the life of the page (it survives route
+changes, not reloads), and only the browser keeps it.
 
 Import everything from `src/librarian`:
 
@@ -126,7 +126,7 @@ after a `propose-delete` is handed over counts; any other call does nothing.
 
 These set up the conversation when the page loads, so a single page load shows each screenshot
 state. They combine. Their replies come from the server's preview (`?freeze=` on the librarian
-route, `ARCHITECTURE.md` › The librarian), which always plays the **scripted fake model**,
+route, `server/agent/README.md` › Previews), which always plays the **scripted fake model**,
 whatever models the server runs, sends no page actions and costs nothing.
 
 | Option                      | Starting conversation | `status` |

@@ -13,7 +13,7 @@ code and this doc disagree, one of them is a bug.
   - **The landing page** (`/`, `src/home/`): your library of manuals, beside a librarian agent
     you talk to, which lists, finds, opens and proposes deleting manuals, and starts new ones.
   - **The reader** (`/read/<manual>`, `src/reader/`): one manual's start page and its sections.
-- A local API server (`server/`, described in `ARCHITECTURE.md`) stores the manuals, writes their
+- A local API server (`server/`, described in `server/README.md`) stores the manuals, writes their
   sections, and runs the librarian.
 - **Failure states only where something can fail:** a section the server couldn't write has two
   (see [When a section can’t be written](#when-a-section-cant-be-written)); on the landing page,
@@ -34,7 +34,7 @@ A section's body is not part of the manual: the reader fetches it when the secti
 Opening an `unwritten` section switches it to `writing`; the server writes it and streams it in,
 and the section becomes `written`. If the server can't write it, the section goes back to
 `unwritten` and the reader says why. The hooks and the markdown renderer that expose this are
-documented in `src/manual/README.md`, and the API in `ARCHITECTURE.md`.
+documented in `src/manual/README.md`, and the API in `server/api/README.md`.
 
 The landing page lists summaries of manuals (`ManualSummary`), documented in
 `src/library/README.md`.
@@ -739,7 +739,7 @@ reader's own, in `Prose.css`.
 - All UI copy uses real punctuation: ’ “ ” – — … (`Waiting for the first words…`,
   `Not yet written — opening it starts the writing.`). The content is typographic too: the seed
   manuals are written that way, and the server turns Claude's straight quotes and apostrophes
-  into curly ones as it streams, outside code (`ARCHITECTURE.md` §4).
+  into curly ones as it streams, outside code (`server/writer/README.md` › The Bedrock writer).
 - Tabular figures: TOC, outline and pager labels, status percentages and word counts (with
   thousands separators), table cells, ordered-list markers, footnote references.
 
@@ -981,9 +981,9 @@ text edge.
   words the librarian wrote before a tool), exactly one reply line tall (24px), a `.write-head-line` with `data-live`: the cue bar with its breathing lamp,
   and beside them the activity, `--text-micro` mono `--cue`. It fades in over `--dur-base`.
   - **The activity** starts as `Thinking…`. While the librarian runs a tool, it is that tool's
-    status line (`Searching the shelves…`; `ARCHITECTURE.md` › The librarian lists them all), and
-    stays until the next words arrive. The words change in place, with no motion.
-  - **Planning a manual** takes many seconds (`ARCHITECTURE.md` › Configuration has the measured
+    status line (`Searching the shelves…`; `server/agent/README.md` › The librarian lists them
+    all), and stays until the next words arrive. The words change in place, with no motion.
+  - **Planning a manual** takes many seconds (`server/README.md` › Configuration has the measured
     time), so its line moves on as the plan does: about a second in, once the planned title has
     arrived, `Planning “Restoring a Vintage Pinball Machine”…`; if the first plan fails its
     checks, `Revising the plan…`, then `Revising “…”…`.

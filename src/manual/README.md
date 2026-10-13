@@ -17,7 +17,7 @@ import {
 
 The data model (`Manual`, `Chapter`, `Section`) is the API's: `types.ts` re-exports it from
 `server/api/types.ts` with `export type`, so nothing from `server/` reaches the bundle. It is
-described in `DESIGN.md`, and the API in `ARCHITECTURE.md` › The API. The sample manual lives in
+described in `DESIGN.md`, and the API in `server/api/README.md`. The sample manual lives in
 `server/seed/`; the browser has no copy.
 
 ## Files

@@ -7,7 +7,7 @@ often. Recheck them before you rely on them.
 for every job: writing sections, the librarian and planning manuals. This doc recommends the 5.5
 models, but this account's Bedrock access block refuses the newer models, and Haiku 4.5 is open to
 all Bedrock customers. No other model here is wired up, and the bake-off below was not run. The
-choice lives in `server/config.ts` and `ARCHITECTURE.md`.
+choice lives in `server/config.ts` and `server/README.md` › Configuration.
 
 ## Summary
 

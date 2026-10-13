@@ -16,10 +16,11 @@ writes each section only when a reader opens it. The app has two pages:
 
 ## The docs
 
-- `ARCHITECTURE.md`: the server, its API, storage, the section writers, the model gateway, the
-  agent loop, the librarian, configuration, logs and the reader's store.
+- `ARCHITECTURE.md`: a map of the code: what each folder holds, which folders may import which,
+  and the rules that cut across them.
 - `DESIGN.md`: the design of both pages: their rules, tokens, layout and behavior.
 - `src/*/README.md`: the API of each shared folder in `src/` (`librarian`, `library`, `manual`, `ui`).
+- `server/README.md` and each `server/*/README.md`: how the server and each of its folders work.
 - `PROCESS.md`: how work happens: the roles, where state lives, who approves rule changes, and
   the orchestrator's protocol.
 - `WORKLIST.md`: the phases and tasks, with each task's status.
@@ -48,7 +49,8 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
   start and `node --watch` waits for a file change, while Vite keeps running. Stop the other
   server, then save a server file or restart `npm run dev`.
 
-The API server listens on `127.0.0.1` only; `ARCHITECTURE.md` › The API has the checks it makes.
+The API server listens on `127.0.0.1` only; `server/api/README.md` › Only this machine's own pages
+has the checks it makes.
 
 | Script            | What it does                                                                 |
 | ----------------- | ---------------------------------------------------------------------------- |
@@ -78,7 +80,7 @@ RTFM_DATA_DIR=/tmp/rtfm-try RTFM_PORT=0 npm run server   # alone, on any free po
   0 to 65535 stops the server from starting.
 - Vite's proxy always points at 8787, so `RTFM_PORT` is for `npm run server` alone.
 
-`ARCHITECTURE.md` › Configuration has the rules.
+`server/README.md` › Configuration has the rules.
 
 ## The models
 
@@ -98,7 +100,7 @@ RTFM_DATA_DIR=/tmp/rtfm-try RTFM_PORT=0 npm run server   # alone, on any free po
     *Building a Treehouse*): the title shows 0.6s into the plan, and the manual is saved 2.4s
     later. Anything else gets a polite “I can’t do that”.
 - **`bedrock`**: Claude Haiku 4.5, through the model gateway, for both. As measured
-  (`ARCHITECTURE.md` › Configuration has the table):
+  (`server/README.md` › Configuration has the table):
   - It writes a section live: about 4,200–5,000 characters in 12–15 seconds, for $0.007–0.010 a
     section.
   - It answers as the librarian in one model call per turn, usually two or three a reply,
@@ -149,8 +151,8 @@ Everything but the credentials is committed:
 
 The gateway refuses a model call that could cross the daily or monthly cap: nothing is charged,
 and the reader shows "budget reached" (the librarian's reply says its budget is used up). How it
-reserves each call's worst case and settles it afterwards is in `ARCHITECTURE.md` › The model
-gateway.
+reserves each call's worst case and settles it afterwards is in `server/gateway/README.md` › Each
+call.
 
 To try a different setting without changing the committed one (a tiny cap, say), call
 `startServer({ ...config, caps: { dailyUsd: 0.001, monthlyUsd: 20 } })` from a scratch script,
@@ -199,20 +201,20 @@ Another server (PID <pid>) is using the data folder <folder>. Stop it first, or 
 A second `npm run dev` in the same checkout stops altogether, because its Vite also finds 5173
 taken. To run a second server, give it another folder with `RTFM_DATA_DIR`. If a server is
 refused while no server is using the folder, delete `.data/server.lock`. How the lock works is in
-`ARCHITECTURE.md` › Storage.
+`server/storage/README.md` › The data folder's lock.
 
 `npm run usage` prints today's and this month's spend against the caps, by model and by job,
 with counts of aborted, failed and estimated calls, any unsettled reservations, and whether the
 kill switch is on. `npm run usage -- <dataDir>` reads another data folder. A call cut short (the
 reader closed the tab, the model stalled) is marked estimated; what it is charged is in
-`ARCHITECTURE.md` › The model gateway.
+`server/gateway/README.md` › Each call.
 
 ## Logs
 
 The server logs one JSON line per event, both to its standard output (the terminal running
 `npm run dev` or `npm run server`) and to `logs/<yyyy-mm-dd>.jsonl` in its data folder, one file
 per UTC day. The browser's uncaught errors and failed API requests reach the same log. The line's
-shape, how long files are kept, and what is and isn't logged are in `ARCHITECTURE.md` › Logs.
+shape, how long files are kept, and what is and isn't logged are in `server/logging/README.md`.
 
 `npm run logs` prints recent entries, one line each, with any error's stack under it:
 
@@ -281,5 +283,5 @@ npm run shot -- /tmp/shots-after --compare /tmp/shots-before
 - `src/reportErrors.ts`: reports the browser's errors and failed API requests to the server's log.
 - `server/`: the API server, storage and the data folder's lock, the section writers, the agent
   loop, the librarian and its planner, the model gateway, and the logger. The seven seed manuals
-  are in `server/seed/`. `ARCHITECTURE.md` documents it.
+  are in `server/seed/`. `server/README.md` and its folders' READMEs document it.
 - `scripts/`: the `shot` script (`shot.ts`, with the capture helpers in `screenshots.ts`).

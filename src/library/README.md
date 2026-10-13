@@ -2,7 +2,7 @@
 
 The manuals on the landing page (`src/home/`), as the API server stores them: it loads the
 library from `GET /api/manuals` and deletes through `DELETE /api/manuals/:manualId`
-(`ARCHITECTURE.md` › The API). It creates nothing itself: the librarian creates manuals on the
+(`server/api/README.md`). It creates nothing itself: the librarian creates manuals on the
 server, and `refreshLibrary` brings them in. There is no rename.
 
 Import everything from `src/library`:

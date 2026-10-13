@@ -4,8 +4,8 @@ Research only. Every source was read on **2026-10-11**. No AWS calls were made, 
 signed up for or created. "Unconfirmed" marks anything the official docs don't settle.
 
 **Status (2026-10-11):** nothing here is adopted. The app calls Claude Haiku 4.5 on Bedrock, not
-through Claude Platform on AWS. The agent loop is our own, built on the gateway (`ARCHITECTURE.md`
-› The agent loop), not on the AgentCore harness.
+through Claude Platform on AWS. The agent loop is our own, built on the gateway
+(`server/agent/README.md` › The agent loop), not on the AgentCore harness.
 
 ## Summary
 
@@ -488,5 +488,5 @@ All read 2026-10-11.
 - Community, not official: two threads matching the Bedrock symptom,
   https://yomotherboard.com/question/why-cant-my-account-access-newer-anthropic-and-openai-models-through-bedrock/
   and https://yomotherboard.com/?p=487231
-- RTFM: `CLAUDE.md`, `README.md`, `ARCHITECTURE.md` (gateway, `bedrock-client.ts`, credentials),
+- RTFM: `CLAUDE.md`, `README.md`, `server/gateway/README.md` (`bedrock-client.ts`, credentials),
   `research/bedrock-models.md`
