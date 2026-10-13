@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.9 — Put the app at rtfm.moonfetus.com
-- **Status:** todo
+- **Status:** doing (agent aa0e2649282ebf078)
 - **Depends on:** IN.8
 - **Files:** `infra/edge-*.ts` and their tests, `infra/app.ts`, `infra/README.md`, `PROCESS.md`
   (with the user's approval)
@@ -79,7 +79,7 @@ aren't RTFM's.
   orchestrator has a task to move to B.
 
 ### IN.11 — Store the library in DynamoDB
-- **Status:** todo
+- **Status:** doing (agent a31e9f93c83c3faa0)
 - **Depends on:** IN.8 (storage is the same for A and its fallback, so it doesn't wait for IN.10)
 - **Files:** `server/storage/**`, `server/app.ts`, `server/config.ts`, `server/README.md`,
   `infra/app-stack.ts` and its test, `package.json`, `package-lock.json`, `scripts/**`,
