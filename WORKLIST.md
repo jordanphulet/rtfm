@@ -72,6 +72,11 @@ aren't RTFM's.
     `Active`, its endpoint's auth type `IamAuth`, its two log groups. Once this deploy leaves
     `RtfmApp` at `UPDATE_COMPLETE`, the check drops its "`UPDATE_ROLLBACK_COMPLETE` passes too"
     exception.
+  - Before this task's smoke check can run, the user updates the AWS CLI on the laptop: the one
+    installed (2.17, July 2024) has no `lambda-web` service, so `npm run aws -- lambda-web …`
+    fails. `infra/README.md` › Your steps gains it.
+  - Nothing secret goes in a revision's environment: `rtfm-read` can read it
+    (`GetWebFunctionRevision`).
 - **Done when:** the entry passes its tests locally (streams, a `POST`, a disconnect aborting a
   run, the origin check, the static app), `RtfmApp` synthesizes and passes its tests, and the
   smoke check's new commands are in `infra/README.md`.
