@@ -81,7 +81,7 @@ phase is done:
 
 ### BA.3 — The passphrase: build
 - **Status:** todo
-- **Depends on:** BA.2 and the user's approval
+- **Depends on:** BA.2 and the user's approval, RA.2 (both change `README.md`)
 - **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`,
   `research/passphrase.md` (`server/**` and `src/**` include the folder READMEs and page design
   docs)
@@ -94,3 +94,99 @@ phase is done:
   refusing without a session, signing in and out, a wrong passphrase, the attempt limit, a
   tampered or expired token, and streams working with the cookie; live, the whole app works
   after signing in and nothing works before.
+
+---
+
+## Rule audit
+
+A repeatable audit of which written rules agents actually break, and what each break costs, so
+the rules that matter most can be turned into code. An auditor session ran it once by hand on
+2026-10-12, at the user's request; this phase makes it a skill any session can run. When this
+phase is done:
+
+- `npm run audit` reads this repo's Claude Code transcripts and writes candidate rule breaks to a
+  folder outside the repo;
+- the `rule-audit` skill turns those candidates into a ranking by frequency and consequence, with
+  proposed tasks, and changes no files.
+
+### Rules for this phase
+
+- **Transcripts are the user's private record.** Read them only; never copy their content into the
+  repo. Test fixtures are small synthetic transcripts written for the tests.
+- **Never print a credential value.** Anything key- or secret-shaped is shown redacted, in output,
+  logs and reports alike.
+- **The audit writes nothing inside the repo.** Its output goes to a folder outside it.
+- **The skill file needs the user's approval.** It instructs sessions, like `CLAUDE.md`; the
+  orchestrator shows it to the user before committing it. If the sandbox refuses writes under
+  `.claude/skills/`, the agent reports that and doesn't work around it.
+
+### RA.1 — Read the transcripts
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `scripts/audit/**` (new), `package.json`, `ARCHITECTURE.md` (the `scripts/` codemap
+  entry), `README.md`
+- **Do:**
+  - `npm run audit -- [--out <folder>] [--exclude-session <id>]` reads every transcript for this
+    repo: the `~/.claude/projects/` folders for the main checkout and its worktrees, each session
+    and its `subagents/` (with each subagent's `.meta.json` description). It writes JSON files to
+    the output folder (default: a new temporary folder, printed at the end).
+  - **Events:** one per tool call with its result, assistant text and human message, saying who
+    (a session or a subagent and its description) and when, in UTC.
+  - **Dropped:** messages repeated across forked sessions (counted once), harness messages (task
+    notifications, agent hand-backs, system reminders) and the excluded session.
+  - **Credential scan:** counts key- and secret-shaped values, shows only redacted context, and
+    marks the tests' known fake key.
+  - **Candidates**, each with time, session, who, the command or path and the first lines of the
+    result. They are starting points for reading, not verdicts:
+    - the user's messages, where corrections live;
+    - git commands run by subagents that change state;
+    - stopping processes: `pkill`, `killall`, and `kill` with a lookup (`$(…)`, `lsof`, `ps`);
+    - touches of the data folder and of `.env*.local` and `~/.aws`;
+    - edits to `CLAUDE.md`, `PROCESS.md`, `WORKLIST.md` and `.claude/`;
+    - each task commit on `main` and the review agents started for that task before it (commit
+      times from `git log`, compared across time zones);
+    - the orchestrator staging whole folders (`git add -A <folder>`);
+    - the peak number of task agents running at once;
+    - how far each worktree is behind `main`;
+    - tool errors grouped by their first line;
+    - each commit that changed `CLAUDE.md` or `PROCESS.md`, with its date and a short diff.
+  - Tests on synthetic transcripts: a forked duplicate counts once; redaction never lets a value
+    through; commits match reviews across time zones; each detector's known false positives stay
+    out (`git mv -n`, `git stash list`, `git tag -l`, a command inside a heredoc body).
+- **Done when:** `npm run build` and `npm test` pass; nothing is written inside the repo; no
+  output line holds a credential value; run on the real transcripts, it finds the first audit's
+  cases:
+  - design C's builder freeing a port on 2026-10-10, and the four `pkill -f` from already-running
+    agents after the rule was added (19:19–19:40 UTC);
+  - BE.4's and RL.6's `git rm --cached` and `git restore --staged`, and AL.6's
+    `git worktree add`/`remove`;
+  - BE.2's `rm -r .data`;
+  - OH.1, OH.2, OH.4, OH.5, OH.9 and RS.2 committed with no review agent started for them;
+  - no credential value in any transcript, only the tests' fake key;
+  - every worktree behind `main`.
+
+### RA.2 — The rule-audit skill
+- **Status:** todo
+- **Depends on:** RA.1
+- **Files:** `.claude/skills/rule-audit/SKILL.md` (new, the user approves), `README.md`
+- **Do:** a project skill that a session runs when asked to "run the rule audit". The session
+  acts as an auditor: it changes no files and proposes tasks. The method:
+  1. **Collect the rules** from everywhere they live: the history of the rule files (when each
+     rule appeared and what prompted it), the phase rules in `WORKLIST.md`, the "Rules" blocks in
+     agent prompts, the user's corrections, and review findings.
+  2. **Run `npm run audit`** and read every candidate in its context, dropping false positives.
+  3. **Judge each break** by the rule in force at the time, and by whether the agent could have
+     known it (an agent already running never sees a rule added after it started).
+  4. **Weigh consequence:** what each break cost (the user's tools, money, security, data,
+     rework); the incident that prompted the rule; whether it recurred; whether code already
+     enforces it (the gateway, `sdk-boundary.test.ts`, the server lock) and whether breaks stopped
+     after that.
+  5. **Rank** by frequency and consequence, and recommend which written rules to turn into code
+     first. Prefer the repo's own scripts and tests, which make the right way the easy way, over
+     harness hooks. Prefer rules that actually break over ones that only could. Name rules that
+     contradict each other.
+  6. **Report** in the session, with proposed tasks in this file's format for the orchestrator.
+  - `README.md` lists the skill alongside the scripts.
+- **Done when:** reviewed and approved by the user; a fresh session told only "run the rule audit" produces a ranking whose
+  top three match the first audit's (review before commit, stopping processes the agent didn't
+  start, sessions working from stale rules) without being shown them.
