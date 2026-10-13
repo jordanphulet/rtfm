@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.4 — Settle the AWS design
-- **Status:** doing (agent a67c46fb4f3ef74f8; stage 2: writing up the design the user decided on 2026-10-13, with no spikes)
+- **Status:** doing (agent a67c46fb4f3ef74f8; reviewed; waiting for the user to approve and redeploy `RtfmToolkit` from the worktree's template, then the orchestrator commits it and adds IN.7–IN.15 from `research/aws-design.md`)
 - **Depends on:** IN.3
 - **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
   `ARCHITECTURE.md`, `infra/**`
