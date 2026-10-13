@@ -20,7 +20,7 @@ aren't RTFM's.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.4 — Settle the AWS design
-- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1 done; its spike boundary change is in security review, then goes to the user to approve and deploy)
+- **Status:** doing (agent a67c46fb4f3ef74f8; stage 1 in a second round after the security review: the distribution moves to a user-deployed `RtfmSpikeEdge`, and the boundary denies `lambda:PutResourcePolicy`)
 - **Depends on:** IN.3
 - **Files:** `research/aws-design.md`, `research/aws-hosting.md`, `research/lambda-and-dynamodb.md`,
   `ARCHITECTURE.md`, `infra/**`
@@ -48,6 +48,9 @@ aren't RTFM's.
     - a POST with a body through it (OAC needs a body-hash header);
     - whether Lambda sees a client disconnect;
     - the cold-start time to open a section.
+  - Deny `lambda:PutResourcePolicy` in the boundary, for good: on `main` it lets a stack attach a
+    resource policy that gets around `NoFunctionPermissions`. A CloudFront distribution, which
+    can't be scoped by name or safely by tag, lives in a stack the user deploys.
   - Give the exact boundary diff the chosen design needs, the cost at idle and at the $20 cap,
     the local and AWS interface pairs to build, and the build tasks that follow.
 - **Done when:** the doc recommends one design with the spikes' results, every spike stack is
