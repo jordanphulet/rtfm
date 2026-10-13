@@ -135,6 +135,8 @@ Make the repo quicker to find your way around, for agents and people. When this 
   - Keep the folder map in one place, the codemap in `ARCHITECTURE.md`.
   - Cut the README's "Where things live" to what someone running the app needs, and point to
     the codemap for the rest.
+  - `ARCHITECTURE.md`'s opening still says "`DESIGN.md` covers the design of both pages"; name
+    the shared `DESIGN.md` and each page's `src/<page>/DESIGN.md`.
   - README's doc index stays one line per doc. It names the pattern (each folder's README, each
     page's `DESIGN.md`) rather than restating what each folder holds.
 - **Done when:** no folder's description appears in more than one doc; every doc the index names
