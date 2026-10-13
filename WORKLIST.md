@@ -39,59 +39,6 @@ user says its step is done.
 
 ---
 
-## Before AWS
-
-Two things the app needs before it's hosted: logs that Claude can read without the user copying
-from a terminal, and a passcode so a public URL can't spend on Bedrock for anyone who finds it.
-When this phase is done:
-
-- the server writes structured logs to a file Claude can read, and the same lines would go to
-  CloudWatch unchanged;
-- errors in the browser reach the same log;
-- with a passcode set, no API route answers without it, and the passcode screen fits the design.
-
-### Rules for this phase
-
-- **AWS credentials come only from `.env.local`.** There are profiles in `~/.aws/config`, and
-  they **must never be used**. Never read, print, copy or edit `.env.local`.
-- **No real Bedrock calls.** Tests and live checks use the fake models.
-- **`.data/` is the user's data.** Never start a server on it (the user's dev server may be
-  running there); use `RTFM_DATA_DIR` on a temporary folder. Never delete or edit the ledger.
-- **Logs never hold secrets:** no credentials, no passcode, no cookies.
-
-### BA.3 — The passcode gate
-- **Status:** doing (agent abe5e645c548c5c65)
-- **Depends on:** RA.1 (both change `README.md`, `ARCHITECTURE.md` and `package.json`)
-- **Files:** `server/**`, `src/**`, `scripts/**`, `README.md`, `ARCHITECTURE.md`, `DESIGN.md`
-  (`server/**` and `src/**` include the folder READMEs and page design docs)
-- **Do:** build the gate the user approved, as simple as it can be: a static passcode that keeps
-  a public URL from spending on Bedrock.
-  - **The setting:** `RTFM_PASSCODE` in the server's environment, read by `server/config.ts`. The
-    user rotates it by changing it and restarting or redeploying. Not set means no gate, as now.
-  - **The server:** every `/api` route except `POST /api/passcode` answers `401` unless the
-    request carries a cookie `rtfm_passcode` equal to `RTFM_PASSCODE`, compared in constant time.
-    `POST /api/passcode { passcode }` checks it and, when it matches, sets that cookie
-    (`HttpOnly`, `SameSite=Strict`, `Path=/api`, and `Secure` when the request's host isn't
-    local); a wrong one gets `401`. The cookie carries the reader's section streams too.
-    Changing the passcode locks out every browser.
-  - **The page:** any `401` from the API shows a one-field passcode screen, in the house style;
-    on success it reloads where the user was.
-  - **Logs:** refusals and wrong passcodes are logged with no passcode or cookie value.
-  - **Not included:** hashing, signed sessions, expiry, an attempt limit, a sign-out button and a
-    passcode command.
-  - The screenshot script and the tests run with and without a passcode set; the screenshots
-    include the passcode screen.
-  - Write it into the docs that own each part (the server and api READMEs, `ARCHITECTURE.md`'s
-    cross-cutting rules, the design docs) and README's how-to, which recommends a passcode of a
-    few random words, since nothing slows guessing.
-- **Done when:** `npm run build` and `npm test` pass, and `npm run shot` passes with `--compare`
-  showing only the new passcode-screen shots; tests cover every route refusing without the
-  cookie, a wrong passcode, a right one, the streams with the cookie, no gate when unset, and no
-  passcode in any log line; live on a temporary data folder with a passcode set, the app works
-  after entering it and no API route answers before.
-
----
-
 ## Rule audit
 
 A repeatable audit of which written rules agents actually break, and what each break costs, so
@@ -116,7 +63,7 @@ phase is done:
   `.claude/skills/`, the agent reports that and doesn't work around it.
 
 ### RA.2 — The rule-audit skill
-- **Status:** todo
+- **Status:** doing (agent a29b1e232287de45c)
 - **Depends on:** RA.1, BA.3 (both change `README.md`)
 - **Files:** `.claude/skills/rule-audit/SKILL.md` (new, the user approves), `README.md`
 - **Do:** a project skill that a session runs when asked to "run the rule audit". The session
