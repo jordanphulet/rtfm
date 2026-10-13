@@ -100,6 +100,39 @@ than `.githooks/commit-msg` runs no hook:
 git config core.hooksPath .githooks
 ```
 
+### Rule-change notices
+
+`.claude/settings.json` runs three Claude Code hooks from `scripts/hooks/`, so that a session
+learns when the rules it was given are out of date (`PROCESS.md` › How rules spread). A session
+in a worktree, such as one the desktop app starts, runs its hooks from the main checkout:
+`CLAUDE_PROJECT_DIR` is the main checkout, and the hook input's `cwd` is the worktree.
+
+- **`behind-main.ts`**, when a session starts: in a worktree (the hook input's `cwd`) whose
+  `HEAD` is behind the local `main`, it tells the session how many commits behind it is, which of
+  `CLAUDE.md`, `PROCESS.md`, `WORKLIST.md` and `README.md` `main` has changed since the
+  worktree's branch left it, and that `git show main:<file>` reads them. In the main checkout, or
+  when up to date, it says nothing.
+- **`rule-copies.ts save`**, at every session start (a new session, a resume, `/clear` and
+  compaction): it copies the main checkout's `CLAUDE.md` and `PROCESS.md` to
+  `rtfm-rules-<uid>/<session id>/copy/` in the system's temporary folder (private to the user),
+  as the copy in the session's context. A subagent is given its session's copy.
+- **`rule-copies.ts check`**, after every tool call: when either file in the main checkout
+  differs from what the session, or the subagent making the call, last knew of it, it tells that
+  one, once per change, which file changed, the `git diff --no-index` from the file as it was
+  when the session started to the file now (cut short past 4,000 characters), and that the file
+  in the main checkout wins. Which subagent made the call comes from the hook input's `agent_id`;
+  what each has been told is kept in `seen/` beside the copy. Parallel tool calls check at the
+  same time, so a lock lets one of them tell and the others say nothing.
+
+A hook that fails (no git, not a repository, no saved copy) prints nothing and exits 0, so it
+never blocks a session. The check costs about 65ms a tool call through the hook's shell command,
+almost all of it Node starting up and reading TypeScript. The hooks read their JSON input on
+stdin and the project folder from `CLAUDE_PROJECT_DIR`, so they run by hand too:
+
+```sh
+echo '{"session_id":"try","cwd":"<a worktree>"}' | CLAUDE_PROJECT_DIR="$PWD" node scripts/hooks/behind-main.ts
+```
+
 ### Another data folder or port
 
 `RTFM_DATA_DIR` and `RTFM_PORT` run the server on another data folder or port, with nothing

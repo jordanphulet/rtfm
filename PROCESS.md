@@ -34,7 +34,13 @@ proposed, the orchestrator asks the user in its own session.
 
 - Through files, never through messages alone. A rule that should hold is written into the file
   that governs it; a message may point to it but doesn't replace it.
-- A session in a git worktree syncs with main before changing anything the rules govern.
+- A session in a git worktree reads the rule files from `main` (`git show main:<file>`), and
+  bases anything it drafts on `main`'s version.
+- Hooks tell a session when its rules are out of date (`README.md` › Rule-change notices): a
+  session in a worktree behind `main` hears, when it starts, which rule files `main` has changed;
+  and a session or subagent hears at its next tool call when the main checkout's `CLAUDE.md` or
+  `PROCESS.md` has changed since the session started, with the change. The main checkout's file
+  wins over the copy in its context.
 - Every loop pass re-reads `CLAUDE.md` and `PROCESS.md` along with `WORKLIST.md`.
 
 ## Orchestrator protocol

@@ -84,6 +84,8 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `compare.ts`.
 - `audit/`: `npm run audit`, candidate rule breaks from this repo's Claude Code transcripts. See
   `scripts/audit/README.md`.
+- `hooks/`: the Claude Code hooks `.claude/settings.json` runs, which tell a session when its
+  rules are out of date (`README.md` › Rule-change notices).
 - `commit-task.ts`: `npm run commit-task`, which commits a task's work with its `Reviewed-by:`
   trailer. `.githooks/commit-msg` refuses, without one, a task commit or a commit of Claude's
   that changes more than `WORKLIST.md` (`README.md` › Committing task work).
