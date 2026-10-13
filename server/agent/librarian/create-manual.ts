@@ -24,7 +24,7 @@ export function createManualTool({ gateway, store, onStatus, onAction }: {
   return defineTool({
     name: "create_manual",
     description:
-      "Creates a new manual from the user's request: a planner writes its title, author's voice and table of contents, and saves it in the library. It takes about half a minute. Use it when the user asks for a new manual, passing what they asked for in their own words, with anything they said about it earlier.",
+      "Creates a new manual from the user's request: a planner writes its title, author's voice and table of contents, and saves it in the library with no sections written yet. It takes about half a minute. Use it when the user asks for a new manual, at most once per reply, passing what they asked for in their own words, with anything they said about it earlier. If they haven't said what it should be about, ask first. Once it is saved, give its title and offer to open it, but don't open it in the same reply. If it fails, say so plainly.",
     input: { request: z.string().min(1).describe("What the new manual should be about, in the user's words.") },
     status: CREATE_STATUS,
     async run({ request }, signal) {

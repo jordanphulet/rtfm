@@ -321,7 +321,8 @@ describe("the librarian through the gateway", () => {
       { role: "assistant", content: "Confirm it, or keep it." },
       { role: "user", content: `${DELETE_OUTCOME_NOTES.kept}\n\nDelete the geese one` },
     ]);
-    expect(prompts[0]!.system).toContain("call propose_delete for it, even if you proposed the same delete before");
+    const proposeDelete = prompts[0]!.tools!.find(({ name }) => name === "propose_delete")!;
+    expect(proposeDelete.description).toContain("even if you proposed the same delete before");
   });
 
   it("tells the model when an earlier proposed delete was confirmed", async () => {

@@ -88,7 +88,7 @@ export function librarianTools({ gateway, store, onStatus, onAction }: {
     defineTool({
       name: "propose_delete",
       description:
-        "Asks the user to confirm deleting one manual. It deletes nothing: when your reply has finished, the page opens its delete confirmation for that manual, and only the user's choice there deletes it or keeps it. Use it only when the user asks to delete a manual, for one manual per reply. Get the id from list_manuals or find_manuals first, and write nothing before calling it.",
+        "Asks the user to confirm deleting one manual. It deletes nothing: when your reply has finished, the page opens its delete confirmation for that manual, and only the user's choice there deletes it or keeps it. So never say your proposal deleted a manual; say it is waiting for their confirmation. Only the <page_note> that may start the user's next message says how it ended. The user can't write to you while the confirmation is open, so none from an earlier reply is still waiting: whenever they ask to delete a manual, propose it, even if you proposed the same delete before. Use it only when the user asks to delete a manual, for one manual per reply. Get the id from list_manuals or find_manuals first, and write nothing before calling it.",
       input: { manual_id: z.string().min(1).describe("The manual's id, such as \"negotiating-with-geese\".") },
       status: TOOL_STATUS.delete,
       async run({ manual_id }) {
