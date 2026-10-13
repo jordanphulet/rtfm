@@ -1,0 +1,101 @@
+.passcode .passcode-page {
+  padding: var(--space-16);
+}
+
+.passcode .passcode-inner {
+  max-width: var(--measure);
+}
+
+.passcode .passcode-title {
+  margin: 0 0 var(--space-1);
+  font: 600 var(--text-h3) / var(--leading-h3) var(--font-sans);
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}
+
+.passcode .passcode-lead {
+  margin: 0 0 var(--space-8);
+  font: var(--text-lead) / var(--leading-lead) var(--font-sans);
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.passcode .passcode-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font: 600 var(--text-micro) / var(--leading-micro) var(--font-sans);
+  color: var(--ink-muted);
+}
+
+.passcode .passcode-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.passcode .passcode-field {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--ink-faint);
+  border-radius: var(--radius-m);
+  background: var(--ground);
+  font: var(--text-reply) / var(--leading-reply) var(--font-sans);
+  color: var(--ink-strong);
+  transition: border-color var(--dur-quick) var(--ease-out);
+}
+
+.passcode .passcode-open {
+  min-width: var(--tap);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: var(--ground-tint);
+  font: 600 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  font-stretch: calc(var(--wdth-tight) * 1%);
+  color: var(--ink-strong);
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+
+.passcode .passcode-open[aria-disabled] {
+  background: none;
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .passcode .passcode-field:hover {
+    border-color: var(--ink-muted);
+  }
+
+  .passcode .passcode-open:not([aria-disabled]):hover {
+    color: var(--cue);
+  }
+}
+
+.passcode .passcode-status {
+  margin: var(--space-3) 0 0;
+  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.passcode .passcode-status strong {
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+@media (max-width: 1023px) {
+  .passcode .passcode-page {
+    padding: var(--space-16) var(--space-8);
+  }
+}
+
+@media (max-width: 767px) {
+  .passcode .passcode-page {
+    padding: var(--space-8) var(--space-4);
+  }
+}

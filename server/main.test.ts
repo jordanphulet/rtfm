@@ -14,7 +14,7 @@ const TEST_TIMEOUT_MS = 30_000;
 /** Runs `npm run server`'s main.ts on its own data folder, with the fake models and any free port. */
 function startMain(dataDir: string) {
   const child = spawn(process.execPath, [MAIN], {
-    env: { ...process.env, RTFM_DATA_DIR: dataDir, RTFM_PORT: "0", RTFM_MODELS: "fake" },
+    env: { ...process.env, RTFM_DATA_DIR: dataDir, RTFM_PORT: "0", RTFM_MODELS: "fake", RTFM_PASSCODE: undefined },
     stdio: ["ignore", "pipe", "pipe"],
   });
   onTestFinished(() => {

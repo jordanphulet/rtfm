@@ -103,4 +103,20 @@ describe("reporting errors", () => {
 
     expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/manuals", REPORT_URL]);
   });
+
+  it("answers a 401 by asking for the passcode, never settling and never reporting it", async () => {
+    const { apiFetch, startReportingErrors } = await freshModule();
+    const passcode = await import("./passcode/required");
+    startReportingErrors();
+    fetch = stubFetch(async () => Response.json({ error: "Passcode required" }, { status: 401 }));
+    const required = vi.spyOn(passcode, "requirePasscode");
+
+    const settled = vi.fn();
+    void apiFetch("/api/manuals").then(settled, settled);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(required).toHaveBeenCalledTimes(1);
+    expect(settled).not.toHaveBeenCalled();
+    expect(reports()).toEqual([]);
+  });
 });

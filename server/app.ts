@@ -7,6 +7,7 @@ import { librarianRoute } from "./api/librarian.ts";
 import { libraryRoute } from "./api/library.ts";
 import { manualRoute } from "./api/manual.ts";
 import { createRequestHandler } from "./api/node-adapter.ts";
+import { passcodeRoute } from "./api/passcode.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
 import type { ServerConfig } from "./config.ts";
@@ -65,6 +66,7 @@ export async function startServer(config: ServerConfig, replaced: Replaced = {})
     port,
     models: config.models,
     dataDir: config.dataDir,
+    passcodeGate: config.passcode !== undefined,
   });
 
   return {
@@ -109,8 +111,9 @@ async function serve(
     librarianRoute(store, librarian, logger),
     clientErrorsRoute(logger),
   ];
+  if (config.passcode !== undefined) routes.push(passcodeRoute(config.passcode, logger));
 
-  const server = createServer(createRequestHandler(routes, logger));
+  const server = createServer(createRequestHandler(routes, logger, config.passcode));
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, "127.0.0.1", resolve);

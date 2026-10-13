@@ -33,8 +33,18 @@ function open(search = "") {
   return { source: FakeEventSource.last, events, close };
 }
 
+function stubFetch(status = 200) {
+  const urls: string[] = [];
+  vi.stubGlobal("fetch", async (url: string) => {
+    urls.push(url);
+    return { ok: status === 200, status, json: async () => ({}) };
+  });
+  return urls;
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("streamSection", () => {
@@ -56,11 +66,30 @@ describe("streamSection", () => {
     expect(source.closed).toBe(true);
   });
 
-  it("reports an error on the source as an error event, and closes it", () => {
+  it("closes the source on an error, asks the section's URL, then reports the error", async () => {
+    const urls = stubFetch();
     const { source, events } = open();
     source.emit("error");
-    expect(events).toEqual([{ event: "error" }]);
     expect(source.closed).toBe(true);
+    await vi.waitFor(() => expect(events).toEqual([{ event: "error" }]));
+    expect(urls).toEqual(["/api/manuals/the-haunt-that-listens/sections/the-director"]);
+  });
+
+  it("reports the error when the section's URL gets no answer either", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const { source, events } = open();
+    source.emit("error");
+    await vi.waitFor(() => expect(events).toEqual([{ event: "error" }]));
+  });
+
+  it("shows the passcode screen instead of an error when the section's URL answers 401", async () => {
+    const required = vi.spyOn(await import("../passcode/required"), "requirePasscode");
+    stubFetch(401);
+    const { source, events } = open();
+    source.emit("error");
+    await vi.waitFor(() => expect(required).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(events).toEqual([]);
   });
 
   it("returns a function that closes the source", () => {
@@ -80,15 +109,6 @@ describe("streamSection", () => {
 });
 
 describe("fetching", () => {
-  function stubFetch() {
-    const urls: string[] = [];
-    vi.stubGlobal("fetch", async (url: string) => {
-      urls.push(url);
-      return { ok: true, json: async () => ({}) };
-    });
-    return urls;
-  }
-
   it("requests the manual and a section by their ids", async () => {
     const urls = stubFetch();
     await fetchManual("x");

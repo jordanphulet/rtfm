@@ -9,6 +9,8 @@ export interface ServerConfig extends GatewayConfig {
   port: number;
   dataDir: string;
   models: ModelSource;
+  /** What every API request must carry in its `rtfm_passcode` cookie; undefined means no gate. */
+  passcode: string | undefined;
   maxConcurrentRuns: number;
   sectionWordsRequested: number;
   sectionExpectedCharacters: number;
@@ -24,6 +26,7 @@ export const config: ServerConfig = {
   port: portFromEnv(process.env.RTFM_PORT),
   dataDir: dataDirFromEnv(process.env.RTFM_DATA_DIR),
   models: modelsFromEnv(process.env.RTFM_MODELS),
+  passcode: process.env.RTFM_PASSCODE || undefined,
   maxConcurrentRuns: MAX_CONCURRENT_RUNS,
   sectionWordsRequested: 650,
   sectionExpectedCharacters: 4800,

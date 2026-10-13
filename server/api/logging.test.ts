@@ -19,7 +19,7 @@ const STREAM_PATH = `/api/manuals/${SAMPLE_ID}/sections/${UNWRITTEN_ID}/stream`;
 
 async function start(dataDir?: string, replaced: Replaced = {}) {
   const server = await startServer(
-    { ...config, port: 0, dataDir: dataDir ?? (await tempDataDir()), models: "fake" },
+    { ...config, port: 0, dataDir: dataDir ?? (await tempDataDir()), models: "fake", passcode: undefined },
     { writer: fastFakeWriter(), librarian: fakeLibrarianModel(INSTANT_PACE), ...replaced },
   );
   servers.push(server);

@@ -54,9 +54,10 @@ TypeScript directly on Node 22.18+, as `scripts/` does, with its own `tsconfig.s
   - It exits only once standard output has taken every line, since a pipe may still hold some.
 - `.claude/launch.json` runs `npm run dev`.
 - `npm run shot` starts the server in process with `startServer({ ...config, port: 0,
-  dataDir: <temp dir>, models: "fake" })` and points its Vite proxy at it
-  (`http://127.0.0.1:<port>`, also with `changeOrigin: false`). Every run starts from
-  the seed and never touches `.data/` or Bedrock.
+  dataDir: <temp dir>, models: "fake", passcode: undefined })` and points its Vite proxy at it
+  (`http://127.0.0.1:<port>`, also with `changeOrigin: false`), then does the same with a passcode
+  set, on a second temp dir, for the passcode screen. Every run starts from the seed and never
+  touches `.data/` or Bedrock, and a `RTFM_PASSCODE` in the environment changes nothing.
 
 ## Choosing the models
 
@@ -84,11 +85,12 @@ section writer and the librarian's model, which also plans new manuals (`createM
 | Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
+| The passcode: `RTFM_PASSCODE` | the environment, read by `server/config.ts` | yes |
 | Prices | `server/gateway/prices.ts` | no |
 
 - **Types.** `config` is a `ServerConfig`, which extends `GatewayConfig` (`caps`,
   `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) with the port, data dir,
-  models, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
+  models, passcode, `maxConcurrentRuns`, `sectionWordsRequested` and `sectionExpectedCharacters`.
   `startServer` and the gateway take it as it is, so tests and the shot script spread `config` and
   override what they need.
 - **`RTFM_DATA_DIR` and `RTFM_PORT`** run the server on another data folder (resolved against
@@ -97,6 +99,10 @@ section writer and the librarian's model, which also plans new manuals (`createM
   working directory; a `RTFM_PORT` that isn't a whole number from 0 to 65535 stops the server from
   starting, and 0 takes any free port. Vite's proxy always points at `API_PORT`, so `RTFM_PORT`
   is for `npm run server` alone.
+- **`RTFM_PASSCODE`** is `config.passcode`: set, every API request must carry it in a cookie;
+  unset or empty, there is no gate (`server/api/README.md` › The passcode). It is a secret, so it
+  is never logged, and `server.started` says only whether it is set (`passcodeGate`). Change it
+  and restart the server to rotate it.
 - **`maxConcurrentCalls` is `maxConcurrentRuns + 2`**, both from one constant. The section runs
   can use at most 3 calls between them, so 2 are always left for the librarian's turns and the
   planner's plans, one each or two of either. Three sections being written can therefore never
@@ -155,9 +161,10 @@ records them, not read from AWS's bill.
 ## Tests
 
 Tests sit next to the code (`*.test.ts`) and never call Bedrock. Any test that starts a server
-binds port 0. Tests that race a timer against real time leave wide margins (a pause meant to stay
-inside a timeout is at most a quarter of it, one meant to outlast it at least twice as long), so
-they hold when several test runs share the machine.
+binds port 0 and sets its own `passcode` (`undefined` unless it tests the gate), so a
+`RTFM_PASSCODE` in the environment changes nothing. Tests that race a timer against real time
+leave wide margins (a pause meant to stay inside a timeout is at most a quarter of it, one meant to
+outlast it at least twice as long), so they hold when several test runs share the machine.
 
 ## Files
 

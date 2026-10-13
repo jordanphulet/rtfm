@@ -22,7 +22,10 @@ const UNCAUGHT: ClientErrorReport = {
 
 async function start() {
   const { logger, entries } = capturingLogger();
-  const server = await startServer({ ...config, port: 0, dataDir: await tempDataDir(), models: "fake" }, { logger });
+  const server = await startServer(
+    { ...config, port: 0, dataDir: await tempDataDir(), models: "fake", passcode: undefined },
+    { logger },
+  );
   servers.push(server);
   const url = `http://127.0.0.1:${server.port}/api/client-errors`;
   const report = (body: unknown, headers: Record<string, string> = {}) =>

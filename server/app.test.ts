@@ -38,7 +38,7 @@ describe("starting with Bedrock models", () => {
 
 describe("one server per data folder", () => {
   it("refuses a second server on the same folder, and allows one again after the first stops", async () => {
-    const fakeConfig = { ...config, port: 0, dataDir: await tempDataDir(), models: "fake" as const };
+    const fakeConfig = { ...config, port: 0, dataDir: await tempDataDir(), models: "fake" as const, passcode: undefined };
     const first = await startServer(fakeConfig);
     await expect(startServer(fakeConfig)).rejects.toThrow(DataFolderInUse);
 
@@ -75,7 +75,10 @@ describe("stopping", () => {
       prices,
       dataDir,
     });
-    const server = await startServer({ ...config, port: 0, dataDir, models: "fake" }, { librarian: gateway, idle: gateway.idle });
+    const server = await startServer(
+      { ...config, port: 0, dataDir, models: "fake", passcode: undefined },
+      { librarian: gateway, idle: gateway.idle },
+    );
 
     void fetch(`http://127.0.0.1:${server.port}/api/librarian`, {
       method: "POST",

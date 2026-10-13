@@ -44,10 +44,13 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `librarian/`: the librarian's conversation (`useLibrarian`, `useLibrarianActions`), sent to
   `POST /api/librarian` and streamed back. See `src/librarian/README.md`, which also has its URL
   options.
+- `passcode/`: the passcode screen (`PasscodeScreen`), which `App.tsx` shows in either page's
+  place once an API request answers `401` (`usePasscodeRequired`). See
+  `src/passcode/README.md`.
 - `ui/`: the shared design system: tokens, fonts, base styles, the write head, `StatusRing`,
   `Sheet`, `ReplyMarkdown`. See `src/ui/README.md`.
 - `reportErrors.ts`: `startReportingErrors` and `apiFetch`, which report the page's errors and
-  failed API requests to the server's log.
+  failed API requests to the server's log; `apiFetch` also shows the passcode screen on a `401`.
 
 ### The server: `server/`
 
@@ -56,7 +59,7 @@ browser (Vite, :5173)                           server (node:http, :8787)
   and `logs.ts` are the `npm run` commands; `escape-tags.ts` escapes text for the prompts, and
   `testing.ts` holds the tests' helpers. See `server/README.md`.
 - `api/`: the routes (`Route`, `ApiRequest`, `EventSink` in `route.ts`), the Node adapter with the
-  local-only checks (`node-adapter.ts`), the previews (`preview.ts`) and the wire types
+  local-only checks and the passcode gate (`node-adapter.ts`, with `passcode.ts`), the previews (`preview.ts`) and the wire types
   (`types.ts`). See `server/api/README.md`.
 - `storage/`: `ManualStore` and `UsageLedger` (`types.ts`) as files in the data folder
   (`file-manual-store.ts`, `file-ledger.ts`), the data folder's lock (`lock.ts`) and seeding
@@ -96,11 +99,13 @@ other page:
 
 | Folder | Imports from `src/` |
 | --- | --- |
-| `App.tsx` | `home/`, `reader/` (lazily) |
+| `App.tsx` | `home/`, `reader/` (lazily), `passcode/` |
 | `home/` | `library/`, `librarian/`, `ui/` |
 | `reader/` | `manual/`, `ui/` |
 | `manual/`, `library/` | `reportErrors.ts` |
 | `librarian/` | `reportErrors.ts`, and `manual/repair.ts` straight from the file |
+| `passcode/` | `ui/` |
+| `reportErrors.ts` | `passcode/required.ts` straight from the file |
 | `ui/` | nothing |
 
 **In the server**, `app.ts` wires the folders together; below it, each folder imports only these:
@@ -137,6 +142,10 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 - **Only this machine's own pages.** The server listens on `127.0.0.1`, and the Node adapter
   refuses any other `Host` or `Origin`, and any body that isn't JSON, before a route runs
   (`server/api/README.md` › Only this machine's own pages).
-- **One logger**, passed to whatever logs, never logs a manual's text, a prompt or a conversation
-  (`server/logging/README.md`).
+- **The passcode gate.** With `RTFM_PASSCODE` set, the Node adapter answers every request but
+  `POST /api/passcode` with `401` unless its `rtfm_passcode` cookie holds the passcode, so a
+  public URL can't spend the model caps for anyone who finds it; the browser shows the passcode
+  screen on any `401` (`server/api/README.md` › The passcode, `src/passcode/README.md`).
+- **One logger**, passed to whatever logs, never logs a manual's text, a prompt, a conversation
+  or the passcode (`server/logging/README.md`).
 - **Tests never call Bedrock** (`server/README.md` › Tests).

@@ -27,8 +27,19 @@ export function streamSection(
   for (const name of SECTION_EVENTS) {
     source.addEventListener(name, (message) => handle({ event: name, data: JSON.parse(message.data) } as SectionEvent));
   }
-  source.addEventListener("error", () => handle({ event: "error" }));
+  source.addEventListener("error", () => {
+    source.close();
+    void askSectionAfterStreamError(manualId, sectionId).then(() => onEvent({ event: "error" }));
+  });
   return () => source.close();
+}
+
+/**
+ * An `EventSource` error hides the answer's status, so the section's own URL is asked once:
+ * `apiFetch` shows the passcode screen on a 401 and never settles, so the error is never handed on.
+ */
+async function askSectionAfterStreamError(manualId: string, sectionId: string): Promise<void> {
+  await apiFetch(sectionUrl(manualId, sectionId)).catch(() => undefined);
 }
 
 function manualUrl(manualId: string): string {

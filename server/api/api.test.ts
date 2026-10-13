@@ -20,6 +20,7 @@ async function start(writer: SectionWriter = recordingWriter(), dataDir?: string
     port: 0,
     dataDir: dataDir ?? (await tempDataDir()),
     models: "fake",
+    passcode: undefined,
     maxConcurrentRuns: 3,
   };
   const server = await startServer(config, { writer });

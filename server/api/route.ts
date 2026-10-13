@@ -8,6 +8,8 @@ export interface ApiRequest {
 export interface JsonResponse {
   status: number;
   body: unknown;
+  /** The API's cookie to set: the adapter adds its attributes (`server/api/README.md` › The passcode). */
+  cookie?: { name: string; value: string };
 }
 
 export interface EventSink {

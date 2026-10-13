@@ -1,10 +1,14 @@
 import type { ClientError, ClientErrorReport } from "../server/api/types";
+import { requirePasscode } from "./passcode/required";
 
 const REPORT_URL = "/api/client-errors";
 /** Reports one page load may send, so a page that fails in a loop stops reporting. */
 const MAX_REPORTS = 20;
 
 let reportsLeft = 0;
+
+/** What `apiFetch` answers a 401 with: the passcode screen replaces the page, and entering it reloads. */
+const untilReload = new Promise<never>(() => {});
 
 /**
  * Reports uncaught errors and unhandled rejections to the server's log from now on, and turns on
@@ -16,7 +20,10 @@ export function startReportingErrors() {
   window.addEventListener("unhandledrejection", (event) => reportError("rejection", event.reason));
 }
 
-/** `fetch`, reporting a request that gets no answer or a server error (5xx). */
+/**
+ * `fetch`, reporting a request that gets no answer or a server error (5xx). A 401 shows the
+ * passcode screen and never settles, so no page shows it as a failure.
+ */
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const method = init?.method ?? "GET";
   let response: Response;
@@ -25,6 +32,10 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   } catch (error) {
     reportFailedRequest(method, url);
     throw error;
+  }
+  if (response.status === 401) {
+    requirePasscode();
+    return untilReload;
   }
   if (response.status >= 500) reportFailedRequest(method, url, response.status);
   return response;

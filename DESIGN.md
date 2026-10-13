@@ -16,13 +16,16 @@ and these docs disagree, one of them is a bug.
   - **The reader** (`/read/<manual>`, `src/reader/`): one manual's start page and its sections.
 - A local API server (`server/`, described in `server/README.md`) stores the manuals, writes their
   sections, and runs the librarian.
+- **The passcode screen** (`src/passcode/`): when the server has a passcode and the browser hasn't
+  entered it, it takes either page's place ([The passcode screen](#the-passcode-screen)).
 - **Failure states only where something can fail:** a section the server couldn't write has two
   (see [When a section can’t be written](src/reader/DESIGN.md#when-a-section-cant-be-written));
   on the landing page, the library can fail to load ([The library can’t be
   reached](src/home/DESIGN.md#the-library-cant-be-reached)), a delete can fail ([When a delete
   fails](src/home/DESIGN.md#when-a-delete-fails)), and a reply can fail ([When a reply
   fails](src/home/DESIGN.md#when-a-reply-fails)). A new manual whose plan fails its checks isn't
-  created, and the librarian says so in its reply, as words, not as a failure state.
+  created, and the librarian says so in its reply, as words, not as a failure state. The passcode
+  screen says when a passcode is wrong or couldn't be checked.
 - **Dark only.**
 
 ## Data model
@@ -59,6 +62,44 @@ These rules are locked for both pages, as are the craft requirements and the ban
   own adaptation at narrow widths (a different structure, a sheet, content moved), not a shared
   lowest-common-denominator layout.
 - Works from **375px to 1440px+** wide, with no horizontal page scroll.
+
+## The passcode screen
+
+With a passcode set on the server (`server/api/README.md` › The passcode), any `401` from the API
+replaces whichever page asked with this screen, at the same URL. It is the stage door: one
+question, asked plainly, then you're back where you were.
+
+- **Root** `<div class="ui passcode">`, its CSS in `src/passcode/PasscodeScreen.css`, scoped under
+  `.passcode`. No header, no panel, no dock, no skip link: the field is the first stop.
+- **Placed like the library's head**: left-aligned, 64px from the top and the left (32px gutter at
+  768–1023px; 32px from the top and a 16px gutter on phone), its content capped at `--measure`.
+  Nothing is centred and nothing is boxed.
+- **Content**, top to bottom:
+  - `This library is private`, `<h1>`, `--text-h3` 600 `--ink-strong`, `balance` (the notice
+    size, not a hero), 4px above `Enter its passcode to open it.`, `--text-lead` `--ink-muted`;
+  - 32px, the label `Passcode`, `--text-micro` Sans 600 `--ink-muted`, 8px above one row:
+  - **the field**, a `type="password"` input (`autocomplete="current-password"`, so a password
+    manager can fill it), filling the row: the librarian's field in one line, `--tap` tall, 1px
+    `--ink-faint` border (`--ink-muted` on hover), `--radius-m`, `--ground`, `--text-reply`
+    `--ink-strong`, the standard focus ring;
+  - 8px to its right, **Open**, as tall as the field: Send's style, `--text-ui` 600 wdth 85
+    `--ink-strong` on `--ground-tint`, `--radius-s`, `--cue` text on hover. While the field is
+    empty or a check is under way it is `aria-disabled` (still focusable), `--ink-faint` on no
+    fill, with no hover.
+  - 12px below the row, the status line (`role="status"`, so it is announced), `--text-ui`
+    `--ink-muted` starting with a 600 `--ink-strong` title, empty until there is something to say.
+- **Focus on load** on hover-and-fine-pointer devices, so you can type at once; touch devices
+  never get a keyboard they didn't ask for.
+- **Enter or Open** sends it. Open reads `Checking…` until the server answers:
+  - **right:** the page reloads at the same URL, so you land where you were;
+  - **wrong:** **Wrong passcode.** “Check it and try again.” The field keeps focus with its text
+    selected, so typing replaces it;
+  - **no answer** (no server, an error, or 10 seconds): **Couldn’t check the passcode.** “The server
+    didn’t answer. Try again in a moment.”
+- No red, no lock icon, no warning glyph: the words carry it. No motion beyond the shared hover
+  and focus transitions.
+- **States** (`npm run shot`, `passcode/<state>-<desktop|phone>.png`): `start` (desktop: the
+  field focused), `wrong` (a wrong passcode entered).
 
 ## Craft requirements
 

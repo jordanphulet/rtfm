@@ -29,7 +29,7 @@ afterEach(async () => {
 async function start() {
   const writer = recordingWriter();
   const server = await startServer(
-    { ...config, port: 0, dataDir: await tempDataDir(), models: "fake" },
+    { ...config, port: 0, dataDir: await tempDataDir(), models: "fake", passcode: undefined },
     { writer, librarian: fakeLibrarianModel(INSTANT_PACE) },
   );
   servers.push(server);

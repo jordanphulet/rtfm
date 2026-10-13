@@ -1,10 +1,12 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router";
+import { PasscodeScreen, usePasscodeRequired } from "./passcode";
 
 const Home = lazy(() => import("./home"));
 const Reader = lazy(() => import("./reader"));
 
 export default function App() {
+  if (usePasscodeRequired()) return <PasscodeScreen />;
   return (
     <Suspense>
       <Routes>

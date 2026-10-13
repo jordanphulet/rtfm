@@ -8,7 +8,7 @@ import { fakePlan } from "../server/agent/planner/fake-planner.ts";
 import type { FailureReason, ManualSummary } from "../server/api/types.ts";
 import { sectionsInReadingOrder } from "../server/storage/manual.ts";
 import { startServer } from "../server/app.ts";
-import { config } from "../server/config.ts";
+import { config, type ServerConfig } from "../server/config.ts";
 import { baselineProblem, compareShots } from "./compare.ts";
 import { captureAll, localUrl, printSummary, settle, startViteServer, type CaptureGroup } from "./screenshots.ts";
 
@@ -17,6 +17,9 @@ const SHOTS_DIR = positionals[0] ?? "shots";
 const BASELINE_DIR = values.compare;
 const READER_DIR = `${SHOTS_DIR}/reader`;
 const HOME_DIR = `${SHOTS_DIR}/home`;
+const PASSCODE_DIR = `${SHOTS_DIR}/passcode`;
+const SHOT_PASSCODE = "copper lantern tidal owl";
+const WRONG_PASSCODE = "copper lantern";
 const TYPED_MESSAGE = "Delete the manual about birthday parties";
 const UNHANDLED_MESSAGE = "Sing me a sea shanty about geese";
 const LIST_MESSAGE = "What do I have?";
@@ -86,12 +89,27 @@ try {
   if (dataDir) await rm(dataDir, { recursive: true, force: true });
 }
 
+/** Both pages on a server with no passcode, then the passcode screen on a second server with one. */
 async function captureWithServers(dataDir: string): Promise<boolean> {
-  const apiServer = await startServer({ ...config, port: 0, dataDir, models: "fake" });
+  await clearShots();
+  const pages = await captureOnServer({ dataDir: path.join(dataDir, "open"), passcode: undefined }, [
+    ...captureGroups(READER_DIR, READER_SIZES, readerShots()),
+    ...captureGroups(HOME_DIR, HOME_SIZES, homeShots()),
+  ]);
+  const passcode = await captureOnServer(
+    { dataDir: path.join(dataDir, "gated"), passcode: SHOT_PASSCODE },
+    captureGroups(PASSCODE_DIR, HOME_SIZES, passcodeShots()),
+  );
+  return printSummary([...pages, ...passcode]);
+}
+
+/** Captures through a Vite server of its own, in front of an API server with the fake models and these settings. */
+async function captureOnServer(settings: Pick<ServerConfig, "dataDir" | "passcode">, groups: CaptureGroup[]) {
+  const apiServer = await startServer({ ...config, ...settings, port: 0, models: "fake" });
   try {
     const viteServer = await startViteServer(apiServer.port);
     try {
-      return await captureShots(localUrl(viteServer));
+      return await captureAll(localUrl(viteServer), groups);
     } finally {
       await viteServer.close();
     }
@@ -100,19 +118,11 @@ async function captureWithServers(dataDir: string): Promise<boolean> {
   }
 }
 
-async function captureShots(baseUrl: string): Promise<boolean> {
-  await clearShots();
-  const results = await captureAll(baseUrl, [
-    ...captureGroups(READER_DIR, READER_SIZES, readerShots()),
-    ...captureGroups(HOME_DIR, HOME_SIZES, homeShots()),
-  ]);
-  return printSummary(results);
-}
-
 async function clearShots() {
   await rm(SHOTS_DIR, { recursive: true, force: true });
   await mkdir(READER_DIR, { recursive: true });
   await mkdir(HOME_DIR, { recursive: true });
+  await mkdir(PASSCODE_DIR, { recursive: true });
 }
 
 function readerShots(): Shot[] {
@@ -161,6 +171,14 @@ function homeShots(): Shot[] {
       prepare: deleteFirstManual,
       expectedErrors: [/Failed to load resource: the server responded with a status of 409/],
     },
+  ];
+}
+
+function passcodeShots(): Shot[] {
+  const refusals = [/Failed to load resource: the server responded with a status of 401/];
+  return [
+    { state: "start", path: "/", expectedErrors: refusals },
+    { state: "wrong", path: "/", prepare: enterWrongPasscode, expectedErrors: refusals },
   ];
 }
 
@@ -255,6 +273,14 @@ async function createPlannedManual(page: Page) {
       await route.fulfill({ response, body: (await response.text()).replace("event: done", `${action}event: done`) });
     },
   );
+}
+
+async function enterWrongPasscode(page: Page) {
+  const input = await clickHook(page, "passcode-input");
+  await input.pressSequentially(WRONG_PASSCODE);
+  await input.press("Enter");
+  await page.getByText("Wrong passcode.").waitFor({ timeout: REPLY_TIMEOUT_MS });
+  await settle(page);
 }
 
 async function openDeleteConfirmation(page: Page) {

@@ -42,18 +42,19 @@ the same lines unchanged:
 ## What is logged
 
 Ids, sizes, counts and durations, never a manual's text, a prompt, a conversation or a reply, a
-request's query or headers (other than a refused request's `Host` and `Origin`), or credentials. A
-browser error's message and stack are logged as the browser reports them. The Bedrock client writes
-the AWS keys out of a thrown error's message and stack, since a signature error from AWS quotes the
-access key ID.
+request's query or headers (other than a refused request's `Host` and `Origin`), credentials, or
+the passcode, whether entered or carried in a cookie. A browser error's message and stack are
+logged as the browser reports them. The Bedrock client writes the AWS keys out of a thrown error's
+message and stack, since a signature error from AWS quotes the access key ID.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
-| `server.started`, `server.stopped` | INFO | `startServer` listening (`port`, `models`, `dataDir`), and `close()` done |
+| `server.started`, `server.stopped` | INFO | `startServer` listening (`port`, `models`, `dataDir`, and `passcodeGate`: whether a passcode is set), and `close()` done |
 | `server.refused` | WARN | The data folder's lock is held by another server (`pid`, `dataDir`) |
 | `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use); an uncaught exception or unhandled rejection in `main.ts` |
 | `request` | INFO, WARN for 5xx | Each request, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
-| `request.refused` | WARN | The local-only checks refused it, or its body was too long or not JSON (`status`, `host`, `origin`) |
+| `request.refused` | WARN | The local-only checks refused it, it didn't carry the passcode (`401`), or its body was too long or not JSON (`status`, `host`, `origin`) |
+| `passcode.wrong`, `passcode.accepted` | WARN, INFO | `POST /api/passcode` with a wrong passcode, or the right one (no fields: never the passcode) |
 | `request.failed` | ERROR | A handler threw (the 500 in `server/api/README.md` › Routes) |
 | `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
 | `model.refused` | WARN | The gateway refused a call: `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap` or `busy`) |
@@ -72,14 +73,18 @@ access key ID.
 ## Browser errors
 
 `src/reportErrors.ts` reports what goes wrong in the page to `POST /api/client-errors`, which is
-subject to the local-only checks like any route:
+subject to the local-only checks and the passcode like any route (so a browser that hasn't
+entered the passcode reports nothing):
 
 - `startReportingErrors()`, called in `main.tsx`, listens for `error` (an uncaught error) and
   `unhandledrejection` on `window`. `apiFetch`, which the library, manual and librarian stores
   use in place of `fetch`, reports a request that gets no answer or a 5xx. A 4xx is the server's
-  own answer and already in its `request` line. Section streams aren't reported: the browser fires
+  own answer and already in its `request` line; a 401 shows the passcode screen instead
+  (`src/passcode/README.md`). Section streams aren't reported: the browser fires
   an `error` on an `EventSource` whenever the page is left mid-stream, and a stream the server
-  ends early is in its own log (`section.aborted`, `clientClosed`).
+  ends early is in its own log (`section.aborted`, `clientClosed`). After a stream's error the page
+  asks the section's URL once through `apiFetch` (to find a `401`), so that request is reported
+  if it gets no answer or a 5xx.
 - A report is `{ kind, page, … }`, the `ClientErrorReport` in `api/types.ts`: `error` or
   `rejection` with the error's `name`, `message` and `stack`; or `request` with its `method`,
   `path` and `status` (none when there was no answer). `page` is the page's path, without its
@@ -120,7 +125,8 @@ control characters escaped, and reading whole lines from an offset (the follow l
 not tested); the request, refusal, model-call, run and reply entries; the client-error route
 (its fields, the local-only checks, truncation and the hourly limit); `main.ts` writing the same
 lines to standard output and the file; and that no cookie, query, conversation or section text
-reaches the log file (`api/logging.test.ts`), nor an AWS key from a Bedrock error
+reaches the log file (`api/logging.test.ts`), nor the passcode, entered or in a cookie
+(`api/passcode.test.ts`), nor an AWS key from a Bedrock error
 (`gateway/bedrock-client.test.ts`, since only `server/gateway/` may use the Bedrock client).
 
 ## Files

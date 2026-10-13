@@ -27,7 +27,7 @@ afterEach(async () => {
 
 async function start(librarian: Gateway = fakeLibrarianModel(INSTANT_PACE), dataDir?: string) {
   dataDir ??= await tempDataDir();
-  const server = await startServer({ ...committedConfig, port: 0, dataDir, models: "fake" }, { librarian });
+  const server = await startServer({ ...committedConfig, port: 0, dataDir, models: "fake", passcode: undefined }, { librarian });
   servers.push(server);
   const base = `http://127.0.0.1:${server.port}/api`;
 

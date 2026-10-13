@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "../logging/logger.ts";
+import { isPasscode, PASSCODE_COOKIE, PASSCODE_PATH, passcodeRequired } from "./passcode.ts";
 import { badRequest, notFound, type EventStream, type JsonResponse, type Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
@@ -23,7 +24,8 @@ class Refused extends Error {
   }
 }
 
-export function createRequestHandler(routes: Route[], logger: Logger) {
+/** With a `passcode`, every request but `POST /api/passcode` must carry it in its cookie. */
+export function createRequestHandler(routes: Route[], logger: Logger, passcode?: string) {
   return async (request: IncomingMessage, response: ServerResponse) => {
     const startedAt = performance.now();
     const logged: RequestFields = { requestId: randomUUID(), method: request.method, path: pathOf(request) };
@@ -34,8 +36,9 @@ export function createRequestHandler(routes: Route[], logger: Logger) {
     });
     try {
       refuseOtherSites(request);
-      const body = await readJsonBody(request);
       const url = new URL(request.url ?? "/", "http://localhost");
+      if (passcode !== undefined) refuseWithoutPasscode(request, url.pathname, passcode);
+      const body = await readJsonBody(request);
       const match = matchRoute(routes, request.method, url.pathname);
       if (!match) return writeJson(response, notFound);
 
@@ -46,7 +49,7 @@ export function createRequestHandler(routes: Route[], logger: Logger) {
         signal: controller.signal,
       });
       if (typeof result === "function") await writeEvents(response, result);
-      else writeJson(response, result);
+      else writeJson(response, result, request.headers.host);
     } catch (error) {
       if (error instanceof Refused) {
         const fields = { ...logged, status: error.response.status, ...headersOf(request) };
@@ -91,6 +94,27 @@ function refuseOtherSites(request: IncomingMessage) {
   const { host, origin } = request.headers;
   if (!host || !LOCAL_HOST.test(host)) throw new Refused(hostNotAllowed);
   if (origin !== undefined && !LOCAL_ORIGIN.test(origin)) throw new Refused(originNotAllowed);
+}
+
+function refuseWithoutPasscode(request: IncomingMessage, pathname: string, passcode: string) {
+  if (request.method === "POST" && pathname === PASSCODE_PATH) return;
+  const given = cookieValue(request.headers.cookie, PASSCODE_COOKIE);
+  if (given === undefined || !isPasscode(given, passcode)) throw new Refused(passcodeRequired);
+}
+
+/** The value of the first cookie with this name in a `Cookie` header, decoded. */
+function cookieValue(header: string | undefined, name: string): string | undefined {
+  for (const pair of header?.split(";") ?? []) {
+    const [key, ...value] = pair.trim().split("=");
+    if (key === name) return decodedOrUndefined(value.join("="));
+  }
+  return undefined;
+}
+
+/** The API's one cookie: script can't read it, other sites never send it, and only `/api` gets it. */
+export function setCookieHeader({ name, value }: { name: string; value: string }, host: string | undefined): string {
+  const secure = LOCAL_HOST.test(host ?? "") ? "" : "; Secure";
+  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/api${secure}`;
 }
 
 function matchRoute(routes: Route[], method: string | undefined, pathname: string) {
@@ -143,7 +167,8 @@ function decodedOrUndefined(pathPart: string): string | undefined {
   }
 }
 
-function writeJson(response: ServerResponse, { status, body }: JsonResponse) {
+function writeJson(response: ServerResponse, { status, body, cookie }: JsonResponse, host?: string) {
+  if (cookie) response.setHeader("set-cookie", setCookieHeader(cookie, host));
   if (body === undefined) {
     response.writeHead(status);
     response.end();

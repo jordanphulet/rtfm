@@ -133,18 +133,40 @@ To switch to Claude:
 
 Any value of `RTFM_MODELS` other than `fake` or `bedrock` stops the server from starting.
 
+## A passcode
+
+`RTFM_PASSCODE` puts the whole app behind a passcode, so that once it is on a public URL nobody
+who finds it can spend the Bedrock budget:
+
+```sh
+RTFM_PASSCODE='<four or more random words>' npm run dev
+```
+
+- **Pick a few random words**, four or more, rather than one word or a short code. Nothing slows
+  guessing (no attempt limit, no lockout), so the passcode's length is what keeps it safe.
+- With it set, every API request but entering the passcode answers `401` until the browser has
+  entered it, and the page shows a passcode screen in its place. Once it is entered, the page
+  reloads where it was, and the browser keeps a cookie for the rest of its session.
+- **To change it**, set a new one and restart the server. Every browser then has the old one and
+  is asked again.
+- Unset or empty, there is no passcode.
+- It is never logged: refused requests and wrong passcodes are, without it.
+
+How the server checks it is in `server/api/README.md` › The passcode, and the screen's design in
+`DESIGN.md` › The passcode screen.
+
 ## Configuration
 
-Everything but the credentials is committed:
+Everything but the credentials and the passcode is committed:
 
 - `server/config.ts`: the data folder (`RTFM_DATA_DIR` overrides it), the port (`RTFM_PORT`
-  overrides it), the models (`RTFM_MODELS`), the spending caps ($2 a day and $20 a month, UTC),
-  how many sections may be written and how many model calls may run at once, the 30s stall
-  timeout (60s for planning a manual), each job's model and `max_tokens`, the most model turns one
-  librarian reply may take (8), the length in words the prompt asks Claude for
-  (`sectionWordsRequested`), and the length in characters a section's progress counts to while
-  Claude writes (`sectionExpectedCharacters`). The default API port is `API_PORT` in
-  `server/ports.ts`.
+  overrides it), the models (`RTFM_MODELS`), the passcode (`RTFM_PASSCODE`, above), the spending
+  caps ($2 a day and $20 a month, UTC), how many sections may be written and how many model calls
+  may run at once, the 30s stall timeout (60s for planning a manual), each job's model and
+  `max_tokens`, the most model turns one librarian reply may take (8), the length in words the
+  prompt asks Claude for (`sectionWordsRequested`), and the length in characters a section's
+  progress counts to while Claude writes (`sectionExpectedCharacters`). The default API port is
+  `API_PORT` in `server/ports.ts`.
 - `server/gateway/prices.ts`: the dated price table. With `RTFM_MODELS=bedrock`, the server
   refuses to start with a model that isn't in it.
 
@@ -243,7 +265,10 @@ clearing that folder first and nothing else:
   `written`, `dense`, `waiting`, `streaming`, `streaming-full`, `budget`, `error` and `appendix`
   (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
 - `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in
-  `src/home/DESIGN.md`, under "States").
+  `src/home/DESIGN.md`, under "States");
+- `passcode/<state>-<desktop|phone>.png`, for the passcode screen's `start` and `wrong`, taken
+  through a second API server and Vite server, with a passcode set. The pages' shots are taken
+  with none, whatever `RTFM_PASSCODE` is.
 
 `--compare <baseline>` checks a run against an earlier one, such as a copy of `shots/` taken
 before a change:

@@ -80,7 +80,9 @@ The stream:
 - `append` puts its text at its offset (a joining tab's first `append` carries everything so far);
   `written` keeps the text and marks the section written; `frozen` leaves it writing.
 - `failed`, or an `error` on the `EventSource`, records the failure and marks the section
-  `unwritten`. The text that arrived stays in `text`, although the server kept none of it.
+  `unwritten`. After an `error`, `api.ts` first asks the section's URL through `apiFetch`, since
+  the `EventSource` hides the answer's status: a `401` shows the passcode screen instead, and the
+  error is never handed on (`src/passcode/README.md`). The text that arrived stays in `text`, although the server kept none of it.
 - An `append` whose `at` isn't the length of the text so far counts as `failure: "error"`: the
   store never rewrites text already shown, and never leaves a gap.
 - The source is closed after `written`, `frozen`, `failed`, `error` or a mismatched `append`, and

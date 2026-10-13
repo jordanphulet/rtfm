@@ -28,9 +28,11 @@ and the plain handlers behind them. `types.ts` is the contract it shares with th
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
 | `POST /api/librarian` with `{ messages: LibrarianMessage[] }` | `text/event-stream` of `LibrarianEvent`s (`server/agent/README.md` › The librarian), or `400` |
 | `POST /api/client-errors` with a `ClientErrorReport` | `204`, `400`, or `429` past the hourly limit (`server/logging/README.md` › Browser errors) |
+| `POST /api/passcode` with `{ passcode }`, only when a passcode is set | `204` with the passcode cookie, `401 { error: "Wrong passcode" }`, or `400` (The passcode, below) |
 
 Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
-`500 { error: "Internal error" }` (or, once a stream has started, the stream just ends).
+`500 { error: "Internal error" }` (or, once a stream has started, the stream just ends). With a
+passcode set, a request without it gets `401` before any of these (The passcode, below).
 
 ## Only this machine's own pages
 
@@ -61,6 +63,33 @@ A request with no `Host` at all is refused by Node itself, with `400`.
   (`localhost:5173`) and, on the librarian's POST, its `Origin` (`http://localhost:5173`); the
   library's DELETE has no body.
 
+## The passcode
+
+With `RTFM_PASSCODE` set (`server/README.md` › Configuration), the server answers no one who
+hasn't entered it. Unset, or empty, there is no gate and no `POST /api/passcode`.
+
+- **The gate.** After the local-only checks and before the body is read or any route is matched,
+  the Node adapter refuses every request but `POST /api/passcode` with
+  `401 { error: "Passcode required" }` unless its `Cookie` header has `rtfm_passcode` equal to the
+  passcode. Unknown paths get `401` too, so nothing about the API shows before the passcode.
+- **Entering it.** `POST /api/passcode { passcode }` (`api/passcode.ts`) answers the right one
+  with `204` and the cookie, and a wrong one with `401 { error: "Wrong passcode" }` and no cookie.
+- **The cookie** is `rtfm_passcode=<the passcode, URI-encoded>; HttpOnly; SameSite=Strict;
+  Path=/api`, plus `Secure` when the request's `Host` isn't `localhost`, `127.0.0.1` or `[::1]`.
+  The local-only `Host` check (above) refuses every such request before it gets here, so `Secure`
+  comes into play only for a `Host` that check lets in. It has no `Max-Age`, so the browser keeps it for its session. The browser sends it on every API
+  request, the reader's `EventSource` streams included, since they are same-origin.
+- **Compared in constant time:** `isPasscode` compares the SHA-256 digests of the two, which are
+  always the same length, with `timingSafeEqual`.
+- **Rotating it:** change `RTFM_PASSCODE` and restart the server. Every browser's cookie then
+  holds the old one, so every browser gets the passcode screen again.
+- **What it doesn't do:** the passcode is kept and compared as it is, with no signed session, no
+  expiry, no limit on attempts and no sign-out. Nothing slows guessing, which is why `README.md`
+  recommends a passcode of a few random words.
+- **Logged** without the passcode or the cookie: a refused request as `request.refused` (`401`,
+  `Passcode required`), and each passcode entered as `passcode.wrong` or `passcode.accepted`
+  (`server/logging/README.md`).
+
 ## Handlers
 
 Handlers import only `api/route.ts`, never `node:http` or the Node adapter, so they don't depend on
@@ -71,14 +100,16 @@ function given an `EventSink` that ends the stream when it resolves; the choice 
 `handle`, so a stream route can still answer `404`.
 
 Before any route is matched, the Node adapter refuses a request from anywhere but this machine's
-own pages (above), then reads the body, up to 262,144 characters: one that is too long or
+own pages (above), then one without the passcode when one is set (The passcode, above), then reads
+the body, up to 262,144 characters: one that is too long or
 isn't JSON gets `400 { error: "Bad request" }`. Then it:
 
 - matches `method` exactly, and `pattern` by splitting the path on `/`;
 - turns `res.on("close")` into the `AbortSignal`, and logs the request then
   (`server/logging/README.md`);
 - writes the SSE headers (`content-type: text/event-stream`, `cache-control: no-cache`);
-- writes a response whose `body` is `undefined` with no body and no content type (`noContent`, 204).
+- writes a response whose `body` is `undefined` with no body and no content type (`noContent`, 204);
+- sets a response's `cookie` with the attributes in The passcode, above (`setCookieHeader`).
 
 **The library** (`api/library.ts`). A summary's counts come from storage, never from the seed:
 
@@ -167,8 +198,8 @@ data: {}
 
 - `types.ts`: the API contract shared with the browser (Types, above).
 - `route.ts`: `Route`, `ApiRequest`, `EventSink`: what handlers see.
-- `node-adapter.ts`: `node:http` ⇄ `ApiRequest`, the local-only checks, JSON responses, the event
-  stream.
+- `node-adapter.ts`: `node:http` ⇄ `ApiRequest`, the local-only checks, the passcode gate, JSON
+  responses and their cookie, the event stream.
 - `lookup.ts`: finds a manual that has a given section.
 - `library.ts`: `GET /api/manuals`.
 - `manual.ts`: `GET /api/manuals/:manualId`.
@@ -180,3 +211,4 @@ data: {}
 - `preview.ts`: `?freeze`, `?fail` and `?library=empty`: canned, never stored, never billed.
 - `client-errors.ts`: `POST /api/client-errors`: logs what the browser reports
   (`server/logging/README.md` › Browser errors).
+- `passcode.ts`: `POST /api/passcode`, the cookie's name and `isPasscode` (The passcode, above).
