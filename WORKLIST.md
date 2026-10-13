@@ -57,10 +57,11 @@ edits and stops only where two tasks changed the same lines. When this phase is 
   never touch the real file.
 
 ### WT.1 — Read `.env.local` from the main checkout
-- **Status:** doing (agent a499adf9d828fce4d, in its own worktree)
+- **Status:** doing (agent a499adf9d828fce4d, in its own worktree; in review)
 - **Depends on:** —
 - **Files:** `server/gateway/credentials.ts` and its test, `README.md` (the setup step that names
-  `.env.local`), `ARCHITECTURE.md` (the Configuration line)
+  `.env.local`), `ARCHITECTURE.md` (the Configuration line), `server/gateway/README.md` (the
+  `credentials.ts` paragraph)
 - **Do:**
   - `ENV_LOCAL_FILE` is `.env.local` in the main checkout's root: the parent of
     `git rev-parse --path-format=absolute --git-common-dir`, resolved once. Where git isn't
