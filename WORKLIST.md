@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.8 — A finished librarian reply shown as failed on the phone
-- **Status:** doing (agent a009e78e8b6478876)
+- **Status:** doing (agent a009e78e8b6478876; done, in review by a4a12081dfb0a5197)
 - **Depends on:** —
 - **Files:** `src/librarian/**`, `src/home/**`
 - **Do:** on the deployed app, on a phone, the user asked the librarian "Open the haunted house
@@ -78,6 +78,28 @@ Small fixes that keep the repo healthy.
   failure.
 - **Done when:** a test reproduces the failure and passes with the fix, and the phone layout opens
   the manual the librarian names, with the reply shown as finished.
+
+### UP.9 — Report a librarian reply that fails in the browser
+- **Status:** todo
+- **Depends on:** UP.8
+- **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`
+- **Do:** `reply`'s `catch` in `src/librarian/store.ts` shows "This reply failed." and drops the
+  error, so UP.8's `TypeError` never reached the server log. Pass the error to
+  `window.reportError` (which `src/reportErrors.ts` sends to the server log), except for failures
+  `apiFetch` already reports, so nothing is reported twice.
+- **Done when:** a test shows a stream that throws reported once, a request `apiFetch` already
+  reported not reported again, and the reply still shown as failed.
+
+### UP.10 — Check the phone layout in WebKit
+- **Status:** blocked (the user approves downloading Playwright's WebKit build)
+- **Depends on:** —
+- **Files:** `scripts/screenshots.ts`, `scripts/shot.ts`, `package.json`, `README.md`
+- **Do:** checks and screenshots run only Chromium, which is how a WebKit-only gap (UP.8: no
+  `for await` over a stream before Safari 27) reached iPhones. With Playwright's WebKit installed
+  (`npx playwright install webkit`), add a WebKit phone-width run of the librarian flow (ask, get a
+  finished reply, open the named manual) to the screenshot or check script, and say in
+  `README.md` how to run it.
+- **Done when:** the WebKit run passes on `main` and fails on UP.8's parent commit.
 
 ## Waiting on AWS
 
