@@ -44,7 +44,7 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.15 — The passcode as a digest
-- **Status:** doing (agent afd47823474f3e015; review's fixes; the user approved the `CLAUDE.md` line)
+- **Status:** doing (agent afd47823474f3e015; done, being committed)
 - **Depends on:** IN.11, IN.14
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts`, `server/app.ts`,
   `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`,
@@ -79,7 +79,7 @@ aren't RTFM's.
 
 ### IN.20 — Claude on Bedrock in the deployed app
 - **Status:** todo
-- **Depends on:** IN.10, IN.14, IN.15, IN.19
+- **Depends on:** IN.15
 - **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
   `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
