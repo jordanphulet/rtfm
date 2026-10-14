@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.12 — Render equations in sections
-- **Status:** doing (agent ae5b33cd876b1e085; the user approved a fourth round: a cap on KaTeX's rendered strut height)
+- **Status:** doing (agent ae5b33cd876b1e085; fourth round done, in final review)
 - **Depends on:** —
 - **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `server/writer/**`, `package.json`,
   `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `scripts/shot.ts`
