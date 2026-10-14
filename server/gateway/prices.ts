@@ -21,7 +21,7 @@ export interface TokenCounts {
 }
 
 export const prices: PriceTable = {
-  checkedOn: "2026-10-11",
+  checkedOn: "2026-10-14",
   models: {
     [FAKE_MODEL]: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, toolUseSystemPromptTokens: 0 },
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": {

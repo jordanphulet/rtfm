@@ -6,31 +6,40 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const NO_REVIEW_LINE_LIMIT = 40;
+const RECORDED_AGENT = /\bagent\s+([0-9a-f]+)\b/;
 export const MAIN = "main";
 export const CO_AUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 
-const USAGE = `Usage: npm run commit-task -- <ID> --reviewed-by <agent id> [--worktree <path>]
-       npm run commit-task -- <ID> --no-review "<reason>" [--worktree <path>]`;
+const USAGE = `Usage: npm run commit-task -- <ID> --body-file <path> --reviewed-by <agent id> [--worktree <path>]
+       npm run commit-task -- <ID> --body-file <path> --no-review "<reason>" [--worktree <path>]`;
 
 export type FilePatterns = { include: string[]; exclude: string[] };
 export type Task = { id: string; title: string; files: FilePatterns };
+export type WorklistTask = { id: string; title: string; status: string; agent?: string };
 type Review = { reviewedBy: string } | { noReviewReason: string };
 type CommitResult = { subject: string; committed: string[]; leftAlone: string[] };
 type StatusEntry = { code: string; file: string };
 type LineRange = { start: number; end: number };
 
 /**
- * Commits the changed files that task `id`'s **Files** match, with its review trailer, in
- * `repoDir` or, given `worktreeDir`, in that worktree of it. `repoDir` must be the main checkout,
- * on `main`. The task is read from its `WORKLIST.md`, since a worktree's copy may be stale. A
+ * Commits the changed files that task `id`'s **Files** match, with `body` and its review trailer,
+ * in `repoDir` or, given `worktreeDir`, in that worktree of it. `repoDir` must be the main
+ * checkout, on `main`. The task is read from its `WORKLIST.md`, since a worktree's copy may be stale. A
  * worktree holds one task's work, so every changed file in it must match. The commit is built in a
  * separate index holding HEAD and those files, so a refusal or a failed commit leaves the real
  * index as it was; after the commit, the real index takes the committed files. Both folders are
  * top folders, since git status names files relative to the top.
  */
-export function commitTask(repoDir: string, id: string, review: Review, worktreeDir?: string): CommitResult {
+export function commitTask(
+  repoDir: string,
+  id: string,
+  review: Review,
+  body: string,
+  worktreeDir?: string,
+): CommitResult {
   const problem = mainCheckoutProblem(repoDir);
   if (problem) throw new Error(problem);
+  if (body.trim() === "") throw new Error("The commit body is empty: write what changed and the checks that passed.");
   const task = findTask(readFileSync(path.join(repoDir, "WORKLIST.md"), "utf8"), id);
   if (!task) throw new Error(`There is no task ${id} in WORKLIST.md.`);
   if (worktreeDir !== undefined) refuseUnlessWorktree(repoDir, worktreeDir);
@@ -56,7 +65,7 @@ export function commitTask(repoDir: string, id: string, review: Review, worktree
     if ("noReviewReason" in review) {
       refuseLargeChange(id, git(dir, ["diff", "--cached", "--numstat", "-M", "-z"], { env }));
     }
-    git(dir, ["commit", "--file=-"], { env, input: commitMessage(subject, review) });
+    git(dir, ["commit", "--cleanup=whitespace", "--file=-"], { env, input: commitMessage(subject, body, review) });
     return files;
   });
   try {
@@ -72,7 +81,8 @@ export function commitTask(repoDir: string, id: string, review: Review, worktree
 
 /**
  * What is wrong with running the orchestrator's commands in `dir`, or undefined when it is in the
- * main checkout with `main` checked out. `orchestrator-check.ts` and `commitTask` both refuse with it.
+ * main checkout with `main` checked out. `orchestrator-check.ts`, `commit-worklist.ts` and
+ * `commitTask` refuse with it.
  */
 export function mainCheckoutProblem(dir: string): string | undefined {
   const args = ["rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir"];
@@ -156,9 +166,9 @@ function refuseLargeChange(id: string, numstat: string) {
   }
 }
 
-function commitMessage(subject: string, review: Review): string {
+function commitMessage(subject: string, body: string, review: Review): string {
   const reviewer = "reviewedBy" in review ? review.reviewedBy : `none (${review.noReviewReason})`;
-  return `${subject}\n\nReviewed-by: ${reviewer}\n${CO_AUTHOR}\n`;
+  return `${subject}\n\n${body.replace(/^\s*\n/, "").trimEnd()}\n\nReviewed-by: ${reviewer}\n${CO_AUTHOR}\n`;
 }
 
 /** Task `id`'s title and **Files**, from the text of `WORKLIST.md`. */
@@ -168,6 +178,18 @@ export function findTask(worklist: string, id: string): Task | undefined {
   if (!block) return undefined;
   const title = lines[block.start].slice(taskHeading(id).length).trim();
   return { id, title, files: parseFiles(itemText(lines.slice(block.start + 1, block.end), "- **Files:**")) };
+}
+
+/** Each task, with its status on one line and the agent the status records as `agent <id>`. */
+export function worklistTasks(worklist: string): WorklistTask[] {
+  const lines = worklist.split("\n");
+  return lines.flatMap((line, start) => {
+    const heading = line.match(/^### (\S+) — (.*)$/);
+    if (!heading) return [];
+    const block = lines.slice(start, blockEnd(lines, start));
+    const status = itemText(block, "- **Status:**").replace(/\s+/g, " ").trim();
+    return [{ id: heading[1], title: heading[2].trim(), status, agent: status.match(RECORDED_AGENT)?.[1] }];
+  });
 }
 
 function taskHeading(id: string): string {
@@ -196,7 +218,7 @@ export function findItem(block: string[], label: string): LineRange | undefined 
 }
 
 /** The text after `label` of a task block's item, with its continuation lines joined; empty if it has none. */
-export function itemText(block: string[], label: string): string {
+function itemText(block: string[], label: string): string {
   const item = findItem(block, label);
   if (!item) return "";
   return block.slice(item.start, item.end).join(" ").slice(label.length);
@@ -259,7 +281,7 @@ function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${source}$`);
 }
 
-function readStatus(repoDir: string): StatusEntry[] {
+export function readStatus(repoDir: string): StatusEntry[] {
   const args = ["--no-optional-locks", "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames"];
   const entries = git(repoDir, args).split("\0").filter(Boolean);
   return entries.map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3) }));
@@ -269,7 +291,7 @@ function readStatus(repoDir: string): StatusEntry[] {
  * Every changed, deleted and untracked file, one by one, never as a folder. A file added to the
  * index and then deleted (`AD`) is no change from HEAD, so it is left out.
  */
-function changedFiles(status: StatusEntry[]): string[] {
+export function changedFiles(status: StatusEntry[]): string[] {
   return [...new Set(status.filter(({ code }) => code !== "AD").map(({ file }) => file))];
 }
 
@@ -295,21 +317,36 @@ function reviewFrom(values: { "reviewed-by"?: string; "no-review"?: string }): R
   if (reason && reviewedBy === undefined) return { noReviewReason: reason };
 }
 
+function readBodyFile(bodyFile: string): string {
+  try {
+    return readFileSync(bodyFile, "utf8");
+  } catch (error) {
+    throw new Error(`Can't read the body file ${bodyFile}: ${(error as Error).message}`);
+  }
+}
+
 function main(args: string[]): number {
   try {
     const { values, positionals } = parseArgs({
       args,
       allowPositionals: true,
-      options: { "reviewed-by": { type: "string" }, "no-review": { type: "string" }, worktree: { type: "string" } },
+      options: {
+        "body-file": { type: "string" },
+        "reviewed-by": { type: "string" },
+        "no-review": { type: "string" },
+        worktree: { type: "string" },
+      },
     });
     const review = reviewFrom(values);
-    if (positionals.length !== 1 || !review) {
+    const bodyFile = values["body-file"];
+    if (positionals.length !== 1 || !review || !bodyFile) {
       console.error(USAGE);
       return 1;
     }
+    const body = readBodyFile(bodyFile);
     const repoDir = git(process.cwd(), ["rev-parse", "--show-toplevel"]).trim();
     const worktreeDir = values.worktree === undefined ? undefined : path.resolve(values.worktree);
-    const { subject, committed, leftAlone } = commitTask(repoDir, positionals[0], review, worktreeDir);
+    const { subject, committed, leftAlone } = commitTask(repoDir, positionals[0], review, body, worktreeDir);
     console.log(`Committed ${subject}`);
     for (const file of committed) console.log(`  ${file}`);
     if (leftAlone.length > 0) console.log("Left alone:");

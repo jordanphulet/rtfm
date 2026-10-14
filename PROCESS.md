@@ -80,13 +80,16 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
 3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
    keeps its context and its worktree), then wait for it to report back and repeat from step 1.
 4. **Approved:** from the main checkout, with the agent's worktree at `<path>` on `<branch>`:
-   1. `npm run commit-task -- <task id> --worktree <path> --reviewed-by <review agent's id>`, or
-      `--no-review "<reason>"` when the orchestrator reviewed the change alone (40 changed lines
-      at most). It reads the task from the main checkout's `WORKLIST.md` and commits on the
-      task's branch the changed files its **Files** match, as `<task id>: <task title>` with a
-      `Reviewed-by:` trailer. It refuses when a changed file in the worktree isn't in **Files**:
-      the orchestrator adds the file to **Files** (an accepted Outside Files case) or sends the
-      change back.
+   1. `npm run commit-task -- <task id> --worktree <path> --reviewed-by <review agent's id>
+      --body-file <path>`, or `--no-review "<reason>"` when the orchestrator reviewed the change
+      alone (40 changed lines at most). It reads the task from the main checkout's `WORKLIST.md`
+      and commits on the task's branch the changed files its **Files** match, as
+      `<task id>: <task title>` with a `Reviewed-by:` trailer. Its body (`--body-file`) is 2–4
+      lines the orchestrator writes from the agent's report and the review: what changed, any
+      decision made, the checks that passed, and anything left for the user, without repeating
+      the task's **Do**. It refuses when a changed file in the worktree isn't in **Files**: the
+      orchestrator adds the file to **Files** (an accepted Outside Files case) or sends the change
+      back.
    2. `git -C <path> merge --no-edit main`. On a conflict, the orchestrator sends the agent the
       conflicted files, and the agent resolves them, editing files only and running no git
       command. `git -C <path> diff --check` must find no conflict marker left, and the
@@ -97,11 +100,11 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
       `package-lock.json`. If the tests fail, the agent gets the change back as changes needed.
    4. `git merge --ff-only <branch>`, which fast-forwards `main` to the branch. If `main` has
       moved on since the merge, repeat from the merge.
-   5. If the change touches `infra/` beyond its docs and tests, from the main checkout:
-      `npm run cdk -- deploy RtfmApp --require-approval never`, then the smoke check in
-      `infra/README.md` › Deploying the app stack. If either fails, the orchestrator deploys
-      nothing more, adds a `needs-human` task to `WORKLIST.md` with the command's output, and
-      tells the user. It doesn't retry or change AWS by hand.
+   5. From the main checkout, `npm ci`, then `npm run cdk -- diff RtfmApp --method=template`. If
+      it shows a difference: `npm run cdk -- deploy RtfmApp --require-approval never`, then the
+      smoke check in `infra/README.md` › Deploying the app stack. If any of these fails, the
+      orchestrator deploys nothing more, adds a `needs-human` task to `WORKLIST.md` with the
+      command's output, and tells the user. It doesn't retry or change AWS by hand.
    6. `git worktree remove <path>`, then `git branch -d <branch>`. Claude Code locks a worktree
       while its agent runs, so remove it only after the agent has finished. If
       `git worktree remove` refuses because files are left, the orchestrator finds out what they
@@ -118,7 +121,8 @@ orchestrator works in the main checkout and commits the change before it fast-fo
 any task's branch. It starts a review subagent on the change and commits only once the review
 passes, with a `Reviewed-by: <review agent's id>` trailer, which the commit hook requires. Keeping
 `WORKLIST.md` up to date, and git operations such as tags, don't count as work. `WORKLIST.md`
-changes are committed on their own, as "Update work list statuses".
+changes are committed on their own with `npm run commit-worklist`, as "Update work list
+statuses", whose body names each task added, removed or whose status changed, and why.
 
 ### Adding work
 

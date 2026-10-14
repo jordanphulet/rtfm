@@ -41,6 +41,21 @@ export const webFunctionArn = (name: string) => `arn:aws:lambda:${REGION}:${ACCO
 export const RTFM_STACKS = stackArn("Rtfm*");
 
 /**
+ * Every Bedrock call's spending, the caps' totals and the kill switch (`server/gateway/README.md` ›
+ * The table `rtfm-usage`). `RtfmApp` holds it; `rtfm-local` reaches it too, from the laptop.
+ */
+export const USAGE_TABLE = "rtfm-usage";
+export const USAGE_TABLE_ARN = `arn:aws:dynamodb:${REGION}:${ACCOUNT}:table/${USAGE_TABLE}`;
+/** What `server/gateway/dynamodb-spending-ledger.ts` does to the table, its transactions' parts included. */
+export const USAGE_TABLE_ACTIONS = [
+  "dynamodb:GetItem",
+  "dynamodb:Query",
+  "dynamodb:PutItem",
+  "dynamodb:UpdateItem",
+  "dynamodb:ConditionCheckItem",
+];
+
+/**
  * The prefix of the stacks that put the app on the web (its certificate, DNS record, CloudFront
  * distribution, and what lets the distribution invoke the app), which the user deploys: RTFM's
  * roles get no Route 53, ACM or CloudFront permission, and no resource policy. No app stack may

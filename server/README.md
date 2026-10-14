@@ -67,12 +67,16 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 
 - **It listens on `AWS_LAMBDA_HTTP_ENDPOINT`**, the `host:port` Lambda sets
   (`httpEndpointFromEnv` in `config.ts`). Without it, or with no port in it, it doesn't start.
-- **The fake models only.** With `RTFM_MODELS=bedrock` it refuses to start: Bedrock's spend needs
-  one ledger shared by every environment, which a data folder can't be. Its role has no Bedrock
-  permission either.
+- **The fake models only.** With `RTFM_MODELS=bedrock` it refuses to start, and its role has no
+  Bedrock permission either. Its role may read and write the items of `rtfm-usage`, Bedrock's
+  spending ledger, as `rtfm-local` may, but the server doesn't reach that table with the fake
+  models: their spending stays in its throwaway data folder (below).
 - **The manuals in the table `rtfm-app`** (`server/storage/README.md` › The table `rtfm-app`),
   which every environment shares and each seeds when it starts, once across all of them. The
   table's name is `RTFM_APP_TABLE`, which `RtfmApp` sets in the revision's environment.
+- **One writer per section across environments**: a run takes the section's lease in the table
+  before it writes, and a reader whose request reaches another environment waits for the stored
+  body (`server/writer/README.md` › One writer per section).
 - **The table as the execution role.** AWS documents that a Web Function's code runs with its
   execution role, but not how the role's credentials reach the process: its environment-variable
   page reserves `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` and warns that
@@ -138,18 +142,26 @@ section writer and the librarian's model, which also plans new manuals (`createM
 `RTFM_MODELS=bedrock` selects Claude for both.
 
 - Either way, `startServer` builds the manual store `config.manualStorage` names (files in the
-  data folder, unless the Web Function names its table), then one gateway on the file ledger, and
-  the writer on it, all before it seeds or listens. The librarian and its planner use the same
+  data folder, unless the Web Function names its table), then one gateway on a spending ledger,
+  and the writer on it, all before it seeds or listens. The librarian and its planner use the same
   gateway, so one set of caps, the kill switch and the ledger cover every job.
+- **`RTFM_MODELS` also chooses the spending ledger** (`server/gateway/README.md` › The spending
+  ledger): with `"fake"`, the data folder's ledger, totals and `STOP` file; with `"bedrock"`,
+  always the table `rtfm-usage` (`config.usageTable`), on this machine too, reached with
+  `rtfm-local`'s keys. There is no way to run Bedrock on the data folder's ledger. With Bedrock the
+  data folder's lock no longer guards money, since the caps are kept in the table; it still keeps
+  one server per data folder.
 - With `"fake"`, every job's model is `FAKE_MODEL` (`server/gateway/README.md` › The fake model),
   with the job's own `maxTokens` and idle timeout, and the gateway calls the fake model
   (`agent/fake-model.ts`); the fake writer (`writer/fake.ts`) sends the section's sample
   text through it. With `"bedrock"`, the jobs keep their Bedrock models, the gateway calls the
   Bedrock client, and the writer is the Bedrock writer.
 - `createGateway` checks every job's model against the price table (`ModelNotPriced`), and only
-  then calls the client factory it is given, which, with Bedrock, reads the credentials
-  (`CredentialsMissing`) and builds the Bedrock client. Either problem stops the server from
-  starting, and an unpriced model is reported without reading any secret.
+  then calls the factories it is given, which, with Bedrock, read the credentials
+  (`CredentialsMissing`) and build the Bedrock client and the client for `rtfm-usage`. Either
+  problem stops the server from starting, and an unpriced model is reported without reading any
+  secret. The table isn't reached until the first call, so a server whose key can't reach it
+  starts, and each call then fails.
 - `createModels` also returns `idle`, the gateway's `idle()`.
 - Tests replace either model with `startServer(config, { writer, librarian })`. A test that passes
   its own gateway passes its `idle` too, and `close()` waits for it and for the configured
@@ -160,7 +172,7 @@ section writer and the librarian's model, which also plans new manuals (`createM
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the IAM user `rtfm-local`'s, `infra/README.md`), `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat | `server/config.ts` | no |
+| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat, Bedrock's spending table (`usageTable`: `rtfm-usage`, in the region `.env.local` names) | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | The passcode: `RTFM_PASSCODE` | the environment, read by `server/config.ts` | yes |
@@ -227,10 +239,13 @@ section writer and the librarian's model, which also plans new manuals (`createM
   checked 2026-10-11). The table holds the larger, so the bound holds whatever `tool_choice` is
   sent.
 - **Sources:**
+  - **AWS's bill** (Checked against AWS's bill, below) confirms the input and output prices of
+    both profiles.
   - Anthropic's Haiku 4.5 list price, $1 / $5 (the `claude-api` skill, cached 2026-10-06).
   - Anthropic's Bedrock guide, checked 2026-10-11: regional endpoints cost 10% more for Sonnet 4.5
     and later models.
-  - Cache prices use the standard 1.25× and 0.1× multipliers.
+  - Cache prices use the standard 1.25× and 0.1× multipliers. No call caches, so the bill doesn't
+    show them.
   - **Not from AWS's pricing page**, whose Claude tables don't render.
 
 **Measured** with Haiku 4.5 (`global.`): the sections and librarian turns on 2026-10-11, the plan
@@ -243,6 +258,31 @@ records them, not read from AWS's bill.
 | A section aborted mid-stream | as above | charged at 2,048 | — | about $0.013 | about $0.025 |
 | A librarian turn | 2,000–2,700 | up to a few hundred | — | $0.002–0.004 | $0.013–0.016 (about $0.014 for a first turn) |
 | A plan of 23 sections | 3,957 | 2,481 | 21.3s, the longest silence 11.2s (the chapters, about 116 tokens a second) | $0.0164 | about $0.036 |
+
+## Checked against AWS's bill
+
+On 2026-10-14 (UTC), as `rtfm-read`, Cost Explorer's daily cost and usage by usage type for the
+service "Claude Haiku 4.5 (Amazon Bedrock Edition)" (`npm run aws -- ce get-cost-and-usage`), set
+against the calls in `rtfm-usage` by the day they were reserved (UTC). Both days are complete in
+Cost Explorer; the next day, 2026-10-13, was still arriving.
+
+| Day | Input, AWS / ledger | Output, AWS / ledger as reported / ledger as charged | Cost, AWS / ledger |
+| --- | --- | --- | --- |
+| 2026-10-11, 29 calls, 2 aborted | 74,473 / 74,459 | 19,751 / 19,745 / 23,841 | $0.1733 / $0.1937 |
+| 2026-10-12, 46 calls | 116,843 / 116,829 | 10,095 / 10,091 / 10,091 | $0.1673 / $0.1673 |
+
+- **Prices.** Each usage type's cost over its quantity is $1.00 input and $5.00 output per million
+  for `USW2-MP:USW2_InputTokenCount_Global-Units` and `…OutputTokenCount_Global-Units` (the
+  `global.` profile), and $1.10 and $5.50 for `USW2-MP:USW2_InputTokenCount-Units` and
+  `…OutputTokenCount-Units` (the `us.` profile), as `gateway/prices.ts` holds.
+- **Complete calls match to the token.** What AWS billed beyond the ledger each day is one call of
+  14 input and 4–6 output tokens on the `global.` profile, and on 2026-10-11 one more on the `us.`
+  profile, which RTFM never uses: calls made outside the server, worth $0.0001 in all.
+- **An aborted call is billed its input and almost none of its output.** The two sections aborted
+  mid-stream on 2026-10-11 were billed their full input (5,954 tokens) and at most 6 output tokens
+  between them, against the hundreds a section streams in its first 5 seconds (Measured, above).
+  The ledger charged each its full `max_tokens` of output (`server/gateway/README.md` › Each call),
+  2,048 tokens or about $0.01, which is the whole of the day's difference.
 
 ## Tests
 
@@ -303,7 +343,8 @@ the machine.
   and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`
   (`testGateway`, with a config and a ledger of the test's own if it gives them), `inPieces`,
   `collect`, and `readEvents` for server-sent events.
-- `usage.ts`: `npm run usage`.
+- `usage.ts`: `npm run usage`, and its `--import` of the data folder's Bedrock calls into
+  `rtfm-usage`.
 - `logs.ts`: `npm run logs` (`server/logging/README.md`).
 - `escape-tags.ts`: escapes `<` in text inserted in a prompt (the section writer's and the
   planner's).

@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.10 — Measure the deployed app
-- **Status:** todo
+- **Status:** doing (agent a7748e10835ba97ca; done, being committed)
 - **Depends on:** —
 - **Files:** `research/aws-design.md`, `infra/README.md`
 - **Do:** through `https://rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is
@@ -61,43 +61,8 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.12 — One ledger for real spend
-- **Status:** doing (agent a820e5dcd6453a836)
-- **Depends on:** IN.11
-- **Files:** `server/gateway/**`, `server/storage/**`, `server/app.ts`, `server/config.ts`,
-  `server/usage.ts`, `server/README.md`, `README.md`, `ARCHITECTURE.md`, `infra/access-stack.ts`
-  and its test, `infra/app-stack.ts` and its test, `infra/README.md`
-- **Do:**
-  - The ledger, spending totals and kill switch behind interfaces: the data folder's for `fake`,
-    the table `rtfm-usage`'s for `bedrock`, from a laptop too; reserving as one conditional
-    transaction.
-  - The DynamoDB client for them lives under `server/gateway/**`, listed in
-    `gateway/sdk-boundary.test.ts`'s SDK adapters; only `gateway/credentials.ts` reads
-    `rtfm-local`'s keys.
-  - `rtfm-local` gains read and write on `rtfm-usage` only (`RtfmAccess`, which the user approves
-    and deploys); the Web Function's role, the same.
-  - `ARCHITECTURE.md` and `README.md` say `RTFM_MODELS` chooses the ledger, and that with Bedrock
-    the data folder's lock no longer guards money.
-  - Share IN.11's DynamoDB client builder (`dynamoDbClient` in `server/storage/`, pinned, with no
-    credential chain) rather than writing a second one.
-- **Done when:** both implementations pass one shared suite, two servers with Bedrock share the
-  caps in a test against DynamoDB Local, and the docs say so.
-
-### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998)
-- **Depends on:** IN.11
-- **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
-  `server/writer/README.md`
-- **Do:** section leases behind an interface in `runs.ts`, in memory locally and on the section
-  item in `rtfm-app`; a reader on another environment waits for the stored body, then gets it as
-  one `append` and `written`, or `failed`.
-  - `deleteManual` deletes only the ids in the manual's `written` set, so a section item holding only
-    a lease would be left behind and block a recreated manual's section: delete those too (for
-    example by querying `pk = MANUAL#<id>`).
-- **Done when:** the shared suite covers two runs racing for one section on both implementations.
-
 ### IN.14 — `rtfm-ops` and the ops tools
-- **Status:** todo
+- **Status:** doing (agent ab01bdf3c8304e3d4; done, in review by a00bd57f38f4d5949)
 - **Depends on:** IN.12
 - **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
   `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`
@@ -128,19 +93,119 @@ aren't RTFM's.
   the old cookie, and the set command refusing to run without a terminal; no file or log an agent
   can read holds the passcode.
 
+### AW.4 — Charge an aborted call as AWS does
+- **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
+- **Depends on:** AW.1
+- **Files:** `server/gateway/gateway.ts` and its test, `server/gateway/README.md`, `server/README.md`,
+  `README.md`
+- **Do:** AW.1 found AWS bills an aborted call its full input and almost none of its output (on
+  2026-10-11, two aborted sections were billed at most 6 output tokens between them), while the
+  gateway charges every incomplete call its full `max_tokens` of output. Read 2026-10-13's
+  complete numbers (two aborts, one of which had sent 1,788 characters): if AWS's `global.` output
+  that day is about the ledger's reported 46,494 plus a few tokens, charge an `aborted` call 0
+  output tokens; if it's 400–1,000+ higher, charge what the stream delivered (UTF-8 bytes received,
+  capped at `max_tokens`). Either way it stays `estimated`; a `failed` call keeps its full
+  `max_tokens`; the reservation keeps the worst case, so the caps don't change.
+- **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
+  evidence, and `npm test` passes.
+
+### IN.20 — Claude on Bedrock in the deployed app
+- **Status:** todo
+- **Depends on:** IN.10, IN.14, IN.15, IN.19
+- **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
+  `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
+  `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
+- **Do:**
+  - The Web Function runs `RTFM_MODELS=bedrock`: `server/web-function.ts` stops refusing it, and
+    the revision sets it.
+  - The Bedrock client in the Web Function signs with the execution role's credentials, chosen
+    explicitly as IN.11's DynamoDB store does (the container endpoint or the environment, with
+    whatever IN.10 found about their lifetime); on the laptop, `credentials.ts` still reads only
+    `.env.local`.
+  - The web role gets `claudeStatements()` (`infra/bedrock.ts`), which the boundary already
+    allows, so no `RtfmToolkit` change; it already reaches `rtfm-usage`, so every call reserves
+    against the central caps.
+  - The docs stop describing the deployed app as fake-models-only.
+- **Done when:** `npm test` passes; after the orchestrator's deploy, the smoke check writes one real
+  section through `https://rtfm.moonfetus.com` (under $0.01) and `npm run usage` (or the ops tool)
+  shows it in `rtfm-usage`.
+
+### IN.21 — Replace an environment before its keys run out
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
+  `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
+  `research/aws-design.md`
+- **Do:** Lambda gives the Web Function its role's keys as environment variables, which a running
+  process can't renew, and nothing bounds an environment's life while requests keep coming less
+  than about 5 minutes apart (IN.10).
+  - `server.started` logs when the keys expire, from `AWS_CREDENTIAL_EXPIRATION` when Lambda sets
+    it (a time, never a key), or that it is unset.
+  - When DynamoDB (or, once IN.20 lands, Bedrock) refuses the keys (`ExpiredTokenException`,
+    `UnrecognizedClientException`), the Web Function logs it and exits with code 1 once its open
+    requests end or after a short bound, so Lambda replaces the environment with fresh keys; when
+    the expiry is known, it also exits that way shortly before it.
+- **Done when:** tests show the logged expiry or "unset", and the exit on a refused key and before
+  a known expiry; after the next deploy, `research/aws-design.md` › Measured records whether Lambda
+  sets the expiry and what happens after the exit.
+
+### IN.22 — See the heartbeat through the edge
+- **Status:** todo
+- **Depends on:** IN.20
+- **Files:** `research/aws-design.md`
+- **Do:** through `https://rtfm.moonfetus.com`, `curl -N` a section stream or a librarian reply
+  with each line timestamped, and confirm a `: heartbeat` arrives about 15 s into a silence, and
+  that a silence before the first event shows nothing until that first heartbeat (the edge holds
+  the headers until the first byte, IN.10).
+- **Done when:** the doc's Measured section records it.
+
+### IN.23 — Close the delete race, and the section route's status
+- **Status:** todo
+- **Depends on:** IN.19
+- **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
+- **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
+  - a lease taken between the delete's `409` check and its transaction: condition each section
+    item's `Delete` in `deleteManual`'s transaction on `attribute_exists(body) OR leaseExpiresAt <
+    :now`, and answer `409` when that cancels it; and say what remains (a lease taken after the
+    delete's query, whose run's save then fails after a full paid section);
+  - the section route's `statusOf` sees only this environment's runs: use the lease attributes the
+    section item's strongly consistent read already returns, so a section written elsewhere shows
+    as writing.
+- **Done when:** the runs' shared suite covers both on both implementations, and `npm test` passes.
+
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.4 — Two more tests that flake under load
+- **Status:** doing (agent af499d66e98fae880; done, being committed)
+- **Depends on:** —
+- **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
+- **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
+  signalled" once failed with `SyntaxError: Unexpected end of JSON input`: the stand-in `aws`
+  writes `started.json` with `writeFileSync`, and the test can read the empty file before the
+  write finishes. Make that write atomic (a temporary file renamed into place) or wait for content
+  that parses. `scripts/hooks/rule-copies.test.ts` › "prints nothing and exits 0 without a saved
+  copy, without git, or with bad input" once timed out at the default 5 s under load: give it a
+  timeout that follows `server/README.md` › Tests, or make it lighter. `scripts/serve-temp.test.ts`
+  › "refuses an unknown option" also hit its 5 s timeout once under load: the same treatment.
+- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
+
+### UP.2 — One retry loop, and the kill switch's path with its ledger
+- **Status:** todo
+- **Depends on:** IN.12, IN.13
+- **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
+  `server/api/librarian.test.ts`
+- **Do:** share the `TransactionConflict` retry loop that `storage/dynamodb-manual-store.ts` and
+  `gateway/dynamodb-spending-ledger.ts` each have (about 12 lines), and move `killSwitchPath` from
+  `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
+- **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
+  and `npm test` passes.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
 user says its step is done.
-
-### AW.1 — Check the ledger against the AWS bill
-- **Status:** blocked (the user compares Bedrock charges in Cost Explorer with `npm run usage`)
-- **Depends on:** —
-- **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
-- **Do:** with the user's figures, correct the Haiku 4.5 prices if they differ, and decide from
-  the bill whether a call that doesn't complete should still be charged its full `max_tokens`.
-- **Done when:** the price table matches AWS's charges and `server/README.md` says what was
-  checked.
 
 ### AW.2 — Claude Platform on AWS
 - **Status:** blocked (the user signs up, following `research/aws-hosting.md` › "Your steps")

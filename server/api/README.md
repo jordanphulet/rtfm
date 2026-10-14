@@ -22,7 +22,7 @@ contract it shares with the browser (`ARCHITECTURE.md` › Boundaries).
 | Route | Response |
 | --- | --- |
 | `GET /api/manuals` | `200 ManualSummary[]`, every manual in storage, sorted by title |
-| `GET /api/manuals/:manualId` | `200 Manual` (`writing` while a run is active), or `404` |
+| `GET /api/manuals/:manualId` | `200 Manual` (`writing` while a run is active, in any environment), or `404` |
 | `DELETE /api/manuals/:manualId` | `204` (no body), `404`, or `409 { error }` while a section of it is being written |
 | `GET /api/manuals/:manualId/sections/:sectionId` | `200 { status, body? }`, with the body only when written, or `404` |
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
@@ -154,19 +154,29 @@ characters: one that is too long or isn't JSON gets `400 { error: "Bad request" 
 Titles are sorted with `localeCompare(…, "en")`, so "The Haunt That Listens" sorts under T.
 
 **A manual** (`api/manual.ts`). Its sections' statuses come from one `writtenSectionIds` read, as
-the library's counts do, and never from the bodies. A section is `writing` if it has a run in
-progress (`runs.writingSectionIds`, taken before the read), otherwise `written` if it has a stored
-body, otherwise `unwritten`.
+the library's counts do, and never from the bodies. A section is `writing` if it is being written
+(`runs.writingSectionIds`, taken before the read), otherwise `written` if it has a stored body,
+otherwise `unwritten`. Being written means a run in progress in the environment that answers, or,
+on the Web Function, another environment's live lease on the section, which one query of the
+manual's partition finds (`SectionLeases.heldElsewhere`, `server/storage/README.md` › Section
+leases). A section saved between the two reads shows as `writing`, never as `unwritten`: its body
+replaces its lease in one transaction.
 
 **Deleting a manual** (`api/delete-manual.ts`) removes its table of contents and every written
 section. Nothing else is touched: not the ledger, not the seeding record (`server/storage/README.md`
 › Seeding), so a deleted seed manual stays deleted.
 
-- **It refuses while writing.** If any section of the manual has a run in progress
-  (`runs.isWriting`), the answer is `409 { error: "A section of this manual is being written" }` and
-  nothing changes. The reader keeps streaming, and the caller can try again once the section is
-  written. Stopping the runs instead would mean sending their readers a failure and paying for calls
-  cut short, for a delete that can simply wait a few seconds.
+- **It refuses while writing.** If any section of the manual is being written (`runs.isWriting`:
+  a run in progress in the environment that answers, or another environment's live lease, as for
+  a manual's statuses above), the answer is `409 { error: "A section of this manual is being
+  written" }` and nothing changes. The reader keeps streaming, and the caller can try again once
+  the section is written. Stopping the runs instead would mean sending their readers a failure and
+  paying for calls cut short, for a delete that can simply wait a few seconds.
+- **A lease taken just after the check** doesn't stop the delete. If the delete's query of the
+  section items finds it, the transaction deletes the lease's item with the others, so the run's
+  next renewal, within 5 seconds, finds the lease gone, and the run is aborted mid-write and ends
+  with `failed: "error"`, storing nothing. If the lease comes after that query, the run's save
+  fails, since its manual is gone, and its lease is released or expires.
 - **A run that starts while the delete is under way** can't bring the manual back. The store
   removes the manual's folder in one `rename`, and `saveBody` refuses a manual that doesn't exist.
   Such a run either saved before the rename, and its body is deleted with the rest, or ends with
@@ -189,6 +199,11 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
   in the body, which is only needed for that backlog. Two tabs show the same text.
 - **Written by the time the stream opens** (another tab finished it): one `append` with the whole
   body, then `written`.
+- **Being written by another environment** of the Web Function, which holds the section's lease:
+  nothing but the heartbeat comment every 15 seconds until that environment stores the body, then
+  one `append` with the whole body and `written`. If that environment's run ends without a body,
+  this one writes the section itself and the stream goes on as an unwritten section's
+  (`server/writer/README.md` › Another environment).
 - **`written` carries nothing.** The stored body is exactly the text that was streamed, so the
   client never replaces text it has already shown.
 - **`progress`** (0–1) comes from the writer: exact for the fake, estimated for Claude.

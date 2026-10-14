@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CO_AUTHOR, commitTask, findTask, matchesFiles, parseFiles } from "./commit-task.ts";
+import { CO_AUTHOR, commitTask, findTask, matchesFiles, parseFiles, worklistTasks } from "./commit-task.ts";
 
 const HOOKS_DIR = fileURLToPath(new URL("../.githooks", import.meta.url));
 const SCRIPT = fileURLToPath(new URL("./commit-task.ts", import.meta.url));
@@ -37,6 +37,8 @@ const WORKLIST = `# Work list
 - **Files:** \`nowhere/**\`
 - **Do:** nothing.
 `;
+
+const BODY = "Built the widget from the design.\nnpm test passes.";
 
 describe("parseFiles", () => {
   it("reads paths, ** and * globs, and drops notes such as (new)", () => {
@@ -124,8 +126,56 @@ describe("findTask", () => {
   });
 });
 
+describe("worklistTasks", () => {
+  it("lists each task with its status on one line and the agent it records, across continuation lines", () => {
+    const worklist = `# Work list
+
+## A phase
+
+### Rules for this phase
+
+- **A rule.**
+
+### XX.1 — Build the widget
+- **Status:** doing (agent a1, in its own worktree; review
+  round 2)
+- **Files:** \`src/widget/**\`
+
+### XX.2 — Polish the widget
+- **Status:** doing (in its own worktree, agent
+  b2)
+- **Files:** \`src/widget/**\`
+
+### XX.3 — Wait for the widget
+- **Status:** todo
+- **Files:** \`nowhere/**\`
+
+### XX.4 — Start by hand
+- **Status:** doing
+- **Files:** \`nowhere/**\`
+
+### XX.5 — Ask the user
+- **Status:** needs-human (the user decides; agent c5)
+- **Files:** \`nowhere/**\`
+`;
+    expect(worklistTasks(worklist)).toEqual([
+      {
+        id: "XX.1",
+        title: "Build the widget",
+        status: "doing (agent a1, in its own worktree; review round 2)",
+        agent: "a1",
+      },
+      { id: "XX.2", title: "Polish the widget", status: "doing (in its own worktree, agent b2)", agent: "b2" },
+      { id: "XX.3", title: "Wait for the widget", status: "todo", agent: undefined },
+      { id: "XX.4", title: "Start by hand", status: "doing", agent: undefined },
+      { id: "XX.5", title: "Ask the user", status: "needs-human (the user decides; agent c5)", agent: "c5" },
+    ]);
+  });
+});
+
 describe("in a git repository", () => {
   let repo: string;
+  let bodyFile: string;
 
   beforeEach(() => {
     repo = mkdtempSync(path.join(tmpdir(), "rtfm-commit-task-test-"));
@@ -140,6 +190,8 @@ describe("in a git repository", () => {
     write("src/other.ts", "export {};\n");
     git("add", ".");
     git("commit", "--quiet", "-m", "Start");
+    bodyFile = path.join(repo, ".git", "commit-body.txt");
+    writeFileSync(bodyFile, `${BODY}\n`);
   });
 
   afterEach(() => rmSync(repo, { recursive: true, force: true }));
@@ -202,7 +254,7 @@ describe("in a git repository", () => {
       write("src/other.ts", "export const other = 2;\n");
       write("WORKLIST.md", `${WORKLIST}\nmore\n`);
 
-      const result = commitTask(repo, "XX.1", { reviewedBy: "a7f3" });
+      const result = commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
 
       expect(result.committed.sort()).toEqual([
         "README.md",
@@ -224,79 +276,102 @@ describe("in a git repository", () => {
       write("src/other.ts", "export const other = 2;\n");
       git("add", "src/other.ts");
 
-      commitTask(repo, "XX.1", { reviewedBy: "a7f3" });
+      commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
 
       expect(lastCommitFiles()).toEqual(["README.md"]);
       expect(git("status", "--porcelain")).toBe("M  src/other.ts\n");
     });
 
-    it("writes the reviewer's id as a trailer", () => {
+    it("writes the body between the subject and the trailers, with the reviewer's id", () => {
       write("README.md", "# Readme\n\nWidgets.\n");
-      commitTask(repo, "XX.1", { reviewedBy: "a7f3" });
-      expect(lastMessage()).toBe(`XX.1: Build the widget\n\nReviewed-by: a7f3\n${CO_AUTHOR}\n\n`);
+      commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
+      expect(lastMessage()).toBe(`XX.1: Build the widget\n\n${BODY}\n\nReviewed-by: a7f3\n${CO_AUTHOR}\n\n`);
     });
 
     it("writes none and the reason as the trailer for --no-review", () => {
       write("README.md", "# Readme\n\nWidgets.\n");
-      commitTask(repo, "XX.1", { noReviewReason: "a one-line fix" });
-      expect(lastMessage()).toBe(`XX.1: Build the widget\n\nReviewed-by: none (a one-line fix)\n${CO_AUTHOR}\n\n`);
+      commitTask(repo, "XX.1", { noReviewReason: "a one-line fix" }, BODY);
+      expect(lastMessage()).toBe(
+        `XX.1: Build the widget\n\n${BODY}\n\nReviewed-by: none (a one-line fix)\n${CO_AUTHOR}\n\n`,
+      );
+    });
+
+    it("keeps a body line that starts with #, and drops blank lines around the body", () => {
+      write("README.md", "# Readme\n\nWidgets.\n");
+      commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, "\n\n#12 is fixed.\n\n\n");
+      expect(lastMessage()).toBe(`XX.1: Build the widget\n\n#12 is fixed.\n\nReviewed-by: a7f3\n${CO_AUTHOR}\n\n`);
+    });
+
+    it("keeps the indentation of the body's first line", () => {
+      write("README.md", "# Readme\n\nWidgets.\n");
+      commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, "\n  npm test passes.\nNothing left.  \n");
+      expect(lastMessage()).toBe(
+        `XX.1: Build the widget\n\n  npm test passes.\nNothing left.\n\nReviewed-by: a7f3\n${CO_AUTHOR}\n\n`,
+      );
+    });
+
+    it.each(["", " \n\t\n"])("refuses the body %j, and stages nothing", (body) => {
+      write("README.md", "# Readme\n\nWidgets.\n");
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, body)).toThrow(/^The commit body is empty/);
+      expect(git("status", "--porcelain")).toBe(" M README.md\n");
+      expect(git("log", "--format=%s")).toBe("Start\n");
     });
 
     it("refuses when no changed file matches, leaving the index byte for byte as it was", () => {
       write("src/other.ts", "export const other = 2;\n");
       git("status");
       const before = index();
-      expect(() => commitTask(repo, "XX.2", { reviewedBy: "a7f3" })).toThrow(/No changed file matches XX\.2's Files/);
+      expect(() => commitTask(repo, "XX.2", { reviewedBy: "a7f3" }, BODY)).toThrow(/No changed file matches XX\.2's Files/);
       expect(index().equals(before)).toBe(true);
     });
 
     it("refuses on a branch other than main, and on a detached HEAD", () => {
       write("README.md", "# Readme\n\nWidgets.\n");
       git("switch", "--quiet", "-c", "side");
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(
         "The main checkout is on branch side, not main. Check out main there first.",
       );
       git("switch", "--quiet", "--detach", "main");
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(
         "The main checkout is on a detached HEAD, not main. Check out main there first.",
       );
       expect(git("log", "--format=%s", "side")).toBe("Start\n");
     });
 
     it("refuses an unknown task", () => {
-      expect(() => commitTask(repo, "XX.9", { reviewedBy: "a7f3" })).toThrow(/no task XX\.9/);
+      expect(() => commitTask(repo, "XX.9", { reviewedBy: "a7f3" }, BODY)).toThrow(/no task XX\.9/);
     });
 
     it("refuses --no-review over 40 changed lines, and stages nothing", () => {
       write("src/widget/new.ts", lines(41, "line"));
-      expect(() => commitTask(repo, "XX.1", { noReviewReason: "small" })).toThrow(/changes 41 lines, more than the 40/);
+      expect(() => commitTask(repo, "XX.1", { noReviewReason: "small" }, BODY)).toThrow(/changes 41 lines, more than the 40/);
       expect(git("status", "--porcelain")).toBe("?? src/widget/new.ts\n");
       expect(git("log", "--format=%s")).toBe("Start\n");
     });
 
     it("allows --no-review for 40 changed lines", () => {
       write("src/widget/new.ts", lines(40, "line"));
-      commitTask(repo, "XX.1", { noReviewReason: "small" });
+      commitTask(repo, "XX.1", { noReviewReason: "small" }, BODY);
       expect(lastCommitFiles()).toEqual(["src/widget/new.ts"]);
     });
 
     it("doesn't count a pure rename towards the --no-review limit", () => {
       renameSync(path.join(repo, "src/widget/old.ts"), path.join(repo, "src/widget/renamed.ts"));
       write("README.md", "# Readme\n\nWidgets.\n");
-      commitTask(repo, "XX.1", { noReviewReason: "a rename" });
+      commitTask(repo, "XX.1", { noReviewReason: "a rename" }, BODY);
       expect(lastCommitFiles()).toEqual(["README.md", "src/widget/old.ts", "src/widget/renamed.ts"]);
     });
 
     it("refuses --no-review for a binary change, and stages nothing", () => {
       writeFileSync(path.join(repo, "src/widget/icon.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 1]));
-      expect(() => commitTask(repo, "XX.1", { noReviewReason: "small" })).toThrow(/binary file/);
+      expect(() => commitTask(repo, "XX.1", { noReviewReason: "small" }, BODY)).toThrow(/binary file/);
       expect(git("status", "--porcelain")).toBe("?? src/widget/icon.png\n");
       expect(git("log", "--format=%s")).toBe("Start\n");
     });
 
     it("commits a deletion already staged with git rm", () => {
       git("rm", "--quiet", "src/widget/old.ts");
-      commitTask(repo, "XX.1", { reviewedBy: "a7f3" });
+      commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
       expect(lastCommitFiles()).toEqual(["src/widget/old.ts"]);
       expect(git("status", "--porcelain")).toBe("");
     });
@@ -307,7 +382,7 @@ describe("in a git repository", () => {
       unlinkSync(path.join(repo, "src/widget/gone.ts"));
       write("README.md", "# Readme\n\nWidgets.\n");
 
-      const result = commitTask(repo, "XX.1", { reviewedBy: "a7f3" });
+      const result = commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
 
       expect(result.committed).toEqual(["README.md"]);
       expect(lastCommitFiles()).toEqual(["README.md"]);
@@ -319,11 +394,11 @@ describe("in a git repository", () => {
       const status = "D  src/widget/old.ts\n?? src/widget/old.ts\n";
       expect(git("status", "--porcelain", "--untracked-files=all")).toBe(status);
 
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(/nothing to commit/);
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(/nothing to commit/);
       expect(git("status", "--porcelain", "--untracked-files=all")).toBe(status);
 
       write("README.md", "# Readme\n\nWidgets.\n");
-      const result = commitTask(repo, "XX.1", { reviewedBy: "a7f3" });
+      const result = commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
       expect(result).toMatchObject({ committed: ["README.md"], leftAlone: ["src/widget/old.ts"] });
       expect(git("status", "--porcelain", "--untracked-files=all")).toBe(status);
     });
@@ -334,7 +409,7 @@ describe("in a git repository", () => {
       write("README.md", "# Readme\n\nWidgets.\n");
       expect(git("status", "--porcelain")).toBe("MM README.md\n");
 
-      commitTask(repo, "XX.1", { reviewedBy: "a7f3" });
+      commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
 
       expect(git("show", "HEAD:README.md")).toBe("# Readme\n\nWidgets.\n");
       expect(git("status", "--porcelain")).toBe("");
@@ -350,11 +425,11 @@ describe("in a git repository", () => {
       expect(spawnSync("git", ["merge", "side"], { cwd: repo }).status).not.toBe(0);
       write("src/widget/new.ts", "export {};\n");
 
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(/A merge is in progress/);
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(/A merge is in progress/);
       expect(git("rev-parse", "-q", "--verify", "MERGE_HEAD")).toBeTruthy();
 
       unlinkSync(path.join(repo, ".git", "MERGE_HEAD"));
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(/unmerged/);
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(/unmerged/);
       expect(git("log", "-1", "--format=%s")).toBe("Main change\n");
     });
 
@@ -366,7 +441,7 @@ describe("in a git repository", () => {
       git("status");
       const before = index();
 
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow();
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow();
 
       expect(index().equals(before)).toBe(true);
       expect(git("log", "--format=%s")).toBe("Start\n");
@@ -376,7 +451,7 @@ describe("in a git repository", () => {
       useHooks({ "post-commit": "touch .git/index.lock" });
       write("README.md", "# Readme\n\nWidgets.\n");
 
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" })).toThrow(
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(
         /^Committed XX\.1: Build the widget, but couldn't update the index \(.*index\.lock.*\)\. Run in .+: git reset -- README\.md$/s,
       );
       expect(git("log", "-1", "--format=%s")).toBe("XX.1: Build the widget\n");
@@ -412,7 +487,7 @@ describe("in a git repository", () => {
       writeIn(worktree, "src/widget/new.ts", "export const widget = 1;\n");
       const mainBefore = git("rev-parse", "main");
 
-      const result = commitTask(repo, "XX.3", { reviewedBy: "a7f3" }, worktree);
+      const result = commitTask(repo, "XX.3", { reviewedBy: "a7f3" }, BODY, worktree);
 
       expect(result).toEqual({
         subject: "XX.3: Added after the worktree",
@@ -420,7 +495,7 @@ describe("in a git repository", () => {
         leftAlone: [],
       });
       expect(gitIn(worktree, "log", "-1", "--format=%B", "task")).toBe(
-        `XX.3: Added after the worktree\n\nReviewed-by: a7f3\n${CO_AUTHOR}\n\n`,
+        `XX.3: Added after the worktree\n\n${BODY}\n\nReviewed-by: a7f3\n${CO_AUTHOR}\n\n`,
       );
       expect(gitIn(worktree, "status", "--porcelain")).toBe("");
       expect(git("rev-parse", "main")).toBe(mainBefore);
@@ -433,8 +508,8 @@ describe("in a git repository", () => {
         `${realpathSync(worktree)} is a linked worktree, not the main checkout. ` +
         `Run this command in the main checkout, ${realpathSync(repo)}.`;
 
-      expect(() => commitTask(worktree, "XX.1", { reviewedBy: "a7f3" })).toThrow(message);
-      const result = spawnSync("node", [SCRIPT, "XX.1", "--reviewed-by", "a7f3"], { cwd: worktree, encoding: "utf8" });
+      expect(() => commitTask(worktree, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(message);
+      const result = spawnSync("node", [SCRIPT, "XX.1", "--body-file", bodyFile, "--reviewed-by", "a7f3"], { cwd: worktree, encoding: "utf8" });
       expect(result.status).toBe(1);
       expect(result.stderr).toBe(`${message}\n`);
       expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
@@ -447,7 +522,7 @@ describe("in a git repository", () => {
       gitIn(worktree, "add", "src/other.ts");
       const status = gitIn(worktree, "status", "--porcelain", "--untracked-files=all");
 
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, worktree)).toThrow(
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY, worktree)).toThrow(
         "XX.1's Files don't match these changed files in the worktree:\n  src/other.ts\n  notes/new.md\n" +
           "Add them to XX.1's Files in WORKLIST.md, or have the agent undo them.",
       );
@@ -457,7 +532,7 @@ describe("in a git repository", () => {
 
     it("refuses another task's worktree, listing its changed files", () => {
       writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
-      expect(() => commitTask(repo, "XX.2", { reviewedBy: "a7f3" }, worktree)).toThrow(
+      expect(() => commitTask(repo, "XX.2", { reviewedBy: "a7f3" }, BODY, worktree)).toThrow(
         /^XX\.2's Files don't match these changed files in the worktree:\n {2}README\.md\n/,
       );
       expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
@@ -476,7 +551,7 @@ describe("in a git repository", () => {
 
     it("refuses --no-review over 40 changed lines, and stages nothing in the worktree", () => {
       writeIn(worktree, "src/widget/new.ts", lines(41, "line"));
-      expect(() => commitTask(repo, "XX.1", { noReviewReason: "small" }, worktree)).toThrow(/changes 41 lines/);
+      expect(() => commitTask(repo, "XX.1", { noReviewReason: "small" }, BODY, worktree)).toThrow(/changes 41 lines/);
       expect(gitIn(worktree, "status", "--porcelain")).toBe("?? src/widget/new.ts\n");
       expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Add the hooks\n");
     });
@@ -489,10 +564,10 @@ describe("in a git repository", () => {
       expect(spawnSync("git", ["merge", "main"], { cwd: worktree }).status).not.toBe(0);
       writeIn(worktree, "src/widget/new.ts", "export {};\n");
 
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, worktree)).toThrow(/A merge is in progress/);
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY, worktree)).toThrow(/A merge is in progress/);
 
       unlinkSync(path.resolve(worktree, gitIn(worktree, "rev-parse", "--git-path", "MERGE_HEAD").trim()));
-      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, worktree)).toThrow(/unmerged/);
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY, worktree)).toThrow(/unmerged/);
       expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Task change\n");
     });
 
@@ -505,7 +580,7 @@ describe("in a git repository", () => {
       const subfolder = path.join(worktree, "src");
       const missing = path.join(worktreeParent, "missing");
       for (const folder of [otherRepo, subfolder, missing, worktreeParent]) {
-        expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, folder)).toThrow(
+        expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY, folder)).toThrow(
           `${folder} is not a worktree of this repository.`,
         );
       }
@@ -516,7 +591,7 @@ describe("in a git repository", () => {
       writeIn(worktree, "README.md", "# Readme\n\nWidgets.\n");
       const result = spawnSync(
         "node",
-        [SCRIPT, "XX.1", "--worktree", path.relative(repo, worktree), "--reviewed-by", "a7f3"],
+        [SCRIPT, "XX.1", "--body-file", bodyFile, "--worktree", path.relative(repo, worktree), "--reviewed-by", "a7f3"],
         { cwd: repo, encoding: "utf8" },
       );
       expect(result.stderr).toBe("");
@@ -531,14 +606,14 @@ describe("in a git repository", () => {
     it("commits and lists the files it left alone", () => {
       write("README.md", "# Readme\n\nWidgets.\n");
       write("src/other.ts", "export const other = 2;\n");
-      const result = spawnSync("node", [SCRIPT, "XX.1", "--reviewed-by", "a7f3"], { cwd: repo, encoding: "utf8" });
+      const result = spawnSync("node", [SCRIPT, "XX.1", "--body-file", bodyFile, "--reviewed-by", "a7f3"], { cwd: repo, encoding: "utf8" });
       expect(result.status).toBe(0);
       expect(result.stdout).toBe("Committed XX.1: Build the widget\n  README.md\nLeft alone:\n  src/other.ts\n");
     });
 
     it("commits from a folder below the top", () => {
       write("README.md", "# Readme\n\nWidgets.\n");
-      const result = spawnSync("node", [SCRIPT, "XX.1", "--reviewed-by", "a7f3"], {
+      const result = spawnSync("node", [SCRIPT, "XX.1", "--body-file", bodyFile, "--reviewed-by", "a7f3"], {
         cwd: path.join(repo, "src"),
         encoding: "utf8",
       });
@@ -546,7 +621,12 @@ describe("in a git repository", () => {
       expect(lastCommitFiles()).toEqual(["README.md"]);
     });
 
-    it.each([[["XX.1"]], [["XX.1", "--reviewed-by", "a", "--no-review", "b"]], [["--reviewed-by", "a"]]])(
+    it.each([
+      [["XX.1", "--body-file", "body.txt"]],
+      [["XX.1", "--reviewed-by", "a"]],
+      [["XX.1", "--body-file", "body.txt", "--reviewed-by", "a", "--no-review", "b"]],
+      [["--body-file", "body.txt", "--reviewed-by", "a"]],
+    ])(
       "prints its usage for %j",
       (args) => {
         const result = spawnSync("node", [SCRIPT, ...args], { cwd: repo, encoding: "utf8" });
@@ -554,6 +634,23 @@ describe("in a git repository", () => {
         expect(result.stderr).toMatch(/^Usage: npm run commit-task/);
       },
     );
+
+    it("refuses a body file that is missing or empty, and commits nothing", () => {
+      write("README.md", "# Readme\n\nWidgets.\n");
+      const missing = path.join(repo, ".git", "missing.txt");
+      const run = (file: string) =>
+        spawnSync("node", [SCRIPT, "XX.1", "--body-file", file, "--reviewed-by", "a7f3"], { cwd: repo, encoding: "utf8" });
+
+      const missingResult = run(missing);
+      expect(missingResult.status).toBe(1);
+      expect(missingResult.stderr).toMatch(new RegExp(`^Can't read the body file ${missing}: .*ENOENT`));
+
+      writeFileSync(bodyFile, "\n  \n");
+      const emptyResult = run(bodyFile);
+      expect(emptyResult.status).toBe(1);
+      expect(emptyResult.stderr).toMatch(/^The commit body is empty/);
+      expect(git("log", "--format=%s")).toBe("Start\n");
+    });
   });
 
   describe("the commit-msg hook", () => {

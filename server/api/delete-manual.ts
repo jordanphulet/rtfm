@@ -8,7 +8,7 @@ export function deleteManualRoute(store: ManualStore, runs: Runs): Route {
     pattern: "/api/manuals/:manualId",
     async handle({ params: { manualId } }) {
       if (!(await store.getManual(manualId))) return notFound;
-      if (runs.isWriting(manualId)) {
+      if (await runs.isWriting(manualId)) {
         return { status: 409, body: { error: "A section of this manual is being written" } };
       }
       await store.deleteManual(manualId);

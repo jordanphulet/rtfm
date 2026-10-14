@@ -4,9 +4,10 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { PLAN_LIMITS } from "../agent/planner/check.ts";
-import { tempDataDir } from "../testing.ts";
+import { tempDataDir, waitUntil } from "../testing.ts";
 import {
   createDynamoDbManualStore,
+  createDynamoDbSectionLeases,
   MOST_SECTIONS_DELETED_AT_ONCE,
   TRANSACTION_ATTEMPTS,
   type DynamoDbTable,
@@ -67,18 +68,21 @@ type Answer = { status: number; body: object };
 
 /**
  * A stand-in for DynamoDB on loopback. It answers each request with `answer`, given the
- * operation (`TransactWriteItems`, …) and how many of that operation it has seen, or with an
- * empty item.
+ * operation (`TransactWriteItems`, …), how many of that operation it has seen and the request's
+ * body, or with an empty item.
  */
-async function standInDynamoDb(answer: (operation: string, count: number) => Answer | undefined = () => undefined) {
+async function standInDynamoDb(
+  answer: (operation: string, count: number, body: Record<string, unknown>) => Answer | undefined = () => undefined,
+) {
   const requests: CapturedRequest[] = [];
   const server = createServer(async (request, response) => {
     let text = "";
     for await (const chunk of request.setEncoding("utf8")) text += chunk;
     const target = String(request.headers["x-amz-target"]).split(".")[1]!;
-    requests.push({ target, headers: request.headers, body: JSON.parse(text) as Record<string, unknown> });
+    const requestBody = JSON.parse(text) as Record<string, unknown>;
+    requests.push({ target, headers: request.headers, body: requestBody });
     const count = requests.filter((captured) => captured.target === target).length;
-    const { status, body } = answer(target, count) ?? { status: 200, body: {} };
+    const { status, body } = answer(target, count, requestBody) ?? { status: 200, body: {} };
     response.writeHead(status, { "content-type": "application/x-amz-json-1.0" }).end(JSON.stringify(body));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -106,6 +110,11 @@ function manualItem(written: string[]): Answer {
   return { status: 200, body: { Item: (attributeValue(item) as { M: object }).M } };
 }
 
+function sectionItems(sectionIds: string[]): Answer {
+  const items = sectionIds.map((sectionId) => ({ pk: `MANUAL#${manual.id}`, sk: `SECTION#${sectionId}` }));
+  return { status: 200, body: { Items: items.map((item) => (attributeValue(item) as { M: object }).M) } };
+}
+
 function cancelled(...codes: string[]): Answer {
   return {
     status: 400,
@@ -121,6 +130,92 @@ const conditionFailed: Answer = {
   status: 400,
   body: { __type: "com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException", message: "failed" },
 };
+
+const throttled: Answer = {
+  status: 400,
+  body: { __type: "com.amazonaws.dynamodb.v20120810#ThrottlingException", message: "Rate exceeded" },
+};
+
+/** A failed condition that returns the item as it was, as `ReturnValuesOnConditionCheckFailure` asks. */
+function conditionFailedOn(item: Record<string, object>): Answer {
+  return { status: 400, body: { ...conditionFailed.body, Item: item } };
+}
+
+/** The lease owner a lease request sent. */
+function ownerSent(request: Record<string, unknown>): string {
+  return (request.ExpressionAttributeValues as Record<string, { S: string }>)[":owner"]!.S;
+}
+
+describe("the DynamoDB section leases' renewals", { timeout: 20_000 }, () => {
+  /** Long enough that a loaded test run's pauses don't reach the fence by accident. */
+  const timing = { durationMs: 1_500, renewEveryMs: 100 };
+  const sectionItemKey = { pk: { S: `MANUAL#${manual.id}` }, sk: { S: "SECTION#s" } };
+
+  it("count the lease lost before it expires when every renewal fails without a condition failing", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count) =>
+      operation === "UpdateItem" && count > 1 ? throttled : undefined,
+    );
+    const takeSent = Date.now();
+    const lease = (await createDynamoDbSectionLeases(dynamoDb.table(), timing).take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => lease.lost.aborted);
+    expect(Date.now() - takeSent).toBeGreaterThanOrEqual(timing.durationMs * 0.9);
+    expect(lease.lost.reason).toEqual(new Error(`Couldn't renew the lease on ${manual.id}/s before it expired`));
+    expect(dynamoDb.operations("UpdateItem").length).toBeGreaterThan(2);
+  });
+
+  it("keep the lease when a renewal succeeds after others failed", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count) =>
+      operation === "UpdateItem" && count > 1 && count <= 3 ? throttled : undefined,
+    );
+    const lease = (await createDynamoDbSectionLeases(dynamoDb.table(), timing).take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await new Promise((resolve) => setTimeout(resolve, timing.durationMs * 2));
+    expect(lease.lost.aborted).toBe(false);
+  });
+
+  it("only ever move the expiry later", async () => {
+    const dynamoDb = await standInDynamoDb();
+    const lease = (await createDynamoDbSectionLeases(dynamoDb.table(), timing).take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => dynamoDb.operations("UpdateItem").length > 1);
+    expect(dynamoDb.operations("UpdateItem")[1]!.body).toMatchObject({
+      ConditionExpression: "leaseOwner = :owner AND attribute_not_exists(body) AND leaseExpiresAt < :expiresAt",
+      ReturnValuesOnConditionCheckFailure: "ALL_OLD",
+    });
+  });
+
+  it("ignore a renewal refused for finding a later expiry under its own owner, as a stale retry is", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count, request) => {
+      if (operation !== "UpdateItem" || count !== 2) return undefined;
+      const later = { N: String(Date.now() + 60_000) };
+      return conditionFailedOn({ ...sectionItemKey, leaseOwner: { S: ownerSent(request) }, leaseExpiresAt: later });
+    });
+    const lease = (await createDynamoDbSectionLeases(dynamoDb.table(), timing).take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => dynamoDb.operations("UpdateItem").length > 3);
+    expect(lease.lost.aborted).toBe(false);
+  });
+
+  it("count the lease lost when a renewal finds another owner's lease", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count) => {
+      if (operation !== "UpdateItem" || count !== 2) return undefined;
+      const later = { N: String(Date.now() + 60_000) };
+      return conditionFailedOn({ ...sectionItemKey, leaseOwner: { S: "another/owner" }, leaseExpiresAt: later });
+    });
+    const lease = (await createDynamoDbSectionLeases(dynamoDb.table(), timing).take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => lease.lost.aborted);
+    expect(lease.lost.reason).toEqual(new Error(`The lease on ${manual.id}/s is no longer this writer's`));
+    await expect(lease.saveBody("body")).rejects.toThrow(`The lease on ${manual.id}/s was lost before`);
+    expect(dynamoDb.operations("TransactWriteItems")).toEqual([]);
+  });
+});
 
 describe("the DynamoDB manual store's transactions", () => {
   it("saves a body again after another transaction got in its way", async () => {
@@ -157,6 +252,7 @@ describe("the DynamoDB manual store's transactions", () => {
   it("deletes a manual only while its written sections are exactly those it read", async () => {
     const dynamoDb = await standInDynamoDb((operation, count) => {
       if (operation === "GetItem") return count === 1 ? manualItem(["s"]) : manualItem(["t"]);
+      if (operation === "Query") return sectionItems(count === 1 ? ["s"] : ["t"]);
       if (operation === "TransactWriteItems" && count === 1) return cancelled("ConditionalCheckFailed", "None");
       return undefined;
     });
