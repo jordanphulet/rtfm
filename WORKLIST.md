@@ -105,18 +105,6 @@ aren't RTFM's.
   environment can abort a paid run on the other.
 - **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
 
-### AW.1 — Check the ledger against the AWS bill
-- **Status:** doing (agent a5a235ae9222608b6)
-- **Depends on:** IN.12
-- **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
-- **Do:** with `npm run aws -- ce get-cost-and-usage` (as `rtfm-read`), compare what AWS charged
-  for Claude Haiku 4.5 with the ledger's totals for the same days (`npm run usage`, central and the
-  data folder's), and find from the bill's usage types whether a call that doesn't complete is
-  charged its full `max_tokens` or only what it used. Correct `prices.ts` or the gateway's charge
-  for an incomplete call if they differ. Read-only in AWS.
-- **Done when:** `prices.ts` is checked against AWS's charges and `server/README.md` says what was
-  checked and when, with what the bill shows of incomplete calls.
-
 ### AW.4 — Charge an aborted call as AWS does
 - **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
 - **Depends on:** AW.1
