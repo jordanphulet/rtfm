@@ -65,29 +65,9 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.2 — Keep each library's manuals apart
-- **Status:** doing (agent a3a01cb82bec10d68; done, being committed)
-- **Depends on:** —
-- **Files:** `server/storage/**`, `server/logging/README.md`, `ARCHITECTURE.md`
-- **Do:** bind `ManualStore` and `SectionLeases` to a library, as `research/libraries.md` ›
-  Isolation describes: one function builds each key in `rtfm-app` (`L#<libraryId>#` before the
-  partition key there is now, and no prefix for the admin's library, `admin`), and one each folder
-  in the data folder (`libraries/<libraryId>/`, or the data folder itself for the admin's). The
-  library is an argument of `createFileManualStore`, `createDynamoDbManualStore`,
-  `createInProcessLeases` and `createDynamoDbSectionLeases` that defaults to the admin's, so their
-  callers outside this task keep working unchanged; `seedStore` seeds whichever store it is given.
-  No recipient library may take the id `admin`. The file store's `manual.cleanup-failed` line
-  carries `libraryId`. Run `manual-store-suite.ts` against two libraries on one table and one
-  folder, check the admin's library reads items stored with no prefix, and take one section id's
-  lease in two libraries at once. Document the key scheme and the data folder in
-  `server/storage/README.md`.
-- **Done when:** the suite and the leases' tests show no library sees or changes another's items,
-  the admin's library reads the existing items as they are, and `npm run build` and `npm test`
-  pass.
-
 ### LB.3 — Key the runs by library
-- **Status:** todo
-- **Depends on:** LB.2
+- **Status:** doing (agent a2567743a6f7534f6)
+- **Depends on:** —
 - **Files:** `server/writer/**`, `server/logging/README.md`
 - **Do:** as `research/libraries.md` › How the server carries the library describes: one `Runs`
   for the server, its map keyed `<libraryId>/<manualId>/<sectionId>`, with `maxConcurrentRuns`
@@ -136,7 +116,7 @@ user revokes it, and with its activity visible to the user.
   `npm test` pass.
 
 ### LB.6 — Keep library links and activity
-- **Status:** doing (agent ad5dcc9675bc68f19; done, in review by aaef9295a39aa6729)
+- **Status:** doing (agent ad5dcc9675bc68f19; review's fixes, unify with LB.2's library.ts)
 - **Depends on:** —
 - **Files:** `server/storage/**`, `server/gateway/sdk-boundary.test.ts`, `ARCHITECTURE.md`
 - **Do:** the store of links and activity, as `research/libraries.md` › The key scheme and What is
