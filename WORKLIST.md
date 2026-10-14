@@ -62,7 +62,7 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.14 — `rtfm-ops` and the ops tools
-- **Status:** doing (agent ab01bdf3c8304e3d4)
+- **Status:** doing (agent ab01bdf3c8304e3d4; done, in review by a00bd57f38f4d5949)
 - **Depends on:** IN.12
 - **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
   `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`
@@ -178,7 +178,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.4 — Two more tests that flake under load
-- **Status:** doing (agent af499d66e98fae880)
+- **Status:** doing (agent af499d66e98fae880; done, being committed)
 - **Depends on:** —
 - **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
 - **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
