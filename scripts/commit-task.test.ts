@@ -121,10 +121,23 @@ describe("findTask", () => {
     });
   });
 
+  it("reads 'and its test' and 'except' wrapped across a line break", () => {
+    const worklist = WORKLIST.replace(
+      "- **Files:** `src/widget/**`, `scripts/widget.ts` and its test (new), `README.md`",
+      "- **Files:** `src/widget/**` except\n  `src/widget/seed/**`, `scripts/widget.ts` and its\n  test, `README.md`",
+    );
+    const files = findTask(worklist, "XX.1")!.files;
+    expect(files).toEqual({
+      include: ["src/widget/**", "scripts/widget.ts", "scripts/widget.test.*", "README.md"],
+      exclude: ["src/widget/seed/**"],
+    });
+    expect(matchesFiles("scripts/widget.test.ts", files)).toBe(true);
+  });
+
   it("reads the task IDs in Merges after across continuation lines, skipping notes in parentheses", () => {
     const worklist = WORKLIST.replace(
       "- **Depends on:** —\n- **Files:** `src/widget/**`",
-      "- **Depends on:** —\n- **Merges after:** IN.15 and UP.2 (its safeguard, not\n  AW.3, goes live first), RC.10\n- **Files:** `src/widget/**`",
+      "- **Depends on:** —\n- **Merges after:** IN.15 and UP.2 (its safeguard, not\n  AW.3, goes live first),\n  RC.10\n- **Files:** `src/widget/**`",
     );
     expect(findTask(worklist, "XX.1")?.mergesAfter).toEqual(["IN.15", "UP.2", "RC.10"]);
   });

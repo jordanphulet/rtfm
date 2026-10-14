@@ -209,7 +209,7 @@ export function worklistTasks(worklist: string): WorklistTask[] {
     const heading = line.match(/^### (\S+) — (.*)$/);
     if (!heading) return [];
     const block = lines.slice(start, blockEnd(lines, start));
-    const status = itemText(block, "- **Status:**").replace(/\s+/g, " ").trim();
+    const status = itemText(block, "- **Status:**").trim();
     return [{ id: heading[1], title: heading[2].trim(), status, agent: status.match(RECORDED_AGENT)?.[1] }];
   });
 }
@@ -239,11 +239,14 @@ export function findItem(block: string[], label: string): LineRange | undefined 
   return { start, end: end === -1 ? block.length : end };
 }
 
-/** The text after `label` of a task block's item, with its continuation lines joined; empty if it has none. */
+/**
+ * The text after `label` of a task block's item, with its continuation lines joined and each run of
+ * whitespace collapsed to one space; empty if it has none.
+ */
 function itemText(block: string[], label: string): string {
   const item = findItem(block, label);
   if (!item) return "";
-  return block.slice(item.start, item.end).join(" ").slice(label.length);
+  return block.slice(item.start, item.end).join(" ").slice(label.length).replace(/\s+/g, " ");
 }
 
 /**
