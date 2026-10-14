@@ -86,7 +86,7 @@ user revokes it, and with its activity visible to the user.
   `npm test` pass.
 
 ### LB.8 — Open a library by its link
-- **Status:** doing (agent a07b2e7ab3bb8665c)
+- **Status:** doing (agent a07b2e7ab3bb8665c; done, in review by a4e289fba5cba527e)
 - **Depends on:** —
 - **Merges after:** LB.5
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts` and its test,
