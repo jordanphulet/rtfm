@@ -63,18 +63,6 @@ aren't RTFM's.
 
 Small fixes that keep the repo healthy.
 
-### UP.11 — Report a librarian reply cut before its end
-- **Status:** doing (agent ac130cf4910101149; done, being committed)
-- **Depends on:** —
-- **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`
-- **Do:** a reply whose stream ends without `done`, `frozen` or `failed` shows "This reply failed."
-  and reports nothing. When the server finished but something between it and the browser
-  (CloudFront, Lambda's streaming) cut the reply, the server logs `done` while the page shows a
-  failure, the mismatch UP.8 had to find by hand. Report that ending with `window.reportError`, as
-  an error naming the last event received (never any reply text).
-- **Done when:** a test shows a stream that ends without a final event reported once, with the
-  reply shown as failed, and the existing reporting tests still pass.
-
 ### UP.10 — Check the phone layout in WebKit
 - **Status:** doing (agent a0fe57c5dfadc0239)
 - **Depends on:** —
