@@ -84,6 +84,30 @@ describe("typographic quotes", () => {
     expectLeftAlone(["An unclosed `code span runs to the line's end, \"as here\"."]);
   });
 
+  it("leaves math between double dollars alone, inline and as a block", () => {
+    expectTypeset([
+      [
+        "The pitch is $$f' = \\frac{c}{4(L + 0.61d)}$$, or 'about right'.",
+        "The pitch is $$f' = \\frac{c}{4(L + 0.61d)}$$, or ‘about right’.",
+      ],
+      ["It's $$x''$$ and ``$$'s`` too.", "It’s $$x''$$ and ``$$'s`` too."],
+      ["A $5 part and a $10 one: it's 'cheap'.", "A $5 part and a $10 one: it’s ‘cheap’."],
+      ["Escaped \\$$ isn't math.", "Escaped \\$$ isn’t math."],
+    ]);
+    expectLeftAlone([
+      "$$f = \\frac{c}{4(L + 0.61d)}$$",
+      "$$\nf'(x) = \\text{``loud''}\n$$",
+      "> $$\n> g'' = 2\n> $$",
+      "$$$\nx' = \"y\"\n$$\nstill math: 'yes'\n$$$",
+    ]);
+    expectTypeset([
+      ["$$\nf' = 1\n$$\nIt's done.", "$$\nf' = 1\n$$\nIt’s done."],
+      ["$$ f' = 1\n$$\nIt's done.", "$$ f' = 1\n$$\nIt’s done."],
+      ["$$\nf' = 1 $$\nIt's done.", "$$\nf' = 1 $$\nIt’s done."],
+      ["$$\\begin{aligned}\nf' &= 1\n\\end{aligned}$$\nIt's done.", "$$\\begin{aligned}\nf' &= 1\n\\end{aligned}$$\nIt’s done."],
+    ]);
+  });
+
   it("leaves link and image targets, titles and reference definitions alone", () => {
     expectTypeset([
       [`See [the "Director"](section:the-director "The 'Director'").`, `See [the “Director”](section:the-director "The 'Director'").`],

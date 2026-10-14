@@ -208,6 +208,29 @@
   }
 }
 
+.reader .prose-root .formula-display {
+  margin: var(--space-6) 0;
+}
+
+.reader .prose-root .formula-display > .scroll-x {
+  padding-block: var(--space-1);
+  overflow-y: hidden;
+}
+
+.reader .prose-root .katex-display {
+  margin: 0;
+}
+
+.reader .prose-root .katex-display > .katex {
+  text-align: left;
+}
+
+.reader .prose-root .katex-error {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  color: var(--ink-muted);
+}
+
 .reader .prose-root hr {
   margin: var(--space-10) 0;
   border: 0;

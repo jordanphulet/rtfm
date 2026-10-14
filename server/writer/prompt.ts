@@ -29,6 +29,7 @@ The reader renders exactly these, and nothing else:
 - Footnotes: a reference \`[^short-name]\` in the text, and its definition \`[^short-name]: …\` at the very end of the section. Every reference needs a definition.
 - External links, \`[text](https://…)\`, only to pages you are sure exist, such as Wikipedia articles.
 - Cross-references to other sections of this manual, \`[That Section's Title](section:that-section-id)\`, with the section's title as the link text and only the ids in the contents below. Never link to the section you are writing.
+- Formulas in LaTeX, only for real mathematics the reader will use, such as an equation to calculate with. Wrap every formula in double dollar signs: within a sentence as \`$$v = f\\lambda$$\`, and a formula that stands alone with \`$$\` on a line by itself above and below it. Never use a single dollar sign for math: a single \`$\` is always money, as in $5.
 No HTML, no images and no emoji.
 </markdown>
 

@@ -68,6 +68,13 @@ describe("sectionProblems", () => {
     expect(problems("~~~\n```\n# still code\n~~~\n")).toEqual([]);
   });
 
+  it("ignores a $$ formula block, which closes on a line ending in $$", () => {
+    expect(problems("A room.\n\n$$\nx^{[^y]}\n$$\n")).toEqual([]);
+    expect(problems("A room.\n\n$$ x^{[^y]}\n$$\n\n# Late\n")).toEqual(["it has an H1"]);
+    expect(problems("A room.\n\n$$ c = \\$5\n# not a heading\n$$\n")).toEqual([]);
+    expect(problems("A room.\n\n$$\\begin{aligned}\nx^{[^y]}\n\\end{aligned}$$\n\n# Late\n")).toEqual(["it has an H1"]);
+  });
+
   it("finds an empty section, but accepts one that is only a code block", () => {
     expect(problems(" \n")).toEqual(["the section is empty"]);
     expect(problems("```yaml\nroom: parlour\n```\n")).toEqual([]);

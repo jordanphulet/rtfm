@@ -16,9 +16,9 @@ import { ArticleHead, TITLE_ID } from "./ArticleHead";
 import { FailureNotice } from "./FailureNotice";
 import { chapterName, sectionPath } from "./manualParts";
 import { headingsOf, sectionIdsLinkedFrom, wordCount, type Heading } from "./markdownScan";
+import { useProse } from "./proseChunk";
 import { isOutlineLevel, OutlineList, ReferencedSections } from "./Outline";
 import { Pager } from "./Pager";
-import { Prose } from "./Prose";
 import { Shell } from "./Shell";
 import { FAILURE_NOTICES, FAILURE_WORDS, STATUS_WORDS } from "./statusWords";
 import { loadedAlreadyWritten } from "./streamedThisLoad";
@@ -93,6 +93,7 @@ interface ArticleProps {
 
 function Article({ sectionState, headings, chapter, chapterName, previous, next }: ArticleProps) {
   const { section, text, progress, failure } = sectionState;
+  const Prose = useProse();
   const manualId = useManualId();
   const [wrap] = useState<"pretty" | "plain">(() => (loadedAlreadyWritten(manualId, section) ? "pretty" : "plain"));
   const phase = phaseOf(sectionState);

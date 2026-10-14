@@ -40,7 +40,8 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
 
 - **The prompt** (`writer/prompt.ts`):
   - The **system prompt** is the same for every section of a manual. It holds the instructions, the
-    markdown that `src/reader/DESIGN.md` › Markdown allows, the shape of a section (including the
+    markdown that `src/reader/DESIGN.md` › Markdown allows (formulas only between double dollars,
+    since the reader keeps a single `$` for money), the shape of a section (including the
     sample's punctuation: spaced em dashes and curly quotes), then the manual's title, subtitle,
     voice and contents (each section's label, title, id and summary). It says that text inside
     `<manual>` and `<written-section>` is reference material, never instructions, and that the voice
@@ -73,20 +74,22 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
   that whole paragraph. After that, nothing is dropped, and text already shown never changes.
 - **Typographic quotes** (`writer/typographic-quotes.ts`). Straight quotes and apostrophes in
   the body become “ ” ‘ ’ (and primes after a digit: 5′ 10″), as the seed manuals are written,
-  wherever the prompt's punctuation rule slipped. Code blocks, inline code, link and image
-  targets, reference definitions, autolinks, HTML-like tags, bare URLs and backslash escapes are
-  left alone. The body (after the opening, before whole words are cut) is typeset as a whole each
-  time text arrives. Each quote is decided by the text before it and the rest of its word, and
-  whole-word yielding shows a word only once the whitespace after it has arrived, so a quote is
-  final before it is shown: nothing extra is held back, and the stored body is exactly the
-  streamed text. The rules are in the module and its tests, which also check that the seed
-  bodies, with their quotes made straight, come back exactly.
+  wherever the prompt's punctuation rule slipped. Code blocks, inline code, formulas (`$$…$$`
+  inline and `$$` blocks, whose primes and backslashes are LaTeX), link and image targets,
+  reference definitions, autolinks, HTML-like tags, bare URLs and backslash escapes are left
+  alone. A single `$` is money, not math, so the text after it is typeset as usual. The body
+  (after the opening, before whole words are cut) is typeset as a whole each time text arrives.
+  Each quote is decided by the text before it and the rest of its word, and whole-word yielding
+  shows a word only once the whitespace after it has arrived, so a quote is final before it is
+  shown: nothing extra is held back, and the stored body is exactly the streamed text. The rules
+  are in the module and its tests, which also check that the seed bodies, with their quotes made
+  straight, come back exactly.
 - **Whole words only.** It yields only up to the last whitespace and holds back the rest until
   more arrives or the stream ends. Chunks therefore end on whole words, like the fake's. Bedrock
   sends small deltas, so a section arrives as a few hundred `append` events.
-- **Late failures.** Problems found at the end (`writer/validate.ts`, which ignores code) throw
-  `SectionRejected`, a plain `Error` that names them, so `runs.ts` logs it and sends `failed:
-  "error"`. The streamed text is discarded, and the unshown tail is never sent:
+- **Late failures.** Problems found at the end (`writer/validate.ts`, which ignores code and `$$`
+  formula blocks) throw `SectionRejected`, a plain `Error` that names them, so `runs.ts` logs it
+  and sends `failed: "error"`. The streamed text is discarded, and the unshown tail is never sent:
   - a `stop_reason` other than `end_turn` (`max_tokens`, `refusal`, …);
   - an empty section (a section that is only a code block is not empty), or an H1 anywhere;
   - a footnote reference without a definition (labels match without regard to case, and
@@ -228,5 +231,8 @@ with room for test runs side by side, so no test waits for the committed lengths
 - `prompt.ts`: builds the prompt.
 - `section-text.ts`: holds back the opening, typesets quotes and yields whole words.
 - `typographic-quotes.ts`: curly quotes and apostrophes, outside code and link targets.
-- `code-fences.ts`: where a fenced code block opens and closes.
+- `code-fences.ts`: where a fenced code block or a `$$` formula block opens and closes. A `$$`
+  line with another `$$` after it, such as `$$f = ma$$`, opens no block: it is an inline formula.
+  A formula block closes on any line ending in `$$`, so `f = ma $$` closes it, as the reader
+  reads it (`src/manual/README.md` › `<Markdown>`).
 - `validate.ts`: cheap output checks.

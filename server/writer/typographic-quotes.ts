@@ -10,6 +10,8 @@ const QUOTE_OPENS_AFTER = /[\s([{>“‘—–\-/|]/;
 const EMPHASIS = /[*_~]/;
 const SPACE = /\s/;
 const DIGIT = /\d/;
+const CODE_SPAN_RUNS = /`+/g;
+const MATH_SPAN_RUNS = /\$+/g;
 const LETTER = /\p{L}/u;
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 
@@ -80,16 +82,17 @@ function leftAloneLength(text: string, index: number): number {
   const rest = text.slice(index);
   const before = text[index - 1] ?? " ";
   if (rest[0] === "\\") return Math.min(2, rest.length);
-  if (rest[0] === "`") return codeSpanLength(rest);
+  if (rest[0] === "`") return delimitedSpanLength(rest, CODE_SPAN_RUNS);
+  if (rest.startsWith("$$")) return delimitedSpanLength(rest, MATH_SPAN_RUNS);
   if (rest[0] === "(" && before === "]") return linkTargetLength(rest);
   if (TAG_OR_AUTOLINK.test(rest)) return tagLength(rest);
   if (!LETTER_OR_DIGIT.test(before)) return BARE_URL.exec(rest)?.[0].length ?? 0;
   return 0;
 }
 
-function codeSpanLength(text: string): number {
-  const opening = /^`+/.exec(text)![0];
-  for (const run of text.slice(opening.length).matchAll(/`+/g)) {
+function delimitedSpanLength(text: string, runs: RegExp): number {
+  const opening = text.match(runs)![0];
+  for (const run of text.slice(opening.length).matchAll(runs)) {
     if (run[0] === opening) return opening.length + run.index + run[0].length;
   }
   return text.length;

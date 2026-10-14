@@ -36,6 +36,15 @@ describe("the section prompt", () => {
     expect(sectionPrompt(manual, request(manual, "the-cast")).system).toBe(prompt.system);
   });
 
+  it("asks for formulas between double dollar signs, which the reader renders, and keeps a single dollar for money", async () => {
+    const manual = await sampleManual();
+    const { system } = sectionPrompt(manual, request(manual, UNWRITTEN_ID));
+
+    expect(system).toContain("within a sentence as `$$v = f\\lambda$$`");
+    expect(system).toContain("`$$` on a line by itself above and below it");
+    expect(system).toContain("Never use a single dollar sign for math");
+  });
+
   it("puts the locale rule, above whatever the voice says, in the system prompt", async () => {
     const manual = await sampleManual();
 

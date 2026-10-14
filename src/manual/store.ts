@@ -1,5 +1,6 @@
 import { use, useLayoutEffect, useSyncExternalStore } from "react";
 import { fetchManual, fetchSectionState, streamSection, type StreamEvent } from "./api";
+import { separateFormulaFences } from "./formula-fences";
 import { findSection } from "./reading-order";
 import { repairPartialMarkdown } from "./repair";
 import type { Chapter, FailureReason, Manual, Section, SectionStatus } from "./types";
@@ -192,6 +193,8 @@ export function useSection(manualId: string, id: string): UseSectionResult {
   const { raw, progress, failure } = useSyncExternalStore(subscribe, getText, getText);
   useLayoutEffect(() => openSection(manualId, id), [manualId, id]);
 
-  if (section.status === "written") return { section, status: section.status, text: raw, progress: 1 };
+  if (section.status === "written") {
+    return { section, status: section.status, text: separateFormulaFences(raw), progress: 1 };
+  }
   return { section, status: section.status, text: repairPartialMarkdown(raw), progress, failure };
 }
