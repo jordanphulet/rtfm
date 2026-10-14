@@ -64,9 +64,11 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.14 — Keep wide inline formulas inside the column
-- **Status:** doing (agent a7f26bb256a6fb764; approved, small fixes)
+- **Status:** doing (agent a7f26bb256a6fb764; done, being committed)
 - **Depends on:** —
-- **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`
+- **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`,
+  `scripts/wide-formula.test.ts`, `scripts/shot.ts`, `README.md`, `ARCHITECTURE.md`,
+  `server/README.md`
 - **Do:** UP.12's third review found that nothing limits an inline formula's width, and the
   reader's main column doesn't clip overflow: at 375px, 40 subscripts in a row were 923px wide and
   `\Bigg(` ×200 made the page 3,083px wide, so the whole page scrolls sideways. KaTeX breaks
