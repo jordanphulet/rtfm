@@ -2,7 +2,7 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { tempDataDir } from "../testing.ts";
-import { completeLinesFrom, entriesIn, formatEntry, matches, recentEntries } from "./log-reader.ts";
+import { completeLinesFrom, entriesIn, formatEntry, logOptionsFrom, matches, recentEntries } from "./log-reader.ts";
 import type { LogEntry } from "./logger.ts";
 
 function entry(event: string, level: LogEntry["level"] = "INFO", timestamp = "2026-10-12T08:00:00.000Z"): LogEntry {
@@ -10,6 +10,25 @@ function entry(event: string, level: LogEntry["level"] = "INFO", timestamp = "20
 }
 
 const lines = (...entries: LogEntry[]) => entries.map((each) => `${JSON.stringify(each)}\n`).join("");
+
+describe("the logs options", () => {
+  it("give the filter and how many entries to show", () => {
+    expect(logOptionsFrom({ level: "warn", event: "section", lines: "20" })).toEqual({
+      filter: { level: "WARN", event: "section" },
+      count: 20,
+    });
+    expect(logOptionsFrom({ lines: "50" })).toEqual({ filter: { level: undefined, event: undefined }, count: 50 });
+  });
+
+  it("refuse a level that isn't one, and a count that isn't a whole number above 0", () => {
+    expect(() => logOptionsFrom({ level: "loud", lines: "50" })).toThrow(
+      '--level must be one of DEBUG, INFO, WARN, ERROR, not "loud"',
+    );
+    for (const lines of ["0", "-1", "1.5", "many"]) {
+      expect(() => logOptionsFrom({ lines }), lines).toThrow(`--lines must be a whole number above 0, not "${lines}"`);
+    }
+  });
+});
 
 describe("filtering", () => {
   it("keeps a level and the levels above it", () => {

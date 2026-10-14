@@ -142,9 +142,13 @@ describe("serve-temp", () => {
     TEST_TIMEOUT_MS,
   );
 
-  it("refuses an unknown option", async () => {
-    const child = spawn(process.execPath, [SCRIPT, "--models", "bedrock"], { cwd: ROOT, stdio: "ignore" });
-    running.add(child);
-    expect(await new Promise((resolve) => child.once("exit", resolve))).toBe(2);
-  });
+  it(
+    "refuses an unknown option",
+    async () => {
+      const child = spawn(process.execPath, [SCRIPT, "--models", "bedrock"], { cwd: ROOT, stdio: "ignore" });
+      running.add(child);
+      expect(await new Promise((resolve) => child.once("exit", resolve))).toBe(2);
+    },
+    TEST_TIMEOUT_MS,
+  );
 });

@@ -16,7 +16,7 @@ aren't RTFM's.
 - **RTFM's AWS setup is its own.** RTFM's profiles live in `~/.aws/rtfm/config` and
   `~/.aws/rtfm/credentials`, never in the user's own `~/.aws/config`, which holds work profiles.
   Agents read nothing under `~/.aws` and never `.env.local`, and run AWS only through
-  `npm run aws` and `npm run cdk`.
+  `npm run aws`, `npm run cdk` and `npm run ops`.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.5 — Check the budget counts Bedrock
@@ -33,24 +33,6 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
-### IN.10 — Measure the deployed app
-- **Status:** doing (agent a7748e10835ba97ca; done, being committed)
-- **Depends on:** —
-- **Files:** `research/aws-design.md`, `infra/README.md`
-- **Do:** through `https://rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is
-  in AWS), with the throwaway passcode's cookie, and recorded in `research/aws-design.md`:
-  - events arriving one by one on a section stream, and the 15s heartbeat through CloudFront;
-  - a `POST` with a body (the librarian);
-  - a disconnect aborting the run (the server's log shows the abort);
-  - the cold start to a section's first byte;
-  - how long an idle environment lives (its `SIGTERM` in `/rtfm/app`), over at least a few hours;
-  - the credentials: `server.started` logs `credentials: "environment"` (Lambda sets the role's
-    keys as environment variables, which a running process can't renew), so check whether any
-    environment outlives its keys: look for `ExpiredToken` or `server` errors in `/rtfm/app`, and
-    compare environment lifetimes with the keys' expiry if `AWS_CREDENTIAL_EXPIRATION` is
-    visible. If environments can outlive their keys, propose the fix as a task.
-- **Done when:** each measurement is in the doc, and any problem it found is a proposed task.
-
 ### IN.18 — Read the idle cost
 - **Status:** blocked (until 2026-10-15, two days after the Web Function's first deploy)
 - **Depends on:** IN.10
@@ -61,24 +43,8 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.14 — `rtfm-ops` and the ops tools
-- **Status:** doing (agent ab01bdf3c8304e3d4)
-- **Depends on:** IN.12
-- **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
-  `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`
-- **Do:**
-  - The role `rtfm-ops` in `RtfmAccess` (the user approves and deploys it, and adds its profile to
-    `~/.aws/rtfm/config`): writes only the passcode item in `rtfm-app` and the kill-switch item in
-    `rtfm-usage` (`dynamodb:LeadingKeys`), and reads the passcode item. `rtfm-read` gains reading
-    `rtfm-usage`.
-  - The tools: kill switch on, off and status; `npm run usage` on the central ledger;
-    `npm run logs` on CloudWatch; status. Non-interactive, plain text with `--json`, a non-zero
-    exit on failure, documented in `README.md`.
-- **Done when:** each tool's tests pass offline (DynamoDB Local, a stubbed CLI), the tests cover
-  the roles' reach, and `README.md` documents every tool.
-
 ### IN.15 — The passcode as a digest
-- **Status:** todo
+- **Status:** doing (agent afd47823474f3e015)
 - **Depends on:** IN.11, IN.14
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts`, `server/app.ts`,
   `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`
@@ -92,18 +58,6 @@ aren't RTFM's.
 - **Done when:** the tests show the digest compared in constant time, a rotated digest refusing
   the old cookie, and the set command refusing to run without a terminal; no file or log an agent
   can read holds the passcode.
-
-### IN.19 — Statuses and deletes see every environment's runs
-- **Status:** doing (agent a7083d6fb1dd46f90; in review)
-- **Depends on:** IN.13
-- **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`
-- **Do:** the manual route's written and writing statuses, and the delete route's refusal while a
-  section is being written (`409`), see only the answering environment's runs. Make them also see
-  other environments' live leases in the manual's partition, so a section being written elsewhere
-  shows as writing and its manual can't be deleted mid-run.
-  This comes before the deployed app uses Bedrock: until then a delete answered on one
-  environment can abort a paid run on the other.
-- **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
 
 ### AW.4 — Charge an aborted call as AWS does
 - **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
@@ -143,11 +97,12 @@ aren't RTFM's.
   shows it in `rtfm-usage`.
 
 ### IN.21 — Replace an environment before its keys run out
-- **Status:** todo
+- **Status:** doing (agent a93636117612befb0; done, being committed)
 - **Depends on:** —
 - **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
-  `research/aws-design.md`
+  `research/aws-design.md`, `server/replacement.ts` and its test,
+  `server/storage/dynamodb-testing.ts`, `server/storage/README.md`, `ARCHITECTURE.md`
 - **Do:** Lambda gives the Web Function its role's keys as environment variables, which a running
   process can't renew, and nothing bounds an environment's life while requests keep coming less
   than about 5 minutes apart (IN.10).
@@ -171,23 +126,23 @@ aren't RTFM's.
   the headers until the first byte, IN.10).
 - **Done when:** the doc's Measured section records it.
 
+### IN.23 — Close the delete race, and the section route's status
+- **Status:** doing (agent a638f795b3a12ff50; approved, wording fixes)
+- **Depends on:** IN.19
+- **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
+- **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
+  - a lease taken between the delete's `409` check and its transaction: condition each section
+    item's `Delete` in `deleteManual`'s transaction on `attribute_exists(body) OR leaseExpiresAt <
+    :now`, and answer `409` when that cancels it; and say what remains (a lease taken after the
+    delete's query, whose run's save then fails after a full paid section);
+  - the section route's `statusOf` sees only this environment's runs: use the lease attributes the
+    section item's strongly consistent read already returns, so a section written elsewhere shows
+    as writing.
+- **Done when:** the runs' shared suite covers both on both implementations, and `npm test` passes.
+
 ## Upkeep
 
 Small fixes that keep the repo healthy.
-
-### UP.4 — Two more tests that flake under load
-- **Status:** doing (agent af499d66e98fae880)
-- **Depends on:** —
-- **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
-- **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
-  signalled" once failed with `SyntaxError: Unexpected end of JSON input`: the stand-in `aws`
-  writes `started.json` with `writeFileSync`, and the test can read the empty file before the
-  write finishes. Make that write atomic (a temporary file renamed into place) or wait for content
-  that parses. `scripts/hooks/rule-copies.test.ts` › "prints nothing and exits 0 without a saved
-  copy, without git, or with bad input" once timed out at the default 5 s under load: give it a
-  timeout that follows `server/README.md` › Tests, or make it lighter. `scripts/serve-temp.test.ts`
-  › "refuses an unknown option" also hit its 5 s timeout once under load: the same treatment.
-- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
 - **Status:** todo

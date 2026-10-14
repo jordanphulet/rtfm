@@ -33,14 +33,15 @@ export interface DynamoDbTable {
 }
 
 /**
- * Fixed keys (DynamoDB Local's, in tests), or the Web Function's execution role, through Lambda's
+ * Fixed keys (DynamoDB Local's, in tests; a role's temporary ones, with their session token, for
+ * the ops tools), or the Web Function's execution role, through Lambda's
  * container credentials endpoint, which hands out new ones whenever the client asks as they near
  * expiry, or the variables Lambda sets, which a running process can't see change, so those are
  * never renewed and last until `expiresAt`, when Lambda gives it (`server/README.md` › The Web
  * Function).
  */
 export type TableCredentials =
-  | { kind: "keys"; accessKeyId: string; secretAccessKey: string }
+  | { kind: "keys"; accessKeyId: string; secretAccessKey: string; sessionToken?: string }
   | { kind: "container-endpoint"; fullUri: string; authorizationToken: string | undefined }
   | { kind: "environment"; expiresAt: Date | undefined };
 
@@ -93,25 +94,9 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
     return Item as ManualItem | undefined;
   }
 
-  async function queryPartition(pk: string, ProjectionExpression: string): Promise<Record<string, unknown>[]> {
-    const items: Record<string, unknown>[] = [];
-    const pages = paginateQuery(
-      { client },
-      {
-        TableName,
-        KeyConditionExpression: "pk = :pk",
-        ExpressionAttributeValues: { ":pk": pk },
-        ProjectionExpression,
-        ConsistentRead: true,
-      },
-    );
-    for await (const page of pages) items.push(...(page.Items ?? []));
-    return items;
-  }
-
   return {
     async listManuals() {
-      const items = await queryPartition(LIBRARY, "manual");
+      const items = await queryPartition(client, TableName, LIBRARY, "manual");
       return items.map((item) => (item as unknown as ManualItem).manual);
     },
 
@@ -143,7 +128,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
         if (!item) return;
         const written = [...(item.written ?? [])];
         // The written sections' items, and any unwritten section's item that holds only a lease.
-        const sectionItems = await queryPartition(sectionsPartition(manualId), "pk, sk");
+        const sectionItems = await queryPartition(client, TableName, sectionsPartition(manualId), "pk, sk");
         if (sectionItems.length > MOST_SECTIONS_DELETED_AT_ONCE) {
           throw new Error(`"${manualId}" has ${sectionItems.length} section items, more than one delete can remove`);
         }
@@ -186,7 +171,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
     },
 
     async seededManualIds() {
-      const items = await queryPartition(SEEDED, "sk");
+      const items = await queryPartition(client, TableName, SEEDED, "sk");
       return items.map(({ sk }) => (sk as string).slice(MANUAL_PREFIX.length));
     },
 
@@ -330,7 +315,40 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
       }
       return heldLease(manualId, sectionId, owner, now);
     },
+
+    async heldElsewhere(manualId) {
+      // Expired as a take reads it: `leaseExpiresAt < :now`. A written section's item has no lease.
+      const items = await queryPartition(client, TableName, sectionsPartition(manualId), "sk", {
+        FilterExpression: "leaseExpiresAt >= :now AND NOT begins_with(leaseOwner, :environment)",
+        ExpressionAttributeValues: { ":now": Date.now(), ":environment": `${environment}/` },
+      });
+      return items.map(({ sk }) => (sk as string).slice(SECTION_PREFIX.length));
+    },
   };
+}
+
+/** The items of a partition that the filter keeps (all of them without one), read consistently, page by page. */
+async function queryPartition(
+  client: DynamoDBDocumentClient,
+  TableName: string,
+  pk: string,
+  ProjectionExpression: string,
+  filter?: { FilterExpression: string; ExpressionAttributeValues: Record<string, unknown> },
+): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = [];
+  const pages = paginateQuery(
+    { client },
+    {
+      TableName,
+      KeyConditionExpression: "pk = :pk",
+      ProjectionExpression,
+      FilterExpression: filter?.FilterExpression,
+      ExpressionAttributeValues: { ":pk": pk, ...filter?.ExpressionAttributeValues },
+      ConsistentRead: true,
+    },
+  );
+  for await (const page of pages) items.push(...(page.Items ?? []));
+  return items;
 }
 
 /**
@@ -478,7 +496,11 @@ function credentialsFor(credentials: TableCredentials): DynamoDBClientConfig["cr
       if (!credentials.accessKeyId || !credentials.secretAccessKey) {
         throw new Error("A DynamoDB table needs an access key ID and a secret access key");
       }
-      return { accessKeyId: credentials.accessKeyId, secretAccessKey: credentials.secretAccessKey };
+      return {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken,
+      };
     case "container-endpoint":
       // Empty, not absent, so the environment's relative URI and token file can't take their place.
       return fromHttp({

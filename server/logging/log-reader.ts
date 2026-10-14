@@ -16,6 +16,35 @@ const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
 /** Printable ASCII without spaces or quotes: safe to show unquoted. */
 const PLAIN_VALUE = /^[!#-~]+$/;
 
+/** The options `npm run logs` and `npm run ops -- logs` both take, for `parseArgs`. */
+export const LOG_OPTIONS = {
+  level: { type: "string", short: "l" },
+  event: { type: "string", short: "e" },
+  lines: { type: "string", short: "n", default: "50" },
+} as const;
+
+export class LogOptionInvalid extends Error {}
+
+/** The filter and how many entries to show, from `LOG_OPTIONS`' values. */
+export function logOptionsFrom(values: { level?: string; event?: string; lines?: string }): {
+  filter: LogFilter;
+  count: number;
+} {
+  const filter = { level: levelFrom(values.level), event: values.event };
+  const count = Number(values.lines);
+  if (!Number.isInteger(count) || count < 1) {
+    throw new LogOptionInvalid(`--lines must be a whole number above 0, not "${values.lines}"`);
+  }
+  return { filter, count };
+}
+
+function levelFrom(value: string | undefined): Level | undefined {
+  if (value === undefined) return undefined;
+  const level = LEVELS.find((name) => name === value.toUpperCase());
+  if (!level) throw new LogOptionInvalid(`--level must be one of ${LEVELS.join(", ")}, not "${value}"`);
+  return level;
+}
+
 export function matches(entry: LogEntry, { level, event }: LogFilter): boolean {
   if (level && LEVELS.indexOf(entry.level) < LEVELS.indexOf(level)) return false;
   if (event && entry.event !== event && !entry.event.startsWith(`${event}.`)) return false;

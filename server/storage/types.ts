@@ -41,6 +41,11 @@ export interface ManualStore {
 export interface SectionLeases {
   /** The section's lease, or undefined while another writer holds it or its body is stored. */
   take(manualId: string, sectionId: string): Promise<SectionLease | undefined>;
+  /**
+   * The ids of a manual's sections whose lease another environment holds, unexpired by this
+   * environment's clock: the sections being written elsewhere.
+   */
+  heldElsewhere(manualId: string): Promise<string[]>;
 }
 
 /** A section's lease, renewed until it is released or its body is saved. */

@@ -11,8 +11,9 @@ export type Leave = () => void;
 export interface Runs {
   join(manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave>;
   statusOf(manualId: string, sectionId: string): Promise<SectionStatus>;
-  writingSectionIds(manualId: string): Set<string>;
-  isWriting(manualId: string): boolean;
+  /** The sections of a manual being written here or in another environment. */
+  writingSectionIds(manualId: string): Promise<Set<string>>;
+  isWriting(manualId: string): Promise<boolean>;
 }
 
 /**
@@ -234,14 +235,15 @@ export function createRuns({
     return (await store.getBody(manualId, sectionId)) === undefined ? "unwritten" : "written";
   }
 
-  function writingSectionIds(manualId: string): Set<string> {
+  async function writingSectionIds(manualId: string): Promise<Set<string>> {
     const prefix = runKey(manualId, "");
-    const writing = [...runs].filter(([key, run]) => run !== WRITTEN && key.startsWith(prefix));
-    return new Set(writing.map(([key]) => key.slice(prefix.length)));
+    const runsHere = [...runs].filter(([key, run]) => run !== WRITTEN && key.startsWith(prefix));
+    const writingHere = runsHere.map(([key]) => key.slice(prefix.length));
+    return new Set([...writingHere, ...(await leases.heldElsewhere(manualId))]);
   }
 
-  function isWriting(manualId: string): boolean {
-    return writingSectionIds(manualId).size > 0;
+  async function isWriting(manualId: string): Promise<boolean> {
+    return (await writingSectionIds(manualId)).size > 0;
   }
 
   function activeRunCount(): number {

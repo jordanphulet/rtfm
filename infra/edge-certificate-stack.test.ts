@@ -11,6 +11,7 @@ import {
   BOOTSTRAP_ROLES,
   DEPLOY_ROLE,
   LOCAL_USER,
+  OPS_ROLE,
   PROJECT_TAG,
   READ_ROLE,
   TOOLKIT_STACK,
@@ -25,7 +26,7 @@ const accessResources = resourcesOf(app.node.findChild(ACCESS_STACK) as Stack);
 /** Every identity RTFM makes: the bootstrap's roles, and `RtfmAccess`'s users and roles. */
 const identities = [
   ...Object.values(BOOTSTRAP_ROLES).map((name) => ({ name, can: reachOf(toolkitResources, "AWS::IAM::Role", name) })),
-  ...[READ_ROLE, DEPLOY_ROLE].map((name) => ({ name, can: reachOf(accessResources, "AWS::IAM::Role", name) })),
+  ...[READ_ROLE, DEPLOY_ROLE, OPS_ROLE].map((name) => ({ name, can: reachOf(accessResources, "AWS::IAM::Role", name) })),
   ...[LOCAL_USER, AGENT_USER].map((name) => ({ name, can: reachOf(accessResources, "AWS::IAM::User", name) })),
 ];
 const STACK_CHANGES = [

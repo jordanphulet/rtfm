@@ -29,8 +29,9 @@ Never read, print, copy or edit `.env.local`. It holds real AWS credentials. Cod
 runtime; checks may only confirm which variable names are set.
 
 Never read, print, copy or edit anything under `~/.aws`: it holds the user's work profiles and
-RTFM's keys. Reach AWS only through `npm run aws` and `npm run cdk` (`infra/README.md`), never by
-running `aws` or `cdk` directly.
+RTFM's keys. Reach AWS only through `npm run aws`, `npm run cdk` and `npm run ops`
+(`infra/README.md`, `README.md` › The ops tools), never by running `aws` or `cdk` directly.
+`npm run ops -- kill-switch on|off` changes the live app: run it only when the user asks in chat.
 
 To run the app for a check, start `npm run serve-temp` in the background and stop it with its handle
 or the PID it prints (`README.md` › A throwaway server). Only stop processes you started yourself,

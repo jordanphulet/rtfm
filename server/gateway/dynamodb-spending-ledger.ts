@@ -14,8 +14,8 @@ import { chargedUsd, dayOf, type LedgerCall } from "./ledger-calls.ts";
 import type { SpendingLedger } from "./spending-ledger.ts";
 import { SpendingRefused } from "./types.ts";
 
-/** The kill switch is on while this item exists. Its own partition, so a role can be limited to it. */
-const KILL_SWITCH_KEY = { pk: "KILL_SWITCH", sk: "KILL_SWITCH" };
+/** The kill switch is on while this item exists. Its own partition, which `rtfm-ops` is limited to. */
+export const KILL_SWITCH_KEY = { pk: "KILL_SWITCH", sk: "KILL_SWITCH" };
 const totalKey = (period: string) => ({ pk: "TOTAL", sk: period });
 const callKey = (reservedAt: string, callId: string) => ({
   pk: `LEDGER#${monthOf(reservedAt)}`,
@@ -177,8 +177,9 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
 }
 
 /**
- * Turns the kill switch on or off, for the tests on DynamoDB Local. The server never calls it, and
- * `rtfm-local` may not delete the item (`README.md` › Bedrock's spending: the table `rtfm-usage`).
+ * Turns the kill switch on or off: `npm run ops -- kill-switch`, as `rtfm-ops`, and the tests. The
+ * server never calls it, and `rtfm-local` may not delete the item (`README.md` › Bedrock's
+ * spending: the table `rtfm-usage`).
  */
 export async function setKillSwitch(table: DynamoDbTable, on: boolean): Promise<void> {
   const client = documentClient(table);

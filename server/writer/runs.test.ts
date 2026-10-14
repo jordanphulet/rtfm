@@ -98,7 +98,7 @@ describe("runs", () => {
     expect(await store.getBody(GEESE_ID, sectionId)).toBeUndefined();
     expect(await store.writtenSectionIds(GEESE_ID)).toEqual([]);
     expect(await runs.statusOf(GEESE_ID, sectionId)).toBe("unwritten");
-    expect(runs.isWriting(GEESE_ID)).toBe(false);
+    expect(await runs.isWriting(GEESE_ID)).toBe(false);
 
     const returning = recorder();
     await runs.join(geese, sectionId, returning.listener);
@@ -110,16 +110,16 @@ describe("runs", () => {
   it("knows which sections of a manual are being written", async () => {
     const runs = createRuns({ store, writer: recordingWriter(), maxConcurrentRuns: 3, logger: silentLogger });
     const reader = recorder();
-    expect(runs.isWriting(SAMPLE_ID)).toBe(false);
+    expect(await runs.isWriting(SAMPLE_ID)).toBe(false);
 
     await runs.join(manual, UNWRITTEN_ID, reader.listener);
-    expect(runs.isWriting(SAMPLE_ID)).toBe(true);
-    expect(runs.writingSectionIds(SAMPLE_ID)).toEqual(new Set([UNWRITTEN_ID]));
-    expect(runs.isWriting("the-haunt")).toBe(false);
+    expect(await runs.isWriting(SAMPLE_ID)).toBe(true);
+    expect(await runs.writingSectionIds(SAMPLE_ID)).toEqual(new Set([UNWRITTEN_ID]));
+    expect(await runs.isWriting("the-haunt")).toBe(false);
 
     await waitUntil(() => reader.last() === "written");
-    expect(runs.isWriting(SAMPLE_ID)).toBe(false);
-    expect(runs.writingSectionIds(SAMPLE_ID)).toEqual(new Set());
+    expect(await runs.isWriting(SAMPLE_ID)).toBe(false);
+    expect(await runs.writingSectionIds(SAMPLE_ID)).toEqual(new Set());
   });
 
   it("fails a run whose manual is deleted before it finishes, and stores nothing", async () => {

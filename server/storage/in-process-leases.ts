@@ -3,7 +3,7 @@ import type { ManualStore, SectionLeases } from "./types.ts";
 /**
  * Leases for a server that is the only one on its store, as on this machine (one server per data
  * folder): every take is granted, since the runs' own map already keeps one writer per section
- * within the process.
+ * within the process, and no section is held elsewhere.
  */
 export function createInProcessLeases(store: ManualStore): SectionLeases {
   const neverLost = new AbortController().signal;
@@ -14,6 +14,9 @@ export function createInProcessLeases(store: ManualStore): SectionLeases {
         saveBody: (body) => store.saveBody(manualId, sectionId, body),
         async release() {},
       };
+    },
+    async heldElsewhere() {
+      return [];
     },
   };
 }

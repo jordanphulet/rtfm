@@ -343,6 +343,15 @@ describe("the DynamoDB client's credentials", () => {
     expect(request!.headers["user-agent"]).not.toContain("decoy-app");
   });
 
+  it("signs with a role's temporary keys and their session token", async () => {
+    const dynamoDb = await standInDynamoDb();
+    const credentials = { kind: "keys", accessKeyId: "ASIAROLEKEY", secretAccessKey: "x", sessionToken: "the-session" } as const;
+
+    await createDynamoDbManualStore(dynamoDb.table(credentials)).getManual(manual.id);
+
+    expect(dynamoDb.requests.map(signedWith)).toEqual([{ accessKeyId: "ASIAROLEKEY", sessionToken: "the-session" }]);
+  });
+
   it("refuses fixed keys that are empty rather than looking for others", async () => {
     const dynamoDb = await standInDynamoDb();
     const credentials = { kind: "keys", accessKeyId: "", secretAccessKey: "x" } as const;

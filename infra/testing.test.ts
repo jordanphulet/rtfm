@@ -44,6 +44,40 @@ describe("decide, the tests' policy evaluator", () => {
     expect(decide(statements, "lambda:AddPermission", "x")).toBe("deny");
   });
 
+  it("holds ForAllValues when every value matches, or none is given, unless Null requires one, as IAM does", () => {
+    const forAllValues: Statement = {
+      Effect: "Allow",
+      Action: "dynamodb:GetItem",
+      Resource: "*",
+      Condition: { "ForAllValues:StringEquals": { "dynamodb:LeadingKeys": ["KILL_SWITCH"] } },
+    };
+    const leadingKeys = (keys: string[]) => ({ "dynamodb:LeadingKeys": keys });
+    expect(decide([forAllValues], "dynamodb:GetItem", "x", leadingKeys(["KILL_SWITCH"]))).toBe("allow");
+    expect(decide([forAllValues], "dynamodb:GetItem", "x", leadingKeys(["KILL_SWITCH", "TOTAL"]))).toBe("no allow");
+    expect(decide([forAllValues], "dynamodb:GetItem", "x", leadingKeys([]))).toBe("allow");
+    expect(decide([forAllValues], "dynamodb:GetItem", "x")).toBe("allow");
+
+    const withNull: Statement = {
+      ...forAllValues,
+      Condition: { ...forAllValues.Condition, Null: { "dynamodb:LeadingKeys": "false" } },
+    };
+    expect(decide([withNull], "dynamodb:GetItem", "x", leadingKeys(["KILL_SWITCH"]))).toBe("allow");
+    expect(decide([withNull], "dynamodb:GetItem", "x", leadingKeys([]))).toBe("no allow");
+    expect(decide([withNull], "dynamodb:GetItem", "x")).toBe("no allow");
+  });
+
+  it("refuses a multivalued key under an operator without ForAllValues", () => {
+    const statement: Statement = {
+      Effect: "Allow",
+      Action: "*",
+      Resource: "*",
+      Condition: { StringEquals: { "dynamodb:LeadingKeys": "KILL_SWITCH" } },
+    };
+    expect(() => decide([statement], "dynamodb:GetItem", "x", { "dynamodb:LeadingKeys": ["KILL_SWITCH"] })).toThrow(
+      /ForAllValues/,
+    );
+  });
+
   it("refuses to guess at NotResource or an operator it doesn't know", () => {
     const notResource = { Effect: "Deny", Action: "*", NotResource: "arn:aws:s3:::rtfm-*" } as unknown as Statement;
     expect(() => decide([notResource], "s3:GetObject", "arn:aws:s3:::work/a")).toThrow(/NotResource/);

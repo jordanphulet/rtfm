@@ -148,7 +148,8 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
 
 The client (`createDynamoDbManualStore(table)`) takes everything from the `DynamoDbTable` it is
 given: the table's name, region, endpoint and credentials. The credentials are fixed keys
-(DynamoDB Local's, in the tests), or the Web Function's execution role: a provider on Lambda's
+(DynamoDB Local's, in the tests; a role's temporary keys with their session token, for the ops
+tools in `scripts/ops/`), or the Web Function's execution role: a provider on Lambda's
 container credentials endpoint (`fromHttp`, given its URI and token, with the environment's
 relative URI and token file set aside) or on the environment's key variables (`fromEnv`, which
 reads them at call time and honours `AWS_CREDENTIAL_EXPIRATION`). The client holds what a provider
@@ -169,8 +170,9 @@ credentials against a stand-in. It refuses fixed keys that are empty. Who gives 
 credentials is `server/README.md` › The Web Function.
 
 **Room for what comes next.** Each kind of item has its own partition key, so later items fit
-beside these: the passcode's digest as one item of its own partition, which `rtfm-ops` can be
-limited to with `dynamodb:LeadingKeys`.
+beside these: the passcode's digest as one item of the partition `PASSCODE` (`PASSCODE_PARTITION`
+in `infra/rtfm.ts`), the one partition of `rtfm-app` that `rtfm-ops` may read and write, limited
+to it with `dynamodb:LeadingKeys` (`infra/README.md` › The identities).
 
 **Changing the stored form.** The table is deployed data: a change to these items carries its
 migration, or reads the old form too (`ARCHITECTURE.md` › Everything runs on one machine).
@@ -184,12 +186,14 @@ nothing while another writer holds the section or its body is stored. A lease is
 is released or its body saved; it has a `lost` signal, which aborts once the holder may no longer
 write (the lease is gone from storage, or it couldn't be renewed and is about to expire, before
 another writer can take it: The holder fences itself, below); and only it may save the body (`SectionLease.saveBody`, which answers as
-`ManualStore.saveBody` does, and throws once the lease is lost).
+`ManualStore.saveBody` does, and throws once the lease is lost). `SectionLeases.heldElsewhere`
+names a manual's sections whose lease another environment holds, so the manual's statuses and its
+delete see sections being written elsewhere (`server/api/README.md` › Handlers).
 
-- **In the process** (`in-process-leases.ts`), with the files: every take is granted, and the
-  lease saves through the store. One server uses a data folder (its lock), and the runs' map
-  already keeps one writer per section in it, so the server works exactly as it would without
-  leases.
+- **In the process** (`in-process-leases.ts`), with the files: every take is granted, the lease
+  saves through the store, and no section is held elsewhere. One server uses a data folder (its
+  lock), and the runs' map already keeps one writer per section in it, so the server works exactly
+  as it would without leases.
 - **In `rtfm-app`** (`createDynamoDbSectionLeases` in `dynamodb-manual-store.ts`), with the table,
   on the section's own item (The table `rtfm-app`, above). Each environment has its own random id,
   and each take its own, so an owner names both the environment and the run.
@@ -221,6 +225,13 @@ another writer can take it: The holder fences itself, below); and only it may sa
     one saved without a lease (the seed's), it answers `"already-written"`; otherwise it throws.
   - **Releasing** deletes the item on the condition that it holds this owner's lease and no body,
     so a body, or another writer's lease, is never deleted.
+  - **Held elsewhere** is one `Query` of the manual's partition (`pk = MANUAL#<manualId>`), page by
+    page, for the items whose `leaseExpiresAt` is not yet past by this environment's clock (live,
+    as a take would read it) and whose `leaseOwner` doesn't start with this environment's id. Its
+    own runs are in its runs' map already. A written section's item holds no lease, so it is
+    never named. DynamoDB filters after reading, so the query costs a read unit per 4 KB of the
+    partition, bodies included: the sample manual, all 18 sections written, about 18 units, a
+    fraction of a cent a month at RTFM's scale.
 - **How long, and why.** A lease lasts 20 seconds and its holder renews it every 5
   (`SECTION_LEASE_TIMING`):
   - Renewal runs on a timer, not on the writer's chunks, so a silence in the model's stream, as
@@ -248,7 +259,9 @@ leases of one and a half to two seconds, for headroom when test runs go side by 
 simultaneous takes wins, a written section gives none, renewal keeps a lease past twice its
 length, an unrenewed lease fences its holder and expires, and only its new holder can save, a
 holder whose item is deleted hears its lease is lost, a release frees it at once and leaves a body
-alone, a body saved without a lease wins, and deleting a manual deletes its lease-only items.
+alone, a body saved without a lease wins, another environment's leases are named as held
+elsewhere until they expire while a written section and an environment's own lease never are, and
+deleting a manual deletes its lease-only items.
 `dynamodb-manual-store.test.ts` checks the renewals against a stand-in: with every renewal
 throttled the lease is lost no sooner than nine tenths of its length after the take; a renewal
 that succeeds after failures keeps it; a renewal only moves the expiry later; a refused renewal

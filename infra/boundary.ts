@@ -7,6 +7,7 @@ import {
   BUDGET,
   DEPLOY_ROLE,
   EXECUTION_POLICY,
+  OPS_ROLE,
   QUALIFIER,
   READ_ROLE,
   RTFM_RESOURCES,
@@ -31,7 +32,7 @@ const WEB_FUNCTION_AUTH_TYPE = "lambda:Request/WebFunctionAuthType";
  */
 const PROTECTED = [
   ...[BOUNDARY_POLICY, EXECUTION_POLICY, BEDROCK_POLICY].map(policyArn),
-  ...[READ_ROLE, DEPLOY_ROLE, `cdk-${QUALIFIER}-*`].map(roleArn),
+  ...[READ_ROLE, DEPLOY_ROLE, OPS_ROLE, `cdk-${QUALIFIER}-*`].map(roleArn),
   userArn("*"),
   ...USER_STACKS.map(stackArn),
   budgetArn(BUDGET),

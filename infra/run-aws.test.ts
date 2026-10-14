@@ -12,14 +12,20 @@ const SCRIPT = fileURLToPath(new URL("./run-aws.ts", import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CDK_CONFIG = fileURLToPath(new URL("./cdk.json", import.meta.url));
 
-/** Stands in for the AWS CLI: answers the identity check, then records itself and waits. */
+/**
+ * Stands in for the AWS CLI: answers the identity check, then records itself and waits. It renames
+ * the record into place, so the test never reads it half written.
+ */
 const FAKE_AWS = `#!${process.execPath}
+const fs = require("node:fs");
 const args = process.argv.slice(2);
 if (args[0] === "sts") {
   console.log(JSON.stringify({ Arn: process.env.FAKE_ARN }));
 } else {
   const started = { pid: process.pid, home: process.env.HOME, args };
-  require("node:fs").writeFileSync(process.env.FAKE_STARTED, JSON.stringify(started));
+  const partial = process.env.FAKE_STARTED + ".partial";
+  fs.writeFileSync(partial, JSON.stringify(started));
+  fs.renameSync(partial, process.env.FAKE_STARTED);
   setInterval(() => {}, 1000);
 }
 `;
@@ -137,7 +143,7 @@ describe("npm run aws and npm run cdk", () => {
     expect(result.stderr).toMatch(/^Usage/);
   });
 
-  describe("with a stand-in for the AWS CLI", () => {
+  describe("with a stand-in for the AWS CLI", { timeout: 30_000 }, () => {
     let folder = "";
     let fakePid: number | undefined;
     afterEach(() => {

@@ -117,8 +117,11 @@ one writer per section, exactly as it would without them.
 - **Finished runs stay in the map** as `written`, which closes the gap between a request reading
   storage and a run finishing. If `saveBody` returns `already-written`, the run sends `written`
   anyway: the stored body is the one that counts.
-- **`writingSectionIds(manualId)`** names the sections of a manual that have a run in progress,
-  for the manual route; **`isWriting(manualId)`** says whether there are any, for the delete route.
+- **`writingSectionIds(manualId)`** names the sections of a manual being written, for the manual
+  route; **`isWriting(manualId)`** says whether there are any, for the delete route. A section is
+  being written if it has a run in progress in the map, or another environment holds its lease
+  (`SectionLeases.heldElsewhere`: one query of the manual's partition in `rtfm-app`, and none with
+  the leases in the process, which have no other environment).
 - **Statuses come from storage** for any section not being written. If a written section's file
   has been deleted by hand, opening it drops the stale `written` entry and writes it again.
 - **Listeners:** the first request starts the writer with its own `AbortController`. Later
@@ -185,9 +188,11 @@ does, and `runs.test.ts` covers the runs.
 leases in its process, and two environments, each with its own DynamoDB leases, on one table in
 DynamoDB Local. In each, two runs race for one section and one writer writes it for both readers;
 a reader whose run is aborted leaves the section to the other; a placeholder is stored by neither;
-and a failure reaches both. It then covers what only environments do: the waiting reader's one
-`append`, taking over a crashed environment's expired lease, the waiting limit, a run that loses
-its lease, and a released lease freeing the section at once. The leases it waits out are half a
+a failure reaches both; and while one place writes a section, the other's manual route shows it
+as `writing` and its delete route refuses the manual with `409`, until the body is stored. It then
+covers what only environments do: the waiting reader's one `append`, taking over a crashed
+environment's expired lease, the waiting limit, a run that loses its lease, and a released lease
+freeing the section at once. The leases it waits out are half a
 second to two seconds long, with room for test runs side by side, so no test waits for the
 committed lengths.
 

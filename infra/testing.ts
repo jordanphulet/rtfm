@@ -12,8 +12,11 @@ export type Statement = {
 };
 type Resource = { Type: string; Properties: Record<string, unknown> };
 type Resources = Record<string, Resource>;
-/** The request's condition keys, such as `iam:PermissionsBoundary`. */
-export type RequestContext = Record<string, string>;
+/**
+ * The request's condition keys, such as `iam:PermissionsBoundary`; a multivalued one, such as
+ * `dynamodb:LeadingKeys`, as a list.
+ */
+export type RequestContext = Record<string, string | string[]>;
 export type Decision = "allow" | "deny" | "no allow";
 
 /**
@@ -23,6 +26,7 @@ export type Decision = "allow" | "deny" | "no allow";
 export const INLINE_TEMPLATE_BUDGET = 40 * 1024;
 
 const list = (value: Strings | undefined): string[] => (value === undefined ? [] : [value].flat());
+const FOR_ALL_VALUES = "ForAllValues:";
 
 function wildcardMatches(pattern: unknown, value: string, ignoreCase: boolean): boolean {
   if (typeof pattern !== "string") throw new Error(`Can't evaluate the pattern ${JSON.stringify(pattern)}`);
@@ -37,10 +41,17 @@ function coversAction(statement: Statement, action: string): boolean {
 
 /**
  * `StringEquals` compares exactly; the `Like` and `Arn` operators read `*` and `?` as wildcards. A
- * negated operator holds when the key is missing, as in IAM.
+ * negated operator holds when the key is missing, as in IAM. `ForAllValues` holds when every value
+ * of a multivalued key does, and so when it has none; `Null` treats a key with no values as missing.
  */
 function conditionHolds(operator: string, key: string, values: string[], context: RequestContext): boolean {
+  if (operator.startsWith(FOR_ALL_VALUES)) {
+    const single = operator.slice(FOR_ALL_VALUES.length);
+    return list(context[key]).every((value) => conditionHolds(single, key, values, { [key]: value }));
+  }
+  if (operator === "Null") return (list(context[key]).length === 0) === (values[0] === "true");
   const actual = context[key];
+  if (Array.isArray(actual)) throw new Error(`${key} has several values, so ${operator} needs ForAllValues`);
   const equalsAny = actual !== undefined && values.includes(actual);
   const matchesAny = actual !== undefined && values.some((value) => wildcardMatches(value, actual, false));
   switch (operator) {
@@ -54,8 +65,6 @@ function conditionHolds(operator: string, key: string, values: string[], context
       return matchesAny;
     case "StringNotLike":
       return !matchesAny;
-    case "Null":
-      return (actual === undefined) === (values[0] === "true");
     default:
       throw new Error(`Can't evaluate the condition operator ${operator}`);
   }
