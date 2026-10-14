@@ -64,10 +64,11 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.12 — Render equations in sections
-- **Status:** doing (agent ae5b33cd876b1e085; the user chose a last round: a blocklist of layout-moving commands on top of the height check)
+- **Status:** doing (agent ae5b33cd876b1e085; done, being committed as the user chose)
 - **Depends on:** —
 - **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `server/writer/**`, `package.json`,
-  `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `scripts/shot.ts`
+  `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `scripts/shot.ts`, `README.md`,
+  `src/librarian/store.ts`
 - **Do:** sections written by Claude hold LaTeX (`$$f = \frac{c}{4(L + 0.61d)}$$`, seen on the
   deployed app in a pyrophone manual), and the reader shows it raw: `react-markdown` with
   `remark-gfm` has no math. The user chose KaTeX: add `remark-math` and `rehype-katex` (and
