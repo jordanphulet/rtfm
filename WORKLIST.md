@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.14 — Keep wide inline formulas inside the column
-- **Status:** todo
+- **Status:** doing (agent a7f26bb256a6fb764)
 - **Depends on:** —
 - **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`
 - **Do:** UP.12's third review found that nothing limits an inline formula's width, and the
@@ -78,7 +78,7 @@ Small fixes that keep the repo healthy.
   build` and `npm test` pass.
 
 ### UP.13 — Bring in the UI design iteration
-- **Status:** doing (agent a254561e13310c51d; done, in review by a6bd21566a2e0f95f)
+- **Status:** doing (agent a254561e13310c51d; approved, small fixes)
 - **Depends on:** —
 - **Files:** `src/home/**`, `src/reader/**`, `src/ui/**`, `index.html`, `package.json`,
   `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `research/ui-references.md`
