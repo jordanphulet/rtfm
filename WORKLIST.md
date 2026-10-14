@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.10 — Measure the deployed app
-- **Status:** doing (agent a7748e10835ba97ca)
+- **Status:** doing (agent a7748e10835ba97ca; done, being committed)
 - **Depends on:** —
 - **Files:** `research/aws-design.md`, `infra/README.md`
 - **Do:** through `https://rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is
@@ -141,6 +141,35 @@ aren't RTFM's.
 - **Done when:** `npm test` passes; after the orchestrator's deploy, the smoke check writes one real
   section through `https://rtfm.moonfetus.com` (under $0.01) and `npm run usage` (or the ops tool)
   shows it in `rtfm-usage`.
+
+### IN.21 — Replace an environment before its keys run out
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
+  `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
+  `research/aws-design.md`
+- **Do:** Lambda gives the Web Function its role's keys as environment variables, which a running
+  process can't renew, and nothing bounds an environment's life while requests keep coming less
+  than about 5 minutes apart (IN.10).
+  - `server.started` logs when the keys expire, from `AWS_CREDENTIAL_EXPIRATION` when Lambda sets
+    it (a time, never a key), or that it is unset.
+  - When DynamoDB (or, once IN.20 lands, Bedrock) refuses the keys (`ExpiredTokenException`,
+    `UnrecognizedClientException`), the Web Function logs it and exits with code 1 once its open
+    requests end or after a short bound, so Lambda replaces the environment with fresh keys; when
+    the expiry is known, it also exits that way shortly before it.
+- **Done when:** tests show the logged expiry or "unset", and the exit on a refused key and before
+  a known expiry; after the next deploy, `research/aws-design.md` › Measured records whether Lambda
+  sets the expiry and what happens after the exit.
+
+### IN.22 — See the heartbeat through the edge
+- **Status:** todo
+- **Depends on:** IN.20
+- **Files:** `research/aws-design.md`
+- **Do:** through `https://rtfm.moonfetus.com`, `curl -N` a section stream or a librarian reply
+  with each line timestamped, and confirm a `: heartbeat` arrives about 15 s into a silence, and
+  that a silence before the first event shows nothing until that first heartbeat (the edge holds
+  the headers until the first byte, IN.10).
+- **Done when:** the doc's Measured section records it.
 
 ## Upkeep
 
