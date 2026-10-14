@@ -13,6 +13,9 @@ interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledge
 - **`SectionLeases`** keeps one writer per section among the servers sharing a store (Section
   leases, below): in the process (`in-process-leases.ts`) beside the files, and on the section's
   item in `rtfm-app` beside the table. `config.manualStorage` chooses them with the store.
+- **`LinkStore`** keeps the recipient libraries' links, each under its secret's digest, and each
+  library's activity (Library links and activity, below): files in the data folder
+  (`file-link-store.ts`) and the table `rtfm-app` (`dynamodb-link-store.ts`), held to one suite.
 - **`UsageLedger`** appends an entry (into the file for its `reservedAt` month) and reads a
   month's entries (`"2026-10"`, UTC). It is files in the data folder, which the gateway's spending
   ledger for the fake models keeps its record in; Bedrock's spending is in the table `rtfm-usage`
@@ -26,6 +29,8 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 .data/manuals/<manualId>/manual.json         StoredManual
 .data/manuals/<manualId>/sections/<id>.md    one file per written section
 .data/seeded.json                            the ids of the seed manuals already seeded
+.data/links/<digest>.json                    a recipient library's link: libraryId, label, createdAt, revokedAt
+.data/activity/<libraryId>.json              a recipient library's activity
 .data/ledger/2026-10.jsonl                   the fake models' ledger: one JSON line per entry, append-only
 .data/STOP                                   the fake models' kill switch (server/gateway/README.md)
 .data/server.lock                            the PID of the server using the folder
@@ -109,6 +114,8 @@ of item, told apart by its keys, two strings:
 | A section being written | `MANUAL#<manualId>` | `SECTION#<sectionId>` | `leaseOwner`: `<environment>/<run>`, two random UUIDs; `leaseExpiresAt`: epoch milliseconds (Section leases, below) |
 | A seed manual already seeded | `SEEDED` | `MANUAL#<manualId>` | none |
 | The passcode | `PASSCODE` | `PASSCODE` | `digest`: the passcode's SHA-256 digest, 64 lowercase hex characters (`server/api/README.md` › The passcode) |
+| A recipient library's link | `LINK` | the link's secret's digest | `libraryId`; `label`, if any; `createdAt`; `revokedAt`, once revoked (Library links and activity, below) |
+| A recipient library's activity | `ACTIVITY` | `<libraryId>` | `firstUsedAt`, `lastUsedAt`; the counts, numbers; each absent until first set |
 
 Every manual is in the one partition `LIBRARY`, apart from the bodies, so listing the library
 reads no body, and each manual's `written` set gives its written sections without reading them.
@@ -301,6 +308,61 @@ loses it too. It also checks that a delete cancelled by a section's condition an
 without trying again, even when `written` changed too. The runs' shared suite runs both kinds of
 leases (`server/writer/README.md` › Tests).
 
+## Library links and activity
+
+A recipient's library is opened by a secret link, and its activity is counted
+(`research/libraries.md`). `LinkStore` (`library-links.ts`) keeps both; `link-store-suite.ts`
+checks these rules against the files and the table, the table's on DynamoDB Local:
+
+- **The secret** is 16 bytes from `randomBytes`, as base64url: 22 characters, 128 bits
+  (`makeLibrarySecret`, `LIBRARY_SECRET_PATTERN`). `librarySecretDigest` gives its SHA-256 in
+  lowercase hex, and refuses anything not of the secret's form, without repeating it.
+- **Only the digest is kept.** Every link is created and found by its digest
+  (`LINK_DIGEST_PATTERN`), and anything else, a secret included, throws, so no item or file holds a
+  secret.
+- **Every library here is a recipient's:** its id is a slug of at most 63 characters and never
+  `admin`, the admin's library, which has no link and no activity (`checkedRecipientLibraryId` in
+  `library.ts`). Any other id throws, without the id in the message, so a secret passed in its
+  place never reaches a log.
+- **A link** holds its `libraryId`, the user's `label` if any, `createdAt` and, once revoked,
+  `revokedAt`, as ISO strings the caller gives. `createLink` never replaces one: a digest another
+  link has taken answers `"exists"`, and the very link already stored, unrevoked, answers
+  `"created"`, changing nothing, so a retried create still counts as its own. `findLink` answers
+  undefined only when there is no link; a read that fails throws, never counting as no link.
+  `revokeLink` sets `revokedAt` on every open link naming the library, keeping the items, and
+  answers `"revoked"`, `"already-revoked"` (keeping the first time) or `"no-link"`; of two at once,
+  one revokes.
+- **A library's activity** is `firstUsedAt`, `lastUsedAt`, `opens`, `sectionsRead`,
+  `librarianMessages`, `manualsCreated` and `sectionsWritten`. `recordOpen` adds an open and keeps
+  the first one's time; `recordLastUse` moves `lastUsedAt` forward, never back; `count` adds one to
+  a counter. Counts made at once are never lost. `getActivity` gives a library never used all
+  zeros, and `listActivity` every library used.
+
+In `rtfm-app`, links are in the partition `LINK` and activity in `ACTIVITY`, which belong to no
+library (The table `rtfm-app`, above):
+
+- **`createLink`** puts the link's item on `attribute_not_exists(pk)`, and when that fails reads
+  the stored link back, as `createManual` does.
+- **`findLink`** is one strongly consistent `GetItem`; **`listLinks`** queries `LINK`.
+- **`revokeLink`** queries `LINK` for the library's links, then sets `revokedAt` on each on the
+  condition `attribute_exists(pk) AND attribute_not_exists(revokedAt)`.
+- **The activity** is one `UpdateItem` each, which creates the item if there is none:
+  `SET firstUsedAt = if_not_exists(firstUsedAt, :at) ADD opens :one`, `ADD <counter> :one`, or
+  `SET lastUsedAt = :at` on the condition `attribute_not_exists(lastUsedAt) OR lastUsedAt < :at`,
+  whose failure means a later use is kept already. So environments counting at once never lose a
+  count; the SDK retrying a write whose answer was lost can count it twice.
+- **`getActivity`** is one strongly consistent `GetItem`; **`listActivity`** queries `ACTIVITY`.
+
+In the data folder, links are in `links/<digest>.json` and activity in `activity/<libraryId>.json`
+(The data folder, above):
+
+- **`createLink`** creates the link's file with `createExclusively`, so of two creates only one
+  wins.
+- **`revokeLink`** and each change to a library's activity read the file and write it again
+  through a temp file and a `rename` (`writeAtomically`), one at a time in the process. One server
+  uses a data folder (its lock), so no count is lost.
+- **Listing** reads the `<digest>.json` or `<libraryId>.json` files, leaving temp files out.
+
 ## DynamoDB Local, for the tests
 
 The DynamoDB store's tests, and the Web Function's, run against DynamoDB Local on loopback, so
@@ -365,14 +427,21 @@ delete `.data/ledger/`, because the caps are computed from it.
 - `file-manual-store.ts`: manuals and sections as files.
 - `in-process-leases.ts`: section leases for a server alone on its store.
 - `dynamodb-manual-store.ts`: manuals, sections, section leases and the passcode's digest in a
-  table shaped as `rtfm-app`, and `createAppTable` for DynamoDB Local. The one file here that
-  imports the AWS SDK. Its client builder (`documentClient`) and transaction retry loop
-  (`transactWrite`) also serve the gateway's table `rtfm-usage`.
+  table shaped as `rtfm-app`, and `createAppTable` for DynamoDB Local. One of the two files here
+  that import the AWS SDK, with `dynamodb-link-store.ts`, which uses its client builder
+  (`documentClient`) and partition query (`queryPartition`). The builder and its transaction retry
+  loop (`transactWrite`) also serve the gateway's table `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
+- `library-links.ts`: `LinkStore`, a link and a library's activity, and the secret's form, its
+  making and its digest.
+- `file-link-store.ts`: links and activity as files.
+- `dynamodb-link-store.ts`: links and activity in a table shaped as `rtfm-app`.
+- `link-store-suite.ts`: the tests every `LinkStore` passes.
 - `dynamodb-testing.ts`: the tests' tables in DynamoDB Local, and a stand-in in front of one that
   refuses the keys when told to (`keyRefusingDynamoDb`).
 - `file-ledger.ts`: the usage ledger as JSON lines.
-- `files.ts`: reads a file or folder that may not exist; creates a file only if it doesn't exist.
+- `files.ts`: reads a file or folder that may not exist; creates a file only if it doesn't exist;
+  replaces a file's content through a temp file and a `rename`.
 - `lock.ts`: the data folder's lock: one server per folder.
 - `manual.ts`: a manual's chapters and sections in reading order; the id pattern.
 - `seed.ts`: seeds each manual in `server/seed/` once.

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { link, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { link, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 
 export async function readIfExists(path: string | URL): Promise<string | undefined> {
   try {
@@ -36,6 +36,13 @@ export async function createExclusively(file: string, content: string): Promise<
   } finally {
     await rm(tempFile, { force: true });
   }
+}
+
+/** Replaces the file's content through a temp file and a `rename`, so it is never seen half-written. */
+export async function writeAtomically(file: string, content: string): Promise<void> {
+  const tempFile = tempPathFor(file);
+  await writeFile(tempFile, content);
+  await rename(tempFile, file);
 }
 
 export function tempPathFor(file: string): string {

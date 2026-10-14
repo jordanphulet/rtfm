@@ -10,6 +10,7 @@ const SDK_IMPORT = /["'`]@(?:anthropic-ai|aws-sdk)\//;
 const SDK_ADAPTERS = [
   "server/gateway/bedrock-client.ts",
   "server/gateway/dynamodb-spending-ledger.ts",
+  "server/storage/dynamodb-link-store.ts",
   "server/storage/dynamodb-manual-store.ts",
 ];
 const CLIENT_IMPORT = /["'`][^"'`\n]*\bbedrock-client(?:\.[cm]?[jt]s)?["'`]/;
