@@ -7,7 +7,7 @@ import { librarianRoute } from "./api/librarian.ts";
 import { libraryRoute } from "./api/library.ts";
 import { manualRoute } from "./api/manual.ts";
 import { createRequestHandler } from "./api/node-adapter.ts";
-import { passcodeRoute } from "./api/passcode.ts";
+import { cachedDigest, passcodeRoute, type CurrentDigest } from "./api/passcode.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
 import { usageTableWith, type ManualStorage, type ServerConfig } from "./config.ts";
@@ -22,7 +22,11 @@ import type { SpendingLedger } from "./gateway/spending-ledger.ts";
 import { FAKE_MODEL, type Job, type ModelClient } from "./gateway/types.ts";
 import { toLogFile } from "./logging/log-file.ts";
 import { createLogger, type LogFields, type Logger } from "./logging/logger.ts";
-import { createDynamoDbManualStore, createDynamoDbSectionLeases } from "./storage/dynamodb-manual-store.ts";
+import {
+  createDynamoDbManualStore,
+  createDynamoDbSectionLeases,
+  readPasscodeDigest,
+} from "./storage/dynamodb-manual-store.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { createInProcessLeases } from "./storage/in-process-leases.ts";
@@ -51,8 +55,11 @@ export interface Models {
   idle(): Promise<void>;
 }
 
-/** Parts of the server a caller may supply in place of the configured ones. */
-export type Replaced = Partial<Models> & { logger?: Logger };
+/**
+ * Parts of the server a caller may supply in place of the configured ones. `now` is the clock the
+ * stored passcode's digest is kept by, in milliseconds.
+ */
+export type Replaced = Partial<Models> & { logger?: Logger; now?: () => number };
 
 const nothingToSettle = async () => {};
 
@@ -162,6 +169,7 @@ async function serve(
   logger: Logger,
 ): Promise<{ server: Server; models: Models }> {
   const { store, leases } = createStorage(config, logger);
+  const currentDigest = passcodeDigestSource(config, replaced.now ?? Date.now);
   const models = await modelsFor(config, store, replaced, logger);
   const { writer, librarian } = models;
   await seedStore(store);
@@ -175,9 +183,9 @@ async function serve(
     librarianRoute(store, librarian, logger),
     clientErrorsRoute(logger),
   ];
-  if (config.passcode !== undefined) routes.push(passcodeRoute(config.passcode, logger));
+  if (currentDigest) routes.push(passcodeRoute(currentDigest, logger));
 
-  const server = createServer(createRequestHandler(routes, logger, config));
+  const server = createServer(createRequestHandler(routes, logger, config, currentDigest));
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);
@@ -195,6 +203,26 @@ function createStorage(config: ServerConfig, logger: Logger): { store: ManualSto
     case "dynamodb": {
       const { table } = config.manualStorage;
       return { store: createDynamoDbManualStore(table), leases: createDynamoDbSectionLeases(table) };
+    }
+  }
+}
+
+/**
+ * Where the gate finds the passcode's digest: the fixed one, or the one stored beside the manuals,
+ * read again at most once a minute. Undefined means no gate.
+ */
+function passcodeDigestSource(config: ServerConfig, now: () => number): CurrentDigest | undefined {
+  switch (config.passcode?.kind) {
+    case undefined:
+      return undefined;
+    case "digest": {
+      const { digest } = config.passcode;
+      return async () => digest;
+    }
+    case "stored": {
+      if (config.manualStorage.kind !== "dynamodb") throw new Error("A stored passcode needs the manuals in DynamoDB");
+      const { table } = config.manualStorage;
+      return cachedDigest(() => readPasscodeDigest(table), now);
     }
   }
 }

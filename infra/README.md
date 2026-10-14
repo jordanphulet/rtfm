@@ -70,7 +70,7 @@ for the AWS CLI.
 | `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read`, `rtfm-deploy` and `rtfm-ops`, nothing else |
 | `rtfm-read` (role) | `npm run aws`, `npm run cdk` but deploys, and `npm run ops`' reads | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, the items of `rtfm-usage`, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
-| `rtfm-ops` (role) | `npm run ops -- kill-switch` | Reading and writing the items of two partitions: `KILL_SWITCH` in `rtfm-usage` and `PASSCODE` in `rtfm-app`, nothing else |
+| `rtfm-ops` (role) | `npm run ops -- kill-switch` and `passcode` | Reading and writing the items of two partitions: `KILL_SWITCH` in `rtfm-usage` and `PASSCODE` in `rtfm-app`, nothing else |
 | `cdk-rtfm-deploy-role-…` | The CDK CLI's deploys | CloudFormation on `Rtfm*` stacks, but only reading `RtfmAccess` and `RtfmToolkit`; passing the execution role |
 | `cdk-rtfm-file-publishing-role-…` | Uploading assets | The staging bucket |
 | `cdk-rtfm-lookup-role-…` | `cdk diff`'s reads | Reading `Rtfm*` stacks and the bootstrap's version |
@@ -122,7 +122,9 @@ partition, and no other table, service or role, so it can't reach beyond what th
   switch's item: `dynamodb:GetItem`, `PutItem` and `DeleteItem`, so it turns the kill switch on and
   off, and reads it.
 - **`PASSCODE`** in `rtfm-app` (`PASSCODE_PARTITION`; `server/storage/README.md` › The table
-  `rtfm-app`), which holds the passcode's item: `dynamodb:GetItem` and `PutItem`.
+  `rtfm-app`), which holds the passcode's item, its digest: `dynamodb:GetItem` and `PutItem`, so
+  `npm run ops -- passcode set` stores a new digest and `passcode cookie` reads it. The digest
+  opens the app (`README.md` › A passcode).
 
 Each statement names its table's ARN and holds two conditions on `dynamodb:LeadingKeys`, the
 partition keys a request names: `ForAllValues:StringEquals` with the one partition, and `Null`
@@ -175,9 +177,9 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
     Its name never changes, since the edge's resource policy names it. One revision, made from
     the package below on `nodejs24.x`, with `timeoutSeconds` 300 (a request, a whole stream
     included, may run 5 minutes) and its logs in `/rtfm/app`. Its environment holds only
-    `AWS_LAMBDA_NODEJS_ENTRYPOINT`, `RTFM_PASSCODE`, a throwaway committed in `app-stack.ts`, and
-    `RTFM_APP_TABLE`, the table's name: `rtfm-read` can read a revision
-    (`GetWebFunctionRevision`), so nothing secret goes there.
+    `AWS_LAMBDA_NODEJS_ENTRYPOINT` and `RTFM_APP_TABLE`, the table's name: `rtfm-read` can read a
+    revision (`GetWebFunctionRevision`), so nothing secret goes there. The server reads the
+    passcode's digest from the table (`README.md` › A passcode).
   - **its endpoint `main`**: `HomeRegion`, `IamAuth`, at most 2 environments (`maxEnvironments`)
     and 100 requests a second (`rateLimit`). No role of RTFM's may invoke it; only the edge's
     distribution may, through the resource policy in `RtfmEdge`. The stack's output
@@ -185,7 +187,8 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
   - **its role `rtfm-app-web-function`**, which Lambda assumes, and which may only write log
     streams in `/rtfm/app` and `/rtfm/app.local`, read and write items in the table `rtfm-app`
     (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `DeleteItem`, which also cover the store's
-    transactions), and read and write items in the table `rtfm-usage` as `rtfm-local` may
+    transactions and the passcode's item, so it can read the digest that opens the app, and
+    write it too), and read and write items in the table `rtfm-usage` as `rtfm-local` may
     (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `ConditionCheckItem`): no Bedrock, since the Web
     Function runs only the fake models.
   - **the table `rtfm-app`**, the library: the manuals and their sections
@@ -337,17 +340,15 @@ show that it starts: Lambda doesn't check that a revision's server listens.
 
 With the edge stacks deployed (Your steps › The edge stacks), these requests go through the domain
 and the whole path to the server: CloudFront, the host check, the origin access control, the Web
-Function's resource policy and the server itself. The passcode is the throwaway one in
-`app-stack.ts` (`THROWAWAY_PASSCODE`), whose cookie `curl` keeps in a temporary file:
+Function's resource policy and the server itself. The cookie is the passcode's digest, which
+`npm run ops -- passcode cookie` reads as `rtfm-ops` (`README.md` › The ops tools), kept in a shell
+variable and never printed; nothing here sees the passcode itself:
 
 ```sh
-cookies=$(mktemp)
 curl -sS -o /dev/null -w '%{http_code}\n' https://rtfm.moonfetus.com/
 curl -sS -o /dev/null -w '%{http_code}\n' https://rtfm.moonfetus.com/api/manuals
-curl -sS -o /dev/null -w '%{http_code}\n' -c "$cookies" -H 'content-type: application/json' \
-  --data '{"passcode":"throwaway passcode for the fake models"}' https://rtfm.moonfetus.com/api/passcode
-curl -sS -o /dev/null -w '%{http_code}\n' -b "$cookies" https://rtfm.moonfetus.com/api/manuals
-rm "$cookies"
+cookie=$(npm run -s ops -- passcode cookie)
+curl -sS -o /dev/null -w '%{http_code}\n' -b "$cookie" https://rtfm.moonfetus.com/api/manuals
 distribution=$(npm run -s aws -- cloudformation describe-stacks --stack-name RtfmEdge \
   --query "Stacks[0].Outputs[?OutputKey=='DistributionDomain'].OutputValue" --output text)
 curl -sS -o /dev/null -w '%{http_code}\n' "https://$distribution/"
@@ -357,9 +358,15 @@ They pass when they print, in order:
 
 - `200`: the app's page, from the server through CloudFront.
 - `401`: the API refuses a request without the passcode's cookie.
-- `204`: the passcode is accepted, and its cookie saved.
 - `200`: the library, with the cookie.
 - `403`: the distribution's own `*.cloudfront.net` domain, refused by the host check.
+
+**Before the user has set a passcode**, the app refuses every API request. `passcode cookie` then
+writes `No passcode is set, …` to standard error and leaves the cookie empty, and the library's
+line prints `401` in place of `200`. That is the app failing closed, as it should, and the check
+still passes if everything else prints as above; tell the user to run
+`npm run ops -- passcode set` in a terminal outside the Claude app (Your steps › 7). Once they
+have, the Web Function reads the new digest within a minute.
 
 ## The boundary
 
@@ -481,6 +488,7 @@ These set RTFM up in an account that holds none of it, up to the app answering a
   `RtfmAccess` exist, then checks with the smoke check (`PROCESS.md` › Rules › Only the
   orchestrator deploys; Deploying the app stack, above).
 - **Checking `rtfm-local`'s key**: step 6 below, which needs `RtfmApp`'s table `rtfm-usage`.
+- **The passcode**: step 7 below, which needs `RtfmApp`'s table `rtfm-app`.
 - **The edge stacks** (below), which read `RtfmApp`'s output.
 - **The smoke check through the domain**: the requests in Deploying the app stack, above, to
   `rtfm.moonfetus.com`, and one to the distribution's own `*.cloudfront.net` domain, which must
@@ -599,6 +607,12 @@ the laptop.
    Claude then writes. In the IAM console, under the user `rtfm-local`, its key's "Last used"
    should then show Bedrock: the server called Bedrock with this key. If you set up Bedrock access
    by hand before, delete that user, with its keys, and its policy once `rtfm-local`'s key works.
+
+7. **Set the deployed app's passcode**, once `RtfmApp` is deployed, in a terminal on the laptop
+   outside the Claude app, never in its Terminal panel, whose screen a session can read:
+   `npm run ops -- passcode set` (`README.md` › A passcode). It shows four words once and waits
+   for Enter, then clears the screen and its scrollback; keep the words. Until then the app
+   refuses every API request.
 
 ### The edge stacks
 
@@ -796,8 +810,8 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
   the host check's code and the Web Function's name, which a test keeps the same as
   `app-stack.ts`'s: an edge stack imports nothing from `app-stack.ts`, which would make every
   change to the app stack yours to approve (`PROCESS.md` › Authority). `app-stack.ts`:
-  `RtfmApp`, with its resources' names, the throwaway passcode, and the asset that builds the Web
-  Function's package (`scripts/build-web-function.ts`).
+  `RtfmApp`, with its resources' names and the asset that builds the Web Function's package
+  (`scripts/build-web-function.ts`).
 - `boundary.ts`: the boundary's statements. `bedrock.ts`: Claude's.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`, and `openAwsSession`, the ops tools' way to AWS.
 - `testing.ts`: the tests' policy evaluator: whether a role's or user's policies, and its

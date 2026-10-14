@@ -42,7 +42,10 @@ export const APP_LOG_GROUP = "/rtfm/app";
 export const APP_LOCAL_LOG_GROUP = `${APP_LOG_GROUP}.local`;
 /** Bucket names are global, so the account and region keep it RTFM's own. */
 export const APP_BUCKET = `rtfm-app-${ACCOUNT}-${REGION}`;
-/** What `server/storage/dynamodb-manual-store.ts` does to the table, its transactions included. */
+/**
+ * What `server/storage/dynamodb-manual-store.ts` does to the table, its transactions included;
+ * `GetItem` also reads the passcode's digest.
+ */
 const APP_TABLE_ACTIONS = [
   "dynamodb:GetItem",
   "dynamodb:Query",
@@ -56,11 +59,6 @@ export const WEB_FUNCTION_ROLE = "rtfm-app-web-function";
 export const WEB_FUNCTION_ENDPOINT = "main";
 /** Where `scripts/build-web-function.ts` puts the server in the package. */
 export const WEB_FUNCTION_ENTRYPOINT = "server/web-function.mjs";
-/**
- * Not the user's passcode: it guards only the fake models, and anyone who can read the revision,
- * `rtfm-read` included, can read it.
- */
-export const THROWAWAY_PASSCODE = "throwaway passcode for the fake models";
 const WEB_FUNCTION_TIMEOUT_SECONDS = 300;
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -159,7 +157,6 @@ export class RtfmAppStack extends Stack {
         timeoutSeconds: WEB_FUNCTION_TIMEOUT_SECONDS,
         environmentVariables: {
           AWS_LAMBDA_NODEJS_ENTRYPOINT: WEB_FUNCTION_ENTRYPOINT,
-          RTFM_PASSCODE: THROWAWAY_PASSCODE,
           RTFM_APP_TABLE: APP_TABLE,
         },
         telemetryConfig: { loggingConfig: { logGroup: APP_LOG_GROUP } },

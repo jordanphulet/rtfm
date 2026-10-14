@@ -28,11 +28,12 @@ contract it shares with the browser (`ARCHITECTURE.md` › Boundaries).
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
 | `POST /api/librarian` with `{ messages: LibrarianMessage[] }` | `text/event-stream` of `LibrarianEvent`s (`server/agent/README.md` › The librarian), or `400` |
 | `POST /api/client-errors` with a `ClientErrorReport` | `204`, `400`, or `429` past the hourly limit (`server/logging/README.md` › Browser errors) |
-| `POST /api/passcode` with `{ passcode }`, only when a passcode is set | `204` with the passcode cookie, `401 { error: "Wrong passcode" }`, or `400` (The passcode, below) |
+| `POST /api/passcode` with `{ passcode }`, only with a passcode gate | `204` with the passcode cookie, `401 { error: "Wrong passcode" }`, or `400` (The passcode, below) |
 
 Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
 `500 { error: "Internal error" }` (or, once a stream has started, the stream just ends). With a
-passcode set, a request without it gets `401` before any of these (The passcode, below).
+passcode gate, a request without the passcode's cookie gets `401` before any of these (The
+passcode, below).
 
 ## Only the app's own pages
 
@@ -92,31 +93,52 @@ Unset, as on this machine, where Vite serves the app, every path goes to the API
 
 ## The passcode
 
-With `RTFM_PASSCODE` set (`server/README.md` › Configuration), the server answers no one who
-hasn't entered it. Unset, or empty, there is no gate and no `POST /api/passcode`.
+The server keeps the passcode's SHA-256 digest, never the passcode (`passcodeDigest`, lowercase
+hex), and answers no one whose cookie doesn't hold it. `config.passcode` says where the digest
+comes from (`server/README.md` › Configuration):
+
+- **A fixed digest**, on this machine: `RTFM_PASSCODE`, hashed when `config.ts` loads
+  (`fixedPasscode`). Unset or empty, there is no gate and no `POST /api/passcode`.
+- **The stored digest**, on the Web Function: the passcode's item in the table `rtfm-app`
+  (`server/storage/README.md` › The table `rtfm-app`), which the user sets with
+  `npm run ops -- passcode set` (`README.md` › A passcode). `cachedDigest` reads it again only
+  once the last read is a minute old (`STORED_DIGEST_MAX_AGE_MS`) by the server's clock, which
+  tests replace (`startServer`'s `now`), so a new digest reaches every environment within a
+  minute, with no deploy. A read that fails isn't kept: the request gets `500`, and the next one
+  reads again. A stored digest needs the manuals in DynamoDB, or the server doesn't start.
+
+The rules:
 
 - **The gate.** After the `Host` and `Origin` checks and before the body is read or any route is
   matched, the Node adapter refuses every API request but `POST /api/passcode` with
   `401 { error: "Passcode required" }` unless its `Cookie` header has `rtfm_passcode` equal to the
-  passcode. Unknown paths get `401` too, so nothing about the API shows before the passcode.
-- **Entering it.** `POST /api/passcode { passcode }` (`api/passcode.ts`) answers the right one
-  with `204` and the cookie, and a wrong one with `401 { error: "Wrong passcode" }` and no cookie.
-- **The cookie** is `rtfm_passcode=<the passcode, URI-encoded>; HttpOnly; SameSite=Strict;
-  Path=/api`, plus `Secure` when the request's `Host` isn't `localhost`, `127.0.0.1` or `[::1]`,
-  as on the Web Function, whose page is HTTPS. It has no `Max-Age`, so the browser keeps it for its
-  session. The browser sends it on every API request, the reader's `EventSource` streams included,
-  since they are same-origin. `curl -c` keeps a `Secure` cookie, and sends it back (`-b`) only over
-  HTTPS.
-- **Compared in constant time:** `isPasscode` compares the SHA-256 digests of the two, which are
-  always the same length, with `timingSafeEqual`.
-- **Rotating it:** change `RTFM_PASSCODE` and restart the server. Every browser's cookie then
-  holds the old one, so every browser gets the passcode screen again.
-- **What it doesn't do:** the passcode is kept and compared as it is, with no signed session, no
-  expiry, no limit on attempts and no sign-out. Nothing slows guessing, which is why `README.md`
-  recommends a passcode of a few random words.
-- **Logged** without the passcode or the cookie: a refused request as `request.refused` (`401`,
-  `Passcode required`), and each passcode entered as `passcode.wrong` or `passcode.accepted`
-  (`server/logging/README.md`).
+  digest. Unknown paths get `401` too, so nothing about the API shows before the passcode. A
+  request with no such cookie, or one without a digest's form (`hasDigestForm`: 64 lowercase hex
+  characters), is refused without reading the digest.
+- **Entering it.** `POST /api/passcode { passcode }` (`api/passcode.ts`) hashes the passcode
+  given and answers the right one with `204` and the cookie, and a wrong one with
+  `401 { error: "Wrong passcode" }` and no cookie.
+- **Failing closed.** While no digest is stored, every request the gate guards gets `401`, and
+  every passcode entered gets `401 { error: "Wrong passcode" }`, logged as `passcode.unset`.
+- **The cookie** is `rtfm_passcode=<the digest>; HttpOnly; SameSite=Strict; Path=/api`, plus
+  `Secure` when the request's `Host` isn't `localhost`, `127.0.0.1` or `[::1]`, as on the Web
+  Function, whose page is HTTPS. It has no `Max-Age`, so the browser keeps it for its session. The
+  browser sends it on every API request, the reader's `EventSource` streams included, since they
+  are same-origin. `curl -c` keeps a `Secure` cookie, and sends it back (`-b`) only over HTTPS;
+  `curl -b 'rtfm_passcode=<digest>'` sends one it was given.
+- **Compared in constant time:** `isDigest` also takes only a cookie with a digest's form, judged
+  by the cookie alone, then compares its 32 bytes with the digest's 32 with `timingSafeEqual`, so
+  the time taken never depends on the digest.
+- **Rotating it:** a new digest, from a new `RTFM_PASSCODE` and a restart, or from
+  `passcode set` and at most a minute. Every browser's cookie then holds the old one, so every
+  browser gets the passcode screen again.
+- **The digest opens the app.** The cookie is the digest itself, so whoever can read the digest
+  can open the app without the passcode (`README.md` › A passcode). There is no signed session, no
+  expiry, no limit on attempts and no sign-out. Nothing slows guessing, which is why the passcode
+  is a few random words.
+- **Logged** without the passcode, the digest or the cookie: a refused request as
+  `request.refused` (`401`, `Passcode required`), and each passcode entered as `passcode.wrong`,
+  `passcode.accepted` or `passcode.unset` (`server/logging/README.md`).
 
 ## Handlers
 
@@ -273,4 +295,5 @@ data: {}
 - `preview.ts`: `?freeze`, `?fail` and `?library=empty`: canned, never stored, never billed.
 - `client-errors.ts`: `POST /api/client-errors`: logs what the browser reports
   (`server/logging/README.md` › Browser errors).
-- `passcode.ts`: `POST /api/passcode`, the cookie's name and `isPasscode` (The passcode, above).
+- `passcode.ts`: `POST /api/passcode`, the cookie's name, `passcodeDigest`, `hasDigestForm`,
+  `isDigest`, and `cachedDigest`, the stored digest's cache (The passcode, above).

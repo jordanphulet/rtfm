@@ -122,7 +122,8 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `task-prompt.ts`: `npm run task-prompt`, which prints the prompt that starts a task's agent or
   its reviewer, from the task's block in `WORKLIST.md`, using `commit-task.ts`'s parsing.
 - `ops/`: `npm run ops` (`ops.ts`), the ops tools for the deployed app: the kill switch
-  (`kill-switch.ts`), the spend (`usage.ts`), the logs (`logs.ts`) and the status (`status.ts`),
+  (`kill-switch.ts`), the passcode (`passcode.ts`, with its words in `passcode-words.ts`), the
+  spend (`usage.ts`), the logs (`logs.ts`) and the status (`status.ts`),
   each acting as an RTFM role through `infra/run-aws.ts`'s session (`context.ts`), and the
   deployed names they read (`deployed.ts`). `testing.ts` holds the tests' stand-in for the AWS CLI
   (`README.md` › The ops tools).
@@ -226,12 +227,15 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
   origin `https://rtfm.moonfetus.com`. The Node adapter refuses any other `Host` or `Origin`, and
   any body that isn't JSON, before a route runs (`server/api/README.md` › Only the app's own
   pages).
-- **The passcode gate.** With `RTFM_PASSCODE` set, the Node adapter answers every API request but
-  `POST /api/passcode` with `401` unless its `rtfm_passcode` cookie holds the passcode, so a
-  public URL can't spend the model caps for anyone who finds it; the browser shows the passcode
-  screen on any `401` (`server/api/README.md` › The passcode, `src/passcode/README.md`).
+- **The passcode gate.** With a passcode set (`RTFM_PASSCODE` on this machine, the digest in
+  `rtfm-app` on the Web Function), the Node adapter answers every API request but
+  `POST /api/passcode` with `401` unless its `rtfm_passcode` cookie holds the passcode's SHA-256
+  digest, so a public URL can't spend the model caps for anyone who finds it; the browser shows
+  the passcode screen on any `401` (`server/api/README.md` › The passcode,
+  `src/passcode/README.md`). The server keeps only the digest, and the Web Function refuses every
+  API request while none is stored.
 - **One logger**, passed to whatever logs, never logs a manual's text, a prompt, a conversation
-  or the passcode (`server/logging/README.md`).
+  or the passcode or its digest (`server/logging/README.md`).
 - **Tests never call Bedrock** (`server/README.md` › Tests).
 - **AWS only as RTFM.** Commands reach AWS only through `npm run aws`, `npm run cdk` and
   `npm run ops`, as the roles `rtfm-read`, `rtfm-deploy` and `rtfm-ops`, which reach only

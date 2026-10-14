@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./api/node-adapter.ts";
+import { passcodeDigest } from "./api/passcode.ts";
 import type { AwsCredentials } from "./gateway/credentials.ts";
 import type { GatewayConfig } from "./gateway/types.ts";
 import { API_PORT } from "./ports.ts";
@@ -20,6 +21,12 @@ export interface UsageTableLocation {
   endpoint: string | undefined;
 }
 
+/**
+ * Where the passcode's digest comes from: a fixed one (`RTFM_PASSCODE`'s, hashed when the server
+ * starts), or the one stored in the manuals' table, as on the Web Function.
+ */
+export type PasscodeSource = { kind: "digest"; digest: string } | { kind: "stored" };
+
 export interface ServerConfig extends GatewayConfig, AdapterConfig {
   /** The address the server listens on. */
   host: string;
@@ -27,6 +34,8 @@ export interface ServerConfig extends GatewayConfig, AdapterConfig {
   dataDir: string;
   manualStorage: ManualStorage;
   models: ModelSource;
+  /** Undefined means no passcode gate (`server/api/README.md` › The passcode). */
+  passcode: PasscodeSource | undefined;
   /** Used only with Bedrock; the fake models' spending stays in the data folder. */
   usageTable: UsageTableLocation;
   maxConcurrentRuns: number;
@@ -47,7 +56,7 @@ export const config: ServerConfig = {
   manualStorage: { kind: "files" },
   models: modelsFromEnv(process.env.RTFM_MODELS),
   usageTable: { name: "rtfm-usage", endpoint: undefined },
-  passcode: process.env.RTFM_PASSCODE || undefined,
+  passcode: fixedPasscode(process.env.RTFM_PASSCODE),
   allowedHosts: LOOPBACK_HOSTS,
   allowedOrigins: LOOPBACK_ORIGINS,
   appDir: undefined,
@@ -64,6 +73,11 @@ export const config: ServerConfig = {
     "plan-manual": { model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", maxTokens: 4096, idleTimeoutMs: 60_000 },
   },
 };
+
+/** A passcode as the server keeps it, as its digest alone; empty or unset means no gate. */
+export function fixedPasscode(passcode = ""): PasscodeSource | undefined {
+  return passcode === "" ? undefined : { kind: "digest", digest: passcodeDigest(passcode) };
+}
 
 function modelsFromEnv(value = "fake"): ModelSource {
   if (value === "fake" || value === "bedrock") return value;

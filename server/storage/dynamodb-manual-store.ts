@@ -451,6 +451,29 @@ export async function transactWrite(
   }
 }
 
+/** The passcode's item in `rtfm-app`, the one item of its partition, which holds the passcode's digest. */
+export const PASSCODE_KEY = { pk: "PASSCODE", sk: "PASSCODE" };
+/** A SHA-256 digest in lowercase hex, the only form the passcode's item holds. */
+export const PASSCODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/;
+
+/** The passcode's digest stored in the table, or undefined while no passcode is set. */
+export async function readPasscodeDigest(table: DynamoDbTable): Promise<string | undefined> {
+  const { Item } = await documentClient(table).send(
+    new GetCommand({ TableName: table.name, Key: PASSCODE_KEY, ConsistentRead: true }),
+  );
+  if (Item === undefined) return undefined;
+  if (typeof Item.digest !== "string" || !PASSCODE_DIGEST_PATTERN.test(Item.digest)) {
+    throw new Error("The passcode's item in the table holds no SHA-256 digest in lowercase hex");
+  }
+  return Item.digest;
+}
+
+/** Stores the passcode's digest in place of the one before. */
+export async function writePasscodeDigest(table: DynamoDbTable, digest: string): Promise<void> {
+  if (!PASSCODE_DIGEST_PATTERN.test(digest)) throw new Error("A passcode's digest is SHA-256 in lowercase hex");
+  await documentClient(table).send(new PutCommand({ TableName: table.name, Item: { ...PASSCODE_KEY, digest } }));
+}
+
 /** Creates an empty table shaped as `rtfm-app`, for DynamoDB Local; `RtfmApp` creates the real one. */
 export async function createAppTable(table: DynamoDbTable): Promise<void> {
   await dynamoDbClient(table).send(

@@ -5,13 +5,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, onTestFinished } from "vitest";
 import type { LogEntry } from "./logging/logger.ts";
-import { createDynamoDbManualStore } from "./storage/dynamodb-manual-store.ts";
+import { passcodeDigest } from "./api/passcode.ts";
+import { createDynamoDbManualStore, writePasscodeDigest } from "./storage/dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS, keyRefusingDynamoDb, testAppTable } from "./storage/dynamodb-testing.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "./testing.ts";
 
 const WEB_FUNCTION = fileURLToPath(new URL("./web-function.ts", import.meta.url));
 const TEST_TIMEOUT_MS = 30_000;
 const PASSCODE = "brass kettle mossy heron";
+/** In the environment, which the Web Function never takes its passcode from. */
+const DECOY_PASSCODE = "copper lantern tidal owl";
 const INDEX = "<!doctype html><title>RTFM</title>";
 /** A Web Function endpoint's domain, which Lambda sends as the `Host`. */
 const ENDPOINT_HOST = "abcdefghijklmnop.b7t.lambda-web.us-west-2.on.aws";
@@ -27,11 +30,13 @@ interface Answer {
 /**
  * Runs `web-function.ts` as Lambda would, on a stand-in `AWS_LAMBDA_HTTP_ENDPOINT` (any free port
  * on loopback), with its `/tmp` and its built app in folders of the test's own, and its own table
- * in DynamoDB Local, reached with stand-ins for the execution role's credentials.
+ * in DynamoDB Local, holding `PASSCODE`'s digest unless `passcodeStored` is false, reached with
+ * stand-ins for the execution role's credentials.
  */
-async function startWebFunction(env: NodeJS.ProcessEnv = {}) {
+async function startWebFunction(env: NodeJS.ProcessEnv = {}, { passcodeStored = true } = {}) {
   const tmp = await tempDataDir();
   const table = await testAppTable();
+  if (passcodeStored) await writePasscodeDigest(table, passcodeDigest(PASSCODE));
   const appDir = path.join(tmp, "dist");
   await mkdir(appDir);
   await writeFile(path.join(appDir, "index.html"), INDEX);
@@ -41,7 +46,7 @@ async function startWebFunction(env: NodeJS.ProcessEnv = {}) {
       AWS_LAMBDA_HTTP_ENDPOINT: "127.0.0.1:0",
       RTFM_APP_DIR: appDir,
       RTFM_MODELS: undefined,
-      RTFM_PASSCODE: PASSCODE,
+      RTFM_PASSCODE: DECOY_PASSCODE,
       RTFM_DATA_DIR: undefined,
       RTFM_APP_TABLE: table.name,
       RTFM_DYNAMODB_ENDPOINT: table.endpoint,
@@ -126,6 +131,34 @@ describe("web-function.ts", () => {
     expect(JSON.parse(manuals.text)).toContainEqual(expect.objectContaining({ id: SAMPLE_ID }));
   });
 
+  it("opens with the cookie holding the stored digest, never with RTFM_PASSCODE", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const webFunction = await startWebFunction();
+    const port = await webFunction.listening();
+    const page = { host: ENDPOINT_HOST, origin: APP_ORIGIN };
+
+    const { cookie } = await enterPasscode(port);
+    expect(cookie).toBe(`rtfm_passcode=${passcodeDigest(PASSCODE)}`);
+    expect((await send(port, "POST", "/api/passcode", page, { passcode: DECOY_PASSCODE })).status).toBe(401);
+    expect((await send(port, "GET", "/api/manuals", { ...page, cookie: `rtfm_passcode=${passcodeDigest(DECOY_PASSCODE)}` })).status).toBe(401);
+    expect(JSON.stringify(webFunction.entries())).not.toContain(passcodeDigest(PASSCODE));
+  });
+
+  it("refuses every API request, and every passcode, while no digest is stored", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const webFunction = await startWebFunction({}, { passcodeStored: false });
+    const port = await webFunction.listening();
+    const page = { host: ENDPOINT_HOST, origin: APP_ORIGIN };
+
+    expect((await send(port, "GET", "/", page)).status).toBe(200);
+    expect((await send(port, "GET", "/api/manuals", page)).status).toBe(401);
+    expect((await send(port, "GET", "/api/manuals", { ...page, cookie: `rtfm_passcode=${passcodeDigest(PASSCODE)}` })).status).toBe(401);
+    for (const passcode of [PASSCODE, DECOY_PASSCODE]) {
+      const entered = await send(port, "POST", "/api/passcode", page, { passcode });
+      expect(entered.status, passcode).toBe(401);
+      expect(entered.headers["set-cookie"]).toBeUndefined();
+    }
+    expect(webFunction.entries().map(({ event }) => event)).toContain("passcode.unset");
+  });
+
   it("serves the built app for every page route, without the passcode", { timeout: TEST_TIMEOUT_MS }, async () => {
     const webFunction = await startWebFunction();
     const port = await webFunction.listening();
@@ -195,6 +228,7 @@ describe("web-function.ts", () => {
 
   it("exits with 1 once DynamoDB refuses its keys, so Lambda replaces the environment", { timeout: TEST_TIMEOUT_MS }, async () => {
     const table = await testAppTable();
+    await writePasscodeDigest(table, passcodeDigest(PASSCODE));
     const dynamoDb = await keyRefusingDynamoDb(table);
     const webFunction = await startWebFunction({ RTFM_APP_TABLE: table.name, RTFM_DYNAMODB_ENDPOINT: dynamoDb.endpoint });
     const port = await webFunction.listening();
