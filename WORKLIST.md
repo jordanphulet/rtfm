@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.1 — Design a library per recipient
-- **Status:** doing (agent af1e1383b0c085e70; review's fixes and the user's decisions)
+- **Status:** doing (agent af1e1383b0c085e70; done, being committed)
 - **Depends on:** —
 - **Files:** `research/libraries.md`
 - **Do:** write a dated design, opening with a status line, for what the user decided:
