@@ -6,6 +6,7 @@ import { silentLogger, type Logger } from "../logging/logger.ts";
 import { createFileLedger } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry, UsageLedger } from "../storage/types.ts";
 import { capturingLogger, collect, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, waitUntil } from "../testing.ts";
+import { openFileSpendingLedger } from "./file-spending-ledger.ts";
 import { createGateway, killSwitchPath, type RunningGateway } from "./gateway.ts";
 import {
   GatewayBusy,
@@ -122,7 +123,8 @@ describe("model gateway", () => {
       logger = silentLogger,
     }: { config?: GatewayConfig; now?: () => Date; logger?: Logger } = {},
   ): Promise<RunningGateway> {
-    return createGateway({ createClient: () => client, ledger, config, prices: TEST_PRICES, dataDir, now, logger });
+    const openSpendingLedger = () => openFileSpendingLedger({ ledger, dataDir, now });
+    return createGateway({ createClient: () => client, openSpendingLedger, config, prices: TEST_PRICES, now, logger });
   }
 
   async function seedLedger(entries: LedgerEntry[]) {
@@ -133,14 +135,16 @@ describe("model gateway", () => {
     return (await ledger.entriesForMonth(month)).filter((entry) => entry.kind === "settle");
   }
 
-  it("refuses at start-up a job whose model is not in the price table, before creating the client", async () => {
+  it("refuses at start-up a job whose model is not in the price table, before creating the client or opening the spending ledger", async () => {
     const config = gatewayConfig({ jobs: { ...JOBS, librarian: { model: "unpriced-model", maxTokens: 10 } } });
     const createClient = vi.fn(() => fakeClient().client);
+    const openSpendingLedger = vi.fn(() => openFileSpendingLedger({ ledger, dataDir }));
     const logger = silentLogger;
-    await expect(createGateway({ createClient, ledger, config, prices: TEST_PRICES, dataDir, logger })).rejects.toThrow(
-      ModelNotPriced,
-    );
+    await expect(
+      createGateway({ createClient, openSpendingLedger, config, prices: TEST_PRICES, logger }),
+    ).rejects.toThrow(ModelNotPriced);
     expect(createClient).not.toHaveBeenCalled();
+    expect(openSpendingLedger).not.toHaveBeenCalled();
   });
 
   it("streams the client's events and settles a complete call at its reported usage", async () => {

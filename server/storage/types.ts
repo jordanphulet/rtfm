@@ -45,7 +45,10 @@ export interface SectionLeases {
 
 /** A section's lease, renewed until it is released or its body is saved. */
 export interface SectionLease {
-  /** Aborts, with the reason, once another writer has taken the lease. */
+  /**
+   * Aborts, with the reason, once the holder may no longer write: the lease is gone from storage,
+   * or it couldn't be renewed and is about to expire, before another writer can take it.
+   */
   lost: AbortSignal;
   /** Saves the body as `ManualStore.saveBody` does, and throws if the lease was lost. */
   saveBody(body: string): Promise<"saved" | "already-written">;

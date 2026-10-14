@@ -14,7 +14,8 @@ const SEED_SECTIONS = Object.entries(SEED_BODIES).map(([file, body]) => [file.sp
 
 const SYNTAX_RUN = /\n[ \t>]*(\d+[.)])?|[*_`~[\]()|#>^:\\!-]+[ \t]*/g;
 
-const CHARACTER_SWEEP_TIMEOUT_MS = 30_000;
+/** A sweep takes 0.3 s to 12 s, by how busy the machine is (`server/README.md` › Tests). */
+const RENDER_SWEEP_TIMEOUT_MS = 60_000;
 
 describe("repairPartialMarkdown", () => {
   it.each([
@@ -86,17 +87,21 @@ describe("repairPartialMarkdown", () => {
       const everyCut = Array.from({ length: denseDocument.length + 1 }, (_, end) => end);
       expectNoRawSyntaxAtCuts(denseDocument, everyCut);
     },
-    CHARACTER_SWEEP_TIMEOUT_MS,
+    RENDER_SWEEP_TIMEOUT_MS,
   );
 
   it("streams every section of the sample manual", () => {
     expect(SEED_SECTIONS).toHaveLength(18);
   });
 
-  it.each(SEED_SECTIONS)("never shows raw syntax while streaming %s", (_file, body) => {
-    expect(repairPartialMarkdown(body)).toBe(body);
-    expectNoRawSyntaxAtCuts(body, cutsAroundSyntax(body));
-  });
+  it.each(SEED_SECTIONS)(
+    "never shows raw syntax while streaming %s",
+    (_file, body) => {
+      expect(repairPartialMarkdown(body)).toBe(body);
+      expectNoRawSyntaxAtCuts(body, cutsAroundSyntax(body));
+    },
+    RENDER_SWEEP_TIMEOUT_MS,
+  );
 });
 
 /** Every cut before, inside and after each run of markdown syntax, a line start included. */

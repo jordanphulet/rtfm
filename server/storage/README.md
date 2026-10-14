@@ -14,7 +14,9 @@ interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledge
   leases, below): in the process (`in-process-leases.ts`) beside the files, and on the section's
   item in `rtfm-app` beside the table. `config.manualStorage` chooses them with the store.
 - **`UsageLedger`** appends an entry (into the file for its `reservedAt` month) and reads a
-  month's entries (`"2026-10"`, UTC). It is files in the data folder, wherever the server runs.
+  month's entries (`"2026-10"`, UTC). It is files in the data folder, which the gateway's spending
+  ledger for the fake models keeps its record in; Bedrock's spending is in the table `rtfm-usage`
+  (`server/gateway/README.md` › The spending ledger).
 
 ## The data folder
 
@@ -24,8 +26,8 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 .data/manuals/<manualId>/manual.json         StoredManual
 .data/manuals/<manualId>/sections/<id>.md    one file per written section
 .data/seeded.json                            the ids of the seed manuals already seeded
-.data/ledger/2026-10.jsonl                   one JSON line per ledger entry, append-only
-.data/STOP                                   the kill switch (server/gateway/README.md)
+.data/ledger/2026-10.jsonl                   the fake models' ledger: one JSON line per entry, append-only
+.data/STOP                                   the fake models' kill switch (server/gateway/README.md)
 .data/server.lock                            the PID of the server using the folder
 .data/logs/2026-10-12.jsonl                  the server's log for one UTC day (server/logging/README.md)
 ```
@@ -176,8 +178,9 @@ A section is written by one run at a time, wherever it runs (`server/writer/READ
 writer per section). Within a process the runs' map sees to that; across the processes sharing a
 store, the run takes the section's lease first. `SectionLeases.take` gives a `SectionLease`, or
 nothing while another writer holds the section or its body is stored. A lease is renewed until it
-is released or its body saved; it has a `lost` signal, which aborts once another writer has taken
-it; and only it may save the body (`SectionLease.saveBody`, which answers as
+is released or its body saved; it has a `lost` signal, which aborts once the holder may no longer
+write (the lease is gone from storage, or it couldn't be renewed and is about to expire, before
+another writer can take it: The holder fences itself, below); and only it may save the body (`SectionLease.saveBody`, which answers as
 `ManualStore.saveBody` does, and throws once the lease is lost).
 
 - **In the process** (`in-process-leases.ts`), with the files: every take is granted, and the
@@ -315,6 +318,8 @@ delete `.data/ledger/`, because the caps are computed from it.
 - `in-process-leases.ts`: section leases for a server alone on its store.
 - `dynamodb-manual-store.ts`: manuals, sections and section leases in a table shaped as
   `rtfm-app`, and `createAppTable` for DynamoDB Local. The one file here that imports the AWS SDK.
+  Its client builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's
+  table `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
 - `dynamodb-testing.ts`: the tests' tables in DynamoDB Local.
 - `file-ledger.ts`: the usage ledger as JSON lines.

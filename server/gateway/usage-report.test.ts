@@ -128,13 +128,34 @@ describe("usage report", () => {
 });
 
 describe("npm run usage", () => {
-  function runUsage(dataDir: string): Promise<{ stdout: string; stderr: string }> {
-    return promisify(execFile)(process.execPath, [USAGE_SCRIPT, dataDir]);
+  function runUsage(dataDir: string, ...options: string[]): Promise<{ stdout: string; stderr: string }> {
+    return promisify(execFile)(process.execPath, [USAGE_SCRIPT, dataDir, ...options], {
+      env: { ...process.env, RTFM_MODELS: "fake" },
+    });
   }
 
   it("works on an empty ledger", async () => {
     const { stdout: output } = await runUsage(await tempDataDir());
     expect(output).toMatch(/Today, \d{4}-\d{2}-\d{2}: \$0\.0000 of \$2\.00, 0 calls/);
+  });
+
+  it("refuses to import with the fake models, and --apply without --import", async () => {
+    const dataDir = await tempDataDir();
+    await expect(runUsage(dataDir, "--import")).rejects.toMatchObject({
+      code: 1,
+      stderr: "--import copies into rtfm-usage, so it runs with RTFM_MODELS=bedrock\n",
+    });
+    await expect(runUsage(dataDir, "--apply")).rejects.toMatchObject({ code: 1, stderr: "--apply goes with --import\n" });
+  });
+
+  it("refuses a data folder with Bedrock, whose spending is in rtfm-usage", async () => {
+    const run = promisify(execFile)(process.execPath, [USAGE_SCRIPT, await tempDataDir()], {
+      env: { ...process.env, RTFM_MODELS: "bedrock" },
+    });
+    await expect(run).rejects.toMatchObject({
+      code: 1,
+      stderr: "With RTFM_MODELS=bedrock, npm run usage reads rtfm-usage, not a data folder\n",
+    });
   });
 
   it("reads a test ledger and the kill switch from the data dir it is given", async () => {

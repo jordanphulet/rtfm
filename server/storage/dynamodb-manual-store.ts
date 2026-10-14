@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import { ID_PATTERN, isSameManual } from "./manual.ts";
 import type { ManualStore, SectionLease, SectionLeases, StoredManual } from "./types.ts";
 
-/** A table shaped as `rtfm-app` (`server/storage/README.md` › The table `rtfm-app`), and how to reach it. */
+/** A DynamoDB table, `rtfm-app` or `rtfm-usage`, and how to reach it. */
 export interface DynamoDbTable {
   name: string;
   region: string;
@@ -415,7 +415,7 @@ export async function createAppTable(table: DynamoDbTable): Promise<void> {
   );
 }
 
-function documentClient(table: DynamoDbTable): DynamoDBDocumentClient {
+export function documentClient(table: DynamoDbTable): DynamoDBDocumentClient {
   return DynamoDBDocumentClient.from(dynamoDbClient(table), { marshallOptions: { removeUndefinedValues: true } });
 }
 
@@ -469,7 +469,7 @@ function credentialsFor(credentials: TableCredentials): DynamoDBClientConfig["cr
 }
 
 /** A short, growing, jittered pause before trying a transaction again. */
-function pause(attempt: number): Promise<void> {
+export function pause(attempt: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, Math.random() * 20 * attempt));
 }
 

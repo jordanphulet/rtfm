@@ -155,8 +155,10 @@ folder READMEs", which matches nothing.
   another's result, so a task starts once every task it depends on is gone from `WORKLIST.md`.
   At most 3 task agents run at once.
 - **Only the orchestrator commits.** Agents never run git commands that change anything.
-- **Only the orchestrator deploys** an app stack, and only from `main` after a merge (Review loop
-  › Approved, step 5). A task agent reaches AWS only when its task's **Do** says so.
+- **Only the orchestrator deploys** an app stack, and only from `main`: after a merge (Review loop
+  › Approved, step 5), and once more when `RtfmApp` doesn't exist yet and the user has deployed
+  `RtfmToolkit` and `RtfmAccess`, followed by the same smoke check. A task agent reaches AWS only
+  when its task's **Do** says so.
 - **Agents never edit `WORKLIST.md`.** They report back, and the orchestrator updates it.
 - **Agent prompts:** a task agent's prompt starts from the output of
   `npm run -s task-prompt -- <ID>`, and a task reviewer's from
