@@ -134,16 +134,18 @@ aren't RTFM's.
 
 Small fixes that keep the repo healthy.
 
-### UP.1 — The flaky repair test
-- **Status:** doing (agent a6e14796ef423fb5e)
+### UP.4 — Two more tests that flake under load
+- **Status:** todo
 - **Depends on:** —
-- **Files:** `src/manual/repair.test.tsx`, `src/manual/**`
-- **Do:** `src/manual/repair.test.tsx` failed once in a full `npm test` run during IN.17 (the
-  streaming test for `giving-the-dead-a-voice.md`) and passed on its own. Find why (a timer race,
-  shared state, load from other test files) by running it repeatedly alone and in the full suite,
-  and fix the cause, in the test or the code.
-- **Done when:** the cause is named in the report, and the test passes 50 runs in a row alone and
-  10 full `npm test` runs in a row.
+- **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`
+- **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
+  signalled" once failed with `SyntaxError: Unexpected end of JSON input`: the stand-in `aws`
+  writes `started.json` with `writeFileSync`, and the test can read the empty file before the
+  write finishes. Make that write atomic (a temporary file renamed into place) or wait for content
+  that parses. `scripts/hooks/rule-copies.test.ts` › "prints nothing and exits 0 without a saved
+  copy, without git, or with bad input" once timed out at the default 5 s under load: give it a
+  timeout that follows `server/README.md` › Tests, or make it lighter.
+- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
 - **Status:** todo
