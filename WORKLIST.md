@@ -65,30 +65,14 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.4 — Carry the library through each request
-- **Status:** doing (agent acdd99f166601e4d9; done, being committed)
-- **Depends on:** —
-- **Files:** `server/api/**`, `server/agent/**`, `server/app.ts` and its test, `server/testing.ts`,
-  `server/replacement.test.ts`, `server/web-function.test.ts`, `scripts/shot.ts`,
-  `scripts/serve-temp.ts`, `server/logging/README.md`, `server/README.md`, `ARCHITECTURE.md`,
-  `server/writer/runs-leases.test.ts`, `server/writer/README.md`
-- **Do:** a `Library` per library id, built once per environment (its store, leases, writer, and
-  the one shared gateway), as `research/libraries.md` › How the server carries the library
-  describes. The Node adapter's gate puts the library on `ApiRequest.library`, and every route, the
-  librarian, the planner and the previews take their store, runs scope and gateway from it. Add
-  `libraryId` to `request`, `request.failed`, `librarian.reply`, `agent.tool-failed`,
-  `client.error` and `client.limited`, `admin` for the admin's library. The gate gives every request
-  the admin's library, so nothing anyone sees changes.
-- **Done when:** the API's tests, run with two libraries put on requests directly, show neither
-  reaches the other's manuals, sections, runs or librarian, the log lines carry `libraryId`, and
-  `npm run build` and `npm test` pass.
-
 ### LB.5 — Cap each library's daily spend
-- **Status:** todo
-- **Depends on:** LB.4
+- **Status:** doing (agent afb560339a1138200; done, being committed)
+- **Depends on:** —
 - **Files:** `server/gateway/**`, `server/config.ts` and its test, `server/storage/types.ts`,
   `server/storage/file-ledger.ts` and its test, `server/app.ts` and its test, `server/usage.ts`,
-  `README.md`, `server/README.md`, `server/logging/README.md`
+  `README.md`, `server/README.md`, `server/logging/README.md`, `server/testing.ts`,
+  `scripts/ops/status.test.ts`, `scripts/ops/usage.test.ts`, `server/api/README.md`,
+  `ARCHITECTURE.md`
 - **Do:** as `research/libraries.md` › Spend describes: the gateway is bound to each `Library`
   (`server/gateway/gateway.ts`), and every reserve entry carries `libraryId` (an entry without one
   is the admin's); a recipient library's reservation also adds its worst case to its day's total
@@ -104,8 +88,8 @@ user revokes it, and with its activity visible to the user.
   `npm test` pass.
 
 ### LB.8 — Open a library by its link
-- **Status:** todo
-- **Depends on:** LB.4, LB.6
+- **Status:** doing (agent a07b2e7ab3bb8665c; done, in review by a4e289fba5cba527e)
+- **Depends on:** —
 - **Merges after:** LB.5
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts` and its test,
   `server/app.ts` and its test, `server/web-function.test.ts`, `server/testing.ts`,
