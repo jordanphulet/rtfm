@@ -215,6 +215,17 @@ describe("the DynamoDB section leases' renewals", { timeout: 20_000 }, () => {
     await expect(lease.saveBody("body")).rejects.toThrow(`The lease on ${manual.id}/s was lost before`);
     expect(dynamoDb.operations("TransactWriteItems")).toEqual([]);
   });
+
+  it("count the lease lost when a renewal finds its item gone", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count) =>
+      operation === "UpdateItem" && count === 2 ? conditionFailed : undefined,
+    );
+    const lease = (await createDynamoDbSectionLeases(dynamoDb.table(), timing).take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => lease.lost.aborted);
+    expect(lease.lost.reason).toEqual(new Error(`The lease on ${manual.id}/s is no longer this writer's`));
+  });
 });
 
 describe("the DynamoDB manual store's transactions", () => {
@@ -272,6 +283,27 @@ describe("the DynamoDB manual store's transactions", () => {
       { Delete: expect.objectContaining({ ExpressionAttributeValues: { ":written": { SS: ["t"] } } }) },
       { Delete: expect.objectContaining({ Key: { pk: { S: `MANUAL#${manual.id}` }, sk: { S: "SECTION#t" } } }) },
     ]);
+  });
+
+  it("refuses a delete that a section's live lease cancels, without trying again", async () => {
+    const dynamoDb = await standInDynamoDb((operation) => {
+      if (operation === "GetItem") return manualItem(["s"]);
+      if (operation === "Query") return sectionItems(["s", "t"]);
+      // The manual's `written` changed too: a lease still refuses the delete at once.
+      if (operation === "TransactWriteItems") {
+        return cancelled("ConditionalCheckFailed", "None", "ConditionalCheckFailed");
+      }
+      return undefined;
+    });
+    expect(await createDynamoDbManualStore(dynamoDb.table()).deleteManual(manual.id)).toBe("writing");
+
+    const transactions = dynamoDb.operations("TransactWriteItems").map(({ body }) => body.TransactItems as object[]);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0][2]).toEqual({
+      Delete: expect.objectContaining({
+        ConditionExpression: "attribute_not_exists(sk) OR attribute_exists(body) OR leaseExpiresAt < :now",
+      }),
+    });
   });
 
   it("counts a create as its own when a retry finds the very manual it sent", async () => {

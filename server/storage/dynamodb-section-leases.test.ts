@@ -31,6 +31,7 @@ describe("the DynamoDB section leases", () => {
     const leases = createDynamoDbSectionLeases(table, timing);
     return {
       heldElsewhere: leases.heldElsewhere,
+      readSection: leases.readSection,
       async take(manualId, sectionId) {
         const lease = await leases.take(manualId, sectionId);
         if (lease) onTestFinished(() => lease.release());
@@ -79,9 +80,9 @@ describe("the DynamoDB section leases", () => {
     expect(await store.writtenSectionIds(manual.id)).toEqual(["s"]);
   });
 
-  it("tells a holder whose lease item is gone, at its next renewal, that the lease is lost", async () => {
+  it("tells a holder whose item no longer holds its lease, at its next renewal, that the lease is lost", async () => {
     const lease = (await environment().take(manual.id, "s"))!;
-    await store.deleteManual(manual.id);
+    await store.saveBody(manual.id, "s", "seeded");
 
     await waitUntil(() => lease.lost.aborted);
     expect(lease.lost.reason).toEqual(new Error(`The lease on ${manual.id}/s is no longer this writer's`));
@@ -125,14 +126,41 @@ describe("the DynamoDB section leases", () => {
     expect(await here.heldElsewhere("another-manual")).toEqual([]);
   });
 
-  it("deletes the items of a manual's sections that hold only a lease", async () => {
-    await environment({ durationMs: 60_000, renewEveryMs: 60_000 }).take(manual.id, "t");
+  it("deletes the items of a manual's sections that hold only an expired lease", async () => {
+    await environment(CRASHED).take(manual.id, "t");
     await store.saveBody(manual.id, "s", "body");
+    await sleep(CRASHED.durationMs + 100);
 
-    await store.deleteManual(manual.id);
+    expect(await store.deleteManual(manual.id)).toBe("deleted");
     await store.createManual(manual);
 
     expect(await environment().take(manual.id, "t")).toBeDefined();
     expect(await environment().take(manual.id, "s")).toBeDefined();
+  });
+
+  it("refuses to delete a manual while a section of it holds a live lease, changing nothing", async () => {
+    await environment().take(manual.id, "t");
+    await store.saveBody(manual.id, "s", "body");
+
+    expect(await store.deleteManual(manual.id)).toBe("writing");
+
+    expect(await store.getManual(manual.id)).toEqual(manual);
+    expect(await store.getBody(manual.id, "s")).toBe("body");
+    expect(await environment().take(manual.id, "t")).toBeUndefined();
+  });
+
+  it("reads a section's body, and whether another environment holds its live lease", async () => {
+    const here = environment();
+    await here.take(manual.id, "mine");
+    await store.saveBody(manual.id, "w", "body");
+    await environment().take(manual.id, "t");
+    await environment(CRASHED).take(manual.id, "s");
+
+    expect(await here.readSection(manual.id, "w")).toEqual({ body: "body", heldElsewhere: false });
+    expect(await here.readSection(manual.id, "t")).toEqual({ body: undefined, heldElsewhere: true });
+    expect(await here.readSection(manual.id, "mine")).toEqual({ body: undefined, heldElsewhere: false });
+    expect(await here.readSection(manual.id, "none")).toEqual({ body: undefined, heldElsewhere: false });
+    await sleep(CRASHED.durationMs + 100);
+    expect(await here.readSection(manual.id, "s")).toEqual({ body: undefined, heldElsewhere: false });
   });
 });

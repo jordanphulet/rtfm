@@ -58,6 +58,8 @@ export const SECTION_LEASE_TIMING: LeaseTiming = { durationMs: 20_000, renewEver
 const FENCE_AT = 0.9;
 /** A section's item that still holds the lease of `:owner`, and no body. */
 const LEASED_TO_OWNER = "leaseOwner = :owner AND attribute_not_exists(body)";
+/** A section's item that is gone, holds a body, or holds a lease expired by `:now`: one no writer holds. */
+const NOT_BEING_WRITTEN = "attribute_not_exists(sk) OR attribute_exists(body) OR leaseExpiresAt < :now";
 
 const LIBRARY = "LIBRARY";
 const SEEDED = "SEEDED";
@@ -77,6 +79,13 @@ interface ManualItem {
   manual: StoredManual;
   /** The ids of the manual's written sections; absent until the first is saved. */
   written?: Set<string>;
+}
+
+/** A section's item: its body once written, its lease while being written. */
+interface SectionItem {
+  body?: string;
+  leaseOwner?: string;
+  leaseExpiresAt?: number;
 }
 
 export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
@@ -119,7 +128,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
     async deleteManual(manualId) {
       for (let attempt = 1; attempt <= TRANSACTION_ATTEMPTS; attempt++) {
         const item = await getManualItem(manualId);
-        if (!item) return;
+        if (!item) return "deleted";
         const written = [...(item.written ?? [])];
         // The written sections' items, and any unwritten section's item that holds only a lease.
         const sectionItems = await queryPartition(client, TableName, sectionsPartition(manualId), "pk, sk");
@@ -127,6 +136,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
           throw new Error(`"${manualId}" has ${sectionItems.length} section items, more than one delete can remove`);
         }
         const unchanged = written.length === 0 ? "attribute_not_exists(written)" : "written = :written";
+        const now = Date.now();
         const cancelled = await transactWrite(client, {
           TransactItems: [
             {
@@ -137,11 +147,19 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
                 ExpressionAttributeValues: written.length === 0 ? undefined : { ":written": new Set(written) },
               },
             },
-            ...sectionItems.map(({ pk, sk }) => ({ Delete: { TableName, Key: { pk, sk } } })),
+            ...sectionItems.map(({ pk, sk }) => ({
+              Delete: {
+                TableName,
+                Key: { pk, sk },
+                ConditionExpression: NOT_BEING_WRITTEN,
+                ExpressionAttributeValues: { ":now": now },
+              },
+            })),
           ],
         });
-        if (!cancelled) return;
-        const [manualCheck] = cancelled.CancellationReasons ?? [];
+        if (!cancelled) return "deleted";
+        const [manualCheck, ...sectionChecks] = cancelled.CancellationReasons ?? [];
+        if (sectionChecks.some(({ Code }) => Code === "ConditionalCheckFailed")) return "writing";
         if (manualCheck?.Code !== "ConditionalCheckFailed") throw cancelled;
         await pause(attempt);
       }
@@ -308,6 +326,19 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
         throw error;
       }
       return heldLease(manualId, sectionId, owner, now);
+    },
+
+    async readSection(manualId, sectionId) {
+      const { Item } = await client.send(
+        new GetCommand({ TableName, Key: sectionKey(manualId, sectionId), ConsistentRead: true }),
+      );
+      const { body, leaseOwner, leaseExpiresAt } = (Item ?? {}) as SectionItem;
+      // Live as a take reads it, and another environment's: its own runs are in its runs' map.
+      const heldElsewhere =
+        leaseOwner !== undefined &&
+        (leaseExpiresAt ?? 0) >= Date.now() &&
+        !leaseOwner.startsWith(`${environment}/`);
+      return { body, heldElsewhere };
     },
 
     async heldElsewhere(manualId) {
