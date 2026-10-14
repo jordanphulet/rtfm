@@ -57,7 +57,7 @@ the identity check and the arguments passed through `npm run aws`, without calli
 
 | Identity | What it is for | What it reaches |
 | --- | --- | --- |
-| `rtfm-local` (user) | The key in the server's `.env.local` | Claude on Bedrock, through the policy `rtfm-bedrock` |
+| `rtfm-local` (user) | The key in the server's `.env.local` | Claude on Bedrock, through the policy `rtfm-bedrock`, and the items of the table `rtfm-usage`, Bedrock's spending ledger |
 | `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read` and `rtfm-deploy`, nothing else |
 | `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
@@ -72,6 +72,12 @@ region (a `global.` profile's foundation-model ARN has no region),
 `bedrock-mantle:CreateInference` and `ListModels` on the account's `project/default`, and
 `aws-marketplace:ViewSubscriptions` and `Subscribe`, which a model's first call needs, but not
 `aws-marketplace:Unsubscribe`.
+
+`rtfm-local`'s inline policy `read-write-rtfm-usage` gives it exactly what the server's Bedrock
+spending ledger does to the table `rtfm-usage` (`server/gateway/README.md` › The table
+`rtfm-usage`): `dynamodb:GetItem`, `Query`, `PutItem`, `UpdateItem` and `ConditionCheckItem`, on
+`table/rtfm-usage` alone (`USAGE_TABLE_ACTIONS` in `rtfm.ts`). It can't delete an item, so it can
+turn the kill switch on but never off, and it reaches no other table, index or table setting.
 
 `rtfm-read` reads, and changes nothing of:
 
@@ -127,8 +133,8 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
   - The staging bucket's policy lets `lambda.amazonaws.com` read objects and their versions for a
     revision of a Web Function `rtfm-*` in this account: Lambda reads a revision's code as its
     own service principal.
-- **`RtfmAccess`** (`access-stack.ts`): the users, the two roles, `rtfm-bedrock`, and the budget
-  alarm. It has termination protection.
+- **`RtfmAccess`** (`access-stack.ts`): the users, the two roles, `rtfm-bedrock`, `rtfm-local`'s
+  policy on `rtfm-usage`, and the budget alarm. It has termination protection.
 - **`RtfmApp`** (`app-stack.ts`): the app, deployed through the bootstrap with
   `npm run cdk -- deploy RtfmApp` (Deploying the app stack, below). Every role in it carries the
   boundary (`PermissionsBoundary.of` the stack). It holds:
@@ -144,15 +150,21 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
     distribution may, through the resource policy in `RtfmEdge`. The stack's output
     `EndpointDomain` is its domain, which stays as long as the endpoint does.
   - **its role `rtfm-app-web-function`**, which Lambda assumes, and which may only write log
-    streams in `/rtfm/app` and `/rtfm/app.local`, and read and write items in the table
-    `rtfm-app` (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `DeleteItem`, which also cover the
-    store's transactions): no Bedrock, since the Web Function runs only the fake models.
+    streams in `/rtfm/app` and `/rtfm/app.local`, read and write items in the table `rtfm-app`
+    (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `DeleteItem`, which also cover the store's
+    transactions), and read and write items in the table `rtfm-usage` as `rtfm-local` may
+    (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `ConditionCheckItem`): no Bedrock, since the Web
+    Function runs only the fake models.
   - **the table `rtfm-app`**, the library: the manuals and their sections
-    (`server/storage/README.md` › The table `rtfm-app`). On demand, with point-in-time recovery
-    and deletion protection on, and kept when it leaves the stack (`RemovalPolicy.RETAIN`), since
-    it holds the library: deleting it is a step you take yourself, after turning deletion
-    protection off. The boundary allows `dynamodb:*` on `table/rtfm-*`, which covers every action
-    CloudFormation's handler takes on it, so the deploy needs no change to the bootstrap.
+    (`server/storage/README.md` › The table `rtfm-app`).
+  - **the table `rtfm-usage`**, Bedrock's spending ledger: every Bedrock call, from a laptop or
+    deployed, the day's and the month's committed spend, and the kill switch
+    (`server/gateway/README.md` › The table `rtfm-usage`).
+  - Both tables are on demand, with point-in-time recovery and deletion protection on, and kept
+    when they leave the stack (`RemovalPolicy.RETAIN`), since they hold the library and the record
+    of what was spent: deleting one is a step you take yourself, after turning deletion protection
+    off. The boundary allows `dynamodb:*` on `table/rtfm-*`, which covers every action
+    CloudFormation's handler takes on them, so the deploy needs no change to the bootstrap.
   - **the log groups `/rtfm/app` and `/rtfm/app.local`**, kept 30 days and deleted with the stack.
     Lambda writes a Web Function's logs to the `.local` group first, then copies them to the
     other.
@@ -265,6 +277,11 @@ npm run aws -- dynamodb describe-table --table-name rtfm-app \
 npm run aws -- dynamodb describe-continuous-backups --table-name rtfm-app \
   --query 'ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus' \
   --output text
+npm run aws -- dynamodb describe-table --table-name rtfm-usage \
+  --query 'Table.DeletionProtectionEnabled' --output text
+npm run aws -- dynamodb describe-continuous-backups --table-name rtfm-usage \
+  --query 'ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus' \
+  --output text
 ```
 
 It passes when they print, in order:
@@ -279,6 +296,8 @@ It passes when they print, in order:
 - `True`: the table `rtfm-app` has deletion protection on, so nothing can delete the library.
 - `ENABLED`: the table's point-in-time recovery is on, so the library can be restored to any
   second of the last 35 days.
+- `True`, then `ENABLED`: the same for the table `rtfm-usage`, so nothing can delete the record of
+  Bedrock's spending, and it can be restored.
 
 These read the deployed resources' settings and send no request to the server, so they don't
 show that it starts: Lambda doesn't check that a revision's server listens.
@@ -424,10 +443,11 @@ These set RTFM up in an account that holds none of it, up to the app answering a
 `https://rtfm.moonfetus.com`. The whole order:
 
 - **What you need before you start** (below).
-- **The bootstrap, the access stack, the keys and RTFM's AWS files**: steps 1–6 below.
+- **The bootstrap, the access stack, the keys and RTFM's AWS files**: steps 1–5 below.
 - **`RtfmApp`**, which the orchestrator deploys from the main checkout once `RtfmToolkit` and
   `RtfmAccess` exist, then checks with the smoke check (`PROCESS.md` › Rules › Only the
   orchestrator deploys; Deploying the app stack, above).
+- **Checking `rtfm-local`'s key**: step 6 below, which needs `RtfmApp`'s table `rtfm-usage`.
 - **The edge stacks** (below), which read `RtfmApp`'s output.
 - **The smoke check through the domain**: the requests in Deploying the app stack, above, to
   `rtfm.moonfetus.com`, and one to the distribution's own `*.cloudfront.net` domain, which must
@@ -535,11 +555,12 @@ the laptop.
    reaches nothing. `npm run aws -- sts get-caller-identity` then answers with
    `assumed-role/rtfm-read/…`.
 
-6. **Check `rtfm-local`'s key works.** Start the app with `RTFM_MODELS=bedrock npm run dev` and
-   open an unwritten section, which Claude then writes. In the IAM console, under the user
-   `rtfm-local`, its key's "Last used" should then show Bedrock: the server called Bedrock with
-   this key. If you set up Bedrock access by hand before, delete that user, with its keys, and its
-   policy once `rtfm-local`'s key works.
+6. **Check `rtfm-local`'s key works**, once `RtfmApp` is deployed: every Bedrock call is first
+   reserved in its table `rtfm-usage`, so without it the call fails before reaching Bedrock.
+   Start the app with `RTFM_MODELS=bedrock npm run dev` and open an unwritten section, which
+   Claude then writes. In the IAM console, under the user `rtfm-local`, its key's "Last used"
+   should then show Bedrock: the server called Bedrock with this key. If you set up Bedrock access
+   by hand before, delete that user, with its keys, and its policy once `rtfm-local`'s key works.
 
 ### The edge stacks
 
@@ -724,8 +745,9 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
 ## Files
 
 - `app.ts`: `createApp`, the five stacks and the default synthesizer; `cdk.json` runs it.
-- `rtfm.ts`: the account, region and qualifier, and the names and ARNs of the bootstrap's and
-  `RtfmAccess`'s resources.
+- `rtfm.ts`: the account, region and qualifier, the names and ARNs of the bootstrap's and
+  `RtfmAccess`'s resources, and the table `rtfm-usage`'s name, ARN and actions, which `RtfmAccess`
+  and `RtfmApp` both grant.
 - `toolkit-stack.ts`, `access-stack.ts`, `edge-certificate-stack.ts` and `edge-stack.ts`: the
   stacks you deploy. `edge-certificate-stack.ts` also holds the app's domain, and `edge-stack.ts`
   the host check's code and the Web Function's name, which a test keeps the same as

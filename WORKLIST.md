@@ -61,28 +61,8 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.12 — One ledger for real spend
-- **Status:** doing (agent a820e5dcd6453a836)
-- **Depends on:** IN.11
-- **Files:** `server/gateway/**`, `server/storage/**`, `server/app.ts`, `server/config.ts`,
-  `server/usage.ts`, `server/README.md`, `README.md`, `ARCHITECTURE.md`, `infra/access-stack.ts`
-  and its test, `infra/app-stack.ts` and its test, `infra/README.md`
-- **Do:**
-  - The ledger, spending totals and kill switch behind interfaces: the data folder's for `fake`,
-    the table `rtfm-usage`'s for `bedrock`, from a laptop too; reserving as one conditional
-    transaction.
-  - The adapter that issues their DynamoDB commands lives under `server/gateway/**`, listed in
-    `gateway/sdk-boundary.test.ts`'s SDK adapters, and builds its client with IN.11's
-    `dynamoDbClient` (`server/storage/`); only `gateway/credentials.ts` reads `rtfm-local`'s keys.
-  - `rtfm-local` gains read and write on `rtfm-usage` only (`RtfmAccess`, which the user approves
-    and deploys); the Web Function's role, the same.
-  - `ARCHITECTURE.md` and `README.md` say `RTFM_MODELS` chooses the ledger, and that with Bedrock
-    the data folder's lock no longer guards money.
-- **Done when:** both implementations pass one shared suite, two servers with Bedrock share the
-  caps in a test against DynamoDB Local, and the docs say so.
-
 ### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998; in review)
+- **Status:** doing (agent a6eb3ca69062c8998; review round 3: test headroom under load, renewals only extend the lease)
 - **Depends on:** IN.11
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
   `server/writer/README.md`
@@ -134,10 +114,12 @@ aren't RTFM's.
   section is being written (`409`), see only the answering environment's runs. Make them also see
   other environments' live leases in the manual's partition, so a section being written elsewhere
   shows as writing and its manual can't be deleted mid-run.
+  This comes before the deployed app uses Bedrock: until then a delete answered on one
+  environment can abort a paid run on the other.
 - **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
 
 ### AW.1 — Check the ledger against the AWS bill
-- **Status:** todo
+- **Status:** doing (agent a5a235ae9222608b6)
 - **Depends on:** IN.12
 - **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
 - **Do:** with `npm run aws -- ce get-cost-and-usage` (as `rtfm-read`), compare what AWS charged
@@ -153,7 +135,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.1 — The flaky repair test
-- **Status:** todo
+- **Status:** doing (agent a6e14796ef423fb5e)
 - **Depends on:** —
 - **Files:** `src/manual/repair.test.tsx`, `src/manual/**`
 - **Do:** `src/manual/repair.test.tsx` failed once in a full `npm test` run during IN.17 (the
@@ -162,6 +144,42 @@ Small fixes that keep the repo healthy.
   and fix the cause, in the test or the code.
 - **Done when:** the cause is named in the report, and the test passes 50 runs in a row alone and
   10 full `npm test` runs in a row.
+
+### UP.2 — One retry loop, and the kill switch's path with its ledger
+- **Status:** todo
+- **Depends on:** IN.12, IN.13
+- **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
+  `server/api/librarian.test.ts`
+- **Do:** share the `TransactionConflict` retry loop that `storage/dynamodb-manual-store.ts` and
+  `gateway/dynamodb-spending-ledger.ts` each have (about 12 lines), and move `killSwitchPath` from
+  `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
+- **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
+  and `npm test` passes.
+
+### UP.3 — Commit messages with bodies
+- **Status:** doing (agent ac56b8f2bfbf9814f; on 2026-10-13 the user approved the `PROCESS.md` wording the orchestrator sent: step 1's body sentence, and `npm run commit-worklist` in When the orchestrator does work itself)
+- **Depends on:** —
+- **Files:** `scripts/commit-task.ts` and its test, `scripts/commit-worklist.ts` and its test,
+  `package.json`, `README.md`, `PROCESS.md` (with the user's approval)
+- **Do:**
+  - `npm run commit-task` requires a body, `--body-file <path>`, and refuses an empty one; the
+    body goes between the subject and the trailers.
+  - A new `npm run commit-worklist` commits `WORKLIST.md` alone as "Update work list statuses",
+    with a body generated from its diff: each task added, removed, or whose status changed (with
+    the new status), plus an optional `--reason "<text>"` line. It refuses any other staged or
+    changed file in the commit.
+  - `PROCESS.md`, with the wording the user approved: in Review loop › Approved, step 1, after
+    "…as `<task id>: <task title>` with a `Reviewed-by:` trailer.", add "Its body (`--body-file`)
+    is 2–4 lines the orchestrator writes from the agent's report and the review: what changed, any
+    decision made, the checks that passed, and anything left for the user, without repeating the
+    task's **Do**."; in When the orchestrator does work itself, the last sentence becomes
+    "`WORKLIST.md` changes are committed on their own with `npm run commit-worklist`, as "Update
+    work list statuses", whose body names each task added, removed or whose status changed, and
+    why."
+  - `README.md` › Committing task work describes both commands.
+- **Done when:** both commands' tests cover the body (required, refused when empty, placed before
+  the trailers, generated from a `WORKLIST.md` diff), and the user has approved the `PROCESS.md`
+  change.
 
 ## Waiting on AWS
 

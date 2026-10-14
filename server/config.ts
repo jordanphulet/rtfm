@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./api/node-adapter.ts";
+import type { AwsCredentials } from "./gateway/credentials.ts";
 import type { GatewayConfig } from "./gateway/types.ts";
 import { API_PORT } from "./ports.ts";
 import type { DynamoDbTable, TableCredentials } from "./storage/dynamodb-manual-store.ts";
@@ -10,6 +11,15 @@ export type ModelSource = "fake" | "bedrock";
 /** Where the manuals are kept: files in the data folder, or a DynamoDB table shaped as `rtfm-app`. */
 export type ManualStorage = { kind: "files" } | { kind: "dynamodb"; table: DynamoDbTable };
 
+/**
+ * The table Bedrock's spending is kept in, from this machine too. Without an `endpoint` (DynamoDB
+ * Local's, in tests), it is DynamoDB's own in the region `.env.local` names.
+ */
+export interface UsageTableLocation {
+  name: string;
+  endpoint: string | undefined;
+}
+
 export interface ServerConfig extends GatewayConfig, AdapterConfig {
   /** The address the server listens on. */
   host: string;
@@ -17,6 +27,8 @@ export interface ServerConfig extends GatewayConfig, AdapterConfig {
   dataDir: string;
   manualStorage: ManualStorage;
   models: ModelSource;
+  /** Used only with Bedrock; the fake models' spending stays in the data folder. */
+  usageTable: UsageTableLocation;
   maxConcurrentRuns: number;
   sectionWordsRequested: number;
   sectionExpectedCharacters: number;
@@ -34,6 +46,7 @@ export const config: ServerConfig = {
   dataDir: dataDirFromEnv(process.env.RTFM_DATA_DIR),
   manualStorage: { kind: "files" },
   models: modelsFromEnv(process.env.RTFM_MODELS),
+  usageTable: { name: "rtfm-usage", endpoint: undefined },
   passcode: process.env.RTFM_PASSCODE || undefined,
   allowedHosts: LOOPBACK_HOSTS,
   allowedOrigins: LOOPBACK_ORIGINS,
@@ -71,6 +84,17 @@ function portFromEnv(value = String(API_PORT)): number {
 /** The built app the Web Function serves: the folder `RTFM_APP_DIR` names, or else `<repo>/dist`. */
 export function builtAppDirFromEnv(value = process.env.RTFM_APP_DIR ?? ""): string {
   return value === "" ? fileURLToPath(new URL("../dist", import.meta.url)) : path.resolve(value);
+}
+
+/** The usage table, reached with `rtfm-local`'s keys from `.env.local`, in their region. */
+export function usageTableWith({ name, endpoint }: UsageTableLocation, credentials: AwsCredentials): DynamoDbTable {
+  const { accessKeyId, secretAccessKey, region } = credentials;
+  return {
+    name,
+    region,
+    endpoint: endpoint ?? `https://dynamodb.${region}.amazonaws.com`,
+    credentials: { kind: "keys", accessKeyId, secretAccessKey },
+  };
 }
 
 /**

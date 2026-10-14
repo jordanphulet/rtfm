@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, onTestFinished } from "vitest";
 import { INSTANT_PACE, unrecordedFakeModel, type FakeModelPace } from "./agent/fake-model.ts";
+import { openFileSpendingLedger } from "./gateway/file-spending-ledger.ts";
 import { createGateway } from "./gateway/gateway.ts";
 import { prices, type PriceTable } from "./gateway/prices.ts";
 import type { GatewayConfig, ModelClient } from "./gateway/types.ts";
@@ -51,8 +52,8 @@ interface TestGatewayOptions {
 }
 
 /**
- * The real gateway, with its caps, kill switch and a ledger (a file ledger in the data folder,
- * unless one is given), calling a fake model client.
+ * The real gateway, with its caps, kill switch and the data folder's spending ledger (on a file
+ * ledger in the data folder, unless one is given), calling a fake model client.
  */
 export async function testGateway(
   client: ModelClient,
@@ -62,10 +63,9 @@ export async function testGateway(
   const gateway = await createGateway({
     logger: silentLogger,
     createClient: () => client,
-    ledger,
+    openSpendingLedger: () => openFileSpendingLedger({ ledger, dataDir }),
     config,
     prices: TEST_PRICES,
-    dataDir,
   });
   const ledgerEntries = () => ledger.entriesForMonth(monthOf(new Date().toISOString()));
   return { gateway, ledgerEntries };
