@@ -30,6 +30,7 @@ import {
   APP_TABLE,
   APP_TABLE_ARN,
   BOUNDARY_POLICY,
+  LINK_PARTITION,
   PASSCODE_PARTITION,
   REGION,
   USAGE_TABLE,
@@ -47,7 +48,7 @@ export const APP_LOCAL_LOG_GROUP = `${APP_LOG_GROUP}.local`;
 export const APP_BUCKET = `rtfm-app-${ACCOUNT}-${REGION}`;
 /**
  * What `server/storage/dynamodb-manual-store.ts` does to the table, its transactions included;
- * `GetItem` also reads the passcode's digest.
+ * `GetItem` also reads the passcode's digest and the libraries' links.
  */
 const APP_TABLE_ACTIONS = [
   "dynamodb:GetItem",
@@ -57,10 +58,15 @@ const APP_TABLE_ACTIONS = [
   "dynamodb:DeleteItem",
 ];
 /**
- * The writes the Web Function's role may never make in the passcode's partition, which only
- * `rtfm-ops` writes. `BatchWriteItem` isn't granted, but the deny names it as well.
+ * The partitions of `rtfm-app` that decide who opens the app, the passcode's and the links', which
+ * only `rtfm-ops` writes.
  */
-const PASSCODE_WRITE_ACTIONS = [
+const OPS_PARTITIONS = [PASSCODE_PARTITION, LINK_PARTITION];
+/**
+ * The writes the Web Function's role may never make in `OPS_PARTITIONS`. `BatchWriteItem` isn't
+ * granted, but the deny names it as well.
+ */
+const OPS_PARTITION_WRITE_ACTIONS = [
   "dynamodb:PutItem",
   "dynamodb:UpdateItem",
   "dynamodb:DeleteItem",
@@ -147,11 +153,11 @@ export class RtfmAppStack extends Stack {
           statements: [
             new PolicyStatement({ actions: APP_TABLE_ACTIONS, resources: [APP_TABLE_ARN] }),
             new PolicyStatement({
-              sid: "LeaveThePasscodeToOps",
+              sid: "LeaveAccessToOps",
               effect: Effect.DENY,
-              actions: PASSCODE_WRITE_ACTIONS,
+              actions: OPS_PARTITION_WRITE_ACTIONS,
               resources: [APP_TABLE_ARN],
-              conditions: { "ForAnyValue:StringEquals": { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] } },
+              conditions: { "ForAnyValue:StringEquals": { "dynamodb:LeadingKeys": OPS_PARTITIONS } },
             }),
           ],
         }),

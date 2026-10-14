@@ -14,10 +14,12 @@ import {
 } from "./app-stack.ts";
 import { createApp } from "./app.ts";
 import {
+  ACTIVITY_PARTITION,
   APP_TABLE,
   APP_TABLE_ARN,
   BOOTSTRAP_ROLES,
   BOUNDARY_POLICY,
+  LINK_PARTITION,
   PASSCODE_PARTITION,
   PROJECT_TAG,
   STAGING_BUCKET,
@@ -59,8 +61,21 @@ const TABLE_HANDLER_ACTIONS = [
   "dynamodb:UntagResource",
   "dynamodb:ListTagsOfResource",
 ];
-/** The library's partitions in `rtfm-app` (`server/storage/README.md` › The table `rtfm-app`). */
-const LIBRARY_PARTITIONS = ["LIBRARY", "SEEDED", "MANUAL#a-manual"];
+/**
+ * The partitions of `rtfm-app` the Web Function writes: the admin's library, a recipient's library
+ * (`L#<libraryId>#…`) and the libraries' activity (`research/libraries.md` › The key scheme).
+ */
+const WRITTEN_PARTITIONS = [
+  "LIBRARY",
+  "SEEDED",
+  "MANUAL#a-manual",
+  "L#acme#LIBRARY",
+  "L#acme#SEEDED",
+  "L#acme#MANUAL#a-manual",
+  ACTIVITY_PARTITION,
+];
+/** The partitions of `rtfm-app` only `rtfm-ops` writes: the passcode's and the libraries' links. */
+const OPS_PARTITIONS = [PASSCODE_PARTITION, LINK_PARTITION];
 /** CloudFormation can't tag a Web Function's revisions or endpoints. */
 const UNTAGGABLE = ["AWS::Lambda::WebFunctionRevision", "AWS::Lambda::WebFunctionEndpoint"];
 
@@ -245,16 +260,16 @@ describe("the Web Function's role", () => {
     expect(webFunctionCan("dynamodb:Query", `${USAGE_TABLE_ARN}/index/any`)).toBe(false);
   });
 
-  it("reads the passcode's digest, in its partition of rtfm-app, and every other item", () => {
-    for (const partition of [PASSCODE_PARTITION, ...LIBRARY_PARTITIONS]) {
+  it("reads the passcode's digest, the libraries' links and every other item of rtfm-app", () => {
+    for (const partition of [...OPS_PARTITIONS, ...WRITTEN_PARTITIONS]) {
       const leadingKeys = { "dynamodb:LeadingKeys": [partition] };
       expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN, leadingKeys), partition).toBe(true);
       expect(webFunctionCan("dynamodb:Query", APP_TABLE_ARN, leadingKeys), partition).toBe(true);
     }
   });
 
-  it("writes every item of rtfm-app outside the passcode's partition, a transaction's parts included", () => {
-    for (const partition of LIBRARY_PARTITIONS) {
+  it("writes every item of rtfm-app outside the passcode's and the links' partitions, a transaction's parts included", () => {
+    for (const partition of WRITTEN_PARTITIONS) {
       for (const action of ["PutItem", "UpdateItem", "DeleteItem"]) {
         const context = { "dynamodb:LeadingKeys": [partition] };
         expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN, context), `${action} ${partition}`).toBe(true);
@@ -264,18 +279,23 @@ describe("the Web Function's role", () => {
     }
   });
 
-  it("is refused every write to the passcode's partition, which only rtfm-ops writes", () => {
-    const writes: [string, RequestContext][] = [
-      ["PutItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] }],
-      ["UpdateItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] }],
-      ["DeleteItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] }],
-      ["PutItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
-      ["UpdateItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
-      ["DeleteItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
-      ["BatchWriteItem", { "dynamodb:LeadingKeys": ["LIBRARY", PASSCODE_PARTITION] }],
-    ];
-    for (const [action, context] of writes) {
-      expect(decide(webFunctionStatements, `dynamodb:${action}`, APP_TABLE_ARN, context), action).toBe("deny");
+  it("is refused every write to the passcode's and the links' partitions, which only rtfm-ops writes", () => {
+    for (const partition of OPS_PARTITIONS) {
+      const writes: [string, RequestContext][] = [
+        ["PutItem", { "dynamodb:LeadingKeys": [partition] }],
+        ["UpdateItem", { "dynamodb:LeadingKeys": [partition] }],
+        ["DeleteItem", { "dynamodb:LeadingKeys": [partition] }],
+        ["PutItem", { "dynamodb:LeadingKeys": [partition], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
+        ["UpdateItem", { "dynamodb:LeadingKeys": [partition], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
+        ["DeleteItem", { "dynamodb:LeadingKeys": [partition], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
+        ["BatchWriteItem", { "dynamodb:LeadingKeys": ["LIBRARY", partition] }],
+        ["BatchWriteItem", { "dynamodb:LeadingKeys": [ACTIVITY_PARTITION, partition] }],
+      ];
+      for (const [action, context] of writes) {
+        expect(decide(webFunctionStatements, `dynamodb:${action}`, APP_TABLE_ARN, context), `${action} ${partition}`).toBe(
+          "deny",
+        );
+      }
     }
   });
 

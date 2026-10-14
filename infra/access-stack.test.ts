@@ -6,10 +6,12 @@ import { createApp } from "./app.ts";
 import {
   ACCESS_STACK,
   ACCOUNT,
+  ACTIVITY_PARTITION,
   AGENT_USER,
   BOOTSTRAP_ROLES,
   DEPLOY_ROLE,
   KILL_SWITCH_PARTITION,
+  LINK_PARTITION,
   LOCAL_USER,
   OPS_ROLE,
   PASSCODE_PARTITION,
@@ -39,6 +41,24 @@ const readRoleStatements = () => inlineStatements(READ_ROLE);
 const opsRoleStatements = () => inlineStatements(OPS_ROLE);
 /** The partition keys a DynamoDB request names, which IAM checks as `dynamodb:LeadingKeys`. */
 const leadingKeys = (...keys: string[]) => ({ "dynamodb:LeadingKeys": keys });
+/**
+ * The partitions of `rtfm-app` that neither `rtfm-read` nor `rtfm-ops` reaches: the admin's
+ * library, a recipient's sections and seeding record, and lookalikes of the partitions they do
+ * reach (`research/libraries.md` › The key scheme).
+ */
+const UNREACHED_PARTITIONS = [
+  "LIBRARY",
+  "SEEDED",
+  "MANUAL#the-haunt-that-listens",
+  "L#acme#MANUAL#the-haunt-that-listens",
+  "L#acme#SEEDED",
+  "L#acme#MANUAL#the-haunt-that-listens#LIBRARY",
+  "l#acme#library",
+  "L#acme#LIBRARY-copy",
+  "XL#acme#LIBRARY",
+  "LINKS",
+  "ACTIVITY#acme",
+];
 
 const actionsOf = (statements: Statement[]) => statements.flatMap((statement) => [statement.Action ?? []].flat()).sort();
 
@@ -170,6 +190,9 @@ describe("the RtfmAccess stack", () => {
       "dynamodb:DescribeContinuousBackups",
       "dynamodb:DescribeTable",
       "dynamodb:GetItem",
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:Query",
       "dynamodb:Query",
     ]);
   });
@@ -188,7 +211,39 @@ describe("the RtfmAccess stack", () => {
     expect(can("dynamodb:GetItem", table("rtfm-usage", "us-east-1"))).toBe(false);
   });
 
-  it("lets rtfm-read change no table or its backups, and read none of its items", () => {
+  it("lets rtfm-read read the libraries' links and activity in rtfm-app, and the recipients' manual lists", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    const app = table("rtfm-app");
+    for (const partition of [LINK_PARTITION, ACTIVITY_PARTITION]) {
+      expect(can("dynamodb:GetItem", app, leadingKeys(partition)), partition).toBe(true);
+      expect(can("dynamodb:Query", app, leadingKeys(partition)), partition).toBe(true);
+    }
+    expect(can("dynamodb:Query", app, leadingKeys("L#acme#LIBRARY"))).toBe(true);
+    expect(can("dynamodb:Query", app, leadingKeys("L#acme-2026#LIBRARY"))).toBe(true);
+    expect(can("dynamodb:GetItem", app, leadingKeys("L#acme#LIBRARY"))).toBe(false);
+    expect(can("dynamodb:Query", app, leadingKeys("L#acme#MANUAL#x#LIBRARY"))).toBe(false);
+  });
+
+  it("lets rtfm-read read no other item of rtfm-app, and write none", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
+    const app = table("rtfm-app");
+    for (const partition of [...UNREACHED_PARTITIONS, PASSCODE_PARTITION, KILL_SWITCH_PARTITION]) {
+      for (const action of ["GetItem", "Query"]) {
+        expect(can(`dynamodb:${action}`, app, leadingKeys(partition)), `${action} ${partition}`).toBe(false);
+      }
+    }
+    expect(can("dynamodb:Query", app, leadingKeys(LINK_PARTITION, "LIBRARY"))).toBe(false);
+    expect(can("dynamodb:Query", app, leadingKeys("L#acme#LIBRARY", "L#acme#SEEDED"))).toBe(false);
+    for (const partition of [LINK_PARTITION, ACTIVITY_PARTITION, "L#acme#LIBRARY"]) {
+      for (const action of ["PutItem", "UpdateItem", "DeleteItem", "BatchWriteItem", "BatchGetItem", "ConditionCheckItem", "Scan"]) {
+        expect(can(`dynamodb:${action}`, app, leadingKeys(partition)), `${action} ${partition}`).toBe(false);
+      }
+      expect(can("dynamodb:Query", table("rtfm-app/index/any"), leadingKeys(partition)), partition).toBe(false);
+      expect(can("dynamodb:Query", table("rtfm-app", "us-east-1"), leadingKeys(partition)), partition).toBe(false);
+    }
+  });
+
+  it("lets rtfm-read change no table or its backups, and read none of its items without naming a partition", () => {
     const can = reachOf(resources, "AWS::IAM::Role", READ_ROLE);
     const denied: [string, string][] = [
       ["dynamodb:UpdateTable", table("rtfm-app")],
@@ -276,7 +331,7 @@ describe("the RtfmAccess stack", () => {
       expect(can(`dynamodb:${action}`, usage, leadingKeys(KILL_SWITCH_PARTITION)), action).toBe(true);
     }
 
-    for (const partition of ["TOTAL", "LEDGER#2026-10", PASSCODE_PARTITION]) {
+    for (const partition of ["TOTAL", "LEDGER#2026-10", PASSCODE_PARTITION, LINK_PARTITION]) {
       for (const action of ["GetItem", "PutItem", "DeleteItem"]) {
         expect(can(`dynamodb:${action}`, usage, leadingKeys(partition)), `${action} ${partition}`).toBe(false);
       }
@@ -295,15 +350,35 @@ describe("the RtfmAccess stack", () => {
     expect(can("dynamodb:GetItem", app, leadingKeys(PASSCODE_PARTITION))).toBe(true);
     expect(can("dynamodb:PutItem", app, leadingKeys(PASSCODE_PARTITION))).toBe(true);
 
-    for (const partition of ["LIBRARY", "MANUAL#the-haunt-that-listens", "SEEDED", KILL_SWITCH_PARTITION]) {
-      for (const action of ["GetItem", "PutItem", "DeleteItem"]) {
-        expect(can(`dynamodb:${action}`, app, leadingKeys(partition)), `${action} ${partition}`).toBe(false);
-      }
-    }
     for (const action of ["DeleteItem", "UpdateItem", "Query", "Scan", "BatchWriteItem"]) {
       expect(can(`dynamodb:${action}`, app, leadingKeys(PASSCODE_PARTITION)), action).toBe(false);
     }
     expect(can("dynamodb:PutItem", app)).toBe(false);
+  });
+
+  it("lets rtfm-ops make, list, read and revoke the libraries' links in rtfm-app, and delete none", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", OPS_ROLE);
+    const app = table("rtfm-app");
+    for (const action of ["GetItem", "Query", "PutItem", "UpdateItem"]) {
+      expect(can(`dynamodb:${action}`, app, leadingKeys(LINK_PARTITION)), action).toBe(true);
+    }
+
+    for (const action of ["DeleteItem", "Scan", "BatchWriteItem", "BatchGetItem", "ConditionCheckItem"]) {
+      expect(can(`dynamodb:${action}`, app, leadingKeys(LINK_PARTITION)), action).toBe(false);
+    }
+    expect(can("dynamodb:PutItem", app, leadingKeys(LINK_PARTITION, "LIBRARY"))).toBe(false);
+    expect(can("dynamodb:Query", app)).toBe(false);
+  });
+
+  it("lets rtfm-ops reach no other item of rtfm-app", () => {
+    const can = reachOf(resources, "AWS::IAM::Role", OPS_ROLE);
+    const app = table("rtfm-app");
+    const others = [...UNREACHED_PARTITIONS, ACTIVITY_PARTITION, "L#acme#LIBRARY", KILL_SWITCH_PARTITION];
+    for (const partition of others) {
+      for (const action of ["GetItem", "Query", "PutItem", "UpdateItem", "DeleteItem"]) {
+        expect(can(`dynamodb:${action}`, app, leadingKeys(partition)), `${action} ${partition}`).toBe(false);
+      }
+    }
   });
 
   it("lets rtfm-ops reach no other table, region or service", () => {
@@ -335,8 +410,12 @@ describe("the RtfmAccess stack", () => {
       "dynamodb:DeleteItem",
       "dynamodb:GetItem",
       "dynamodb:GetItem",
+      "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:PutItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem",
     ]);
   });
 

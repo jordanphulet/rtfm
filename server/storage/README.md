@@ -195,9 +195,10 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   read of an item holding anything else throws, naming the form. They aren't part of
   `ManualStore`: the Web Function's passcode gate reads the digest (`server/app.ts`), and
   `npm run ops -- passcode` reads and writes it as `rtfm-ops` (`README.md` › The ops tools). Its
-  partition, `PASSCODE` (`PASSCODE_PARTITION` in `infra/rtfm.ts`), is the one partition of
-  `rtfm-app` that `rtfm-ops` may read and write, limited to it with `dynamodb:LeadingKeys`
-  (`infra/README.md` › The identities). The item never holds the passcode itself.
+  partition, `PASSCODE` (`PASSCODE_PARTITION` in `infra/rtfm.ts`), is one of the two partitions
+  of `rtfm-app` that `rtfm-ops` may read and write, with `LINK`, the libraries' links, limited to
+  them with `dynamodb:LeadingKeys` (`infra/README.md` › The identities). The item never holds the
+  passcode itself.
 - **Transactions that collide.** Two transactions on one item at once can cancel one of them with
   `TransactionConflict`, as two saves into one manual do, since both update its item. The SDK
   doesn't retry a cancelled transaction, so the store does, up to 8 attempts in all, after a
@@ -208,8 +209,15 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   do: `GetItem`, `Query`, `PutItem`, `UpdateItem` and `DeleteItem`, which also cover the
   transactions' parts and the read of the passcode's digest (`infra/app-stack.ts`). They cover
   every item of the table, but a deny keeps the role from writing any item of the passcode's
-  partition, `PASSCODE`: it reads the digest and never writes it (`infra/README.md` › The Web
-  Function's role and the passcode).
+  partition, `PASSCODE`, or of the libraries' links, `LINK`: it reads them and never writes them
+  (`infra/README.md` › The Web Function's role, the passcode and the links). It writes every other
+  partition, a recipient library's `L#<libraryId>#…` and the libraries' activity, `ACTIVITY`,
+  among them.
+- **What `rtfm-ops` and `rtfm-read` may reach** of the table is limited by partition: `rtfm-ops`
+  reads and writes the passcode's and the links', and `rtfm-read` reads the links', the
+  activity's, and the recipients' manual lists, `L#<libraryId>#LIBRARY`, with `Query` alone
+  (`infra/README.md` › The identities). Neither reads a section, the admin's library or a seeding
+  record.
 
 The client (`createDynamoDbManualStore(table)`) takes everything from the `DynamoDbTable` it is
 given: the table's name, region, endpoint and credentials. The credentials are fixed keys
