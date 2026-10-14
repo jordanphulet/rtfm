@@ -64,9 +64,10 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.9 — Report a librarian reply that fails in the browser
-- **Status:** doing (agent a4586a9dbacf6a3c9; done, in review by afe009e0cfafb0765)
+- **Status:** doing (agent a4586a9dbacf6a3c9; done, being committed)
 - **Depends on:** —
-- **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`
+- **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`,
+  `src/librarian/api.ts`
 - **Do:** `reply`'s `catch` in `src/librarian/store.ts` shows "This reply failed." and drops the
   error, so UP.8's `TypeError` never reached the server log. Pass the error to
   `window.reportError` (which `src/reportErrors.ts` sends to the server log), except for failures
