@@ -8,7 +8,7 @@ import { silentLogger } from "../logging/logger.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry } from "../storage/types.ts";
 import { tempDataDir } from "../testing.ts";
-import { killSwitchPath } from "./gateway.ts";
+import { killSwitchPath } from "./file-spending-ledger.ts";
 import { FAKE_MODEL } from "./types.ts";
 import { usageReport } from "./usage-report.ts";
 

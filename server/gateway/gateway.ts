@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import type { Logger } from "../logging/logger.ts";
 import type { SettleEntry } from "../storage/types.ts";
 import { costUsd, worstCaseCostUsd, type ModelPrice, type PriceTable, type TokenCounts } from "./prices.ts";
@@ -58,11 +57,6 @@ const REQUEST_FRAMING_TOKENS = 100;
 const MESSAGE_FRAMING_TOKENS = 10;
 const BLOCK_FRAMING_TOKENS = 10;
 const TOKEN_FIELDS = ["inputTokens", "outputTokens", "cacheWriteTokens", "cacheReadTokens"] as const;
-
-/** The data folder's kill switch (`file-spending-ledger.ts`). */
-export function killSwitchPath(dataDir: string): string {
-  return path.join(dataDir, "STOP");
-}
 
 export async function createGateway({
   createClient,

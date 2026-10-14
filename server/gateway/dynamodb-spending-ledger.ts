@@ -1,14 +1,7 @@
-import { CreateTableCommand, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import {
-  DeleteCommand,
-  GetCommand,
-  PutCommand,
-  TransactWriteCommand,
-  paginateQuery,
-  type TransactWriteCommandInput,
-} from "@aws-sdk/lib-dynamodb";
+import { CreateTableCommand } from "@aws-sdk/client-dynamodb";
+import { DeleteCommand, GetCommand, PutCommand, paginateQuery } from "@aws-sdk/lib-dynamodb";
 import { monthOf } from "../storage/file-ledger.ts";
-import { documentClient, pause, TRANSACTION_ATTEMPTS, type DynamoDbTable } from "../storage/dynamodb-manual-store.ts";
+import { documentClient, transactWrite, type DynamoDbTable } from "../storage/dynamodb-manual-store.ts";
 import type { LedgerEntry, ReserveEntry, SettleEntry } from "../storage/types.ts";
 import { chargedUsd, dayOf, type LedgerCall } from "./ledger-calls.ts";
 import type { SpendingLedger } from "./spending-ledger.ts";
@@ -43,21 +36,6 @@ export interface DynamoDbSpendingLedger extends SpendingLedger {
 export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpendingLedger {
   const client = documentClient(table);
   const TableName = table.name;
-
-  /** Runs a transaction again while another one touching the same items gets in its way. */
-  async function transactWrite(input: TransactWriteCommandInput): Promise<TransactionCanceledException | undefined> {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        await client.send(new TransactWriteCommand(input));
-        return undefined;
-      } catch (error) {
-        if (!(error instanceof TransactionCanceledException)) throw error;
-        const conflicted = error.CancellationReasons?.some(({ Code }) => Code === "TransactionConflict");
-        if (!conflicted || attempt === TRANSACTION_ATTEMPTS) return error;
-        await pause(attempt);
-      }
-    }
-  }
 
   function addToTotal(period: string, usd: number) {
     return {
@@ -97,7 +75,7 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
   return {
     async reserve(entry, caps) {
       const { reservedAt, worstCaseUsd } = entry;
-      const cancelled = await transactWrite({
+      const cancelled = await transactWrite(client, {
         TransactItems: [
           { ConditionCheck: { TableName, Key: KILL_SWITCH_KEY, ConditionExpression: "attribute_not_exists(pk)" } },
           addWithinCap(dayOf(reservedAt), worstCaseUsd, caps.dailyUsd),
@@ -116,7 +94,7 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
 
     async settle(entry, worstCaseUsd) {
       const { reservedAt, callId, usd } = entry;
-      const cancelled = await transactWrite({
+      const cancelled = await transactWrite(client, {
         TransactItems: [
           {
             Update: {
@@ -162,7 +140,7 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
     async importCall(call) {
       const { callId, reservedAt, job, model, worstCaseUsd, settle } = call;
       const reserve: ReserveEntry = { kind: "reserve", callId, reservedAt, job, model, worstCaseUsd };
-      const cancelled = await transactWrite({
+      const cancelled = await transactWrite(client, {
         TransactItems: [
           putCall({ reserve, settle }),
           addToTotal(dayOf(reservedAt), chargedUsd(call)),

@@ -1,10 +1,15 @@
 import { existsSync } from "node:fs";
+import path from "node:path";
 import { monthOf } from "../storage/file-ledger.ts";
 import type { UsageLedger } from "../storage/types.ts";
-import { killSwitchPath } from "./gateway.ts";
 import { callsFrom, chargedUsd, dayOf } from "./ledger-calls.ts";
 import type { SpendingLedger } from "./spending-ledger.ts";
 import { SpendingRefused } from "./types.ts";
+
+/** The data folder's kill switch: on while this file exists. */
+export function killSwitchPath(dataDir: string): string {
+  return path.join(dataDir, "STOP");
+}
 
 export interface FileSpendingLedgerDeps {
   ledger: UsageLedger;

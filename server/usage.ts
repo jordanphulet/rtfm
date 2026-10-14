@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { config, usageTableWith } from "./config.ts";
 import { readAwsCredentials } from "./gateway/credentials.ts";
 import { createDynamoDbSpendingLedger } from "./gateway/dynamodb-spending-ledger.ts";
-import { killSwitchPath } from "./gateway/gateway.ts";
+import { killSwitchPath } from "./gateway/file-spending-ledger.ts";
 import { importUsage } from "./gateway/usage-import.ts";
 import { usageReport } from "./gateway/usage-report.ts";
 import { createLogger, toStandardError } from "./logging/logger.ts";

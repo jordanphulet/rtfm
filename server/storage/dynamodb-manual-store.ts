@@ -434,7 +434,7 @@ async function bodyIsStored(client: DynamoDBDocumentClient, TableName: string, m
 }
 
 /** Runs a transaction again while another one touching the same items gets in its way. */
-async function transactWrite(
+export async function transactWrite(
   client: DynamoDBDocumentClient,
   input: TransactWriteCommandInput,
 ): Promise<TransactionCanceledException | undefined> {
@@ -546,7 +546,7 @@ function credentialsFor(credentials: TableCredentials): DynamoDBClientConfig["cr
 }
 
 /** A short, growing, jittered pause before trying a transaction again. */
-export function pause(attempt: number): Promise<void> {
+function pause(attempt: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, Math.random() * 20 * attempt));
 }
 

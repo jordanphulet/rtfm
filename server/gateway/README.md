@@ -219,10 +219,12 @@ Every read is strongly consistent.
 - **Retries.** The SDK retries a request that fails on its way (up to 3 attempts), and fills in
   `TransactWriteItems`'s `ClientRequestToken` once per request, so its retries carry the same one,
   and DynamoDB applies the transaction at most once. A transaction cancelled by
-  `TransactionConflict` (another one on the same item at the same moment) is tried again, as the
-  manual store's are, up to 8 attempts in all, after a random pause of up to 20ms times the
-  attempt's number; then it throws. A reservation that throws for any reason other than a refusal
-  makes no call; if DynamoDB applied it after all, it stays counted at its worst case, never less.
+  `TransactionConflict` (another one on the same item at the same moment) is tried again by the
+  retry loop it shares with the manual store (`transactWrite` in
+  `server/storage/dynamodb-manual-store.ts`), up to 8 attempts in all, after a random pause of up
+  to 20ms times the attempt's number; then the loop returns the cancellation and the ledger throws
+  it. A reservation that throws for any reason other than a refusal makes no call; if DynamoDB
+  applied it after all, it stays counted at its worst case, never less.
 - **What `rtfm-local` and the Web Function's role may do** on the table is exactly what the server
   does: `GetItem`, `Query`, `PutItem`, `UpdateItem` and `ConditionCheckItem`, which also cover the
   transactions' parts (`USAGE_TABLE_ACTIONS` in `infra/rtfm.ts`). Neither may `DeleteItem`, so
@@ -391,10 +393,10 @@ data folder's ledger as it is.
 
 - `types.ts`: `ModelClient`, `ModelPrompt`, `ModelEvent`, `GatewayConfig`, refusal errors,
   `FAKE_MODEL`.
-- `gateway.ts`: reservations, concurrency, idle timeout, settling; the data folder's kill switch's
-  path.
+- `gateway.ts`: reservations, concurrency, idle timeout, settling.
 - `spending-ledger.ts`: the `SpendingLedger` interface.
-- `file-spending-ledger.ts`: the data folder's spending ledger, for the fake models.
+- `file-spending-ledger.ts`: the data folder's spending ledger, for the fake models, and its kill
+  switch's path (`killSwitchPath`).
 - `dynamodb-spending-ledger.ts`: the table `rtfm-usage`'s, for Bedrock, with `importCall`,
   `setKillSwitch` and `createUsageTable` (for DynamoDB Local). The one file here, beside
   `bedrock-client.ts`, that imports an AWS SDK.

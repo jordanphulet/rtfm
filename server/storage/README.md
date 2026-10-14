@@ -355,8 +355,8 @@ delete `.data/ledger/`, because the caps are computed from it.
 - `in-process-leases.ts`: section leases for a server alone on its store.
 - `dynamodb-manual-store.ts`: manuals, sections and section leases in a table shaped as
   `rtfm-app`, and `createAppTable` for DynamoDB Local. The one file here that imports the AWS SDK.
-  Its client builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's
-  table `rtfm-usage`.
+  Its client builder (`documentClient`) and transaction retry loop (`transactWrite`) also serve the
+  gateway's table `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
 - `dynamodb-testing.ts`: the tests' tables in DynamoDB Local, and a stand-in in front of one that
   refuses the keys when told to (`keyRefusingDynamoDb`).
