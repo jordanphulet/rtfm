@@ -78,7 +78,7 @@ the same caps and kill switch as a laptop's (Bedrock's spending, below).
 | `npm run commit-task`        | Commits a task's work with its body and review trailer. See below.           |
 | `npm run commit-worklist`    | Commits `WORKLIST.md` alone, with a body from its diff. See below.           |
 | `npm run task-prompt`        | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
-| `npm run ops`                | The deployed app's kill switch, passcode, spend, logs and status. See below. |
+| `npm run ops`                | The deployed app's kill switch, passcode, libraries, spend, logs and status. |
 | `npm run aws`                | The AWS CLI as RTFM's own role, the only way to it. See `infra/README.md`.   |
 | `npm run cdk`                | The CDK CLI in `infra/`, as RTFM's own role. See `infra/README.md`.          |
 
@@ -518,10 +518,13 @@ npm run logs -- --level warn              # warnings and errors only
 npm run logs -- --event section           # section.started, section.failed, …
 npm run logs -- --lines 200 --follow      # the last 200, then each new one as it is written
 npm run logs -- /tmp/rtfm-try -e request  # another data folder's requests
+npm run logs -- --library acme            # the library acme's entries
 ```
 
 - `--level` (`-l`) shows that level and the ones above it: `DEBUG`, `INFO`, `WARN`, `ERROR`.
 - `--event` (`-e`) shows that event and the events under it (`section` matches `section.failed`).
+- `--library` shows the entries whose `libraryId` is that library's: `admin` for the admin's, or a
+  recipient's id (`server/logging/README.md` says which lines carry it).
 - `--lines` (`-n`) is how many entries to show first (50 unless given); `--follow` (`-f`) then
   keeps printing new ones until it is stopped with Ctrl-C.
 
@@ -544,14 +547,19 @@ It chooses the role itself, and takes no `--profile`. They are built for agents:
 
 `kill-switch on` and `off` change the live app, so agents run them only when the user asks in chat
 (`CLAUDE.md` › Shell). `passcode set` is yours, and agents never run it: it runs only in a
-terminal, which should be one outside the Claude app (A passcode, above). The other commands only
-read.
+terminal, which should be one outside the Claude app (A passcode, above). `library create` and
+`library revoke` are yours too, run in your own terminal outside the Claude app, and agents never
+run them (Libraries, below). The other commands only read.
 
 | Command | Role | What it does |
 | --- | --- | --- |
 | `kill-switch on`, `off`, `status` | `rtfm-ops` | Puts or deletes the kill switch's item in `rtfm-usage` (Bedrock's spending, above), then reads it back: `Kill switch: off.`, or `ON`; `--json` gives `{ "killSwitchOn": false }` |
 | `passcode set` | `rtfm-ops` | Makes a passcode of four random words, from the more than a thousand in `scripts/ops/passcode-words.ts`, and puts its digest in the passcode's item in `rtfm-app`; then shows the words on the terminal, waits for Enter, and clears the screen and its scrollback (`\x1b[2J\x1b[3J\x1b[H`). Its output says only that the passcode is set. With no terminal on standard input and output it exits 1 before reaching AWS |
 | `passcode cookie` | `rtfm-ops` | The passcode cookie, `rtfm_passcode=<digest>`, read from the passcode's item in `rtfm-app`, for `curl -b`; `--json` gives `{ "cookie": "…" }`. It exits 1 when no passcode is set. The cookie opens the app, so pass it straight to `curl` rather than printing it |
+| `library create <libraryId> [--label <text>]` | `rtfm-ops` | Makes a recipient's library: puts its link's item in `rtfm-app`, holding the new secret's digest, `libraryId`, the label and `createdAt`, and prints the link, `https://rtfm.moonfetus.com/l#<secret>`, once, on standard output; `--json` gives `{ "libraryId": "…", "link": "…" }`. It refuses an id that isn't a slug of at most 63 characters, is `admin`, or that any link names, revoked or not |
+| `library list` | `rtfm-read` | Every library, oldest first: its id, label, when it was made and revoked, its first and last use, the links opened, manuals created, sections written and read, librarian messages, and its spend today, this month and in all; `--json` gives the same as a list |
+| `library show <libraryId>` | `rtfm-read` | The same for one library, with its spend by day, and its manuals, each with its title and its written sections; `--json` gives the same |
+| `library revoke <libraryId>` | `rtfm-ops` | Sets `revokedAt` on the library's link, then reads it back: `acme is revoked; the app refuses its link within a minute.`; `--json` gives `{ "libraryId": "…", "revokedAt": "…" }`. It exits 1 for a library already revoked, or one no link names |
 | `usage` | `rtfm-read` | `npm run usage`'s report of `rtfm-usage`: today's and this month's Bedrock spend against the caps, by model and by job, the unsettled reservations and the kill switch; `--json` gives the same figures |
 | `logs` | `rtfm-read` | The Web Function's log entries in CloudWatch (`/rtfm/app`), one line each as `npm run logs` prints them; `--json` gives the entries |
 | `status` | `rtfm-read` | Each stack's status and termination protection (`RtfmToolkit`, `RtfmAccess`, `RtfmApp`, `RtfmEdgeCertificate` in `us-east-1`, `RtfmEdge`), the Web Function's state and its endpoint's auth type and state, each table's status, deletion protection and point-in-time recovery, today's and this month's Bedrock spend, and the kill switch; anything not deployed shows as `missing` |
@@ -562,18 +570,50 @@ npm run ops -- usage --json
 curl -b "$(npm run -s ops -- passcode cookie)" https://rtfm.moonfetus.com/api/manuals
 npm run ops -- logs --level warn --since 6h       # warnings and errors of the last 6 hours
 npm run ops -- logs -e section -n 200             # the last 200 section events of the last day
+npm run ops -- logs --library acme --since 7d     # the library acme's entries of the last week
+npm run ops -- library list
+npm run ops -- library show acme --json
 npm run ops -- status
 ```
 
-`logs` takes `npm run logs`'s filters, `--level` (`-l`), `--event` (`-e`) and `--lines` (`-n`, 50
-unless given), and `--since`, how far back to read: minutes, hours or days, such as `90m`, `6h` or
-`2d` (`1d` unless given; CloudWatch keeps 30 days). It has no `--follow`. Lines in the log group
-that aren't the server's entries, such as Lambda's own, are left out.
+`logs` takes `npm run logs`'s filters, `--level` (`-l`), `--event` (`-e`), `--library` and
+`--lines` (`-n`, 50 unless given), and `--since`, how far back to read: minutes, hours or days,
+such as `90m`, `6h` or `2d` (`1d` unless given; CloudWatch keeps 30 days). It has no `--follow`.
+Lines in the log group that aren't the server's entries, such as Lambda's own, are left out.
 
-`kill-switch`, `usage` and `status` reach `rtfm-usage`, and `passcode` reaches `rtfm-app`, with
-the AWS SDK, as the role: the AWS CLI gives the role's temporary keys
+`kill-switch`, `usage` and `status` reach `rtfm-usage`, `passcode` reaches `rtfm-app`, and
+`library` reaches both, with the AWS SDK, as the role: the AWS CLI gives the role's temporary keys
 (`aws configure export-credentials`), so the SDK never reads `~/.aws` itself. The rest goes through the AWS CLI. The code is in `scripts/ops/`, and its tests
 run offline: the items in DynamoDB Local, and a stand-in for the AWS CLI.
+
+### Libraries
+
+The `library` commands make, list, show and revoke the recipients' libraries (A library's link,
+above). `create` and `revoke` read and write only the links' items in `rtfm-app`, as `rtfm-ops`;
+`list` and `show` read the links, the activity and the recipients' manual lists in `rtfm-app`, and
+the libraries' spend in `rtfm-usage`, as `rtfm-read` (`infra/README.md` › The identities). You make
+and revoke libraries yourself, in a terminal outside the Claude app, whose Terminal panel a session
+can read: agents never run `library create` or `library revoke` (`CLAUDE.md` › Shell).
+
+```sh
+npm run ops -- library create acme --label "Acme, staff engineer"
+npm run ops -- library revoke acme
+```
+
+- **`create` prints the link once**, on standard output, and nothing keeps it: no other output,
+  file or log holds it. Copy it straight away. A lost link can't be shown again: revoke its
+  library and make another under a new id.
+- **One link per library, one library per id.** `create` refuses an id any link names, revoked or
+  not, so a revoked library's id is never given to another library. The id is a slug of at most
+  63 characters (lowercase letters, digits and hyphens), never `admin`, the admin's library. The
+  label is your own note on whom the link is for; only the ops tools show it.
+- **The spend** is each day's committed spend of the library in `rtfm-usage`, the total its daily
+  cap is checked against (Configuration, above): settled calls at what they cost, and an
+  unsettled one at its worst case. Today and this month are UTC.
+- **`show`** lists each manual in the library, the starters and any the recipient asked for, with
+  its title and its written sections, from the manual list alone: never a section's body. The
+  titles and the label are printed quoted, with every control character escaped, since a
+  recipient's titles are text they chose.
 
 ## Screenshots
 

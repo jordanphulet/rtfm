@@ -10,3 +10,5 @@ export const CERTIFICATE_REGION = "us-east-1";
 export const WEB_FUNCTION = "rtfm-app";
 export const WEB_FUNCTION_ENDPOINT = "main";
 export const APP_LOG_GROUP = "/rtfm/app";
+/** Where the app answers; a library's link is `<origin>/l#<secret>`. */
+export const APP_ORIGIN = "https://rtfm.moonfetus.com";

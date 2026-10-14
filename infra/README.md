@@ -70,7 +70,7 @@ for the AWS CLI.
 | `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read`, `rtfm-deploy` and `rtfm-ops`, nothing else |
 | `rtfm-read` (role) | `npm run aws`, `npm run cdk` but deploys, and `npm run ops`' reads | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, the items of `rtfm-usage`, the libraries' links and activity and the recipients' manual lists in `rtfm-app`, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
-| `rtfm-ops` (role) | `npm run ops -- kill-switch` and `passcode` | Reading and writing the items of three partitions: `KILL_SWITCH` in `rtfm-usage`, and `PASSCODE` and `LINK` in `rtfm-app`, nothing else |
+| `rtfm-ops` (role) | `npm run ops -- kill-switch`, `passcode`, and `library create` and `revoke` | Reading and writing the items of three partitions: `KILL_SWITCH` in `rtfm-usage`, and `PASSCODE` and `LINK` in `rtfm-app`, nothing else |
 | `cdk-rtfm-deploy-role-…` | The CDK CLI's deploys | CloudFormation on `Rtfm*` stacks, but only reading `RtfmAccess` and `RtfmToolkit`; passing the execution role |
 | `cdk-rtfm-file-publishing-role-…` | Uploading assets | The staging bucket |
 | `cdk-rtfm-lookup-role-…` | `cdk diff`'s reads | Reading `Rtfm*` stacks and the bootstrap's version |
@@ -103,17 +103,17 @@ turn the kill switch on but never off, and it reaches no other table, index or t
   (`dynamodb:DescribeTable` and `DescribeContinuousBackups`), and can't list the account's
   tables;
 - the items of the table `rtfm-usage`, Bedrock's spending ledger (`dynamodb:GetItem` and
-  `Query`), for `npm run ops -- usage` and `status`;
+  `Query`), for `npm run ops -- usage`, `status`, and `library list` and `show`;
 - in `rtfm-app`, the items of two partitions, `LINK` and `ACTIVITY` (`LINK_PARTITION` and
   `ACTIVITY_PARTITION` in `rtfm.ts`), the libraries' links and their activity
   (`dynamodb:GetItem` and `Query`), and the recipients' manual lists, the partitions
-  `L#<libraryId>#LIBRARY` (`dynamodb:Query` alone). A link's item holds its secret's digest,
-  which opens nothing. A `Query` of a manual list returns each of the library's manuals as its
-  table of contents (title, subtitle, voice, and its chapters' and sections' titles and
-  summaries, which come from what the recipient asked for) and which of its sections are written,
-  but no section's body or lease, and no conversation, which is kept nowhere. It reads no other
-  item of `rtfm-app`: not the passcode's, the admin's library, a section or a seeding record. It
-  reads no index.
+  `L#<libraryId>#LIBRARY` (`dynamodb:Query` alone), for `npm run ops -- library list` and `show`.
+  A link's item holds its secret's digest, which opens nothing. A `Query` of a manual list
+  returns each of the library's manuals as its table of contents (title, subtitle, voice, and its
+  chapters' and sections' titles and summaries, which come from what the recipient asked for) and
+  which of its sections are written, but no section's body or lease, and no conversation, which is
+  kept nowhere. It reads no other item of `rtfm-app`: not the passcode's, the admin's library, a
+  section or a seeding record. It reads no index.
 
 The items of `rtfm-app` it reads are limited as `rtfm-ops`'s are (below), with
 `dynamodb:LeadingKeys`: `ForAllValues:StringEquals` with `LINK` and `ACTIVITY`; and

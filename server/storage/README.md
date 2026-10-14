@@ -197,6 +197,10 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   - One transaction holds 100 items, so a manual with more than 99 section items can't be
     deleted; a planned manual has at most 32 sections.
 - **`seededManualIds`** queries the library's partition `SEEDED`; **`markSeeded`** puts its item.
+- **`listManualsWithWritten(table, libraryId)`** queries the library's partition `LIBRARY` for each
+  manual and its `written` set, and nothing else: `npm run ops -- library show` reads a recipient's
+  manuals with it, as `rtfm-read`, whose reach in `rtfm-app` is that `Query` on
+  `L#<libraryId>#LIBRARY` (`infra/README.md` › The identities). It isn't part of `ManualStore`.
 - **`readPasscodeDigest(table)`** gets the passcode's item (`PASSCODE_KEY`), strongly consistent,
   and gives its digest, or undefined when there is no item; **`writePasscodeDigest(table,
   digest)`** puts it, replacing the one before. Both hold the digest to its form,

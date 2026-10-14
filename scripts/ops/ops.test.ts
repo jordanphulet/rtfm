@@ -9,6 +9,7 @@ import { standInAws } from "./testing.ts";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const LOG_LINE = { timestamp: "2026-10-13T11:00:00.000Z", level: "WARN", event: "section.failed", message: "m" };
+const ACME_LINE = { ...LOG_LINE, event: "request", libraryId: "acme" };
 const filterLogEvents = { args: ["logs", "filter-log-events"], stdout: { events: [{ message: JSON.stringify(LOG_LINE) }] } };
 
 async function until(condition: () => boolean): Promise<void> {
@@ -46,6 +47,13 @@ describe("npm run ops", () => {
     ]);
   });
 
+  it("keeps one library's log entries with --library", { timeout: 30_000 }, async () => {
+    const events = [LOG_LINE, ACME_LINE].map((line) => ({ message: JSON.stringify(line) }));
+    const { context } = standInAws([{ args: ["logs", "filter-log-events"], stdout: { events } }]);
+    expect(JSON.parse((await runOps(["logs", "--library", "acme", "--json"], context)).stdout)).toEqual([ACME_LINE]);
+    expect(JSON.parse((await runOps(["logs", "--library", "admin", "--json"], context)).stdout)).toEqual([]);
+  });
+
   it("refuses a command line it doesn't take, before reaching AWS", async () => {
     const { context, calls } = standInAws();
     const refused: [string[], RegExp][] = [
@@ -60,6 +68,16 @@ describe("npm run ops", () => {
       [["usage", "extra"], /takes no argument/],
       [["status", "--profile", "work-admin"], /Unknown option '--profile'/],
       [["usage", "--level", "warn"], /Unknown option '--level'/],
+      [["library"], /library takes create <libraryId>, list, show <libraryId> or revoke <libraryId>/],
+      [["library", "make", "acme"], /library takes create/],
+      [["library", "create"], /library takes create/],
+      [["library", "create", "acme", "globex"], /library takes create/],
+      [["library", "list", "acme"], /library takes create/],
+      [["library", "show"], /library takes create/],
+      [["library", "revoke"], /library takes create/],
+      [["library", "revoke", "acme", "--label", "x"], /Only library create takes --label/],
+      [["library", "list", "--library", "acme"], /Unknown option '--library'/],
+      [["usage", "--label", "x"], /Unknown option '--label'/],
     ];
     for (const [args, message] of refused) {
       await expect(runOps(args, context), args.join(" ")).rejects.toThrow(OpsUsageError);

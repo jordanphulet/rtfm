@@ -14,6 +14,7 @@ describe("the deployed resources the ops tools read", () => {
       WEB_FUNCTION: appStack.WEB_FUNCTION,
       WEB_FUNCTION_ENDPOINT: appStack.WEB_FUNCTION_ENDPOINT,
       APP_LOG_GROUP: appStack.APP_LOG_GROUP,
+      APP_ORIGIN: `https://${edgeCertificateStack.APP_DOMAIN}`,
     });
   });
 });

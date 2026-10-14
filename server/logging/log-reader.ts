@@ -9,6 +9,8 @@ export interface LogFilter {
   level?: Level;
   /** This event, or any event under it: `section` matches `section.failed`. */
   event?: string;
+  /** The entries of this library alone: `admin`, or a recipient's id. */
+  libraryId?: string;
 }
 
 const NEWLINE = 0x0a;
@@ -21,16 +23,17 @@ export const LOG_OPTIONS = {
   level: { type: "string", short: "l" },
   event: { type: "string", short: "e" },
   lines: { type: "string", short: "n", default: "50" },
+  library: { type: "string" },
 } as const;
 
 export class LogOptionInvalid extends Error {}
 
 /** The filter and how many entries to show, from `LOG_OPTIONS`' values. */
-export function logOptionsFrom(values: { level?: string; event?: string; lines?: string }): {
+export function logOptionsFrom(values: { level?: string; event?: string; lines?: string; library?: string }): {
   filter: LogFilter;
   count: number;
 } {
-  const filter = { level: levelFrom(values.level), event: values.event };
+  const filter = { level: levelFrom(values.level), event: values.event, libraryId: values.library };
   const count = Number(values.lines);
   if (!Number.isInteger(count) || count < 1) {
     throw new LogOptionInvalid(`--lines must be a whole number above 0, not "${values.lines}"`);
@@ -45,9 +48,10 @@ function levelFrom(value: string | undefined): Level | undefined {
   return level;
 }
 
-export function matches(entry: LogEntry, { level, event }: LogFilter): boolean {
+export function matches(entry: LogEntry, { level, event, libraryId }: LogFilter): boolean {
   if (level && LEVELS.indexOf(entry.level) < LEVELS.indexOf(level)) return false;
   if (event && entry.event !== event && !entry.event.startsWith(`${event}.`)) return false;
+  if (libraryId !== undefined && entry.libraryId !== libraryId) return false;
   return true;
 }
 
@@ -120,7 +124,7 @@ function formatValue(value: unknown): string {
 }
 
 /** The text with each control character written as `\uXXXX`. */
-function printable(text: string): string {
+export function printable(text: string): string {
   const escaped = (character: string) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
   return text.replace(CONTROL_CHARACTERS, escaped);
 }

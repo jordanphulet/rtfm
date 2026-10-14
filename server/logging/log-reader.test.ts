@@ -18,6 +18,7 @@ describe("the logs options", () => {
       count: 20,
     });
     expect(logOptionsFrom({ lines: "50" })).toEqual({ filter: { level: undefined, event: undefined }, count: 50 });
+    expect(logOptionsFrom({ library: "acme", lines: "50" }).filter).toEqual({ libraryId: "acme" });
   });
 
   it("refuse a level that isn't one, and a count that isn't a whole number above 0", () => {
@@ -43,6 +44,16 @@ describe("filtering", () => {
     expect(matches(entry("sections"), { event: "section" })).toBe(false);
     expect(matches(entry("section.failed"), { event: "section.failed" })).toBe(true);
     expect(matches(entry("section.started"), { event: "section.failed" })).toBe(false);
+  });
+
+  it("keeps one library's entries", () => {
+    const inLibrary = (libraryId?: string) => ({ ...entry("request"), ...(libraryId && { libraryId }) });
+    expect(matches(inLibrary("acme"), { libraryId: "acme" })).toBe(true);
+    expect(matches(inLibrary("acme-2"), { libraryId: "acme" })).toBe(false);
+    expect(matches(inLibrary("admin"), { libraryId: "acme" })).toBe(false);
+    expect(matches(inLibrary(), { libraryId: "acme" })).toBe(false);
+    expect(matches(inLibrary("admin"), { libraryId: "admin" })).toBe(true);
+    expect(matches(inLibrary(), {})).toBe(true);
   });
 });
 

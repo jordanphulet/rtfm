@@ -220,6 +220,19 @@ export function createDynamoDbManualStore(table: DynamoDbTable, libraryId = ADMI
 }
 
 /**
+ * A library's manuals, each with the ids of its written sections, from one `Query` of the
+ * library's `LIBRARY` partition alone: no section's item or body is read.
+ */
+export async function listManualsWithWritten(
+  table: DynamoDbTable,
+  libraryId: string,
+): Promise<{ manual: StoredManual; written: string[] }[]> {
+  const partition = libraryKeys(libraryId).manualsPartition;
+  const items = (await queryPartition(documentClient(table), table.name, partition, "manual, written")) as unknown as ManualItem[];
+  return items.map(({ manual, written }) => ({ manual, written: [...(written ?? [])] }));
+}
+
+/**
  * Section leases on the section's own item, shared by every environment on the table: a writer
  * takes one with a conditional write, renews it while it writes, and alone may save the body.
  */

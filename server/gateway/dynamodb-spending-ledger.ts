@@ -10,10 +10,12 @@ import { SpendingRefused } from "./types.ts";
 
 /** The kill switch is on while this item exists. Its own partition, which `rtfm-ops` is limited to. */
 export const KILL_SWITCH_KEY = { pk: "KILL_SWITCH", sk: "KILL_SWITCH" };
-const totalKey = (period: string) => ({ pk: "TOTAL", sk: period });
+const TOTAL = "TOTAL";
+const totalKey = (period: string) => ({ pk: TOTAL, sk: period });
+const LIBRARY_PERIOD_PREFIX = "LIBRARY#";
 /** The period of a recipient library's day's total, beside the central totals; the admin's library has none. */
 const libraryDay = (libraryId: string, reservedAt: string) =>
-  libraryId === ADMIN_LIBRARY_ID ? undefined : `LIBRARY#${libraryId}#${dayOf(reservedAt)}`;
+  libraryId === ADMIN_LIBRARY_ID ? undefined : `${LIBRARY_PERIOD_PREFIX}${libraryId}#${dayOf(reservedAt)}`;
 const callKey = (reservedAt: string, callId: string) => ({
   pk: `LEDGER#${monthOf(reservedAt)}`,
   sk: `${reservedAt}#${callId}`,
@@ -177,6 +179,38 @@ export async function setKillSwitch(table: DynamoDbTable, on: boolean): Promise<
   const TableName = table.name;
   if (on) await client.send(new PutCommand({ TableName, Item: KILL_SWITCH_KEY }));
   else await client.send(new DeleteCommand({ TableName, Key: KILL_SWITCH_KEY }));
+}
+
+/** A recipient library's committed spend on one day (UTC), unsettled calls at their worst case. */
+export interface LibraryDayTotal {
+  libraryId: string;
+  day: string;
+  committedUsd: number;
+}
+
+/**
+ * Each recipient library's total for each day it spent, or one library's alone, from one `Query` of
+ * the `TOTAL` partition.
+ */
+export async function readLibraryDayTotals(table: DynamoDbTable, libraryId?: string): Promise<LibraryDayTotal[]> {
+  const totals: LibraryDayTotal[] = [];
+  const prefix = libraryId === undefined ? LIBRARY_PERIOD_PREFIX : `${LIBRARY_PERIOD_PREFIX}${libraryId}#`;
+  const pages = paginateQuery(
+    { client: documentClient(table) },
+    {
+      TableName: table.name,
+      KeyConditionExpression: "pk = :pk AND begins_with(sk, :prefix)",
+      ExpressionAttributeValues: { ":pk": TOTAL, ":prefix": prefix },
+      ConsistentRead: true,
+    },
+  );
+  for await (const page of pages) {
+    for (const { sk, committedUsd } of (page.Items ?? []) as { sk: string; committedUsd: number }[]) {
+      const [totalsLibraryId, day] = sk.slice(LIBRARY_PERIOD_PREFIX.length).split("#");
+      totals.push({ libraryId: totalsLibraryId, day, committedUsd });
+    }
+  }
+  return totals;
 }
 
 /** Creates an empty table shaped as `rtfm-usage`, for DynamoDB Local; `RtfmApp` creates the real one. */

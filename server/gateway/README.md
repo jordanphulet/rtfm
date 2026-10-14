@@ -259,6 +259,10 @@ Every read is strongly consistent.
 - **`setKillSwitch`** puts or deletes the kill-switch item: `npm run ops -- kill-switch`, as
   `rtfm-ops` (`README.md` › The ops tools), and the tests, on DynamoDB Local. The server never
   calls it.
+- **`readLibraryDayTotals(table, libraryId?)`** gives each recipient library's committed spend for
+  each day it spent, or one library's, from one `Query` of `TOTAL` with
+  `begins_with(sk, "LIBRARY#")`: `npm run ops -- library list` and `show`, as `rtfm-read`. The
+  server never calls it.
 - **Numbers** go to DynamoDB as JavaScript prints them, and DynamoDB adds them as exact decimals.
   `usd − worst case` is worked out in floating point, so a total can drift from the sum of its
   entries by far less than a millionth of a cent a call. The suite uses amounts a binary fraction
