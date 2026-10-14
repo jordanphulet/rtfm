@@ -61,21 +61,8 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998; review round 3: test headroom under load, renewals only extend the lease)
-- **Depends on:** IN.11
-- **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
-  `server/writer/README.md`
-- **Do:** section leases behind an interface in `runs.ts`, in memory locally and on the section
-  item in `rtfm-app`; a reader on another environment waits for the stored body, then gets it as
-  one `append` and `written`, or `failed`.
-  - `deleteManual` deletes only the ids in the manual's `written` set, so a section item holding only
-    a lease would be left behind and block a recreated manual's section: delete those too (for
-    example by querying `pk = MANUAL#<id>`).
-- **Done when:** the shared suite covers two runs racing for one section on both implementations.
-
 ### IN.14 — `rtfm-ops` and the ops tools
-- **Status:** todo
+- **Status:** doing (agent ab01bdf3c8304e3d4)
 - **Depends on:** IN.12
 - **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
   `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`
@@ -119,7 +106,7 @@ aren't RTFM's.
 - **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
 
 ### AW.1 — Check the ledger against the AWS bill
-- **Status:** todo
+- **Status:** doing (agent a5a235ae9222608b6)
 - **Depends on:** IN.12
 - **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
 - **Do:** with `npm run aws -- ce get-cost-and-usage` (as `rtfm-read`), compare what AWS charged
@@ -127,23 +114,42 @@ aren't RTFM's.
   data folder's), and find from the bill's usage types whether a call that doesn't complete is
   charged its full `max_tokens` or only what it used. Correct `prices.ts` or the gateway's charge
   for an incomplete call if they differ. Read-only in AWS.
-- **Done when:** the price table and the charge for an incomplete call match AWS's, and
-  `server/README.md` says what was checked and when.
+- **Done when:** `prices.ts` is checked against AWS's charges and `server/README.md` says what was
+  checked and when, with what the bill shows of incomplete calls.
+
+### AW.4 — Charge an aborted call as AWS does
+- **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
+- **Depends on:** AW.1
+- **Files:** `server/gateway/gateway.ts` and its test, `server/gateway/README.md`, `server/README.md`,
+  `README.md`
+- **Do:** AW.1 found AWS bills an aborted call its full input and almost none of its output (on
+  2026-10-11, two aborted sections were billed at most 6 output tokens between them), while the
+  gateway charges every incomplete call its full `max_tokens` of output. Read 2026-10-13's
+  complete numbers (two aborts, one of which had sent 1,788 characters): if AWS's `global.` output
+  that day is about the ledger's reported 46,494 plus a few tokens, charge an `aborted` call 0
+  output tokens; if it's 400–1,000+ higher, charge what the stream delivered (UTF-8 bytes received,
+  capped at `max_tokens`). Either way it stays `estimated`; a `failed` call keeps its full
+  `max_tokens`; the reservation keeps the worst case, so the caps don't change.
+- **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
+  evidence, and `npm test` passes.
 
 ## Upkeep
 
 Small fixes that keep the repo healthy.
 
-### UP.1 — The flaky repair test
-- **Status:** doing (agent a6e14796ef423fb5e)
+### UP.4 — Two more tests that flake under load
+- **Status:** todo
 - **Depends on:** —
-- **Files:** `src/manual/repair.test.tsx`, `src/manual/**`
-- **Do:** `src/manual/repair.test.tsx` failed once in a full `npm test` run during IN.17 (the
-  streaming test for `giving-the-dead-a-voice.md`) and passed on its own. Find why (a timer race,
-  shared state, load from other test files) by running it repeatedly alone and in the full suite,
-  and fix the cause, in the test or the code.
-- **Done when:** the cause is named in the report, and the test passes 50 runs in a row alone and
-  10 full `npm test` runs in a row.
+- **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
+- **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
+  signalled" once failed with `SyntaxError: Unexpected end of JSON input`: the stand-in `aws`
+  writes `started.json` with `writeFileSync`, and the test can read the empty file before the
+  write finishes. Make that write atomic (a temporary file renamed into place) or wait for content
+  that parses. `scripts/hooks/rule-copies.test.ts` › "prints nothing and exits 0 without a saved
+  copy, without git, or with bad input" once timed out at the default 5 s under load: give it a
+  timeout that follows `server/README.md` › Tests, or make it lighter. `scripts/serve-temp.test.ts`
+  › "refuses an unknown option" also hit its 5 s timeout once under load: the same treatment.
+- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
 - **Status:** todo
@@ -155,31 +161,6 @@ Small fixes that keep the repo healthy.
   `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
 - **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
   and `npm test` passes.
-
-### UP.3 — Commit messages with bodies
-- **Status:** doing (agent ac56b8f2bfbf9814f; on 2026-10-13 the user approved the `PROCESS.md` wording the orchestrator sent: step 1's body sentence, and `npm run commit-worklist` in When the orchestrator does work itself)
-- **Depends on:** —
-- **Files:** `scripts/commit-task.ts` and its test, `scripts/commit-worklist.ts` and its test,
-  `package.json`, `README.md`, `PROCESS.md` (with the user's approval)
-- **Do:**
-  - `npm run commit-task` requires a body, `--body-file <path>`, and refuses an empty one; the
-    body goes between the subject and the trailers.
-  - A new `npm run commit-worklist` commits `WORKLIST.md` alone as "Update work list statuses",
-    with a body generated from its diff: each task added, removed, or whose status changed (with
-    the new status), plus an optional `--reason "<text>"` line. It refuses any other staged or
-    changed file in the commit.
-  - `PROCESS.md`, with the wording the user approved: in Review loop › Approved, step 1, after
-    "…as `<task id>: <task title>` with a `Reviewed-by:` trailer.", add "Its body (`--body-file`)
-    is 2–4 lines the orchestrator writes from the agent's report and the review: what changed, any
-    decision made, the checks that passed, and anything left for the user, without repeating the
-    task's **Do**."; in When the orchestrator does work itself, the last sentence becomes
-    "`WORKLIST.md` changes are committed on their own with `npm run commit-worklist`, as "Update
-    work list statuses", whose body names each task added, removed or whose status changed, and
-    why."
-  - `README.md` › Committing task work describes both commands.
-- **Done when:** both commands' tests cover the body (required, refused when empty, placed before
-  the trailers, generated from a `WORKLIST.md` diff), and the user has approved the `PROCESS.md`
-  change.
 
 ## Waiting on AWS
 

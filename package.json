@@ -19,6 +19,7 @@
     "logs": "node server/logs.ts",
     "audit": "node scripts/audit/audit.ts",
     "commit-task": "node scripts/commit-task.ts",
+    "commit-worklist": "node scripts/commit-worklist.ts",
     "orchestrator-check": "node scripts/orchestrator-check.ts",
     "task-prompt": "node scripts/task-prompt.ts",
     "aws": "set -f; command set +o braceexpand 2>/dev/null; exec node infra/run-aws.ts aws",

@@ -74,6 +74,9 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 - **The manuals in the table `rtfm-app`** (`server/storage/README.md` › The table `rtfm-app`),
   which every environment shares and each seeds when it starts, once across all of them. The
   table's name is `RTFM_APP_TABLE`, which `RtfmApp` sets in the revision's environment.
+- **One writer per section across environments**: a run takes the section's lease in the table
+  before it writes, and a reader whose request reaches another environment waits for the stored
+  body (`server/writer/README.md` › One writer per section).
 - **The table as the execution role.** AWS documents that a Web Function's code runs with its
   execution role, but not how the role's credentials reach the process: its environment-variable
   page reserves `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` and warns that

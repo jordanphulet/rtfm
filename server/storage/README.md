@@ -1,6 +1,6 @@
 # server/storage
 
-Where the server keeps the manuals, their written sections and the usage ledger. Two narrow
+Where the server keeps the manuals, their written sections and the usage ledger. Narrow
 interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledger:
 
 - **`ManualStore`** lists, gets, creates and deletes manuals, gets and saves section bodies, lists
@@ -10,6 +10,9 @@ interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledge
   the server uses on this machine, and the DynamoDB table `rtfm-app`
   (`dynamodb-manual-store.ts`), which the Web Function uses (`server/README.md` › The Web
   Function). `config.manualStorage` chooses one.
+- **`SectionLeases`** keeps one writer per section among the servers sharing a store (Section
+  leases, below): in the process (`in-process-leases.ts`) beside the files, and on the section's
+  item in `rtfm-app` beside the table. `config.manualStorage` chooses them with the store.
 - **`UsageLedger`** appends an entry (into the file for its `reservedAt` month) and reads a
   month's entries (`"2026-10"`, UTC). It is files in the data folder, which the gateway's spending
   ledger for the fake models keeps its record in; Bedrock's spending is in the table `rtfm-usage`
@@ -101,6 +104,7 @@ of item, told apart by its keys, two strings:
 | --- | --- | --- | --- |
 | A manual | `LIBRARY` | `MANUAL#<manualId>` | `manual`: the `StoredManual`, as a map; `written`: the ids of its written sections, a string set, absent while none is |
 | A written section | `MANUAL#<manualId>` | `SECTION#<sectionId>` | `body`: the Markdown |
+| A section being written | `MANUAL#<manualId>` | `SECTION#<sectionId>` | `leaseOwner`: `<environment>/<run>`, two random UUIDs; `leaseExpiresAt`: epoch milliseconds (Section leases, below) |
 | A seed manual already seeded | `SEEDED` | `MANUAL#<manualId>` | none |
 
 Every manual is in the one partition `LIBRARY`, apart from the bodies, so listing the library
@@ -116,17 +120,21 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   bodies); otherwise `"exists"`.
 - **`saveBody`** is one `TransactWriteItems`: an `Update` of the manual's item that adds the
   section's id to `written`, on the condition that the item exists, and a `Put` of the section's
-  item on the condition `attribute_not_exists(pk)`. Either both happen or neither: the first
-  condition failing throws (no manual), the second answers `"already-written"`.
-- **`getBody`** gets the section's item.
-- **`deleteManual`** reads the manual's `written` set, then deletes the manual's item and every
-  section's item in one transaction, on the condition that `written` is still exactly the set it
-  read (`written = :written`, or `attribute_not_exists(written)` for none). A section saved in
-  between, or a manual deleted and made again under the id with other sections, changes
-  `written`; the condition fails, and it reads and tries again, up to 8 times. So it deletes
-  exactly the sections the manual it deletes has, and no section is ever left without its
-  manual. One transaction holds 100 items, so a manual with more than 99
-  written sections can't be deleted; a planned manual has at most 32.
+  item on the condition `attribute_not_exists(body)`, which replaces a lease the item may hold.
+  Either both happen or neither: the first condition failing throws (no manual), the second
+  answers `"already-written"`.
+- **`getBody`** gets the section's item; one holding only a lease has no body.
+- **`deleteManual`** reads the manual's `written` set and queries the manual's section items (its
+  written sections, and any unwritten section's item holding only a lease), then deletes the
+  manual's item and every section item in one transaction, on the condition that `written` is
+  still exactly the set it read (`written = :written`, or `attribute_not_exists(written)` for
+  none). A section saved in between, or a manual deleted and made again under the id with other
+  sections, changes `written`; the condition fails, and it reads and tries again, up to 8 times.
+  So it deletes exactly the sections the manual it deletes has, no section is ever left without
+  its manual, and no lease is left behind to hold up a manual made again under the id. A lease
+  taken after the query is released by its run, or expires. One transaction holds 100 items, so a
+  manual with more than 99 section items can't be deleted; a planned manual has at most 32
+  sections.
 - **`seededManualIds`** queries the partition `SEEDED`; **`markSeeded`** puts its item.
 - **Transactions that collide.** Two transactions on one item at once can cancel one of them with
   `TransactionConflict`, as two saves into one manual do, since both update its item. The SDK
@@ -134,8 +142,8 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   random pause of up to 20ms times the attempt's number; then it throws the cancellation.
   DynamoDB Local never answers `TransactionConflict`, so these retries are tested against a
   stand-in on loopback.
-- **What the Web Function's role may do** on the table is exactly what the store does:
-  `GetItem`, `Query`, `PutItem`, `UpdateItem` and `DeleteItem`, which also cover the
+- **What the Web Function's role may do** on the table is exactly what the store and the leases
+  do: `GetItem`, `Query`, `PutItem`, `UpdateItem` and `DeleteItem`, which also cover the
   transactions' parts (`infra/app-stack.ts`).
 
 The client (`createDynamoDbManualStore(table)`) takes everything from the `DynamoDbTable` it is
@@ -159,11 +167,91 @@ credentials is `server/README.md` › The Web Function.
 
 **Room for what comes next.** Each kind of item has its own partition key, so later items fit
 beside these: the passcode's digest as one item of its own partition, which `rtfm-ops` can be
-limited to with `dynamodb:LeadingKeys`; and a section's writing lease on the section's own item,
-whose `Put` then conditions on `attribute_not_exists(body)` in place of the whole item.
+limited to with `dynamodb:LeadingKeys`.
 
 **Changing the stored form.** The table is deployed data: a change to these items carries its
 migration, or reads the old form too (`ARCHITECTURE.md` › Everything runs on one machine).
+
+## Section leases
+
+A section is written by one run at a time, wherever it runs (`server/writer/README.md` › One
+writer per section). Within a process the runs' map sees to that; across the processes sharing a
+store, the run takes the section's lease first. `SectionLeases.take` gives a `SectionLease`, or
+nothing while another writer holds the section or its body is stored. A lease is renewed until it
+is released or its body saved; it has a `lost` signal, which aborts once the holder may no longer
+write (the lease is gone from storage, or it couldn't be renewed and is about to expire, before
+another writer can take it: The holder fences itself, below); and only it may save the body (`SectionLease.saveBody`, which answers as
+`ManualStore.saveBody` does, and throws once the lease is lost).
+
+- **In the process** (`in-process-leases.ts`), with the files: every take is granted, and the
+  lease saves through the store. One server uses a data folder (its lock), and the runs' map
+  already keeps one writer per section in it, so the server works exactly as it would without
+  leases.
+- **In `rtfm-app`** (`createDynamoDbSectionLeases` in `dynamodb-manual-store.ts`), with the table,
+  on the section's own item (The table `rtfm-app`, above). Each environment has its own random id,
+  and each take its own, so an owner names both the environment and the run.
+  - **Taking** is an `UpdateItem` that sets `leaseOwner` and `leaseExpiresAt`, creating the item if
+    there is none, on the condition that the item has no body and holds no lease, or an expired
+    one (or one of this owner's, for a take the SDK retried). It doesn't check that the manual
+    exists: the run's save does that, and a lease item left by a manual deleted in between is
+    released by its run, or expires, and is deleted with any manual made again under the id.
+  - **Renewing** sets `leaseExpiresAt` again every `renewEveryMs`, to the lease's length past when
+    the renewal was sent, on the condition that the item still holds this owner's lease and no
+    body, and that the new expiry is later than the stored one. The SDK resends a renewal's expiry
+    as it was first sent, so without that last part a retry of an old renewal arriving after a
+    newer one would move the expiry back.
+    When the condition fails, the renewal asks for the item as it was
+    (`ReturnValuesOnConditionCheckFailure: "ALL_OLD"`). If it still holds this owner's lease and no
+    body, the renewal was a stale retry, and nothing changes. Otherwise the lease is gone (another
+    writer took it, its manual was deleted, or the seed saved its body), so it stops renewing and
+    aborts `lost`. Any other failure (the network, throttling, a timeout) is tried again at the
+    next renewal.
+  - **The holder fences itself.** It counts the lease lost, stops renewing and aborts `lost`, once
+    nine tenths of the lease's length have passed since it sent the latest take or renewal that
+    succeeded, with no later one succeeding (`FENCE_AT`). The stored expiry is the lease's length
+    after the send of the renewal that set it, and never moves back, so the holder has stopped
+    before any other writer can take the lease, and two runs never write, nor pay for, one section
+    at once. Once `lost` has aborted, the lease's `saveBody` throws without trying.
+  - **Saving** is `saveBody`'s transaction with the `Put` conditioned on `leaseOwner = :owner` as
+    well, so a writer that has lost its lease can never store a body, and two environments never
+    both write a section. The body replaces the lease. If the condition fails with a body stored,
+    one saved without a lease (the seed's), it answers `"already-written"`; otherwise it throws.
+  - **Releasing** deletes the item on the condition that it holds this owner's lease and no body,
+    so a body, or another writer's lease, is never deleted.
+- **How long, and why.** A lease lasts 20 seconds and its holder renews it every 5
+  (`SECTION_LEASE_TIMING`):
+  - Renewal runs on a timer, not on the writer's chunks, so a silence in the model's stream, as
+    long as the 30-second stall timeout allows (planning a manual has gone quiet for 26 seconds),
+    never costs the lease. A section with Claude streams for 12–15 seconds, so it is renewed two
+    or three times.
+  - The holder fences itself 18 seconds after sending its latest successful renewal, so only
+    after the next three renewals in a row fail (5, 10 and 15 seconds after it), each with the
+    client's own retries. A renewal that hangs (the client's 10-second request timeout)
+    doesn't hold up the next one.
+  - A crashed environment's lease, or one that couldn't release it (Lambda gives `SIGTERM` 1
+    second), frees the section at most 20 seconds after its last renewal, and a waiting reader
+    takes it over within a second of that.
+  - Expiry compares the taker's clock with the holder's. Lambda's clocks agree to well within a
+    second, so the 2 seconds between the holder's fence and the expiry cover that difference and a
+    fence timer that fires a little late.
+  - Each renewal is one write, a few per section, and each look a waiting reader takes is a
+    conditional write and a read, once a second: fractions of a cent a month at RTFM's scale.
+
+The lease attributes are new, and items stored before them all hold a body, which the conditions
+read as written, so the stored data needs no migration.
+
+`dynamodb-section-leases.test.ts` checks the DynamoDB leases against DynamoDB Local, waiting out
+leases of one and a half to two seconds, for headroom when test runs go side by side: one of two
+simultaneous takes wins, a written section gives none, renewal keeps a lease past twice its
+length, an unrenewed lease fences its holder and expires, and only its new holder can save, a
+holder whose item is deleted hears its lease is lost, a release frees it at once and leaves a body
+alone, a body saved without a lease wins, and deleting a manual deletes its lease-only items.
+`dynamodb-manual-store.test.ts` checks the renewals against a stand-in: with every renewal
+throttled the lease is lost no sooner than nine tenths of its length after the take; a renewal
+that succeeds after failures keeps it; a renewal only moves the expiry later; a refused renewal
+that finds this owner's lease with a later expiry (a stale retry) changes nothing; and one that
+finds another owner's lease loses it, after which `saveBody` throws. The runs' shared suite runs
+both kinds of leases (`server/writer/README.md` › Tests).
 
 ## DynamoDB Local, for the tests
 
@@ -225,12 +313,13 @@ delete `.data/ledger/`, because the caps are computed from it.
 
 ## Files
 
-- `types.ts`: `ManualStore`, `UsageLedger`.
+- `types.ts`: `ManualStore`, `SectionLeases`, `UsageLedger`.
 - `file-manual-store.ts`: manuals and sections as files.
-- `dynamodb-manual-store.ts`: manuals and sections in a table shaped as `rtfm-app`, and
-  `createAppTable` for DynamoDB Local. The one file here that imports the AWS SDK. Its client
-  builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's table
-  `rtfm-usage`.
+- `in-process-leases.ts`: section leases for a server alone on its store.
+- `dynamodb-manual-store.ts`: manuals, sections and section leases in a table shaped as
+  `rtfm-app`, and `createAppTable` for DynamoDB Local. The one file here that imports the AWS SDK.
+  Its client builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's
+  table `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
 - `dynamodb-testing.ts`: the tests' tables in DynamoDB Local.
 - `file-ledger.ts`: the usage ledger as JSON lines.

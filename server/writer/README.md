@@ -104,10 +104,16 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
 
 ## One writer per section
 
-`writer/runs.ts` keeps an in-memory `Map` keyed by `manualId/sectionId`.
+`writer/runs.ts` keeps an in-memory `Map` keyed by `manualId/sectionId`, for the readers one
+server process serves, and takes a section's lease (`SectionLeases`, `server/storage/README.md` ›
+Section leases) before it writes, for the processes that share a store: the Web Function's
+environments, which share the table `rtfm-app`. On this machine there is one server per data
+folder, so its leases (`storage/in-process-leases.ts`) grant every take, and the map alone keeps
+one writer per section, exactly as it would without them.
 
 - **Opening a section** checks the map, then storage (`getBody`), then the map again. If there is
-  still no entry, it creates the run in the same tick, so two requests can't both start one.
+  still no entry, it creates the run in the same tick, so two requests can't both start one. The
+  run then takes the section's lease, and writes only once it has it.
 - **Finished runs stay in the map** as `written`, which closes the gap between a request reading
   storage and a run finishing. If `saveBody` returns `already-written`, the run sends `written`
   anyway: the stored body is the one that counts.
@@ -118,17 +124,53 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
 - **Listeners:** the first request starts the writer with its own `AbortController`. Later
   requests subscribe and get the backlog first.
 - **Ending:**
-  - When the writer finishes, `saveBody`, then `written`. If any chunk was marked `placeholder`,
-    nothing is stored and the entry is removed instead: the readers still get `written`, but the
-    section is unwritten again for the next request, and the library's count doesn't change.
+  - When the writer finishes, the lease saves the body (`SectionLease.saveBody`), then `written`.
+    If any chunk was marked `placeholder`, nothing is stored and the entry is removed instead: the
+    readers still get `written`, but the section is unwritten again for the next request, and the
+    library's count doesn't change.
   - When the writer throws, `failed`, and the entry is removed. Nothing is stored.
   - **When the last listener disconnects, the run is aborted** at once, with no grace period, which
     aborts the Bedrock call (`server/gateway/README.md`), and the partial text is discarded.
     Reloading mid-section therefore starts the writing again from scratch.
-- **At most 3 runs at once** (`config.maxConcurrentRuns`). A fourth request gets `failed:
-  "error"`. Each writing section holds one browser connection, and HTTP/1.1 allows 6 per origin,
-  so this keeps the page's other requests flowing. The reader keeps a section's stream open while
-  it navigates elsewhere.
+  - However it ends, the run then releases its lease. A release that fails is logged
+    (`section.release-failed`), and the lease expires instead.
+- **At most 3 runs at once** (`config.maxConcurrentRuns`) per process, a run waiting for another
+  environment included. A fourth request gets `failed: "error"`. Each writing section holds one
+  browser connection, and HTTP/1.1 allows 6 per origin, so this keeps the page's other requests
+  flowing. The reader keeps a section's stream open while it navigates elsewhere.
+
+### Another environment
+
+When another environment holds the section's lease, the run waits for that environment's body
+instead of writing:
+
+- **It looks again every second** (`WAITING.pollEveryMs`): it tries to take the lease, then reads
+  the body. Its readers, and any reader of this environment who joins it, see the section as
+  `writing` (`statusOf`, `writingSectionIds`) and get no events while it waits: the reader shows its
+  waiting state, and the `EventSource` gets only the heartbeat comment every 15 seconds
+  (`server/api/README.md`), which also keeps CloudFront's 60-second read timeout from closing it.
+- **Once the body is stored**, its readers get it as one `append` at offset 0 with `progress` 1,
+  then `written`, as a reader of a written section does, and the entry becomes `written`.
+- **Once the lease is free with no body stored**, released or expired, the run takes it over and
+  writes the section itself, from the start: the other run ended without a body (aborted, failed,
+  a placeholder) or its environment stopped. A waiting reader therefore never gets a failure only
+  because the other environment's reader left, as when a reader reloads mid-section and the
+  reload reaches another environment.
+- **It gives up after 2 minutes** (`WAITING.limitMs`) with `failed: "error"`. The wait is otherwise
+  bounded by the lease: a lease is held only while its run writes, which the writer's stall
+  timeout and `max_tokens` bound, and is free at most one lease length (20 seconds) after its
+  holder stops renewing it. The limit is far past any section's writing time (12–15 seconds with
+  Claude), and only stops a reader waiting forever on a holder that never ends.
+- **When its last listener disconnects**, the waiting stops, as a run is aborted; it holds no lease.
+- **If the run loses its lease** while it writes (its renewals kept failing until just before the
+  lease would expire, or its item went with a deleted manual), the writer is aborted at once,
+  before another environment can take the section, nothing can be stored, and its readers get
+  `failed: "error"`.
+
+So abort on the last disconnect holds per environment: when the lease holder's last listener
+leaves while a reader waits on another environment, the holder's run is aborted and releases the
+lease, and the waiting run takes the lease at its next look and writes the section for its own
+readers.
 
 ## Tests
 
@@ -139,10 +181,21 @@ both through the real gateway. It checks the contract above, that the kill switc
 exactly the text that streamed. `fake.test.ts` and `bedrock.test.ts` cover what only one writer
 does, and `runs.test.ts` covers the runs.
 
+`runs-leases.test.ts` is the runs' shared suite over both kinds of leases: one server with its
+leases in its process, and two environments, each with its own DynamoDB leases, on one table in
+DynamoDB Local. In each, two runs race for one section and one writer writes it for both readers;
+a reader whose run is aborted leaves the section to the other; a placeholder is stored by neither;
+and a failure reaches both. It then covers what only environments do: the waiting reader's one
+`append`, taking over a crashed environment's expired lease, the waiting limit, a run that loses
+its lease, and a released lease freeing the section at once. The leases it waits out are half a
+second to two seconds long, with room for test runs side by side, so no test waits for the
+committed lengths.
+
 ## Files
 
 - `types.ts`: `SectionWriter`, `WriteFailed`, `refusalAsBudget`, `sectionToWrite`.
-- `runs.ts`: one run per section; later requests join it.
+- `runs.ts`: one run per section, which takes the section's lease or waits for another
+  environment's body; later requests join it.
 - `fake.ts`: plays the seed body through the gateway, which the fake model repeats back.
 - `bedrock.ts`: writes through the gateway, choosing an example section.
 - `prompt.ts`: builds the prompt.

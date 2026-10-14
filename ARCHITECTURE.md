@@ -71,8 +71,10 @@ browser (Vite, :5173)                           server (node:http, :8787)
   See `server/api/README.md`.
 - `storage/`: `ManualStore` and `UsageLedger` (`types.ts`) as files in the data folder
   (`file-manual-store.ts`, `file-ledger.ts`), and `ManualStore` in the DynamoDB table `rtfm-app`
-  (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the data
-  folder's lock (`lock.ts`) and seeding (`seed.ts`). See `server/storage/README.md`.
+  (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the section
+  leases (`SectionLeases`) that keep one writer per section across the Web Function's environments,
+  in the process (`in-process-leases.ts`) or in `rtfm-app`; the data folder's lock (`lock.ts`) and
+  seeding (`seed.ts`). See `server/storage/README.md`.
 - `seed/<manualId>/`: `manual.json`, a TOC, a voice, and which sections start written; and
   `sections/*.md`, bodies (only the sample, the-haunt-that-listens, has them: all 18).
 - `writer/`: the `SectionWriter`s (`fake.ts`, `bedrock.ts`), the Bedrock writer's prompt
@@ -104,9 +106,12 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `scripts/audit/README.md`.
 - `hooks/`: the Claude Code hooks `.claude/settings.json` runs, which tell a session when its
   rules are out of date (`README.md` › Rule-change notices).
-- `commit-task.ts`: `npm run commit-task`, which commits a task's work with its `Reviewed-by:`
-  trailer. `.githooks/commit-msg` refuses, without one, a task commit or a commit of Claude's
-  that changes more than `WORKLIST.md` (`README.md` › Committing task work).
+- `commit-task.ts`: `npm run commit-task`, which commits a task's work with its body and its
+  `Reviewed-by:` trailer. `.githooks/commit-msg` refuses, without one, a task commit or a commit
+  of Claude's that changes more than `WORKLIST.md` (`README.md` › Committing task work). It holds
+  the parsing of `WORKLIST.md` the other scripts share.
+- `commit-worklist.ts`: `npm run commit-worklist`, which commits `WORKLIST.md` alone with a body
+  generated from its diff, using `commit-task.ts`'s check of where it runs and its parsing.
 - `orchestrator-check.ts`: `npm run orchestrator-check`, which checks the orchestrator runs in the
   main checkout on `main`, clean and with its hooks, and lists the `doing` tasks and task
   worktrees an earlier run left (`README.md` › The orchestrator's preflight). It shares
@@ -236,9 +241,10 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
     (`server/README.md` › Tests).
   - Each such interface has one shared test suite that runs against every implementation, so the
     local one stays as strict as the AWS one: `ManualStore`'s runs against the files and against
-    DynamoDB Local, which the tests start on loopback (`server/storage/README.md`), and
+    DynamoDB Local, which the tests start on loopback (`server/storage/README.md`);
     `SpendingLedger`'s against the data folder and against DynamoDB Local
-    (`server/gateway/README.md` › The spending ledger).
+    (`server/gateway/README.md` › The spending ledger); and the runs' against leases in the
+    process and in DynamoDB Local (`server/writer/README.md` › Tests).
   - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
     adapters on purpose, or the test fails.
   - An AWS deployment runs this same server, on a Lambda Web Function behind CloudFront
