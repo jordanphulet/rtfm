@@ -11,7 +11,7 @@ export function manualRoute(store: ManualStore, runs: Runs): Route {
       const stored = await store.getManual(params.manualId);
       if (!stored) return notFound;
 
-      const writingIds = runs.writingSectionIds(stored.id);
+      const writingIds = await runs.writingSectionIds(stored.id);
       const writtenIds = new Set(await store.writtenSectionIds(stored.id));
       const statusOf = (sectionId: string): SectionStatus => {
         if (writingIds.has(sectionId)) return "writing";

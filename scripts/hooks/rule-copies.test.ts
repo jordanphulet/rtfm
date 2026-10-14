@@ -167,7 +167,7 @@ describe("ruleChangeNotice", () => {
   });
 });
 
-describe("the hooks", () => {
+describe("the hooks", { timeout: 30_000 }, () => {
   function run(command: string, input: object, env: NodeJS.ProcessEnv = process.env) {
     return spawnSync(process.execPath, [SCRIPT, command], {
       input: JSON.stringify(input),

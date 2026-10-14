@@ -30,6 +30,7 @@ describe("the DynamoDB section leases", () => {
   function environment(timing = SHORT): SectionLeases {
     const leases = createDynamoDbSectionLeases(table, timing);
     return {
+      heldElsewhere: leases.heldElsewhere,
       async take(manualId, sectionId) {
         const lease = await leases.take(manualId, sectionId);
         if (lease) onTestFinished(() => lease.release());
@@ -109,6 +110,19 @@ describe("the DynamoDB section leases", () => {
   it("refuses the holder's save into a manual that doesn't exist", async () => {
     const lease = (await environment().take("not-there", "s"))!;
     await expect(lease.saveBody("body")).rejects.toThrow('There is no manual "not-there"');
+  });
+
+  it("names the sections another environment holds, until their leases expire, but not its own", async () => {
+    const here = environment();
+    await here.take(manual.id, "mine");
+    await store.saveBody(manual.id, "w", "body");
+    await environment().take(manual.id, "t");
+    await environment(CRASHED).take(manual.id, "s");
+
+    expect(await here.heldElsewhere(manual.id)).toEqual(["s", "t"]);
+    await sleep(CRASHED.durationMs + 100);
+    expect(await here.heldElsewhere(manual.id)).toEqual(["t"]);
+    expect(await here.heldElsewhere("another-manual")).toEqual([]);
   });
 
   it("deletes the items of a manual's sections that hold only a lease", async () => {
