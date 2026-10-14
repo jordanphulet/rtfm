@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.12 — Render equations in sections
-- **Status:** doing (agent ae5b33cd876b1e085)
+- **Status:** doing (agent ae5b33cd876b1e085; done, in review by a44dd751714ff9cc9)
 - **Depends on:** —
 - **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `server/writer/**`, `package.json`,
   `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `scripts/shot.ts`
