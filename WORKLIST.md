@@ -153,7 +153,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.1 — The flaky repair test
-- **Status:** todo
+- **Status:** doing (agent a6e14796ef423fb5e)
 - **Depends on:** —
 - **Files:** `src/manual/repair.test.tsx`, `src/manual/**`
 - **Do:** `src/manual/repair.test.tsx` failed once in a full `npm test` run during IN.17 (the
