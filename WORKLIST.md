@@ -104,10 +104,11 @@ aren't RTFM's.
   refused its keys, what followed; if none was, it says so with the date range read.
 
 ### IN.25 — The Web Function can't write the passcode
-- **Status:** doing (agent a987d7eec36be8f48; approved, doc fixes)
+- **Status:** doing (agent a987d7eec36be8f48; done, being committed)
 - **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`,
-  `infra/access-stack.ts` (the comment only)
+  `infra/access-stack.ts` (the comment only), `infra/testing.ts` and its test,
+  `server/storage/README.md`
 - **Do:** the Web Function's role may put, update and delete any item of `rtfm-app`, so it could
   rewrite the passcode's item, which only `rtfm-ops` (the user's `passcode set`) should. Add a
   `Deny` of `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` on `rtfm-app` where
