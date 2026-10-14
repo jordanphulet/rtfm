@@ -103,23 +103,6 @@ aren't RTFM's.
 - **Done when:** Measured records whether Lambda sets the expiry and, if any environment was
   refused its keys, what followed; if none was, it says so with the date range read.
 
-### IN.25 — The Web Function can't write the passcode
-- **Status:** doing (agent a987d7eec36be8f48; done, being committed)
-- **Depends on:** —
-- **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`,
-  `infra/access-stack.ts` (the comment only), `infra/testing.ts` and its test,
-  `server/storage/README.md`
-- **Do:** the Web Function's role may put, update and delete any item of `rtfm-app`, so it could
-  rewrite the passcode's item, which only `rtfm-ops` (the user's `passcode set`) should. Add a
-  `Deny` of `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` on `rtfm-app` where
-  `dynamodb:LeadingKeys` includes `PASSCODE` (`ForAnyValue:StringEquals`), and update what
-  `README.md` › A passcode says can write it. Also correct the comment on `opsStatements` in
-  `infra/access-stack.ts`: `rtfm-ops` may touch the items of the `KILL_SWITCH` partition in
-  `rtfm-usage` and the `PASSCODE` partition in `rtfm-app`, not one item each. The user approved
-  this comment change; the template doesn't change.
-- **Done when:** the policy evaluator's tests show the role reading the passcode's item and every
-  other item as before, and refused each write to the `PASSCODE` partition.
-
 ## Upkeep
 
 Small fixes that keep the repo healthy.
