@@ -116,9 +116,10 @@ user revokes it, and with its activity visible to the user.
   `npm test` pass.
 
 ### LB.6 — Keep library links and activity
-- **Status:** doing (agent ad5dcc9675bc68f19; review's fixes, unify with LB.2's library.ts)
+- **Status:** doing (agent ad5dcc9675bc68f19; done, being committed)
 - **Depends on:** —
-- **Files:** `server/storage/**`, `server/gateway/sdk-boundary.test.ts`, `ARCHITECTURE.md`
+- **Files:** `server/storage/**`, `server/gateway/sdk-boundary.test.ts`, `ARCHITECTURE.md`,
+  `server/gateway/README.md`
 - **Do:** the store of links and activity, as `research/libraries.md` › The key scheme and What is
   recorded, and where describe: a link by its secret's digest (create on `attribute_not_exists`,
   find, list, revoke, keeping the item), and a library's activity (first and last use, opens and
