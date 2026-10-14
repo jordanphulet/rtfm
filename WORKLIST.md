@@ -70,7 +70,7 @@ aren't RTFM's.
 - **Done when:** the doc's Measured section records it.
 
 ### IN.24 — Record what the keys' expiry does on the deployed app
-- **Status:** doing (agent a9a8263a6eaa6741b)
+- **Status:** doing (agent a9a8263a6eaa6741b; done, being committed)
 - **Depends on:** —
 - **Files:** `research/aws-design.md`
 - **Do:** IN.21's measurement, read with `npm run ops -- logs` (no other AWS call). Since IN.21's
