@@ -23,7 +23,16 @@ import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Asset } from "aws-cdk-lib/aws-s3-assets";
 import type { Construct } from "constructs";
-import { ACCOUNT, BOUNDARY_POLICY, REGION, logGroupArn, policyArn } from "./rtfm.ts";
+import {
+  ACCOUNT,
+  BOUNDARY_POLICY,
+  REGION,
+  USAGE_TABLE,
+  USAGE_TABLE_ACTIONS,
+  USAGE_TABLE_ARN,
+  logGroupArn,
+  policyArn,
+} from "./rtfm.ts";
 
 export const APP_STACK = "RtfmApp";
 export const APP_LOG_GROUP = "/rtfm/app";
@@ -85,16 +94,18 @@ export class RtfmAppStack extends Stack {
       bucketName: APP_BUCKET,
       removalPolicy: RemovalPolicy.RETAIN,
     });
-    this.webFunction(this.appTable());
+    this.webFunction(this.keptTable("AppTable", APP_TABLE));
+    this.keptTable("UsageTable", USAGE_TABLE);
   }
 
   /**
-   * The library, kept whatever happens to the stack: nothing can delete it while its deletion
-   * protection is on, and point-in-time recovery can restore it to any second of the last 35 days.
+   * A table kept whatever happens to the stack, since it holds the library or the record of what
+   * was spent: nothing can delete it while its deletion protection is on, and point-in-time
+   * recovery can restore it to any second of the last 35 days.
    */
-  private appTable(): Table {
-    return new Table(this, "AppTable", {
-      tableName: APP_TABLE,
+  private keptTable(id: string, tableName: string): Table {
+    return new Table(this, id, {
+      tableName,
       partitionKey: { name: "pk", type: AttributeType.STRING },
       sortKey: { name: "sk", type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
@@ -124,6 +135,9 @@ export class RtfmAppStack extends Stack {
         }),
         ReadAndWriteLibrary: new PolicyDocument({
           statements: [new PolicyStatement({ actions: APP_TABLE_ACTIONS, resources: [APP_TABLE_ARN] })],
+        }),
+        ReadAndWriteUsage: new PolicyDocument({
+          statements: [new PolicyStatement({ actions: USAGE_TABLE_ACTIONS, resources: [USAGE_TABLE_ARN] })],
         }),
       },
     });

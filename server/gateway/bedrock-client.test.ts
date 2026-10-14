@@ -11,6 +11,7 @@ import type { SettleEntry } from "../storage/types.ts";
 import { collect, tempDataDir, testGatewayConfig, waitUntil } from "../testing.ts";
 import { createBedrockClient, CREDENTIAL_CHAIN_REFUSED } from "./bedrock-client.ts";
 import type { AwsCredentials } from "./credentials.ts";
+import { openFileSpendingLedger } from "./file-spending-ledger.ts";
 import { createGateway } from "./gateway.ts";
 import { prices } from "./prices.ts";
 import {
@@ -354,10 +355,9 @@ describe("Bedrock client", () => {
       const ledger = createFileLedger(dataDir, logger);
       const gateway = await createGateway({
         createClient: () => bedrockClient(),
-        ledger,
+        openSpendingLedger: () => openFileSpendingLedger({ ledger, dataDir }),
         config,
         prices,
-        dataDir,
         logger,
       });
       const result = collect(gateway.stream(job, prompt, new AbortController().signal));
@@ -474,10 +474,9 @@ describe("Bedrock client", () => {
         const shortTimeout = { ...config, idleTimeoutMs: IDLE_TIMEOUT_MS };
         const gateway = await createGateway({
           createClient: () => bedrockClient(),
-          ledger,
+          openSpendingLedger: () => openFileSpendingLedger({ ledger, dataDir }),
           config: shortTimeout,
           prices,
-          dataDir,
           logger: silentLogger,
         });
         const result = collect(gateway.stream("plan-manual", PLAN_PROMPT, new AbortController().signal));

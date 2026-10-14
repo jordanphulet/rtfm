@@ -34,6 +34,27 @@ export interface ManualStore {
   markSeeded(manualId: string): Promise<void>;
 }
 
+/**
+ * One writer per section across every environment that shares a store
+ * (`server/storage/README.md` › Section leases).
+ */
+export interface SectionLeases {
+  /** The section's lease, or undefined while another writer holds it or its body is stored. */
+  take(manualId: string, sectionId: string): Promise<SectionLease | undefined>;
+}
+
+/** A section's lease, renewed until it is released or its body is saved. */
+export interface SectionLease {
+  /**
+   * Aborts, with the reason, once the holder may no longer write: the lease is gone from storage,
+   * or it couldn't be renewed and is about to expire, before another writer can take it.
+   */
+  lost: AbortSignal;
+  /** Saves the body as `ManualStore.saveBody` does, and throws if the lease was lost. */
+  saveBody(body: string): Promise<"saved" | "already-written">;
+  release(): Promise<void>;
+}
+
 export interface UsageLedger {
   append(entry: LedgerEntry): Promise<void>;
   entriesForMonth(month: string): Promise<LedgerEntry[]>;

@@ -166,7 +166,11 @@ section. Nothing else is touched: not the ledger, not the seeding record (`serve
   (`runs.isWriting`), the answer is `409 { error: "A section of this manual is being written" }` and
   nothing changes. The reader keeps streaming, and the caller can try again once the section is
   written. Stopping the runs instead would mean sending their readers a failure and paying for calls
-  cut short, for a delete that can simply wait a few seconds.
+  cut short, for a delete that can simply wait a few seconds. The check sees the runs of the
+  environment that answers the delete. A run on another environment of the Web Function loses its
+  lease: the delete's transaction deletes the lease's item with the manual's other section items,
+  so the run's next renewal, within 5 seconds, fails, and the run is aborted mid-write and ends
+  with `failed: "error"`, storing nothing.
 - **A run that starts while the delete is under way** can't bring the manual back. The store
   removes the manual's folder in one `rename`, and `saveBody` refuses a manual that doesn't exist.
   Such a run either saved before the rename, and its body is deleted with the rest, or ends with
@@ -189,6 +193,11 @@ never opens a stream. Otherwise it opens the stream with `EventSource`.
   in the body, which is only needed for that backlog. Two tabs show the same text.
 - **Written by the time the stream opens** (another tab finished it): one `append` with the whole
   body, then `written`.
+- **Being written by another environment** of the Web Function, which holds the section's lease:
+  nothing but the heartbeat comment every 15 seconds until that environment stores the body, then
+  one `append` with the whole body and `written`. If that environment's run ends without a body,
+  this one writes the section itself and the stream goes on as an unwritten section's
+  (`server/writer/README.md` › Another environment).
 - **`written` carries nothing.** The stored body is exactly the text that was streamed, so the
   client never replaces text it has already shown.
 - **`progress`** (0–1) comes from the writer: exact for the fake, estimated for Claude.

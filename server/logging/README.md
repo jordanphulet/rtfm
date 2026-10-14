@@ -61,7 +61,9 @@ message and stack, since a signature error from AWS quotes the access key ID.
 | `model.refused` | WARN | The gateway refused a call: `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap` or `busy`) |
 | `ledger.line-skipped` | WARN | A ledger line that isn't JSON (`file`, `line`) |
 | `section.started`, `section.joined` | INFO | A run starts; a reader joins one (`listeners`, `backlogCharacters`) |
-| `section.finished`, `section.aborted` | INFO | A run ends with `written` (`placeholder`), or its last reader left; `characters` and `durationMs` |
+| `section.finished`, `section.aborted` | INFO | A run ends with `written` (`placeholder`; `elsewhere` when another environment wrote the body), or its last reader left; `characters` and `durationMs` |
+| `section.waiting`, `section.taken-over` | INFO | Another environment holds the section's lease, so the run waits for its body; the lease came free with no body, and the run took it (`durationMs` waited) |
+| `section.release-failed` | WARN | A run couldn't release its section's lease, which then expires, with the error |
 | `section.failed` | WARN for budget, ERROR | A run fails (`reason`), with the error unless the budget refused it |
 | `section.refused` | WARN | A run beyond `maxConcurrentRuns` (`activeRuns`) |
 | `librarian.reply` | INFO, WARN for budget, ERROR | A reply ends: `outcome` (`done`, `aborted`, `budget` or `error`), `messages`, `turns`, `tools` (the tools the model called, comma-separated), `durationMs`; a failed reply's error |

@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import { createModels, startServer } from "./app.ts";
 import { config } from "./config.ts";
 import { CredentialsMissing } from "./gateway/credentials.ts";
+import { createDynamoDbSpendingLedger, setKillSwitch } from "./gateway/dynamodb-spending-ledger.ts";
+import { testUsageTable } from "./gateway/dynamodb-testing.ts";
 import { killSwitchPath } from "./gateway/gateway.ts";
 import {
   FAKE_MODEL,
@@ -16,6 +18,7 @@ import {
   type ModelRequest,
 } from "./gateway/types.ts";
 import { silentLogger } from "./logging/logger.ts";
+import { DYNAMODB_LOCAL_CREDENTIALS } from "./storage/dynamodb-testing.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { DataFolderInUse, LOCK_FILE_NAME } from "./storage/lock.ts";
@@ -37,6 +40,29 @@ describe("starting with Bedrock models", () => {
       ModelNotPriced,
     );
     expect(await readdir(dataDir)).not.toContain(LOCK_FILE_NAME);
+  });
+
+  it("keeps their spending in rtfm-usage, never in the data folder: its kill switch and caps are the table's", async () => {
+    const dataDir = await tempDataDir();
+    const table = await testUsageTable();
+    const credentialsFile = pathToFileURL(path.join(dataDir, ".env.local"));
+    const { accessKeyId, secretAccessKey } = DYNAMODB_LOCAL_CREDENTIALS;
+    await writeFile(
+      credentialsFile,
+      `AWS_ACCESS_KEY_ID=${accessKeyId}\nAWS_SECRET_ACCESS_KEY=${secretAccessKey}\nAWS_REGION=${table.region}\n`,
+    );
+    const bedrockConfig = { ...config, dataDir, models: "bedrock" as const, usageTable: { name: table.name, endpoint: table.endpoint } };
+    const store = createFileManualStore(dataDir, silentLogger);
+    const models = await createModels(bedrockConfig, store, silentLogger, credentialsFile);
+    const askLibrarian = () => collect(models.librarian.stream("librarian", GREETING, new AbortController().signal));
+
+    await setKillSwitch(table, true);
+    await expect(askLibrarian()).rejects.toMatchObject({ reason: "kill-switch" });
+    await setKillSwitch(table, false);
+    const spentToday = { callId: "spent", reservedAt: new Date().toISOString(), job: "librarian", model: config.jobs.librarian.model };
+    await createDynamoDbSpendingLedger(table).importCall({ ...spentToday, worstCaseUsd: config.caps.dailyUsd });
+    await expect(askLibrarian()).rejects.toMatchObject({ reason: "daily-cap" });
+    expect(await readdir(dataDir)).not.toContain("ledger");
   });
 
   it("refuses to start without credentials", async () => {

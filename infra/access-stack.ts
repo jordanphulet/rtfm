@@ -19,6 +19,8 @@ import {
   RTFM_RESOURCES,
   RTFM_STACKS,
   STAGING_BUCKET,
+  USAGE_TABLE_ACTIONS,
+  USAGE_TABLE_ARN,
   bucketArns,
   roleArn,
 } from "./rtfm.ts";
@@ -45,7 +47,12 @@ export class RtfmAccessStack extends Stack {
       managedPolicyName: BEDROCK_POLICY,
       statements: bedrockPolicyStatements(),
     });
-    new User(this, "LocalUser", { userName: LOCAL_USER, managedPolicies: [bedrock] });
+    const local = new User(this, "LocalUser", { userName: LOCAL_USER, managedPolicies: [bedrock] });
+    new Policy(this, "LocalUsagePolicy", {
+      policyName: "read-write-rtfm-usage",
+      users: [local],
+      statements: [new PolicyStatement({ actions: USAGE_TABLE_ACTIONS, resources: [USAGE_TABLE_ARN] })],
+    });
     const agent = new User(this, "AgentUser", { userName: AGENT_USER });
     new Role(this, "ReadRole", {
       roleName: READ_ROLE,

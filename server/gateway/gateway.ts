@@ -1,11 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Logger } from "../logging/logger.ts";
-import type { SettleEntry, UsageLedger } from "../storage/types.ts";
-import { monthOf } from "../storage/file-ledger.ts";
-import { callsFrom, chargedUsd, dayOf } from "./ledger-calls.ts";
+import type { SettleEntry } from "../storage/types.ts";
 import { costUsd, worstCaseCostUsd, type ModelPrice, type PriceTable, type TokenCounts } from "./prices.ts";
+import type { SpendingLedger } from "./spending-ledger.ts";
 import {
   GatewayBusy,
   ModelNotPriced,
@@ -25,17 +23,19 @@ export interface Gateway {
 }
 
 export interface RunningGateway extends Gateway {
-  /** Resolves once no call is running and every call's settle has been written to the ledger. */
+  /** Resolves once no call is running and every call's settle has been written to the spending ledger. */
   idle(): Promise<void>;
 }
 
 export interface GatewayDeps {
-  /** Called only once every job's model is in the price table, so an unpriced model is refused before any secret is read. */
+  /**
+   * Both called only once every job's model is in the price table, so an unpriced model is refused
+   * before any secret is read.
+   */
   createClient: () => ModelClient;
-  ledger: UsageLedger;
+  openSpendingLedger: () => Promise<SpendingLedger>;
   config: GatewayConfig;
   prices: PriceTable;
-  dataDir: string;
   logger: Logger;
   now?: () => Date;
 }
@@ -59,61 +59,53 @@ const MESSAGE_FRAMING_TOKENS = 10;
 const BLOCK_FRAMING_TOKENS = 10;
 const TOKEN_FIELDS = ["inputTokens", "outputTokens", "cacheWriteTokens", "cacheReadTokens"] as const;
 
+/** The data folder's kill switch (`file-spending-ledger.ts`). */
 export function killSwitchPath(dataDir: string): string {
   return path.join(dataDir, "STOP");
 }
 
 export async function createGateway({
   createClient,
-  ledger,
+  openSpendingLedger,
   config,
   prices,
-  dataDir,
   logger,
   now = () => new Date(),
 }: GatewayDeps): Promise<RunningGateway> {
   for (const { model } of Object.values(config.jobs)) {
     if (!(model in prices.models)) throw new ModelNotPriced(model);
   }
+  const spending = await openSpendingLedger();
   const client = createClient();
 
-  const committedUsd = new Map<string, number>();
   let runningCalls = 0;
   const idleWaiters: (() => void)[] = [];
 
-  for (const call of callsFrom(await ledger.entriesForMonth(monthOf(now().toISOString())))) {
-    commit(call.reservedAt, chargedUsd(call));
-  }
-
-  function commit(reservedAt: string, usd: number) {
-    for (const period of [dayOf(reservedAt), monthOf(reservedAt)]) {
-      committedUsd.set(period, (committedUsd.get(period) ?? 0) + usd);
-    }
-  }
-
-  function wouldCross(period: string, worstCaseUsd: number, capUsd: number): boolean {
-    return (committedUsd.get(period) ?? 0) + worstCaseUsd > capUsd;
-  }
-
-  function reserve(job: Job, prompt: ModelPrompt): Reservation {
-    if (existsSync(killSwitchPath(dataDir))) throw new SpendingRefused("kill-switch");
+  /**
+   * Takes a concurrency slot at once, so calls starting together can't all slip under the limit,
+   * then reserves the call's worst case in the spending ledger, which checks the kill switch and
+   * the caps.
+   */
+  async function reserve(job: Job, prompt: ModelPrompt): Promise<Reservation> {
     if (runningCalls >= config.maxConcurrentCalls) throw new GatewayBusy(config.maxConcurrentCalls);
+    runningCalls++;
 
     const { model, maxTokens } = config.jobs[job];
     const price = prices.models[model]!;
     const inputBound = inputTokenBound(prompt, price.toolUseSystemPromptTokens);
     const worstCaseUsd = worstCaseCostUsd(price, inputBound, maxTokens);
+    const callId = randomUUID();
     const reservedAt = now().toISOString();
-    if (wouldCross(dayOf(reservedAt), worstCaseUsd, config.caps.dailyUsd)) throw new SpendingRefused("daily-cap");
-    if (wouldCross(monthOf(reservedAt), worstCaseUsd, config.caps.monthlyUsd)) throw new SpendingRefused("monthly-cap");
-
-    commit(reservedAt, worstCaseUsd);
-    runningCalls++;
-    return { callId: randomUUID(), reservedAt, job, model, maxTokens, price, inputBound, worstCaseUsd };
+    try {
+      await spending.reserve({ kind: "reserve", callId, reservedAt, job, model, worstCaseUsd }, config.caps);
+    } catch (error) {
+      endCall();
+      throw error;
+    }
+    return { callId, reservedAt, job, model, maxTokens, price, inputBound, worstCaseUsd };
   }
 
-  function release(reservation: Reservation, usd: number) {
-    commit(reservation.reservedAt, usd - reservation.worstCaseUsd);
+  function endCall() {
     runningCalls--;
     if (runningCalls === 0) for (const resolve of idleWaiters.splice(0)) resolve();
   }
@@ -123,12 +115,14 @@ export async function createGateway({
     return new Promise((resolve) => idleWaiters.push(resolve));
   }
 
-  function reserveOrLogRefusal(job: Job, prompt: ModelPrompt): Reservation {
+  async function reserveOrLogRefusal(job: Job, prompt: ModelPrompt): Promise<Reservation> {
     try {
-      return reserve(job, prompt);
+      return await reserve(job, prompt);
     } catch (error) {
-      const reason = error instanceof SpendingRefused ? error.reason : "busy";
-      logger.warn("model.refused", (error as Error).message, { job, model: config.jobs[job].model, reason });
+      if (error instanceof SpendingRefused || error instanceof GatewayBusy) {
+        const reason = error instanceof SpendingRefused ? error.reason : "busy";
+        logger.warn("model.refused", error.message, { job, model: config.jobs[job].model, reason });
+      }
       throw error;
     }
   }
@@ -150,33 +144,19 @@ export async function createGateway({
     const fields = { callId, job, model, outcome, ...tokens, usd, estimated, durationMs };
     log("model.call", `${job} call ${outcome}`, fields, failure);
     try {
-      await ledger.append({
-        kind: "settle",
-        callId,
-        reservedAt,
-        at,
-        job,
-        model,
-        ...tokens,
-        usd,
-        outcome,
-        estimated,
-      });
+      await spending.settle(
+        { kind: "settle", callId, reservedAt, at, job, model, ...tokens, usd, outcome, estimated },
+        reservation.worstCaseUsd,
+      );
     } finally {
-      release(reservation, usd);
+      endCall();
     }
   }
 
   async function* stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncGenerator<ModelEvent> {
     signal.throwIfAborted();
-    const reservation = reserveOrLogRefusal(job, prompt);
-    const { callId, reservedAt, model, maxTokens, worstCaseUsd } = reservation;
-    try {
-      await ledger.append({ kind: "reserve", callId, reservedAt, job, model, worstCaseUsd });
-    } catch (error) {
-      release(reservation, 0);
-      throw error;
-    }
+    const reservation = await reserveOrLogRefusal(job, prompt);
+    const { model, maxTokens } = reservation;
 
     const reported: Partial<TokenCounts> = {};
     let stopped = false;
