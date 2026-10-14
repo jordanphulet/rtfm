@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.9 — Open a link in the browser
-- **Status:** doing (agent a64276ed31ca4654f; approved, small fixes)
+- **Status:** doing (agent a64276ed31ca4654f; done, being committed)
 - **Depends on:** —
 - **Files:** `src/App.tsx`, `src/link/**`, `src/passcode/**`, `src/reportErrors.ts` and its test,
   `DESIGN.md`, `README.md`, `scripts/shot.ts`, `scripts/screenshots.ts`, `ARCHITECTURE.md`
