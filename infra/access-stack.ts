@@ -188,7 +188,10 @@ function readStatements(): PolicyStatement[] {
   ];
 }
 
-/** The kill switch's item in `rtfm-usage` and the passcode's in `rtfm-app`, and no other item or table. */
+/**
+ * The items of the `KILL_SWITCH` partition in `rtfm-usage` and of the `PASSCODE` partition in
+ * `rtfm-app`, and no other item or table.
+ */
 function opsStatements(): PolicyStatement[] {
   return [
     onlyPartition("KillSwitch", USAGE_TABLE_ARN, KILL_SWITCH_PARTITION, [

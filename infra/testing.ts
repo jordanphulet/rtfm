@@ -27,6 +27,7 @@ export const INLINE_TEMPLATE_BUDGET = 40 * 1024;
 
 const list = (value: Strings | undefined): string[] => (value === undefined ? [] : [value].flat());
 const FOR_ALL_VALUES = "ForAllValues:";
+const FOR_ANY_VALUE = "ForAnyValue:";
 
 function wildcardMatches(pattern: unknown, value: string, ignoreCase: boolean): boolean {
   if (typeof pattern !== "string") throw new Error(`Can't evaluate the pattern ${JSON.stringify(pattern)}`);
@@ -42,16 +43,21 @@ function coversAction(statement: Statement, action: string): boolean {
 /**
  * `StringEquals` compares exactly; the `Like` and `Arn` operators read `*` and `?` as wildcards. A
  * negated operator holds when the key is missing, as in IAM. `ForAllValues` holds when every value
- * of a multivalued key does, and so when it has none; `Null` treats a key with no values as missing.
+ * of a multivalued key does, and so when it has none; `ForAnyValue` holds when at least one does,
+ * and so never when it has none; `Null` treats a key with no values as missing.
  */
 function conditionHolds(operator: string, key: string, values: string[], context: RequestContext): boolean {
   if (operator.startsWith(FOR_ALL_VALUES)) {
     const single = operator.slice(FOR_ALL_VALUES.length);
     return list(context[key]).every((value) => conditionHolds(single, key, values, { [key]: value }));
   }
+  if (operator.startsWith(FOR_ANY_VALUE)) {
+    const single = operator.slice(FOR_ANY_VALUE.length);
+    return list(context[key]).some((value) => conditionHolds(single, key, values, { [key]: value }));
+  }
   if (operator === "Null") return (list(context[key]).length === 0) === (values[0] === "true");
   const actual = context[key];
-  if (Array.isArray(actual)) throw new Error(`${key} has several values, so ${operator} needs ForAllValues`);
+  if (Array.isArray(actual)) throw new Error(`${key} has several values, so ${operator} needs ForAllValues or ForAnyValue`);
   const equalsAny = actual !== undefined && values.includes(actual);
   const matchesAny = actual !== undefined && values.some((value) => wildcardMatches(value, actual, false));
   switch (operator) {

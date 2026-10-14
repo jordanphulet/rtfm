@@ -166,7 +166,9 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
 - **What the Web Function's role may do** on the table is exactly what the store and the leases
   do: `GetItem`, `Query`, `PutItem`, `UpdateItem` and `DeleteItem`, which also cover the
   transactions' parts and the read of the passcode's digest (`infra/app-stack.ts`). They cover
-  every item of the table, so the role could also read or write the passcode's.
+  every item of the table, but a deny keeps the role from writing any item of the passcode's
+  partition, `PASSCODE`: it reads the digest and never writes it (`infra/README.md` › The Web
+  Function's role and the passcode).
 
 The client (`createDynamoDbManualStore(table)`) takes everything from the `DynamoDbTable` it is
 given: the table's name, region, endpoint and credentials. The credentials are fixed keys
