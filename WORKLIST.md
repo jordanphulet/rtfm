@@ -171,6 +171,20 @@ aren't RTFM's.
   the headers until the first byte, IN.10).
 - **Done when:** the doc's Measured section records it.
 
+### IN.23 — Close the delete race, and the section route's status
+- **Status:** todo
+- **Depends on:** IN.19
+- **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
+- **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
+  - a lease taken between the delete's `409` check and its transaction: condition each section
+    item's `Delete` in `deleteManual`'s transaction on `attribute_exists(body) OR leaseExpiresAt <
+    :now`, and answer `409` when that cancels it; and say what remains (a lease taken after the
+    delete's query, whose run's save then fails after a full paid section);
+  - the section route's `statusOf` sees only this environment's runs: use the lease attributes the
+    section item's strongly consistent read already returns, so a section written elsewhere shows
+    as writing.
+- **Done when:** the runs' shared suite covers both on both implementations, and `npm test` passes.
+
 ## Upkeep
 
 Small fixes that keep the repo healthy.
