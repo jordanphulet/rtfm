@@ -123,7 +123,7 @@ aren't RTFM's.
 
 ### IN.20 — Claude on Bedrock in the deployed app
 - **Status:** todo
-- **Depends on:** IN.10, IN.14, IN.15, IN.19, IN.5 (the user may drop IN.5)
+- **Depends on:** IN.10, IN.14, IN.15, IN.19
 - **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
   `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
