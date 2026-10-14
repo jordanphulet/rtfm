@@ -14,11 +14,14 @@ import {
 import { testAppTable } from "../storage/dynamodb-testing.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { createInProcessLeases } from "../storage/in-process-leases.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
-import { capturingLogger, recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "../testing.ts";
+import {
+  capturingLogger, OTHER_UNWRITTEN_ID, recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil,
+} from "../testing.ts";
 import { fakeBody } from "./fake.ts";
-import { createRuns, type Runs, type Waiting } from "./runs.ts";
+import { createRuns, type LibraryScope, type Runs, type ServerRuns, type Waiting } from "./runs.ts";
 import { WriteFailed, type SectionWriter } from "./types.ts";
 
 const GEESE_ID = "negotiating-with-geese";
@@ -49,15 +52,15 @@ const failingWriter: SectionWriter = {
 };
 
 /** A writer that sends its first chunk, then waits until `finish` is called before sending the rest. */
-function heldWriter() {
+function heldWriter(first = "One ", rest = "two.") {
   let finish = () => {};
   const finished = new Promise<void>((resolve) => (finish = resolve));
   const writer: SectionWriter = {
     async *write(_manual, _sectionId, signal) {
-      yield { text: "One ", progress: 0.5 };
+      yield { text: first, progress: 0.5 };
       await Promise.race([finished, new Promise((resolve) => signal.addEventListener("abort", resolve))]);
       signal.throwIfAborted();
-      yield { text: "two.", progress: 1 };
+      yield { text: rest, progress: 1 };
     },
   };
   return { writer, finish };
@@ -65,29 +68,59 @@ function heldWriter() {
 
 /**
  * Where the runs' rules are checked: one server alone on its store, with leases in its process, as
- * on this machine; and two environments sharing one table, each with its own leases.
+ * on this machine; and two environments sharing one table, each with its own leases. Each has the
+ * admin's library and a recipient's, seeded alike.
  */
 interface Setup {
+  /** The admin's manuals. */
   store: ManualStore;
+  /** The recipient's manuals. */
+  recipientStore: ManualStore;
   /** Whether both places are one process, so that their readers share one run. */
   oneProcess: boolean;
-  /** Two places a reader's request may reach, each running the section's writer through the same `writer`. */
-  environments(writer: SectionWriter): [Runs, Runs];
+  /**
+   * Two places a reader's request may reach, each running the admin's sections through `writer`,
+   * and the recipient's library in each, writing through `recipientWriter`.
+   */
+  environments(
+    writer: SectionWriter,
+    options?: { recipientWriter?: SectionWriter; maxConcurrentRuns?: number },
+  ): [Environment, Environment];
 }
+
+/** One place's runs: the admin's library's, and the recipient's from the same `createRuns`. */
+interface Environment {
+  runs: Runs;
+  recipient: Runs;
+}
+
+const RECIPIENT_LIBRARY_ID = "acme";
 
 const setups: [string, () => Promise<Setup>][] = [
   [
     "one process, leases in memory",
     async () => {
-      const store = createFileManualStore(await tempDataDir(), silentLogger);
-      await seedStore(store);
+      const dataDir = await tempDataDir();
+      const store = createFileManualStore(dataDir, silentLogger);
+      const recipientStore = createFileManualStore(dataDir, silentLogger, RECIPIENT_LIBRARY_ID);
+      await Promise.all([seedStore(store), seedStore(recipientStore)]);
       return {
         store,
+        recipientStore,
         oneProcess: true,
-        environments(writer) {
+        environments(writer, { recipientWriter = writer, maxConcurrentRuns = 3 } = {}) {
           const leases = createInProcessLeases(store);
-          const runs = createRuns({ store, leases, writer, maxConcurrentRuns: 3, logger: silentLogger });
-          return [runs, runs];
+          const runs = createRuns({ store, leases, writer, maxConcurrentRuns, logger: silentLogger });
+          const recipient = runs.forLibrary({
+            libraryId: RECIPIENT_LIBRARY_ID,
+            store: recipientStore,
+            leases: createInProcessLeases(recipientStore),
+            writer: recipientWriter,
+          });
+          return [
+            { runs, recipient },
+            { runs, recipient },
+          ];
         },
       };
     },
@@ -97,11 +130,19 @@ const setups: [string, () => Promise<Setup>][] = [
     async () => {
       const table = await testAppTable();
       const store = createDynamoDbManualStore(table);
-      await seedStore(store);
+      const recipientStore = createDynamoDbManualStore(table, RECIPIENT_LIBRARY_ID);
+      await Promise.all([seedStore(store), seedStore(recipientStore)]);
       return {
         store,
+        recipientStore,
         oneProcess: false,
-        environments: (writer) => [dynamoDbEnvironment(table, writer), dynamoDbEnvironment(table, writer)],
+        environments(writer, { recipientWriter = writer, maxConcurrentRuns = 3 } = {}) {
+          const environment = () => {
+            const runs = dynamoDbEnvironment(table, writer, SHORT_LEASE, silentLogger, maxConcurrentRuns);
+            return { runs, recipient: runs.forLibrary(dynamoDbRecipient(table, recipientWriter)) };
+          };
+          return [environment(), environment()];
+        },
       };
     },
   ],
@@ -112,15 +153,25 @@ function dynamoDbEnvironment(
   writer: SectionWriter,
   timing = SHORT_LEASE,
   logger = silentLogger,
-): Runs {
+  maxConcurrentRuns = 3,
+): ServerRuns {
   return createRuns({
     store: createDynamoDbManualStore(table),
     leases: createDynamoDbSectionLeases(table, timing),
     writer,
-    maxConcurrentRuns: 3,
+    maxConcurrentRuns,
     logger,
     waiting: SHORT_WAIT,
   });
+}
+
+function dynamoDbRecipient(table: DynamoDbTable, writer: SectionWriter, timing = SHORT_LEASE): LibraryScope {
+  return {
+    libraryId: RECIPIENT_LIBRARY_ID,
+    store: createDynamoDbManualStore(table, RECIPIENT_LIBRARY_ID),
+    leases: createDynamoDbSectionLeases(table, timing, RECIPIENT_LIBRARY_ID),
+    writer,
+  };
 }
 
 describe.each(setups)("runs in %s", (_name, newSetup) => {
@@ -134,7 +185,7 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
 
   it("starts one writer when two runs race for one section, and both readers get its body", async () => {
     const writer = recordingWriter();
-    const [one, other] = setup.environments(writer);
+    const [{ runs: one }, { runs: other }] = setup.environments(writer);
     const first = recorder();
     const second = recorder();
 
@@ -154,7 +205,7 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
   it("writes the section for the reader who stays when the other reader's run is aborted", async () => {
     const held = heldWriter();
     const writer = recordingWriter(held.writer);
-    const [one, other] = setup.environments(writer);
+    const [{ runs: one }, { runs: other }] = setup.environments(writer);
     const leaving = recorder();
     const staying = recorder();
 
@@ -173,7 +224,7 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
   });
 
   it("streams a placeholder to both readers and stores it for neither", async () => {
-    const [one, other] = setup.environments(recordingWriter());
+    const [{ runs: one }, { runs: other }] = setup.environments(recordingWriter());
     const geese = (await setup.store.getManual(GEESE_ID))!;
     const sectionId = geese.chapters[0].sections[0].id;
     const first = recorder();
@@ -189,7 +240,7 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
 
   it("shows a section one place is writing as writing in the other, which refuses to delete its manual", async () => {
     const held = heldWriter();
-    const [one, other] = setup.environments(held.writer);
+    const [{ runs: one }, { runs: other }] = setup.environments(held.writer);
     const reader = recorder();
     const statusesSeenByOther = async () => {
       const manualResponse = await request(manualRoute(setup.store, other));
@@ -214,7 +265,7 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
 
   it("refuses a delete whose check ran just before a section of the manual started being written", async () => {
     const held = heldWriter();
-    const [one, other] = setup.environments(held.writer);
+    const [{ runs: one }, { runs: other }] = setup.environments(held.writer);
     const reader = recorder();
     const checkedJustBefore: Runs = { ...other, isWriting: async () => false };
 
@@ -234,7 +285,7 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
   });
 
   it("fails both readers when the writer fails, storing nothing", async () => {
-    const [one, other] = setup.environments(failingWriter);
+    const [{ runs: one }, { runs: other }] = setup.environments(failingWriter);
     const first = recorder();
     const second = recorder();
 
@@ -247,6 +298,75 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
     expect(first.events.at(-1)).toEqual({ event: "failed", data: { reason: "budget" } });
     expect(second.events.at(-1)).toEqual({ event: "failed", data: { reason: "budget" } });
     expect(await setup.store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBeUndefined();
+  });
+
+  describe("in two libraries", () => {
+    let recipientManual: StoredManual;
+
+    beforeEach(async () => {
+      recipientManual = (await setup.recipientStore.getManual(SAMPLE_ID))!;
+    });
+
+    it("writes the same section in both at once, each into its own library, counted toward the one limit", async () => {
+      const adminWriter = heldWriter("The admin's ", "section.");
+      const recipientWriter = heldWriter("The recipient's ", "section.");
+      const [{ runs, recipient }] = setup.environments(adminWriter.writer, {
+        recipientWriter: recipientWriter.writer,
+        maxConcurrentRuns: 2,
+      });
+      const adminReader = recorder();
+      const recipientReader = recorder();
+      const refused = recorder();
+
+      await Promise.all([
+        runs.join(manual, UNWRITTEN_ID, adminReader.listener),
+        recipient.join(recipientManual, UNWRITTEN_ID, recipientReader.listener),
+      ]);
+      await waitUntil(() => adminReader.events.length > 0 && recipientReader.events.length > 0, RUN_ENDS_WITHIN_MS);
+      await runs.join(manual, OTHER_UNWRITTEN_ID, refused.listener);
+      adminWriter.finish();
+      recipientWriter.finish();
+      await waitUntil(() => adminReader.last() === "written" && recipientReader.last() === "written", RUN_ENDS_WITHIN_MS);
+
+      expect(refused.events).toEqual([{ event: "failed", data: { reason: "error" } }]);
+      expect(adminReader.text()).toBe("The admin's section.");
+      expect(recipientReader.text()).toBe("The recipient's section.");
+      expect(await setup.store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe("The admin's section.");
+      expect(await setup.recipientStore.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe("The recipient's section.");
+    });
+
+    it("never shows a section one library is writing as busy in the other, in either place", async () => {
+      const adminWriter = heldWriter("The admin's ", "section.");
+      const recipientWriter = heldWriter("The recipient's ", "section.");
+      const [one, other] = setup.environments(adminWriter.writer, { recipientWriter: recipientWriter.writer });
+      const adminReader = recorder();
+      const recipientReader = recorder();
+      const recipientSeenFrom = async ({ recipient }: Environment) => ({
+        status: await recipient.statusOf(SAMPLE_ID, UNWRITTEN_ID),
+        writing: await recipient.writingSectionIds(SAMPLE_ID),
+        isWriting: await recipient.isWriting(SAMPLE_ID),
+      });
+      const notWriting = { status: "unwritten", writing: new Set(), isWriting: false };
+
+      await one.runs.join(manual, UNWRITTEN_ID, adminReader.listener);
+      await waitUntil(() => adminReader.events.length > 0, RUN_ENDS_WITHIN_MS);
+      expect(await recipientSeenFrom(one)).toEqual(notWriting);
+      expect(await recipientSeenFrom(other)).toEqual(notWriting);
+
+      await other.recipient.join(recipientManual, UNWRITTEN_ID, recipientReader.listener);
+      await waitUntil(() => recipientReader.events.length > 0, RUN_ENDS_WITHIN_MS);
+      adminWriter.finish();
+      await waitUntil(() => adminReader.last() === "written", RUN_ENDS_WITHIN_MS);
+      expect(await one.runs.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("written");
+      expect(await one.recipient.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("writing");
+      expect(await one.runs.isWriting(SAMPLE_ID)).toBe(false);
+
+      recipientWriter.finish();
+      await waitUntil(() => recipientReader.last() === "written", RUN_ENDS_WITHIN_MS);
+      expect(recipientReader.text()).toBe("The recipient's section.");
+      expect(await setup.store.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe("The admin's section.");
+      expect(await setup.recipientStore.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe("The recipient's section.");
+    });
   });
 });
 
@@ -262,8 +382,8 @@ describe("runs in two environments", () => {
   });
 
   /** A lease taken by an environment that then stopped renewing it, as one that crashed. */
-  async function crashedEnvironmentsLease(durationMs: number) {
-    const leases = createDynamoDbSectionLeases(table, { durationMs, renewEveryMs: 60 * 60_000 });
+  async function crashedEnvironmentsLease(durationMs: number, libraryId = ADMIN_LIBRARY_ID) {
+    const leases = createDynamoDbSectionLeases(table, { durationMs, renewEveryMs: 60 * 60_000 }, libraryId);
     const lease = await leases.take(SAMPLE_ID, UNWRITTEN_ID);
     onTestFinished(() => lease?.release());
     expect(lease).toBeDefined();
@@ -309,6 +429,34 @@ describe("runs in two environments", () => {
       "section.taken-over",
       "section.finished",
     ]);
+  });
+
+  it("takes over a recipient library's section whose lease expires unrenewed, leaving the admin's alone", async () => {
+    await crashedEnvironmentsLease(500, RECIPIENT_LIBRARY_ID);
+    const recipientStore = createDynamoDbManualStore(table, RECIPIENT_LIBRARY_ID);
+    await seedStore(recipientStore);
+    const writer = recordingWriter();
+    const reader = recorder();
+    const { logger, entries } = capturingLogger();
+    const admin = dynamoDbEnvironment(table, recordingWriter(), SHORT_LEASE, logger);
+    const recipient = admin.forLibrary(dynamoDbRecipient(table, writer));
+
+    await recipient.join((await recipientStore.getManual(SAMPLE_ID))!, UNWRITTEN_ID, reader.listener);
+    await waitUntil(() => entries.some(({ event }) => event === "section.waiting"), RUN_ENDS_WITHIN_MS);
+    expect(await admin.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("unwritten");
+    await waitUntil(() => reader.last() === "written", RUN_ENDS_WITHIN_MS);
+
+    const body = await fakeBody(SAMPLE_ID, UNWRITTEN_ID);
+    expect(writer.signals).toHaveLength(1);
+    expect(reader.text()).toBe(body);
+    expect(await recipientStore.getBody(SAMPLE_ID, UNWRITTEN_ID)).toBe(body);
+    expect(await createDynamoDbManualStore(table).getBody(SAMPLE_ID, UNWRITTEN_ID)).toBeUndefined();
+    expect(entries.map(({ event, libraryId }) => ({ event, libraryId }))).toEqual(
+      ["section.started", "section.waiting", "section.taken-over", "section.finished"].map((event) => ({
+        event,
+        libraryId: RECIPIENT_LIBRARY_ID,
+      })),
+    );
   });
 
   it("fails a reader who waits longer than the limit", async () => {

@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SectionEvent } from "../api/types.ts";
 import { silentLogger, type LogEntry } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
+import { createInProcessLeases } from "../storage/in-process-leases.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
 import {
@@ -328,6 +330,7 @@ describe("runs", () => {
         { level: "INFO", event: "section.joined", sectionId: UNWRITTEN_ID },
         { level: "INFO", event: "section.finished", sectionId: UNWRITTEN_ID },
       ]);
+      expect(entries.map(({ libraryId }) => libraryId)).toEqual([ADMIN_LIBRARY_ID, ADMIN_LIBRARY_ID, ADMIN_LIBRARY_ID]);
       expect(entries[1]).toMatchObject({ manualId: SAMPLE_ID, listeners: 2 });
       expect(entries[2]).toMatchObject({
         manualId: SAMPLE_ID,
@@ -362,6 +365,33 @@ describe("runs", () => {
       ]);
       expect(entries.at(-1)).toMatchObject({ reason: "budget" });
       expect(entries.at(-1)).not.toHaveProperty("error");
+    });
+
+    it("logs a recipient library's runs with its libraryId, a refused one included", async () => {
+      const { logger, entries } = capturingLogger();
+      const writer = recordingWriter();
+      const runs = createRuns({ store, writer, maxConcurrentRuns: 1, logger });
+      const recipientStore = createFileManualStore(dataDir, silentLogger, "acme");
+      await seedStore(recipientStore);
+      const recipient = runs.forLibrary({
+        libraryId: "acme",
+        store: recipientStore,
+        leases: createInProcessLeases(recipientStore),
+        writer,
+      });
+      const recipientManual = (await recipientStore.getManual(SAMPLE_ID))!;
+      const reader = recorder();
+
+      await recipient.join(recipientManual, UNWRITTEN_ID, reader.listener);
+      await recipient.join(recipientManual, OTHER_UNWRITTEN_ID, recorder().listener);
+      await waitUntil(() => reader.last() === "written");
+
+      expect(entries.map(({ event, libraryId }) => ({ event, libraryId }))).toEqual([
+        { event: "section.started", libraryId: "acme" },
+        { event: "section.refused", libraryId: "acme" },
+        { event: "section.finished", libraryId: "acme" },
+      ]);
+      expect(entries[0].message).toBe(`Started acme/${SAMPLE_ID}/${UNWRITTEN_ID}`);
     });
   });
 });

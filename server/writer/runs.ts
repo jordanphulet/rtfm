@@ -2,18 +2,33 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { SectionEvent, SectionStatus } from "../api/types.ts";
 import type { Logger } from "../logging/logger.ts";
 import { createInProcessLeases } from "../storage/in-process-leases.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import type { ManualStore, SectionLease, SectionLeases, StoredManual } from "../storage/types.ts";
 import { WriteFailed, type SectionWriter } from "./types.ts";
 
 export type Listener = (event: SectionEvent) => void;
 export type Leave = () => void;
 
+/** What a run reads, leases, writes and saves through: one library's manuals and its section writer. */
+export interface LibraryScope {
+  libraryId: string;
+  store: ManualStore;
+  leases: SectionLeases;
+  writer: SectionWriter;
+}
+
+/** The runs of one library. */
 export interface Runs {
   join(manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave>;
   statusOf(manualId: string, sectionId: string): Promise<SectionStatus>;
   /** The sections of a manual being written here or in another environment. */
   writingSectionIds(manualId: string): Promise<Set<string>>;
   isWriting(manualId: string): Promise<boolean>;
+}
+
+/** The server's runs: the admin's library's, and `forLibrary` for any other's, sharing one map and limit. */
+export interface ServerRuns extends Runs {
+  forLibrary(library: LibraryScope): Runs;
 }
 
 /**
@@ -28,6 +43,7 @@ export interface Waiting {
 export const WAITING: Waiting = { pollEveryMs: 1_000, limitMs: 120_000 };
 
 interface Run {
+  library: LibraryScope;
   manualId: string;
   sectionId: string;
   startedAt: number;
@@ -43,6 +59,11 @@ interface Run {
 const WRITTEN = "written";
 const nothingToLeave: Leave = () => {};
 
+/**
+ * The runs of every library the server holds, so `maxConcurrentRuns` counts every section being
+ * written whatever its library. What it returns acts in the admin's library, the one made of
+ * `store`, `leases` and `writer`; `forLibrary` gives the runs of another.
+ */
 export function createRuns({
   store,
   writer,
@@ -57,24 +78,25 @@ export function createRuns({
   logger: Logger;
   leases?: SectionLeases;
   waiting?: Waiting;
-}): Runs {
+}): ServerRuns {
   const runs = new Map<string, Run | typeof WRITTEN>();
 
-  async function join(manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave> {
-    const key = runKey(manual.id, sectionId);
+  async function join(library: LibraryScope, manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave> {
+    const key = runKey(library.libraryId, manual.id, sectionId);
     const runBefore = runs.get(key);
     if (runBefore !== undefined && runBefore !== WRITTEN) return joinRun(key, runBefore, listener);
 
-    const storedBody = await store.getBody(manual.id, sectionId);
+    const storedBody = await library.store.getBody(manual.id, sectionId);
     if (storedBody !== undefined) return sendWholeBody(listener, storedBody);
 
     const runAfter = runs.get(key);
-    if (runAfter === WRITTEN) return sendWrittenBody(key, manual, sectionId, listener);
+    if (runAfter === WRITTEN) return sendWrittenBody(key, library, manual, sectionId, listener);
     if (runAfter !== undefined) return joinRun(key, runAfter, listener);
 
     const activeRuns = activeRunCount();
     if (activeRuns >= maxConcurrentRuns) {
       logger.warn("section.refused", `Refused ${key}: ${activeRuns} sections are already being written`, {
+        libraryId: library.libraryId,
         manualId: manual.id,
         sectionId,
         activeRuns,
@@ -82,14 +104,20 @@ export function createRuns({
       listener({ event: "failed", data: { reason: "error" } });
       return nothingToLeave;
     }
-    return follow(key, startRun(key, manual, sectionId), listener);
+    return follow(key, startRun(key, library, manual, sectionId), listener);
   }
 
-  async function sendWrittenBody(key: string, manual: StoredManual, sectionId: string, listener: Listener): Promise<Leave> {
-    const body = await store.getBody(manual.id, sectionId);
+  async function sendWrittenBody(
+    key: string,
+    library: LibraryScope,
+    manual: StoredManual,
+    sectionId: string,
+    listener: Listener,
+  ): Promise<Leave> {
+    const body = await library.store.getBody(manual.id, sectionId);
     if (body !== undefined) return sendWholeBody(listener, body);
     if (runs.get(key) === WRITTEN) runs.delete(key);
-    return join(manual, sectionId, listener);
+    return join(library, manual, sectionId, listener);
   }
 
   function joinRun(key: string, run: Run, listener: Listener): Leave {
@@ -115,8 +143,9 @@ export function createRuns({
     };
   }
 
-  function startRun(key: string, manual: StoredManual, sectionId: string): Run {
+  function startRun(key: string, library: LibraryScope, manual: StoredManual, sectionId: string): Run {
     const run: Run = {
+      library,
       manualId: manual.id,
       sectionId,
       startedAt: performance.now(),
@@ -153,16 +182,16 @@ export function createRuns({
    * the lease over once it is released or expires without a body.
    */
   async function takeLeaseOrWaitForBody(key: string, run: Run): Promise<SectionLease | string> {
-    const { manualId, sectionId } = run;
+    const { library, manualId, sectionId } = run;
     const giveUpAt = performance.now() + waiting.limitMs;
     let waited = false;
     for (;;) {
-      const lease = await leases.take(manualId, sectionId);
+      const lease = await library.leases.take(manualId, sectionId);
       if (lease) {
         if (waited) logger.info("section.taken-over", `Took over ${key} from another environment`, runFields(run));
         return lease;
       }
-      const body = await store.getBody(manualId, sectionId);
+      const body = await library.store.getBody(manualId, sectionId);
       if (body !== undefined) return body;
       if (!waited) logger.info("section.waiting", `Waiting for another environment writing ${key}`, sectionFields(run));
       waited = true;
@@ -175,7 +204,7 @@ export function createRuns({
 
   async function writeSection(key: string, run: Run, manual: StoredManual, lease: SectionLease) {
     const signal = AbortSignal.any([run.controller.signal, lease.lost]);
-    for await (const chunk of writer.write(manual, run.sectionId, signal)) {
+    for await (const chunk of run.library.writer.write(manual, run.sectionId, signal)) {
       const at = run.text.length;
       run.text += chunk.text;
       run.progress = chunk.progress;
@@ -229,38 +258,44 @@ export function createRuns({
     }
   }
 
-  async function statusOf(manualId: string, sectionId: string): Promise<SectionStatus> {
-    const run = runs.get(runKey(manualId, sectionId));
+  async function statusOf(library: LibraryScope, manualId: string, sectionId: string): Promise<SectionStatus> {
+    const run = runs.get(runKey(library.libraryId, manualId, sectionId));
     if (run !== undefined && run !== WRITTEN) return "writing";
-    const { body, heldElsewhere } = await leases.readSection(manualId, sectionId);
+    const { body, heldElsewhere } = await library.leases.readSection(manualId, sectionId);
     if (body !== undefined) return "written";
     return heldElsewhere ? "writing" : "unwritten";
   }
 
-  async function writingSectionIds(manualId: string): Promise<Set<string>> {
-    const prefix = runKey(manualId, "");
+  async function writingSectionIds(library: LibraryScope, manualId: string): Promise<Set<string>> {
+    const prefix = runKey(library.libraryId, manualId, "");
     const runsHere = [...runs].filter(([key, run]) => run !== WRITTEN && key.startsWith(prefix));
     const writingHere = runsHere.map(([key]) => key.slice(prefix.length));
-    return new Set([...writingHere, ...(await leases.heldElsewhere(manualId))]);
-  }
-
-  async function isWriting(manualId: string): Promise<boolean> {
-    return (await writingSectionIds(manualId)).size > 0;
+    return new Set([...writingHere, ...(await library.leases.heldElsewhere(manualId))]);
   }
 
   function activeRunCount(): number {
     return [...runs.values()].filter((run) => run !== WRITTEN).length;
   }
 
-  return { join, statusOf, writingSectionIds, isWriting };
+  function forLibrary(library: LibraryScope): Runs {
+    return {
+      join: (manual, sectionId, listener) => join(library, manual, sectionId, listener),
+      statusOf: (manualId, sectionId) => statusOf(library, manualId, sectionId),
+      writingSectionIds: (manualId) => writingSectionIds(library, manualId),
+      isWriting: async (manualId) => (await writingSectionIds(library, manualId)).size > 0,
+    };
+  }
+
+  return { ...forLibrary({ libraryId: ADMIN_LIBRARY_ID, store, leases, writer }), forLibrary };
 }
 
-function runKey(manualId: string, sectionId: string): string {
-  return `${manualId}/${sectionId}`;
+/** Library and manual ids are slugs, with no `/`, so `<libraryId>/<manualId>/` begins only that manual's keys. */
+function runKey(libraryId: string, manualId: string, sectionId: string): string {
+  return `${libraryId}/${manualId}/${sectionId}`;
 }
 
-function sectionFields({ manualId, sectionId }: Run) {
-  return { manualId, sectionId };
+function sectionFields({ library, manualId, sectionId }: Run) {
+  return { libraryId: library.libraryId, manualId, sectionId };
 }
 
 /** The run's ids, how much it wrote and how long it took. */

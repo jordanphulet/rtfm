@@ -104,12 +104,20 @@ gateway, the store, `config.sectionWordsRequested` and `config.sectionExpectedCh
 
 ## One writer per section
 
-`writer/runs.ts` keeps an in-memory `Map` keyed by `manualId/sectionId`, for the readers one
-server process serves, and takes a section's lease (`SectionLeases`, `server/storage/README.md` ›
-Section leases) before it writes, for the processes that share a store: the Web Function's
+`writer/runs.ts` keeps an in-memory `Map` keyed by `libraryId/manualId/sectionId`, for the readers
+one server process serves, and takes a section's lease (`SectionLeases`, `server/storage/README.md`
+› Section leases) before it writes, for the processes that share a store: the Web Function's
 environments, which share the table `rtfm-app`. On this machine there is one server per data
 folder, so its leases (`storage/in-process-leases.ts`) grant every take, and the map alone keeps
 one writer per section, exactly as it would without them.
+
+**One map serves every library** (`research/libraries.md` › How the server carries the library).
+`createRuns` returns the admin's library's runs, made of the store, leases and writer it is given,
+so the routes use it as is. Its `forLibrary(scope)` gives another library's runs, with the same
+four methods bound to that library's `LibraryScope`: its id, `ManualStore`, `SectionLeases` and
+`SectionWriter`. Every library's runs share the one map and the one limit. A run reads, takes its
+lease, writes and saves through its own library's scope, so the same section id in two libraries
+is two runs, and a lease in one library never makes a section in another look busy.
 
 - **Opening a section** checks the map, then storage (`getBody`), then the map again. If there is
   still no entry, it creates the run in the same tick, so two requests can't both start one. The
@@ -141,10 +149,11 @@ one writer per section, exactly as it would without them.
     Reloading mid-section therefore starts the writing again from scratch.
   - However it ends, the run then releases its lease. A release that fails is logged
     (`section.release-failed`), and the lease expires instead.
-- **At most 3 runs at once** (`config.maxConcurrentRuns`) per process, a run waiting for another
-  environment included. A fourth request gets `failed: "error"`. Each writing section holds one
-  browser connection, and HTTP/1.1 allows 6 per origin, so this keeps the page's other requests
-  flowing. The reader keeps a section's stream open while it navigates elsewhere.
+- **At most 3 runs at once** (`config.maxConcurrentRuns`) per process, whatever their libraries,
+  a run waiting for another environment included. A fourth request gets `failed: "error"`. Each
+  writing section holds one browser connection, and HTTP/1.1 allows 6 per origin, so this keeps
+  the page's other requests flowing. The reader keeps a section's stream open while it navigates
+  elsewhere.
 
 ### Another environment
 
@@ -199,15 +208,19 @@ on the table, whose transaction finds the lease, while with the files, which kee
 manual is deleted and the run fails at its save, storing nothing. It then
 covers what only environments do: the waiting reader's one `append`, taking over a crashed
 environment's expired lease, the waiting limit, a run that loses its lease, and a released lease
-freeing the section at once. The leases it waits out are half a
-second to two seconds long, with room for test runs side by side, so no test waits for the
-committed lengths.
+freeing the section at once, and a recipient's library taking over its own section's expired
+lease while the admin's same section stays `unwritten`. Each setup also holds a recipient's
+library beside the admin's, seeded alike: the same section id is written in both at once, each
+through its own writer into its own library, both counted toward the one limit; and while one
+library writes a section, the other library's same section is `unwritten`, in both places, and
+is written there without waiting. The leases it waits out are half a second to two seconds long,
+with room for test runs side by side, so no test waits for the committed lengths.
 
 ## Files
 
 - `types.ts`: `SectionWriter`, `WriteFailed`, `refusalAsBudget`, `sectionToWrite`.
-- `runs.ts`: one run per section, which takes the section's lease or waits for another
-  environment's body; later requests join it.
+- `runs.ts`: one run per section in each library, which takes the section's lease or waits for
+  another environment's body; later requests join it.
 - `fake.ts`: plays the seed body through the gateway, which the fake model repeats back.
 - `bedrock.ts`: writes through the gateway, choosing an example section.
 - `prompt.ts`: builds the prompt.

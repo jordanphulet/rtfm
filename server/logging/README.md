@@ -17,7 +17,7 @@ optional error. It writes one JSON object per line, shaped for CloudWatch so a L
 the same lines unchanged:
 
 ```json
-{"timestamp":"2026-10-12T18:30:00.123Z","level":"ERROR","event":"section.failed","message":"Writing the-haunt-that-listens/the-room-controller failed","manualId":"the-haunt-that-listens","sectionId":"the-room-controller","characters":812,"durationMs":3150,"reason":"error","error":{"name":"Error","message":"…","stack":"…"}}
+{"timestamp":"2026-10-12T18:30:00.123Z","level":"ERROR","event":"section.failed","message":"Writing admin/the-haunt-that-listens/the-room-controller failed","libraryId":"admin","manualId":"the-haunt-that-listens","sectionId":"the-room-controller","characters":812,"durationMs":3150,"reason":"error","error":{"name":"Error","message":"…","stack":"…"}}
 ```
 
 - `timestamp` is ISO 8601 in UTC; `level` is `INFO`, `WARN` or `ERROR`, from the values Lambda's
@@ -48,6 +48,9 @@ the passcode or its digest, whether entered, carried in a cookie or stored. A br
 message and stack are logged as the browser reports them. The Bedrock client writes the AWS keys
 out of a thrown error's message and stack, since a signature error from AWS quotes the access key
 ID.
+
+Every `section.*` line has the section's `libraryId` (`admin` for the admin's library), `manualId`
+and `sectionId`.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
