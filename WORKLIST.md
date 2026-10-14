@@ -83,7 +83,7 @@ aren't RTFM's.
   caps in a test against DynamoDB Local, and the docs say so.
 
 ### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998; review round 1: the holder fences itself when renewals fail)
+- **Status:** doing (agent a6eb3ca69062c8998; review round 3: test headroom under load, renewals only extend the lease)
 - **Depends on:** IN.11
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
   `server/writer/README.md`
