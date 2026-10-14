@@ -62,7 +62,7 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.14 — `rtfm-ops` and the ops tools
-- **Status:** todo
+- **Status:** doing (agent ab01bdf3c8304e3d4)
 - **Depends on:** IN.12
 - **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
   `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`
