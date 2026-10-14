@@ -121,6 +121,27 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
+### IN.20 — Claude on Bedrock in the deployed app
+- **Status:** todo
+- **Depends on:** IN.10, IN.14, IN.15, IN.19, IN.5 (the user may drop IN.5)
+- **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
+  `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
+  `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
+- **Do:**
+  - The Web Function runs `RTFM_MODELS=bedrock`: `server/web-function.ts` stops refusing it, and
+    the revision sets it.
+  - The Bedrock client in the Web Function signs with the execution role's credentials, chosen
+    explicitly as IN.11's DynamoDB store does (the container endpoint or the environment, with
+    whatever IN.10 found about their lifetime); on the laptop, `credentials.ts` still reads only
+    `.env.local`.
+  - The web role gets `claudeStatements()` (`infra/bedrock.ts`), which the boundary already
+    allows, so no `RtfmToolkit` change; it already reaches `rtfm-usage`, so every call reserves
+    against the central caps.
+  - The docs stop describing the deployed app as fake-models-only.
+- **Done when:** `npm test` passes; after the orchestrator's deploy, the smoke check writes one real
+  section through `https://rtfm.moonfetus.com` (under $0.01) and `npm run usage` (or the ops tool)
+  shows it in `rtfm-usage`.
+
 ## Upkeep
 
 Small fixes that keep the repo healthy.
