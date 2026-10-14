@@ -10,10 +10,10 @@ import { createRequestHandler } from "./api/node-adapter.ts";
 import { cachedDigest, passcodeRoute, type CurrentDigest } from "./api/passcode.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
-import { usageTableWith, type ManualStorage, type ServerConfig } from "./config.ts";
+import { tableWith, type ManualStorage, type ModelAccess, type ServerConfig } from "./config.ts";
 import { exitOnceWritten } from "./exit.ts";
 import { createBedrockClient } from "./gateway/bedrock-client.ts";
-import { ENV_LOCAL_FILE, readAwsCredentials } from "./gateway/credentials.ts";
+import { ENV_LOCAL_FILE, readAwsAccess, type AwsAccess } from "./gateway/credentials.ts";
 import { createDynamoDbSpendingLedger } from "./gateway/dynamodb-spending-ledger.ts";
 import { openFileSpendingLedger } from "./gateway/file-spending-ledger.ts";
 import { createGateway, type Gateway, type RunningGateway } from "./gateway/gateway.ts";
@@ -260,10 +260,16 @@ export async function createModels(
       return { writer: createFakeWriter(gateway), librarian: gateway, idle: gateway.idle };
     }
     case "bedrock": {
-      const createClient = () =>
-        createBedrockClient(readAwsCredentials(credentialsFile), { timeoutMs: config.idleTimeoutMs });
-      const openSpendingLedger = async () =>
-        createDynamoDbSpendingLedger(usageTableWith(config.usageTable, readAwsCredentials(credentialsFile)));
+      const aws = () => modelAws(config.modelAccess, credentialsFile);
+      const createClient = () => {
+        const { access, bedrockEndpoint, keysRefusedBy } = aws();
+        const onKeysRefused = keysRefusedBy("Bedrock");
+        return createBedrockClient(access, { timeoutMs: config.idleTimeoutMs, baseURL: bedrockEndpoint, onKeysRefused });
+      };
+      const openSpendingLedger = async () => {
+        const { access, keysRefusedBy } = aws();
+        return createDynamoDbSpendingLedger({ ...tableWith(config.usageTable, access), onKeysRefused: keysRefusedBy("DynamoDB") });
+      };
       const gateway = await createModelGateway(config, createClient, openSpendingLedger, logger);
       const writer = createBedrockWriter({
         gateway,
@@ -274,6 +280,25 @@ export async function createModels(
       return { writer, librarian: gateway, idle: gateway.idle };
     }
   }
+}
+
+interface ModelAws {
+  access: AwsAccess;
+  bedrockEndpoint: string | undefined;
+  /** What to tell when the service refuses the keys, if anything is to be told. */
+  keysRefusedBy(service: string): ((error: Error) => void) | undefined;
+}
+
+/**
+ * How the Bedrock models reach AWS: `rtfm-local`'s keys from `.env.local`, read now, with Bedrock's
+ * own endpoint and nothing told of refused keys; or the Web Function's execution role.
+ */
+function modelAws(modelAccess: ModelAccess, credentialsFile: URL): ModelAws {
+  if (modelAccess.kind === "env-local") {
+    return { access: readAwsAccess(credentialsFile), bedrockEndpoint: undefined, keysRefusedBy: () => undefined };
+  }
+  const { access, bedrockEndpoint, onKeysRefused } = modelAccess;
+  return { access, bedrockEndpoint, keysRefusedBy: (service) => (error) => onKeysRefused(service, error) };
 }
 
 /** Every job on the fake model, keeping its `maxTokens` and idle timeout. */

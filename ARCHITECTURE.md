@@ -186,7 +186,7 @@ other page:
 | `agent/planner/` | `agent/tool.ts`, `storage/`, the gateway's types, `escape-tags.ts` |
 | `agent/` | the gateway's types, the logger's types; `fake-model.ts` also `agent/planner/fake-planner.ts` and `writer/fake.ts` (`chunkEnds`) |
 | `writer/` | `storage/`, the gateway's types, `api/types.ts`, `escape-tags.ts`, the logger's types |
-| `gateway/` | `storage/` (the ledger and its entries' types, `files.ts`, and the DynamoDB client builder in `dynamodb-manual-store.ts`), the logger's types |
+| `gateway/` | `storage/` (the ledger and its entries' types, `files.ts`, and the DynamoDB client builder, the AWS credentials' types and the execution role's credential provider in `dynamodb-manual-store.ts`), the logger's types |
 | `storage/` | `api/types.ts`, the logger's types |
 | `logging/` | `storage/files.ts` |
 
@@ -220,8 +220,8 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
   (`server/README.md` › Configuration); they reach Bedrock and the table `rtfm-usage`. The one
   exception is the Web Function, whose entry asks for its execution role's temporary
   credentials, from Lambda's container credentials endpoint or the variables Lambda sets, for the
-  table `rtfm-app` alone (`server/README.md` › The Web Function). No AWS client falls back to the
-  environment, a profile or `~/.aws`.
+  tables `rtfm-app` and `rtfm-usage` and for Bedrock (`server/README.md` › The Web Function). No
+  AWS client falls back to the environment, a profile or `~/.aws`.
 - **Only the app's own pages.** On this machine the server listens on `127.0.0.1` and answers only
   this machine's `Host`s and `Origin`s; on the Web Function, only an endpoint's `Host` and the
   origin `https://rtfm.moonfetus.com`. The Node adapter refuses any other `Host` or `Origin`, and

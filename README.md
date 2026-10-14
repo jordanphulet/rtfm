@@ -54,10 +54,11 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 The API server listens on `127.0.0.1` only; `server/api/README.md` › Only the app's own pages has
 the checks it makes.
 
-The same server runs in AWS on a Lambda Web Function, `rtfm-app`, with the fake models, behind
-the passcode whose digest the DynamoDB table `rtfm-app` holds (A passcode, below), keeping the
-manuals in that table and serving the built app beside the API (`server/README.md` › The Web
-Function).
+The same server runs in AWS on a Lambda Web Function, `rtfm-app`, with Claude Haiku 4.5 on
+Bedrock, behind the passcode whose digest the DynamoDB table `rtfm-app` holds (A passcode, below),
+keeping the manuals in that table and serving the built app beside the API (`server/README.md` ›
+The Web Function). Every Bedrock call it makes is reserved in the table `rtfm-usage` first, under
+the same caps and kill switch as a laptop's (Bedrock's spending, below).
 `npm run cdk -- deploy RtfmApp` builds and deploys it (`infra/README.md`).
 
 | Script                       | What it does                                                                 |
@@ -428,8 +429,9 @@ and settlement, the day's and the month's spend that the caps are checked agains
 switch. Every server running Bedrock, on any laptop or deployed, reserves each call in that table
 in one conditional transaction, so together they never pass the caps, and one kill switch stops
 them all. The fake model's calls never reach it. On this machine the server reaches it with
-`rtfm-local`'s keys from `.env.local` (The models, above); `RtfmApp` holds it
-(`infra/README.md`). How it works is in `server/gateway/README.md` › The spending ledger.
+`rtfm-local`'s keys from `.env.local` (The models, above), and the deployed app as its Web
+Function's role; `RtfmApp` holds it (`infra/README.md`). How it works is in
+`server/gateway/README.md` › The spending ledger.
 
 **The kill switch** is the item `KILL_SWITCH` in `rtfm-usage`: while it exists, every server
 refuses every new Bedrock call, from its very next one, with no restart. A call already running

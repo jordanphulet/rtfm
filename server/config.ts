@@ -2,10 +2,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./api/node-adapter.ts";
 import { passcodeDigest } from "./api/passcode.ts";
-import type { AwsCredentials } from "./gateway/credentials.ts";
+import type { AwsAccess } from "./gateway/credentials.ts";
 import type { GatewayConfig } from "./gateway/types.ts";
 import { API_PORT } from "./ports.ts";
-import type { DynamoDbTable, TableCredentials } from "./storage/dynamodb-manual-store.ts";
+import type { DynamoDbTable, ExecutionRoleCredentials } from "./storage/dynamodb-manual-store.ts";
 
 export type ModelSource = "fake" | "bedrock";
 
@@ -13,13 +13,34 @@ export type ModelSource = "fake" | "bedrock";
 export type ManualStorage = { kind: "files" } | { kind: "dynamodb"; table: DynamoDbTable };
 
 /**
- * The table Bedrock's spending is kept in, from this machine too. Without an `endpoint` (DynamoDB
- * Local's, in tests), it is DynamoDB's own in the region `.env.local` names.
+ * A DynamoDB table by name. Without an `endpoint` (DynamoDB Local's, in tests), it is DynamoDB's
+ * own in the region of whatever reaches it.
  */
-export interface UsageTableLocation {
+export interface TableLocation {
   name: string;
   endpoint: string | undefined;
 }
+
+/** The Web Function's execution role, in its region. */
+export interface ExecutionRoleAccess {
+  region: string;
+  credentials: ExecutionRoleCredentials;
+}
+
+/**
+ * How the Bedrock models reach AWS, Bedrock and the table `rtfm-usage` alike: with `rtfm-local`'s
+ * keys from `.env.local`, read only once the Bedrock models are built; or as the Web Function's
+ * execution role, telling `onKeysRefused` which service refused its keys.
+ */
+export type ModelAccess =
+  | { kind: "env-local" }
+  | {
+      kind: "execution-role";
+      access: ExecutionRoleAccess;
+      /** Bedrock's endpoint in the region unless given: a stand-in's, in tests. */
+      bedrockEndpoint: string | undefined;
+      onKeysRefused: (service: string, error: Error) => void;
+    };
 
 /**
  * Where the passcode's digest comes from: a fixed one (`RTFM_PASSCODE`'s, hashed when the server
@@ -37,7 +58,9 @@ export interface ServerConfig extends GatewayConfig, AdapterConfig {
   /** Undefined means no passcode gate (`server/api/README.md` › The passcode). */
   passcode: PasscodeSource | undefined;
   /** Used only with Bedrock; the fake models' spending stays in the data folder. */
-  usageTable: UsageTableLocation;
+  usageTable: TableLocation;
+  /** Used only with Bedrock. */
+  modelAccess: ModelAccess;
   maxConcurrentRuns: number;
   sectionWordsRequested: number;
   sectionExpectedCharacters: number;
@@ -56,6 +79,7 @@ export const config: ServerConfig = {
   manualStorage: { kind: "files" },
   models: modelsFromEnv(process.env.RTFM_MODELS),
   usageTable: { name: "rtfm-usage", endpoint: undefined },
+  modelAccess: { kind: "env-local" },
   passcode: fixedPasscode(process.env.RTFM_PASSCODE),
   allowedHosts: LOOPBACK_HOSTS,
   allowedOrigins: LOOPBACK_ORIGINS,
@@ -100,33 +124,41 @@ export function builtAppDirFromEnv(value = process.env.RTFM_APP_DIR ?? ""): stri
   return value === "" ? fileURLToPath(new URL("../dist", import.meta.url)) : path.resolve(value);
 }
 
-/** The usage table, reached with `rtfm-local`'s keys from `.env.local`, in their region. */
-export function usageTableWith({ name, endpoint }: UsageTableLocation, credentials: AwsCredentials): DynamoDbTable {
-  const { accessKeyId, secretAccessKey, region } = credentials;
-  return {
-    name,
-    region,
-    endpoint: endpoint ?? `https://dynamodb.${region}.amazonaws.com`,
-    credentials: { kind: "keys", accessKeyId, secretAccessKey },
-  };
+/** A table reached with the given access, in its region. */
+export function tableWith({ name, endpoint }: TableLocation, { region, credentials }: AwsAccess): DynamoDbTable {
+  return { name, region, endpoint: endpoint ?? `https://dynamodb.${region}.amazonaws.com`, credentials };
+}
+
+/** How the Web Function reaches AWS (`webFunctionAwsFromEnv`). */
+export interface WebFunctionAws {
+  access: ExecutionRoleAccess;
+  /** The manuals' table, `rtfm-app`. */
+  appTable: TableLocation;
+  /** Bedrock's spending ledger, `rtfm-usage`. */
+  usageTable: TableLocation;
+  bedrockEndpoint: string | undefined;
 }
 
 /**
- * The table the Web Function keeps the manuals in: `RTFM_APP_TABLE`, which `RtfmApp` sets, in
- * `AWS_REGION`, reached as the execution role (`executionRoleCredentialsFromEnv`). Only
- * `web-function.ts` calls this; on this machine the server reads AWS keys from `.env.local` alone.
- * `RTFM_DYNAMODB_ENDPOINT` points it at DynamoDB Local, for its test.
+ * How the Web Function reaches AWS, from the environment Lambda and `RtfmApp` give it: as the
+ * execution role (`executionRoleCredentialsFromEnv`) in `AWS_REGION`, the tables `RTFM_APP_TABLE`
+ * and `RTFM_USAGE_TABLE` name. Only `web-function.ts` calls this; on this machine the server reads
+ * AWS keys from `.env.local` alone. `RTFM_DYNAMODB_ENDPOINT` and `RTFM_BEDROCK_ENDPOINT` point it
+ * at DynamoDB Local and a stand-in for Bedrock, for its test.
  */
-export function webFunctionTableFromEnv(): DynamoDbTable {
-  const name = process.env.RTFM_APP_TABLE;
+export function webFunctionAwsFromEnv(): WebFunctionAws {
+  const appTable = process.env.RTFM_APP_TABLE;
+  const usageTable = process.env.RTFM_USAGE_TABLE;
   const region = process.env.AWS_REGION;
-  if (!name) throw new Error("The Web Function needs RTFM_APP_TABLE, which RtfmApp sets");
+  if (!appTable) throw new Error("The Web Function needs RTFM_APP_TABLE, which RtfmApp sets");
+  if (!usageTable) throw new Error("The Web Function needs RTFM_USAGE_TABLE, which RtfmApp sets");
   if (!region) throw new Error("The Web Function needs AWS_REGION, which Lambda sets");
+  const endpoint = process.env.RTFM_DYNAMODB_ENDPOINT || undefined;
   return {
-    name,
-    region,
-    endpoint: process.env.RTFM_DYNAMODB_ENDPOINT || `https://dynamodb.${region}.amazonaws.com`,
-    credentials: executionRoleCredentialsFromEnv(),
+    access: { region, credentials: executionRoleCredentialsFromEnv() },
+    appTable: { name: appTable, endpoint },
+    usageTable: { name: usageTable, endpoint },
+    bedrockEndpoint: process.env.RTFM_BEDROCK_ENDPOINT || undefined,
   };
 }
 
@@ -136,9 +168,9 @@ export function webFunctionTableFromEnv(): DynamoDbTable {
  * `AWS_CONTAINER_AUTHORIZATION_TOKEN`) when it gives one, or else `AWS_ACCESS_KEY_ID`,
  * `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`, which expire at `AWS_CREDENTIAL_EXPIRATION` when
  * Lambda sets it. It reads no key itself: the DynamoDB store reads the chosen source each time its
- * credentials need refreshing.
+ * credentials need refreshing, and the Bedrock client at each call.
  */
-function executionRoleCredentialsFromEnv(): TableCredentials {
+function executionRoleCredentialsFromEnv(): ExecutionRoleCredentials {
   const fullUri = process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI;
   if (fullUri) {
     return { kind: "container-endpoint", fullUri, authorizationToken: process.env.AWS_CONTAINER_AUTHORIZATION_TOKEN };

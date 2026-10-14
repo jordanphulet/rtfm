@@ -12,8 +12,8 @@ import {
   readPasscodeDigest,
   TRANSACTION_ATTEMPTS,
   writePasscodeDigest,
+  type AwsCredentials,
   type DynamoDbTable,
-  type TableCredentials,
 } from "./dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS, KEYS_REFUSED_BODIES, testAppTable } from "./dynamodb-testing.ts";
 import { sectionsInReadingOrder } from "./manual.ts";
@@ -90,7 +90,7 @@ async function standInDynamoDb(
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   onTestFinished(() => new Promise<void>((resolve) => server.close(() => resolve())));
   const endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const table = (credentials: TableCredentials = DYNAMODB_LOCAL_CREDENTIALS): DynamoDbTable => ({
+  const table = (credentials: AwsCredentials = DYNAMODB_LOCAL_CREDENTIALS): DynamoDbTable => ({
     name: "rtfm-app",
     region: "us-west-2",
     endpoint,

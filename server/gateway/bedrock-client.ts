@@ -1,24 +1,33 @@
 import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
-import type { AwsCredentials } from "./credentials.ts";
+import { executionRoleProvider, type AwsCredentials } from "../storage/dynamodb-manual-store.ts";
+import type { AwsAccess } from "./credentials.ts";
 import type { ModelClient, ModelEvent, ModelRequest } from "./types.ts";
 
-export const CREDENTIAL_CHAIN_REFUSED = "The AWS default credential chain is never used";
+export const KEYS_MISSING = "A Bedrock client needs an access key ID and a secret access key";
+/** What Bedrock answers, with status 403, when the keys have expired or it doesn't know them, as DynamoDB does. */
+const KEYS_REFUSED = ["ExpiredTokenException", "UnrecognizedClientException"];
+
+interface ClientOptions {
+  timeoutMs: number;
+  /** Bedrock's endpoint in the region unless given: a stand-in's, in tests. */
+  baseURL?: string;
+  /** Called with a call's error each time Bedrock refuses the keys (`KEYS_REFUSED`). */
+  onKeysRefused?: (error: Error) => void;
+}
 
 export function createBedrockClient(
-  credentials: AwsCredentials,
-  { timeoutMs, baseURL = regionalURL(credentials.region) }: { timeoutMs: number; baseURL?: string },
+  { region, credentials }: AwsAccess,
+  { timeoutMs, baseURL = regionalURL(region), onKeysRefused }: ClientOptions,
 ): ModelClient {
+  const signedWith = new Set<string>();
   const client = new AnthropicBedrock({
-    awsAccessKey: credentials.accessKeyId,
-    awsSecretKey: credentials.secretAccessKey,
-    awsRegion: credentials.region,
+    awsRegion: region,
     baseURL,
     // Typed string | undefined, but null stops the SDK from reading AWS_BEARER_TOKEN_BEDROCK,
     // which would replace SigV4 signing.
     apiKey: null as unknown as undefined,
-    providerChainResolver: async () => {
-      throw new Error(CREDENTIAL_CHAIN_REFUSED);
-    },
+    // Called before each request, in place of the SDK's own chain: the environment, profiles, IMDS.
+    providerChainResolver: async () => credentialProvider(credentials, signedWith),
     maxRetries: 0,
     timeout: timeoutMs,
   });
@@ -28,10 +37,48 @@ export function createBedrockClient(
       try {
         yield* streamEvents(client, request);
       } catch (error) {
-        throw withoutKeys(error, credentials);
+        const redacted = withoutKeys(error, signedWith);
+        if (onKeysRefused && keysRefused(redacted)) onKeysRefused(redacted);
+        throw redacted;
       }
     },
   };
+}
+
+/**
+ * The credentials a request is signed with: fixed keys as they are, or the execution role's, asked
+ * of their source for each request. Every key and session token signed with is added to
+ * `signedWith`, to be written out of errors.
+ */
+function credentialProvider(credentials: AwsCredentials, signedWith: Set<string>) {
+  const provider = credentials.kind === "keys" ? fixedKeys(credentials) : executionRoleProvider(credentials);
+  return async () => {
+    const identity = await provider();
+    signedWith.add(identity.accessKeyId).add(identity.secretAccessKey).add(identity.sessionToken ?? "");
+    return identity;
+  };
+}
+
+function fixedKeys({ accessKeyId, secretAccessKey, sessionToken }: Extract<AwsCredentials, { kind: "keys" }>) {
+  if (!accessKeyId || !secretAccessKey) throw new Error(KEYS_MISSING);
+  return async () => ({ accessKeyId, secretAccessKey, sessionToken });
+}
+
+/**
+ * Whether Bedrock refused the keys. The SDK turns an error response into an `APIError` with its
+ * headers and JSON body; AWS names the error in the `x-amzn-errortype` header, or else in the
+ * body's `code` or `__type`, as the AWS SDK reads a REST JSON error (`loadRestJsonErrorCode`).
+ */
+function keysRefused(error: unknown): error is Error {
+  if (!(error instanceof AnthropicBedrock.APIError) || error.headers === undefined) return false;
+  const body = (error.error ?? {}) as { code?: unknown; __type?: unknown };
+  const errorType = error.headers.get("x-amzn-errortype") ?? body.code ?? body.__type;
+  return typeof errorType === "string" && KEYS_REFUSED.includes(awsErrorName(errorType));
+}
+
+/** `ExpiredTokenException` from `ExpiredTokenException:http://…` or `com.amazon.coral.service#ExpiredTokenException`. */
+function awsErrorName(errorType: string): string {
+  return errorType.split(/[,:]/)[0]!.split("#").at(-1)!;
 }
 
 async function* streamEvents(
@@ -77,12 +124,12 @@ async function* streamEvents(
 }
 
 /**
- * The error with the AWS keys written out of its message and stack: a signature error from AWS
- * quotes the access key ID, and errors are logged.
+ * The error with the AWS keys and session token written out of its message and stack: a signature
+ * error from AWS quotes the access key ID, and errors are logged.
  */
-function withoutKeys(error: unknown, { accessKeyId, secretAccessKey }: AwsCredentials): unknown {
+function withoutKeys(error: unknown, keys: Set<string>): unknown {
   if (!(error instanceof Error)) return error;
-  for (const key of [accessKeyId, secretAccessKey].filter((key) => key !== "")) {
+  for (const key of [...keys].filter((key) => key !== "")) {
     error.message = error.message.replaceAll(key, "[redacted]");
     if (error.stack) error.stack = error.stack.replaceAll(key, "[redacted]");
   }

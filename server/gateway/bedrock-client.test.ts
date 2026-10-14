@@ -1,16 +1,16 @@
 import { createServer, type IncomingHttpHeaders, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { EventStreamCodec } from "@smithy/eventstream-codec";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { logFileName, logsDir, toLogFile } from "../logging/log-file.ts";
 import { createLogger, silentLogger, type Logger } from "../logging/logger.ts";
+import type { AwsCredentials } from "../storage/dynamodb-manual-store.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
 import type { SettleEntry } from "../storage/types.ts";
 import { collect, tempDataDir, testGatewayConfig, waitUntil } from "../testing.ts";
-import { createBedrockClient, CREDENTIAL_CHAIN_REFUSED } from "./bedrock-client.ts";
-import type { AwsCredentials } from "./credentials.ts";
+import { createBedrockClient, KEYS_MISSING } from "./bedrock-client.ts";
+import { answerKeysRefused, chunkFrame, exceptionFrame, KEYS_REFUSED_ANSWERS, startEventStream } from "./bedrock-testing.ts";
 import { openFileSpendingLedger } from "./file-spending-ledger.ts";
 import { createGateway } from "./gateway.ts";
 import { prices } from "./prices.ts";
@@ -27,11 +27,16 @@ import {
 
 const MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
 const MAX_TOKENS = 2048;
-const FAKE_CREDENTIALS: AwsCredentials = {
+/** Wide, so the tests that start servers of their own hold when several test runs share the machine. */
+const TEST_TIMEOUT_MS = 30_000;
+const REGION = "us-west-2";
+const FAKE_CREDENTIALS = {
+  kind: "keys",
   accessKeyId: "AKIAFAKEFORTESTSONLY",
   secretAccessKey: "fake-secret-for-tests-only",
-  region: "us-west-2",
-};
+} as const;
+/** The execution role's keys, as Lambda sets them. */
+const ROLE_KEYS = { accessKeyId: "ASIAROLEKEYFORTESTS", secretAccessKey: "role-secret-for-tests-only", sessionToken: "role-session-token" };
 
 interface ReceivedRequest {
   method: string;
@@ -100,50 +105,13 @@ const TOOL_USE_EVENTS = [
   { type: "message_stop" },
 ];
 
-const codec = new EventStreamCodec(
-  (bytes) => new TextDecoder().decode(bytes),
-  (text) => new TextEncoder().encode(text),
-);
-
-function stringHeader(value: string) {
-  return { type: "string" as const, value };
-}
-
-function chunkFrame(event: object): Uint8Array {
-  const bytes = Buffer.from(JSON.stringify(event)).toString("base64");
-  return codec.encode({
-    headers: {
-      ":event-type": stringHeader("chunk"),
-      ":content-type": stringHeader("application/json"),
-      ":message-type": stringHeader("event"),
-    },
-    body: new TextEncoder().encode(JSON.stringify({ bytes })),
-  });
-}
-
-function exceptionFrame(exceptionType: string, message: string): Uint8Array {
-  return codec.encode({
-    headers: {
-      ":exception-type": stringHeader(exceptionType),
-      ":content-type": stringHeader("application/json"),
-      ":message-type": stringHeader("exception"),
-    },
-    body: new TextEncoder().encode(JSON.stringify({ message })),
-  });
-}
-
 /** What AWS answers when a signature doesn't match: its message quotes the access key ID. */
-function answerSignatureMismatch(response: ServerResponse) {
+function answerSignatureMismatch(response: ServerResponse, accessKeyId: string = FAKE_CREDENTIALS.accessKeyId) {
   const message =
     "The request signature we calculated does not match the signature you provided. The Canonical String for this " +
-    `request should have been 'Credential=${FAKE_CREDENTIALS.accessKeyId}/20261012/us-west-2/bedrock/aws4_request'`;
+    `request should have been 'Credential=${accessKeyId}/20261012/us-west-2/bedrock/aws4_request'`;
   response.writeHead(403, { "content-type": "application/json", "x-amzn-errortype": "InvalidSignatureException" });
   response.end(JSON.stringify({ message }));
-}
-
-function startEventStream(response: ServerResponse, events: object[]) {
-  response.writeHead(200, { "content-type": "application/vnd.amazon.eventstream" });
-  for (const event of events) response.write(chunkFrame(event));
 }
 
 describe("Bedrock client", () => {
@@ -194,8 +162,15 @@ describe("Bedrock client", () => {
     await new Promise((resolve) => server.close(resolve));
   });
 
-  function bedrockClient(credentials = FAKE_CREDENTIALS): ModelClient {
-    return createBedrockClient(credentials, { timeoutMs: 5000, baseURL });
+  function bedrockClient(
+    credentials: AwsCredentials = FAKE_CREDENTIALS,
+    onKeysRefused?: (error: Error) => void,
+  ): ModelClient {
+    return createBedrockClient({ region: REGION, credentials }, { timeoutMs: 5000, baseURL, onKeysRefused });
+  }
+
+  function signingKeyOf(headers: IncomingHttpHeaders): string | undefined {
+    return /Credential=([^/]+)\//.exec(String(headers.authorization))?.[1];
   }
 
   function request(signal = new AbortController().signal): ModelRequest {
@@ -221,10 +196,118 @@ describe("Bedrock client", () => {
     expect(JSON.stringify(headers)).not.toMatch(/Bearer|must-not-be-used|MUSTNOTBEUSED/);
   });
 
-  it("refuses the default credential chain when a key is empty, before any request is sent", async () => {
+  it("refuses a key that is empty, never falling back to the environment's, before any request is sent", async () => {
     const client = bedrockClient({ ...FAKE_CREDENTIALS, secretAccessKey: "" });
-    await expect(collect(client.stream(request()))).rejects.toThrow(CREDENTIAL_CHAIN_REFUSED);
+    await expect(collect(client.stream(request()))).rejects.toThrow(KEYS_MISSING);
     expect(received).toHaveLength(0);
+  });
+
+  describe("as the Web Function's execution role", { timeout: TEST_TIMEOUT_MS }, () => {
+    it("signs with the keys and session token Lambda sets in the environment, read at each call", async () => {
+      vi.stubEnv("AWS_ACCESS_KEY_ID", ROLE_KEYS.accessKeyId);
+      vi.stubEnv("AWS_SECRET_ACCESS_KEY", ROLE_KEYS.secretAccessKey);
+      vi.stubEnv("AWS_SESSION_TOKEN", ROLE_KEYS.sessionToken);
+      const client = bedrockClient({ kind: "environment", expiresAt: undefined });
+
+      await collect(client.stream(request()));
+      vi.stubEnv("AWS_ACCESS_KEY_ID", "ASIASECONDROLEKEY");
+      await collect(client.stream(request()));
+
+      expect(received.map(({ headers }) => signingKeyOf(headers))).toEqual([ROLE_KEYS.accessKeyId, "ASIASECONDROLEKEY"]);
+      expect(received[0]!.headers["x-amz-security-token"]).toBe(ROLE_KEYS.sessionToken);
+      expect(JSON.stringify(received[0]!.headers)).not.toMatch(/Bearer|must-not-be-used/);
+    });
+
+    it("signs with the keys the container credentials endpoint hands out, asking it at each call", async () => {
+      const asked: IncomingHttpHeaders[] = [];
+      const credentialsEndpoint = createServer((credentialsRequest, response) => {
+        asked.push(credentialsRequest.headers);
+        const Expiration = new Date(Date.now() + 60 * 60_000).toISOString();
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ AccessKeyId: ROLE_KEYS.accessKeyId, SecretAccessKey: ROLE_KEYS.secretAccessKey, Token: ROLE_KEYS.sessionToken, Expiration }));
+      });
+      await new Promise<void>((resolve) => credentialsEndpoint.listen(0, "127.0.0.1", resolve));
+      const fullUri = `http://127.0.0.1:${(credentialsEndpoint.address() as AddressInfo).port}/credentials`;
+      const client = bedrockClient({ kind: "container-endpoint", fullUri, authorizationToken: "the-authorization-token" });
+
+      try {
+        await collect(client.stream(request()));
+        await collect(client.stream(request()));
+      } finally {
+        await new Promise((resolve) => credentialsEndpoint.close(resolve));
+      }
+
+      expect(asked.map(({ authorization }) => authorization)).toEqual(["the-authorization-token", "the-authorization-token"]);
+      expect(received.map(({ headers }) => signingKeyOf(headers))).toEqual([ROLE_KEYS.accessKeyId, ROLE_KEYS.accessKeyId]);
+      expect(received[0]!.headers["x-amz-security-token"]).toBe(ROLE_KEYS.sessionToken);
+    });
+
+    it("writes the role's keys and session token out of an error, as it does fixed keys", async () => {
+      vi.stubEnv("AWS_ACCESS_KEY_ID", ROLE_KEYS.accessKeyId);
+      vi.stubEnv("AWS_SECRET_ACCESS_KEY", ROLE_KEYS.secretAccessKey);
+      vi.stubEnv("AWS_SESSION_TOKEN", ROLE_KEYS.sessionToken);
+      respond = (response) => {
+        response.writeHead(403, { "content-type": "application/json", "x-amzn-errortype": "InvalidSignatureException" });
+        const message = `Credential=${ROLE_KEYS.accessKeyId}/20261012, token ${ROLE_KEYS.sessionToken}, secret ${ROLE_KEYS.secretAccessKey}`;
+        response.end(JSON.stringify({ message }));
+      };
+
+      const error = await collect(bedrockClient({ kind: "environment", expiresAt: undefined }).stream(request())).then(
+        () => undefined,
+        (thrown: unknown) => thrown as Error,
+      );
+
+      expect(error?.message).toContain("Credential=[redacted]/20261012, token [redacted], secret [redacted]");
+      for (const key of Object.values(ROLE_KEYS)) expect(`${error!.message}${error!.stack}`).not.toContain(key);
+    });
+  });
+
+  describe("when Bedrock refuses the keys", { timeout: TEST_TIMEOUT_MS }, () => {
+    const refusals: [string, (response: ServerResponse) => void][] = [
+      ["an expired session token", (response) => answerKeysRefused(response, "ExpiredTokenException")],
+      ["keys it doesn't know", (response) => answerKeysRefused(response, "UnrecognizedClientException")],
+      [
+        "an expired session token, named in the body alone",
+        (response) => {
+          response.writeHead(403, { "content-type": "application/json" });
+          const __type = "com.amazon.coral.service#ExpiredTokenException";
+          response.end(JSON.stringify({ __type, message: KEYS_REFUSED_ANSWERS.ExpiredTokenException }));
+        },
+      ],
+    ];
+
+    it.each(refusals)("tells onKeysRefused, then throws: %s", async (_, answer) => {
+      respond = answer;
+      const refused: Error[] = [];
+
+      const thrown = await collect(bedrockClient(FAKE_CREDENTIALS, (error) => refused.push(error)).stream(request())).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+
+      expect(thrown).toBeInstanceOf(Error);
+      expect(refused).toEqual([thrown]);
+    });
+
+    it("tells onKeysRefused nothing of any other error", async () => {
+      const refused: Error[] = [];
+      const answers = [
+        answerSignatureMismatch,
+        (response: ServerResponse) => {
+          response.writeHead(403, { "content-type": "application/json", "x-amzn-errortype": "AccessDeniedException" });
+          response.end(JSON.stringify({ message: "You don't have access to the model with the specified model ID." }));
+        },
+        (response: ServerResponse) => {
+          response.writeHead(503, { "content-type": "application/json", "x-amzn-errortype": "ServiceUnavailableException" });
+          response.end(JSON.stringify({ message: "ServiceUnavailableException" }));
+        },
+      ];
+      for (const answer of answers) {
+        respond = answer;
+        await expect(collect(bedrockClient(FAKE_CREDENTIALS, (error) => refused.push(error)).stream(request()))).rejects.toThrow();
+      }
+      expect(refused).toEqual([]);
+    });
   });
 
   it("streams the model's response endpoint and maps its events", async () => {

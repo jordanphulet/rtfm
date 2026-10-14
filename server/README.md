@@ -69,39 +69,47 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 
 - **It listens on `AWS_LAMBDA_HTTP_ENDPOINT`**, the `host:port` Lambda sets
   (`httpEndpointFromEnv` in `config.ts`). Without it, or with no port in it, it doesn't start.
-- **The fake models only.** With `RTFM_MODELS=bedrock` it refuses to start, and its role has no
-  Bedrock permission either. Its role may read and write the items of `rtfm-usage`, Bedrock's
-  spending ledger, as `rtfm-local` may, but the server doesn't reach that table with the fake
-  models: their spending stays in its throwaway data folder (below).
+- **Claude on Bedrock**, since `RtfmApp` sets `RTFM_MODELS=bedrock` in the revision's
+  environment (Choosing the models, below). Every call is reserved first in the table
+  `RTFM_USAGE_TABLE` names, `rtfm-usage`, which `RtfmApp` also sets: the same caps ($2 a day, $20
+  a month) and kill switch as every laptop's (`server/gateway/README.md` › The table
+  `rtfm-usage`). Its role may call Claude's models and profiles and read and write the items of
+  `rtfm-usage`, as `rtfm-local` may (`infra/README.md` › The stacks). Unset, `RTFM_MODELS` runs
+  the fake models, as its tests do, with their spending in the throwaway data folder (below).
 - **The manuals in the table `rtfm-app`** (`server/storage/README.md` › The table `rtfm-app`),
   which every environment shares and each seeds when it starts, once across all of them. The
   table's name is `RTFM_APP_TABLE`, which `RtfmApp` sets in the revision's environment.
 - **One writer per section across environments**: a run takes the section's lease in the table
   before it writes, and a reader whose request reaches another environment waits for the stored
   body (`server/writer/README.md` › One writer per section).
-- **The table as the execution role.** AWS documents that a Web Function's code runs with its
-  execution role, but not how the role's credentials reach the process: its environment-variable
-  page reserves `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` and warns that
-  a Web Function doesn't get every variable an Event Function does, and an environment has no
-  set lifetime and is never frozen, so the credentials must be refreshed while it runs.
-  `webFunctionTableFromEnv` (`config.ts`) chooses the source by the names Lambda sets, reading no
-  key itself: Lambda's container credentials endpoint when `AWS_CONTAINER_CREDENTIALS_FULL_URI` is
-  set (with `AWS_CONTAINER_AUTHORIZATION_TOKEN`), as Lambda's other long-lived environments use,
-  or else the three key variables (`server/storage/README.md` › The table `rtfm-app`). The
-  endpoint hands out new credentials whenever the store asks as the old ones near expiry. The key
-  variables are read when the store asks too, but a running process's environment never changes,
-  so they are never renewed, and the Web Function has Lambda replace its environment before they
-  run out (below). With neither, without `RTFM_APP_TABLE` or `AWS_REGION`, or with an
-  `AWS_CREDENTIAL_EXPIRATION` that isn't an ISO 8601 time with its offset, the Web Function
-  refuses to start and names what it needs. `server.started` logs which source it chose
-  (`credentials`: `container-endpoint` or `environment`) and, for the key variables, when they
-  expire (`credentialsExpireAt`: the time `AWS_CREDENTIAL_EXPIRATION` gives, or `unset`), never a
-  key, so the deployed app's log shows what Lambda really gives.
+- **Both tables and Bedrock as the execution role.** AWS documents that a Web Function's code runs
+  with its execution role, but not how the role's credentials reach the process: its
+  environment-variable page reserves `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and
+  `AWS_SESSION_TOKEN` and warns that a Web Function doesn't get every variable an Event Function
+  does, and an environment has no set lifetime and is never frozen, so the credentials must be
+  refreshed while it runs. `webFunctionAwsFromEnv` (`config.ts`) chooses the source by the names
+  Lambda sets, reading no key itself: Lambda's container credentials endpoint when
+  `AWS_CONTAINER_CREDENTIALS_FULL_URI` is set (with `AWS_CONTAINER_AUTHORIZATION_TOKEN`), as
+  Lambda's other long-lived environments use, or else the three key variables
+  (`server/storage/README.md` › The table `rtfm-app`). The manual store, the spending ledger and
+  the Bedrock client all sign with what that source gives (`ModelAccess` in `config.ts`). The
+  endpoint hands out new credentials whenever asked: the DynamoDB clients ask as the old ones near
+  expiry, and the Bedrock client before each call (`server/gateway/README.md` › The Bedrock
+  client). The key variables are read the same way, but a running process's environment never
+  changes, so they are never renewed, and the Web Function has Lambda replace its environment
+  before they run out (below). With neither source, without `RTFM_APP_TABLE`, `RTFM_USAGE_TABLE`
+  or `AWS_REGION`, or with an `AWS_CREDENTIAL_EXPIRATION` that isn't an ISO 8601 time with its
+  offset, the Web Function refuses to start and names what it needs.
+  `server.started` logs which source it chose (`credentials`: `container-endpoint` or
+  `environment`) and, for the key variables, when they expire (`credentialsExpireAt`: the time
+  `AWS_CREDENTIAL_EXPIRATION` gives, or `unset`), never a key, so the deployed app's log shows what
+  Lambda really gives.
 - **A new environment before its keys run out** (`replacement.ts`), since nothing else bounds an
-  environment's life while requests keep coming. When DynamoDB refuses the keys
-  (`ExpiredTokenException`, which is how it answers an expired session token, or
-  `UnrecognizedClientException`), it logs `server.keys-refused` with the `service`: the store
-  reports each refusal to the table's `onKeysRefused`, which only `web-function.ts` sets. When
+  environment's life while requests keep coming. When DynamoDB or Bedrock refuses the keys
+  (`ExpiredTokenException`, which is how each answers an expired session token, or
+  `UnrecognizedClientException`), it logs `server.keys-refused` with the `service` (`DynamoDB` or
+  `Bedrock`): the manual store, the spending ledger and the Bedrock client each report a refusal
+  to their `onKeysRefused`, which only `web-function.ts` sets. When
   `AWS_CREDENTIAL_EXPIRATION` is set, it logs `server.keys-expiring` 6 minutes before that time,
   with `plannedExitAt` and `msUntilExpiry`, so keys that arrive with less than that left read as
   such, and it exits at once; an expiry further away than a timer can wait (about 24.8 days) sets
@@ -117,8 +125,9 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 - **Only here.** This is the one place the server takes AWS credentials from the environment, and
   only `web-function.ts` asks for the execution role. On this machine `main.ts` keeps the manuals
   in files and the server reads AWS keys from `.env.local` alone (Configuration, below); no client
-  falls back to the environment, a profile or `~/.aws`. The table's endpoint is DynamoDB's in that
-  region, or `RTFM_DYNAMODB_ENDPOINT`, which only the tests set, to DynamoDB Local.
+  falls back to the environment, a profile or `~/.aws`. The tables' endpoint is DynamoDB's in that
+  region, or `RTFM_DYNAMODB_ENDPOINT`, and Bedrock's is Bedrock's, or `RTFM_BEDROCK_ENDPOINT`:
+  only the tests set them, to DynamoDB Local and a stand-in for Bedrock.
 - **A throwaway data folder** for the rest: the ledger, the kill switch and the lock,
   `rtfm-data-<random>` in the system's temporary folder (`/tmp` on Lambda), made when each
   environment starts. `RTFM_DATA_DIR` is ignored, and nothing written there outlives the
@@ -142,10 +151,10 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
   the server as `main.ts` does, cutting any request still open, during the exit above too.
 
 `scripts/build-web-function.ts` builds its package (`infra/README.md` › The Web Function's
-package). To run it on this machine as Lambda would, on any free port:
+package). To run it on this machine as Lambda would, on any free port, with the fake models:
 
 ```sh
-AWS_LAMBDA_HTTP_ENDPOINT=127.0.0.1:0 RTFM_APP_TABLE=<table> \
+AWS_LAMBDA_HTTP_ENDPOINT=127.0.0.1:0 RTFM_APP_TABLE=<table> RTFM_USAGE_TABLE=<table> \
   RTFM_DYNAMODB_ENDPOINT=<DynamoDB Local> AWS_REGION=us-west-2 AWS_ACCESS_KEY_ID=<dummy> \
   AWS_SECRET_ACCESS_KEY=<dummy> AWS_SESSION_TOKEN=<dummy> node server/web-function.ts
 ```
@@ -156,6 +165,10 @@ the table holds a passcode's digest (`writePasscodeDigest`). It answers only a r
 `Host` is an endpoint's domain, so `curl` must send one:
 `curl -H 'Host: x.lambda-web.us-west-2.on.aws' http://127.0.0.1:<port>/`. `npm run build` first
 puts the app in `dist/`.
+
+With `RTFM_MODELS=bedrock` it also needs `RTFM_BEDROCK_ENDPOINT`, a stand-in for Bedrock, and a
+table shaped as `rtfm-usage` in DynamoDB Local, as its test sets up: the dummy keys can't reach
+Bedrock itself.
 
 ## Choosing the models
 
@@ -169,10 +182,14 @@ section writer and the librarian's model, which also plans new manuals (`createM
   gateway, so one set of caps, the kill switch and the ledger cover every job.
 - **`RTFM_MODELS` also chooses the spending ledger** (`server/gateway/README.md` › The spending
   ledger): with `"fake"`, the data folder's ledger, totals and `STOP` file; with `"bedrock"`,
-  always the table `rtfm-usage` (`config.usageTable`), on this machine too, reached with
-  `rtfm-local`'s keys. There is no way to run Bedrock on the data folder's ledger. With Bedrock the
-  data folder's lock no longer guards money, since the caps are kept in the table; it still keeps
-  one server per data folder.
+  always the table `rtfm-usage` (`config.usageTable`), on this machine too. There is no way to
+  run Bedrock on the data folder's ledger. With Bedrock the data folder's lock no longer guards
+  money, since the caps are kept in the table; it still keeps one server per data folder.
+- **`config.modelAccess` says how the Bedrock models reach AWS**, Bedrock and `rtfm-usage` alike:
+  `{ kind: "env-local" }`, `rtfm-local`'s keys from `.env.local`, read when the models are built;
+  or, on the Web Function, `{ kind: "execution-role" }`, with the role's credentials and region,
+  Bedrock's endpoint (a stand-in's in its test) and the `onKeysRefused` that hears which service
+  refused the keys (The Web Function, above).
 - With `"fake"`, every job's model is `FAKE_MODEL` (`server/gateway/README.md` › The fake model),
   with the job's own `maxTokens` and idle timeout, and the gateway calls the fake model
   (`agent/fake-model.ts`); the fake writer (`writer/fake.ts`) sends the section's sample
@@ -180,10 +197,10 @@ section writer and the librarian's model, which also plans new manuals (`createM
   Bedrock client, and the writer is the Bedrock writer.
 - `createGateway` checks every job's model against the price table (`ModelNotPriced`), and only
   then calls the factories it is given, which, with Bedrock, read the credentials
-  (`CredentialsMissing`) and build the Bedrock client and the client for `rtfm-usage`. Either
-  problem stops the server from starting, and an unpriced model is reported without reading any
-  secret. The table isn't reached until the first call, so a server whose key can't reach it
-  starts, and each call then fails.
+  (`CredentialsMissing`, on this machine) and build the Bedrock client and the client for
+  `rtfm-usage`. Either problem stops the server from starting, and an unpriced model is reported
+  without reading any secret. The table isn't reached until the first call, so a server whose key
+  can't reach it starts, and each call then fails.
 - `createModels` also returns `idle`, the gateway's `idle()`.
 - Tests replace either model with `startServer(config, { writer, librarian })`. A test that passes
   its own gateway passes its `idle` too, and `close()` waits for it and for the configured
@@ -194,13 +211,13 @@ section writer and the librarian's model, which also plans new manuals (`createM
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the IAM user `rtfm-local`'s, `infra/README.md`), `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat, Bedrock's spending table (`usageTable`: `rtfm-usage`, in the region `.env.local` names) | `server/config.ts` | no |
+| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat, Bedrock's spending table (`usageTable`: `rtfm-usage`, in the region `.env.local` names), how the Bedrock models reach AWS (`modelAccess`) | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | The passcode on this machine: `RTFM_PASSCODE` | the environment, read by `server/config.ts`, which keeps only its digest | yes |
 | The passcode on the Web Function: its digest | the passcode's item in `rtfm-app`, set with `npm run ops -- passcode set` | yes: it opens the app |
 | The Web Function's address and built app: `AWS_LAMBDA_HTTP_ENDPOINT`, `RTFM_APP_DIR` | the environment, read by `server/config.ts` for `server/web-function.ts` (The Web Function, above) | no |
-| The Web Function's table: `RTFM_APP_TABLE`, `AWS_REGION`, where the execution role's credentials come from (`AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN`, or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`), and, in tests, `RTFM_DYNAMODB_ENDPOINT` | the environment Lambda and `RtfmApp` set, read by `server/config.ts` and the DynamoDB store for `server/web-function.ts` alone (The Web Function, above) | the credentials |
+| The Web Function's models and AWS: `RTFM_MODELS`, `RTFM_APP_TABLE`, `RTFM_USAGE_TABLE`, `AWS_REGION`, where the execution role's credentials come from (`AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN`, or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`), and, in tests, `RTFM_DYNAMODB_ENDPOINT` and `RTFM_BEDROCK_ENDPOINT` | the environment Lambda and `RtfmApp` set, read by `server/config.ts`, and the credentials by the DynamoDB clients and the Bedrock client, for `server/web-function.ts` alone (The Web Function, above) | the credentials |
 | The Web Function's own `Host`s and `Origin` | `server/web-function.ts` | no |
 | Prices | `server/gateway/prices.ts` | no |
 
@@ -361,7 +378,8 @@ the machine.
   exit through.
 - `dev.ts`: `npm run dev`: Vite plus `node --watch server/main.ts`.
 - `config.ts`: committed settings (Configuration, above), and the Web Function's
-  (`httpEndpointFromEnv`, `builtAppDirFromEnv`, `webFunctionTableFromEnv`).
+  (`httpEndpointFromEnv`, `builtAppDirFromEnv`, `webFunctionAwsFromEnv`), and `tableWith`, a
+  table by name reached with given credentials.
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
 - `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, the passcode's
   digest, models, gateway, routes; `close(graceMs?)` waits for model calls to settle.

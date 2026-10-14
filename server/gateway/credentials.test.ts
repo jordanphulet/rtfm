@@ -5,7 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tempDataDir } from "../testing.ts";
-import { CredentialsMissing, mainCheckoutRoot, readAwsCredentials } from "./credentials.ts";
+import { CredentialsMissing, mainCheckoutRoot, readAwsAccess } from "./credentials.ts";
 
 const FAKE_KEY_ID = "AKIAFAKEFORTESTSONLY";
 const FAKE_SECRET = "fake-secret-for-tests-only";
@@ -39,10 +39,9 @@ describe("AWS credentials", () => {
       ].join("\n"),
     );
 
-    expect(readAwsCredentials(envFile)).toEqual({
-      accessKeyId: FAKE_KEY_ID,
-      secretAccessKey: FAKE_SECRET,
+    expect(readAwsAccess(envFile)).toEqual({
       region: "us-west-2",
+      credentials: { kind: "keys", accessKeyId: FAKE_KEY_ID, secretAccessKey: FAKE_SECRET },
     });
     expect(process.env.AWS_ACCESS_KEY_ID).toBeUndefined();
     expect(process.env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
@@ -53,7 +52,7 @@ describe("AWS credentials", () => {
 
     let error: unknown;
     try {
-      readAwsCredentials(envFile);
+      readAwsAccess(envFile);
     } catch (caught) {
       error = caught;
     }
@@ -70,7 +69,7 @@ describe("AWS credentials", () => {
     vi.stubEnv("AWS_SECRET_ACCESS_KEY", FAKE_SECRET);
     vi.stubEnv("AWS_REGION", "us-west-2");
 
-    expect(() => readAwsCredentials(envFile)).toThrow(
+    expect(() => readAwsAccess(envFile)).toThrow(
       /AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION/,
     );
   });

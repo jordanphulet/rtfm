@@ -1,13 +1,25 @@
 import { spawn } from "node:child_process";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { request as httpRequest, type IncomingMessage, type OutgoingHttpHeaders } from "node:http";
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingHttpHeaders,
+  type IncomingMessage,
+  type OutgoingHttpHeaders,
+  type ServerResponse,
+} from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, onTestFinished } from "vitest";
 import type { LogEntry } from "./logging/logger.ts";
 import { passcodeDigest } from "./api/passcode.ts";
+import { answerKeysRefused, startEventStream } from "./gateway/bedrock-testing.ts";
+import { createDynamoDbSpendingLedger } from "./gateway/dynamodb-spending-ledger.ts";
+import { testUsageTable } from "./gateway/dynamodb-testing.ts";
 import { createDynamoDbManualStore, writePasscodeDigest } from "./storage/dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS, keyRefusingDynamoDb, testAppTable } from "./storage/dynamodb-testing.ts";
+import { monthOf } from "./storage/file-ledger.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "./testing.ts";
 
 const WEB_FUNCTION = fileURLToPath(new URL("./web-function.ts", import.meta.url));
@@ -20,6 +32,44 @@ const INDEX = "<!doctype html><title>RTFM</title>";
 const ENDPOINT_HOST = "abcdefghijklmnop.b7t.lambda-web.us-west-2.on.aws";
 const APP_ORIGIN = "https://rtfm.moonfetus.com";
 const STREAM_PATH = `/api/manuals/${SAMPLE_ID}/sections/${UNWRITTEN_ID}/stream`;
+
+/** A librarian's reply in one turn, as Claude streams it. */
+const REPLY_EVENTS = [
+  {
+    type: "message_start",
+    message: {
+      id: "msg_test",
+      type: "message",
+      role: "assistant",
+      model: "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      usage: { input_tokens: 40, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+    },
+  },
+  { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+  { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Good morning to you." } },
+  { type: "content_block_stop", index: 0 },
+  { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 6 } },
+  { type: "message_stop" },
+];
+
+/** A stand-in for Bedrock on loopback, answering every call with `respond` and keeping each call's headers. */
+async function standInBedrock(respond: (response: ServerResponse) => void) {
+  const received: IncomingHttpHeaders[] = [];
+  const server = createServer(async (request, response) => {
+    for await (const _ of request);
+    received.push(request.headers);
+    respond(response);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  onTestFinished(() => {
+    server.closeAllConnections();
+    return new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+  return { endpoint: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, received };
+}
 
 interface Answer {
   status: number;
@@ -49,7 +99,9 @@ async function startWebFunction(env: NodeJS.ProcessEnv = {}, { passcodeStored = 
       RTFM_PASSCODE: DECOY_PASSCODE,
       RTFM_DATA_DIR: undefined,
       RTFM_APP_TABLE: table.name,
+      RTFM_USAGE_TABLE: "rtfm-usage",
       RTFM_DYNAMODB_ENDPOINT: table.endpoint,
+      RTFM_BEDROCK_ENDPOINT: undefined,
       AWS_REGION: table.region,
       AWS_ACCESS_KEY_ID: DYNAMODB_LOCAL_CREDENTIALS.accessKeyId,
       AWS_SECRET_ACCESS_KEY: DYNAMODB_LOCAL_CREDENTIALS.secretAccessKey,
@@ -255,16 +307,54 @@ describe("web-function.ts", () => {
     expect(webFunction.entries().at(-1)).toMatchObject({ event: "server.stopped" });
   });
 
-  it("refuses to start with the Bedrock models", { timeout: TEST_TIMEOUT_MS }, async () => {
-    const webFunction = await startWebFunction({ RTFM_MODELS: "bedrock" });
-    expect(await webFunction.exited).toBe(1);
-    expect(webFunction.entries()).toEqual([
-      expect.objectContaining({
-        level: "ERROR",
-        event: "server.start-failed",
-        error: expect.objectContaining({ message: expect.stringContaining('not RTFM_MODELS="bedrock"') }),
-      }),
+  it("runs the Bedrock models as the execution role, reserving each call in RTFM_USAGE_TABLE", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const bedrock = await standInBedrock((response) => {
+      startEventStream(response, REPLY_EVENTS);
+      response.end();
+    });
+    const usageTable = await testUsageTable();
+    const webFunction = await startWebFunction({
+      RTFM_MODELS: "bedrock",
+      RTFM_USAGE_TABLE: usageTable.name,
+      RTFM_BEDROCK_ENDPOINT: bedrock.endpoint,
+    });
+    const port = await webFunction.listening();
+    expect(webFunction.entries()[0]).toMatchObject({ event: "server.started", models: "bedrock" });
+
+    const conversation = { messages: [{ role: "user", text: "Good morning" }] };
+    const reply = await send(port, "POST", "/api/librarian", await enterPasscode(port), conversation);
+    expect(reply.text).toMatch(/event: done\ndata: \{\}\n\n$/);
+
+    expect(bedrock.received).toHaveLength(1);
+    expect(bedrock.received[0]!.authorization).toContain(`Credential=${DYNAMODB_LOCAL_CREDENTIALS.accessKeyId}/`);
+    expect(bedrock.received[0]!["x-amz-security-token"]).toBe("a stand-in session token");
+    const entries = await createDynamoDbSpendingLedger(usageTable).entriesForMonth(monthOf(new Date().toISOString()));
+    expect(entries).toMatchObject([
+      { kind: "reserve", job: "librarian" },
+      { kind: "settle", job: "librarian", outcome: "complete" },
     ]);
+  });
+
+  it("exits with 1 once Bedrock refuses its keys, so Lambda replaces the environment", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const bedrock = await standInBedrock((response) => answerKeysRefused(response, "ExpiredTokenException"));
+    const usageTable = await testUsageTable();
+    const webFunction = await startWebFunction({
+      RTFM_MODELS: "bedrock",
+      RTFM_USAGE_TABLE: usageTable.name,
+      RTFM_BEDROCK_ENDPOINT: bedrock.endpoint,
+    });
+    const port = await webFunction.listening();
+
+    const conversation = { messages: [{ role: "user", text: "Good morning" }] };
+    const reply = await send(port, "POST", "/api/librarian", await enterPasscode(port), conversation);
+    expect(reply.text).toMatch(/event: failed\n/);
+
+    expect(await webFunction.exited).toBe(1);
+    expect(webFunction.entries().find(({ event }) => event === "server.keys-refused")).toMatchObject({
+      level: "WARN",
+      service: "Bedrock",
+    });
+    expect(webFunction.entries().at(-1)).toMatchObject({ event: "server.stopped" });
   });
 
   it("refuses to start without the execution role's credentials, naming where they could come from", { timeout: TEST_TIMEOUT_MS }, async () => {

@@ -23,6 +23,7 @@ import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Asset } from "aws-cdk-lib/aws-s3-assets";
 import type { Construct } from "constructs";
+import { claudeStatements } from "./bedrock.ts";
 import {
   ACCOUNT,
   APP_TABLE,
@@ -136,6 +137,7 @@ export class RtfmAppStack extends Stack {
         ReadAndWriteUsage: new PolicyDocument({
           statements: [new PolicyStatement({ actions: USAGE_TABLE_ACTIONS, resources: [USAGE_TABLE_ARN] })],
         }),
+        InvokeClaude: new PolicyDocument({ statements: claudeStatements() }),
       },
     });
     const code = new Asset(this, "WebFunctionCode", {
@@ -157,7 +159,9 @@ export class RtfmAppStack extends Stack {
         timeoutSeconds: WEB_FUNCTION_TIMEOUT_SECONDS,
         environmentVariables: {
           AWS_LAMBDA_NODEJS_ENTRYPOINT: WEB_FUNCTION_ENTRYPOINT,
+          RTFM_MODELS: "bedrock",
           RTFM_APP_TABLE: APP_TABLE,
+          RTFM_USAGE_TABLE: USAGE_TABLE,
         },
         telemetryConfig: { loggingConfig: { logGroup: APP_LOG_GROUP } },
       },

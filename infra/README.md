@@ -177,9 +177,10 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
     Its name never changes, since the edge's resource policy names it. One revision, made from
     the package below on `nodejs24.x`, with `timeoutSeconds` 300 (a request, a whole stream
     included, may run 5 minutes) and its logs in `/rtfm/app`. Its environment holds only
-    `AWS_LAMBDA_NODEJS_ENTRYPOINT` and `RTFM_APP_TABLE`, the table's name: `rtfm-read` can read a
-    revision (`GetWebFunctionRevision`), so nothing secret goes there. The server reads the
-    passcode's digest from the table (`README.md` › A passcode).
+    `AWS_LAMBDA_NODEJS_ENTRYPOINT`, `RTFM_MODELS=bedrock`, so it runs Claude Haiku 4.5, and
+    `RTFM_APP_TABLE` and `RTFM_USAGE_TABLE`, the tables' names: `rtfm-read` can read a revision
+    (`GetWebFunctionRevision`), so nothing secret goes there. The server reads the passcode's
+    digest from the table (`README.md` › A passcode).
   - **its endpoint `main`**: `HomeRegion`, `IamAuth`, at most 2 environments (`maxEnvironments`)
     and 100 requests a second (`rateLimit`). No role of RTFM's may invoke it; only the edge's
     distribution may, through the resource policy in `RtfmEdge`. The stack's output
@@ -188,9 +189,15 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
     streams in `/rtfm/app` and `/rtfm/app.local`, read and write items in the table `rtfm-app`
     (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `DeleteItem`, which also cover the store's
     transactions and the passcode's item, so it can read the digest that opens the app, and
-    write it too), and read and write items in the table `rtfm-usage` as `rtfm-local` may
-    (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `ConditionCheckItem`): no Bedrock, since the Web
-    Function runs only the fake models.
+    write it too), read and write items in the table `rtfm-usage` as `rtfm-local` may
+    (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `ConditionCheckItem`), so it reserves every
+    Bedrock call against the shared caps and kill switch, and call Claude as `rtfm-bedrock` does,
+    less the Marketplace subscription (`claudeStatements()` in `bedrock.ts`, which the boundary
+    already allows): `bedrock:InvokeModel` and `InvokeModelWithResponseStream` on Claude's
+    inference profiles and foundation models, and `bedrock-mantle:CreateInference` and
+    `ListModels` on `project/default`. It can't subscribe the account to a model through AWS
+    Marketplace, which the boundary doesn't allow, so it calls only models the account is
+    subscribed to: Haiku 4.5's subscription comes from `rtfm-local`'s first call (Your steps › 6).
   - **the table `rtfm-app`**, the library: the manuals and their sections
     (`server/storage/README.md` › The table `rtfm-app`).
   - **the table `rtfm-usage`**, Bedrock's spending ledger: every Bedrock call, from a laptop or
@@ -367,6 +374,43 @@ line prints `401` in place of `200`. That is the app failing closed, as it shoul
 still passes if everything else prints as above; tell the user to run
 `npm run ops -- passcode set` in a terminal outside the Claude app (Your steps › 7). Once they
 have, the Web Function reads the new digest within a minute.
+
+**One real section**, written by Claude through the domain, then found in `rtfm-usage`: the first
+unwritten section of the first manual that has one, streamed to its end, then the spend. A section
+is the `write-section` job, Haiku 4.5's cheapest whole piece of work, and costs $0.007–0.010
+(`server/README.md` › Configuration); its reservation holds about $0.025 against the caps until it
+settles. The section stays written, so the next check writes the next one.
+
+```sh
+app=https://rtfm.moonfetus.com
+cookie=$(npm run -s ops -- passcode cookie)
+manual=$(curl -sS -b "$cookie" "$app/api/manuals" | node -e '
+  const answer = JSON.parse(require("fs").readFileSync(0, "utf8"));
+  const manual = Array.isArray(answer) && answer.find((m) => m.writtenCount < m.sectionCount);
+  if (!manual) { console.error("No manual to write in:", JSON.stringify(answer)); process.exit(1); }
+  console.log(manual.id);') &&
+section=$(curl -sS -b "$cookie" "$app/api/manuals/$manual" | node -e '
+  const manual = JSON.parse(require("fs").readFileSync(0, "utf8"));
+  const sections = [...manual.chapters, ...manual.appendices].flatMap((c) => c.sections);
+  console.log(sections.find((s) => s.status === "unwritten").id);') &&
+curl -sS -N -b "$cookie" "$app/api/manuals/$manual/sections/$section/stream" \
+  | grep -A1 -E '^event: (written|failed)'
+npm run ops -- usage
+```
+
+It passes when the stream ends with `event: written` and `data: {}`, after 12–15 seconds of
+`append` events, and the usage report shows today one more `write-section` call on
+`global.anthropic.claude-haiku-4-5-20251001-v1:0`, settled at $0.007–0.010, with no unsettled
+reservation and the kill switch off. `npm run ops -- logs -e section` shows its `section.started`
+and `section.finished`.
+
+- **`event: failed`** with `{"reason":"budget"}`: the kill switch is on or a cap is reached; the
+  usage report says which. With `{"reason":"error"}`, `npm run ops -- logs --level warn` shows why,
+  such as Bedrock refusing the role (`AccessDeniedException`) or `server.keys-refused`.
+- **No passcode set yet:** every request with the empty cookie answers `401`, so the first `node`
+  prints `No manual to write in: {"error":"Passcode required"}` and the chain stops there: no
+  section is streamed, and the usage report shows no new call, so nothing reached Bedrock and
+  nothing was spent. The check waits for the passcode, as above.
 
 ## The boundary
 

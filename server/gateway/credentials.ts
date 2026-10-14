@@ -3,12 +3,13 @@ import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseEnv } from "node:util";
+import type { AwsCredentials } from "../storage/dynamodb-manual-store.ts";
 import { isErrorCode } from "../storage/files.ts";
 
-export interface AwsCredentials {
-  accessKeyId: string;
-  secretAccessKey: string;
+/** How the Bedrock models reach AWS, Bedrock and the table `rtfm-usage` alike: a region, and what signs there. */
+export interface AwsAccess {
   region: string;
+  credentials: AwsCredentials;
 }
 
 const REQUIRED_NAMES = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"] as const;
@@ -65,14 +66,14 @@ export class CredentialsMissing extends Error {
   }
 }
 
-export function readAwsCredentials(file: URL = ENV_LOCAL_FILE): AwsCredentials {
+/** `rtfm-local`'s keys and region, from `.env.local` alone. */
+export function readAwsAccess(file: URL = ENV_LOCAL_FILE): AwsAccess {
   const values = parseEnv(readTextIfExists(file));
   const missingNames = REQUIRED_NAMES.filter((name) => !values[name]?.trim());
   if (missingNames.length > 0) throw new CredentialsMissing(file, missingNames);
   return {
-    accessKeyId: values.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: values.AWS_SECRET_ACCESS_KEY!,
     region: values.AWS_REGION!,
+    credentials: { kind: "keys", accessKeyId: values.AWS_ACCESS_KEY_ID!, secretAccessKey: values.AWS_SECRET_ACCESS_KEY! },
   };
 }
 

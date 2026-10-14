@@ -39,6 +39,7 @@ async function runPackage(packageDir: string, tmp: string) {
       AWS_LAMBDA_HTTP_ENDPOINT: "127.0.0.1:0",
       RTFM_MODELS: undefined,
       RTFM_APP_TABLE: table.name,
+      RTFM_USAGE_TABLE: "rtfm-usage",
       RTFM_DYNAMODB_ENDPOINT: table.endpoint,
       AWS_REGION: table.region,
       AWS_ACCESS_KEY_ID: DYNAMODB_LOCAL_CREDENTIALS.accessKeyId,

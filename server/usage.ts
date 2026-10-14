@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { config, usageTableWith } from "./config.ts";
-import { readAwsCredentials } from "./gateway/credentials.ts";
+import { config, tableWith } from "./config.ts";
+import { readAwsAccess } from "./gateway/credentials.ts";
 import { createDynamoDbSpendingLedger } from "./gateway/dynamodb-spending-ledger.ts";
 import { killSwitchPath } from "./gateway/file-spending-ledger.ts";
 import { importUsage } from "./gateway/usage-import.ts";
@@ -17,7 +17,7 @@ const dataDir = positionals[0] ?? config.dataDir;
 const now = new Date();
 const month = monthOf(now.toISOString());
 const dataFolderLedger = createFileLedger(dataDir, createLogger([toStandardError]));
-const usageTableLedger = () => createDynamoDbSpendingLedger(usageTableWith(config.usageTable, readAwsCredentials()));
+const usageTableLedger = () => createDynamoDbSpendingLedger(tableWith(config.usageTable, readAwsAccess()));
 
 function refuse(message: string): never {
   console.error(message);

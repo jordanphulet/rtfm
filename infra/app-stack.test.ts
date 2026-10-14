@@ -182,10 +182,12 @@ describe("the Web Function", () => {
     expect(canExecute("s3:GetObjectVersion", stagedCode)).toBe(true);
   });
 
-  it("puts nothing secret in its environment, which rtfm-read can read: the entry and the table, and no passcode", () => {
+  it("puts nothing secret in its environment, which rtfm-read can read: the entry, the models and the tables, and no passcode", () => {
     expect((revision!.ServiceConfig as { EnvironmentVariables: object }).EnvironmentVariables).toEqual({
       AWS_LAMBDA_NODEJS_ENTRYPOINT: BUILT_ENTRYPOINT,
+      RTFM_MODELS: "bedrock",
       RTFM_APP_TABLE: APP_TABLE,
+      RTFM_USAGE_TABLE: USAGE_TABLE,
     });
     expect(WEB_FUNCTION_ENTRYPOINT).toBe(BUILT_ENTRYPOINT);
   });
@@ -241,9 +243,15 @@ describe("the Web Function's role", () => {
     expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN, { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] })).toBe(true);
   });
 
-  it("can't call Bedrock: the Web Function runs only the fake models", () => {
-    const haiku = "arn:aws:bedrock:us-west-2:438180219169:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0";
-    expect(webFunctionCan("bedrock:InvokeModel", haiku)).toBe(false);
-    expect(webFunctionCan("bedrock:InvokeModelWithResponseStream", haiku)).toBe(false);
+  it("calls Claude on Bedrock, through the global profile and the models it routes to, and no other model", () => {
+    const haikuProfile = "arn:aws:bedrock:us-west-2:438180219169:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0";
+    const haikuModel = "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0";
+    for (const resource of [haikuProfile, haikuModel]) {
+      expect(webFunctionCan("bedrock:InvokeModel", resource), resource).toBe(true);
+      expect(webFunctionCan("bedrock:InvokeModelWithResponseStream", resource), resource).toBe(true);
+    }
+    expect(webFunctionCan("bedrock:InvokeModel", "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0")).toBe(false);
+    expect(webFunctionCan("bedrock:CreateModelCustomizationJob", haikuModel)).toBe(false);
+    expect(webFunctionCan("aws-marketplace:Subscribe", "*")).toBe(false);
   });
 });

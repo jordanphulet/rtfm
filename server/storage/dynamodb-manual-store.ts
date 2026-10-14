@@ -27,21 +27,27 @@ export interface DynamoDbTable {
   name: string;
   region: string;
   endpoint: string;
-  credentials: TableCredentials;
+  credentials: AwsCredentials;
   /** Called with a call's error each time DynamoDB refuses the keys (`KEYS_REFUSED`). */
   onKeysRefused?: (error: Error) => void;
 }
 
 /**
- * Fixed keys (DynamoDB Local's, in tests; a role's temporary ones, with their session token, for
- * the ops tools), or the Web Function's execution role, through Lambda's
- * container credentials endpoint, which hands out new ones whenever the client asks as they near
- * expiry, or the variables Lambda sets, which a running process can't see change, so those are
- * never renewed and last until `expiresAt`, when Lambda gives it (`server/README.md` › The Web
- * Function).
+ * What signs a request to AWS, a table's or Bedrock's: fixed keys (`rtfm-local`'s from
+ * `.env.local`; DynamoDB Local's, in tests; a role's temporary ones, with their session token, for
+ * the ops tools), or the Web Function's execution role.
  */
-export type TableCredentials =
+export type AwsCredentials =
   | { kind: "keys"; accessKeyId: string; secretAccessKey: string; sessionToken?: string }
+  | ExecutionRoleCredentials;
+
+/**
+ * The Web Function's execution role, through Lambda's container credentials endpoint, which hands
+ * out new credentials whenever it is asked, or the variables Lambda sets, which a running process
+ * can't see change, so those are never renewed and last until `expiresAt`, when Lambda gives it
+ * (`server/README.md` › The Web Function).
+ */
+export type ExecutionRoleCredentials =
   | { kind: "container-endpoint"; fullUri: string; authorizationToken: string | undefined }
   | { kind: "environment"; expiresAt: Date | undefined };
 
@@ -544,7 +550,7 @@ function keysRefused(error: unknown): error is Error {
  * Fixed keys as they are; the execution role's as a provider, which the client calls again
  * whenever the credentials it holds near their expiry.
  */
-function credentialsFor(credentials: TableCredentials): DynamoDBClientConfig["credentials"] {
+function credentialsFor(credentials: AwsCredentials): DynamoDBClientConfig["credentials"] {
   switch (credentials.kind) {
     case "keys":
       if (!credentials.accessKeyId || !credentials.secretAccessKey) {
@@ -555,6 +561,18 @@ function credentialsFor(credentials: TableCredentials): DynamoDBClientConfig["cr
         secretAccessKey: credentials.secretAccessKey,
         sessionToken: credentials.sessionToken,
       };
+    case "container-endpoint":
+    case "environment":
+      return executionRoleProvider(credentials);
+  }
+}
+
+/**
+ * The execution role's credentials as a provider that asks their source each time it is called:
+ * the DynamoDB clients' and the Bedrock client's.
+ */
+export function executionRoleProvider(credentials: ExecutionRoleCredentials) {
+  switch (credentials.kind) {
     case "container-endpoint":
       // Empty, not absent, so the environment's relative URI and token file can't take their place.
       return fromHttp({

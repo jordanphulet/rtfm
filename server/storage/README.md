@@ -174,9 +174,11 @@ given: the table's name, region, endpoint and credentials. The credentials are f
 tools in `scripts/ops/`), or the Web Function's execution role: a provider on Lambda's
 container credentials endpoint (`fromHttp`, given its URI and token, with the environment's
 relative URI and token file set aside) or on the environment's key variables (`fromEnv`, which
-reads them at call time and honours `AWS_CREDENTIAL_EXPIRATION`). The client holds what a provider
-gives and asks again once it is within five minutes of expiring. The endpoint then hands out new
-credentials; the environment can't change under a running process, so its keys are never
+reads them at call time and honours `AWS_CREDENTIAL_EXPIRATION`), which `executionRoleProvider`
+builds, for the Bedrock client too (`server/gateway/README.md` › The Bedrock client). The types
+are `AwsCredentials` and, for the role alone, `ExecutionRoleCredentials`. The client holds what a
+provider gives and asks again once it is within five minutes of expiring. The endpoint then hands
+out new credentials; the environment can't change under a running process, so its keys are never
 renewed. When the table names an `onKeysRefused`, the client calls it with the error of each call
 DynamoDB refuses for its keys (`ExpiredTokenException` or `UnrecognizedClientException`), once
 the SDK's retries are done, even where the caller goes on quietly, as a lease renewal does; only

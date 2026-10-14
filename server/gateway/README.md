@@ -179,10 +179,13 @@ and `npm run usage` both use it, so they count spend the same way. `monthOf` com
 
 `RtfmApp` holds the table (`infra/README.md` › The stacks): on demand, with point-in-time recovery
 and deletion protection, and kept when it leaves the stack. On this machine the server reaches it
-with `rtfm-local`'s keys from `.env.local`, read only by `credentials.ts`, in their region
-(`usageTableWith` in `server/config.ts`), through the manual store's client builder
+with `rtfm-local`'s keys from `.env.local`, read only by `credentials.ts`, in their region, and
+the Web Function as its execution role (`config.modelAccess`, `server/README.md` › Choosing the
+models; `tableWith` in `server/config.ts`), through the manual store's client builder
 (`documentClient` in `storage/dynamodb-manual-store.ts`: every setting pinned, no credential
-chain). One table holds three kinds of item, told apart by their keys, two strings:
+chain). On the Web Function a refusal of the role's keys is reported to `onKeysRefused`, as the
+manual store's is (`server/README.md` › The Web Function). One table holds three kinds of item,
+told apart by their keys, two strings:
 
 | Item | `pk` | `sk` | Other attributes |
 | --- | --- | --- | --- |
@@ -264,16 +267,43 @@ Bedrock model's, and it is in the price table with every price at 0, so:
 
 ## The Bedrock client
 
-**`bedrock-client.ts`** is the only importer of `@anthropic-ai/bedrock-sdk`. It builds the client
-with every option that would otherwise fall back to the environment set explicitly:
+**`bedrock-client.ts`** is the only importer of `@anthropic-ai/bedrock-sdk`. It takes an `AwsAccess`
+(`credentials.ts`), a region and what signs there, and builds the client with every option that
+would otherwise fall back to the environment set explicitly:
 
-- the keys from `.env.local` as `awsAccessKey` and `awsSecretKey` (never `process.env`), and
-  `awsRegion`, so `AWS_REGION` is never read;
-- `baseURL`, the region's endpoint, so `ANTHROPIC_BEDROCK_BASE_URL` is never read;
+- `awsRegion`, so `AWS_REGION` is never read;
+- `baseURL`, the region's endpoint, so `ANTHROPIC_BEDROCK_BASE_URL` is never read (the Web
+  Function's test gives a stand-in's);
 - `apiKey: null`, so `AWS_BEARER_TOKEN_BEDROCK` can't replace SigV4 signing;
-- a `providerChainResolver` that throws, so the default AWS credential chain never runs;
+- a `providerChainResolver` of its own, in place of the SDK's default chain (the environment,
+  profiles, `~/.aws`, IMDS), which the SDK calls before each request for the credentials to sign
+  it with:
+  - **fixed keys** (`rtfm-local`'s from `.env.local`) as they are; an empty one throws
+    `KEYS_MISSING`, so no request is sent;
+  - **the execution role's** (the Web Function's), through `executionRoleProvider`
+    (`storage/dynamodb-manual-store.ts`), the same source the DynamoDB clients use: Lambda's
+    container credentials endpoint, asked again before each call, or the variables Lambda sets,
+    with their session token, read again before each call (`server/README.md` › The Web
+    Function). A model call takes seconds, so asking each time costs nothing that matters, and the
+    keys are never stale;
 - `maxRetries: 0`, one reservation for one HTTP call;
 - `timeout`, the idle timeout (step 4).
+
+**Refused keys.** When Bedrock refuses the keys, the client calls its `onKeysRefused` with the
+error before throwing it; only the Web Function gives one (`server/README.md` › The Web Function).
+Bedrock answers an expired session token with `ExpiredTokenException` and keys it doesn't know
+with `UnrecognizedClientException`, both with status 403 (the Bedrock API Reference's Common
+Errors, read 2026-10-13). The SDK's errors aren't the AWS SDK's: it throws an `APIError`
+(`@anthropic-ai/sdk` 0.133.0, its error module) carrying the response's `status`, `headers` and
+JSON body (`error`), and 403 alone can't tell these from `AccessDeniedException` or a bad
+signature. So the client reads the error's name as the AWS SDK reads a REST JSON error
+(`loadRestJsonErrorCode` in `@aws-sdk/core`): the `x-amzn-errortype` header, or else the body's
+`code` or `__type`, cut at the first `:` or `,` and after a `#`. Any other error, a credentials
+source that fails included, is no refusal.
+
+**Keys out of errors.** Every key and session token the client signs with is written out of a
+failed call's message and stack (`[redacted]`), since a signature error quotes the access key ID
+and errors are logged.
 
 It maps `message_start` and `message_delta` to `usage`, `text_delta` to `text`, each
 `input_json_delta` to `tool-input`, a `tool_use` block (its start, input fragments and stop) to one
@@ -302,11 +332,13 @@ to the shared 30s, and over it if Bedrock is slower. So `plan-manual` has its ow
 
 - **Option names:** `awsAccessKey`, `awsSecretKey`, `awsRegion`, `awsSessionToken`, `apiKey`,
   `providerChainResolver`, `baseURL`, `maxRetries`, `timeout`. There is no `awsSecretAccessKey`.
-- **Static keys bypass the chain:** when both keys are non-empty, the signer builds the
-  credentials from them. `providerChainResolver` is called only when either is missing or empty;
-  without one, the SDK's default resolver runs `fromEnv` and then `fromNodeProviderChain`
-  (profiles, `~/.aws/*`, SSO, IMDS). Ours throws instead, so the call fails with its message before
-  any request is sent.
+- **The resolver signs every request:** the client passes no `awsAccessKey` or `awsSecretKey`
+  (both default to `null`, never to the environment), so the signer calls `providerChainResolver`
+  for each request (its `getAuthHeaders`), then the provider it returns, and signs
+  with that provider's keys and session token. Without a resolver, the SDK's default one runs
+  `fromEnv` and then `fromNodeProviderChain` (profiles, `~/.aws/*`, SSO, IMDS). An error the
+  resolver itself throws (`KEYS_MISSING`) fails the call as it is, before any request is sent; one
+  from the provider is wrapped in an `APIConnectionError`.
 - **`apiKey`** is typed `string | undefined` and defaults to `AWS_BEARER_TOKEN_BEDROCK`. A
   destructuring default only applies to `undefined`, so `null` passes through as the base
   client's `authToken: null`, and the SDK signs with SigV4 whenever there is no `authToken`. The
@@ -329,7 +361,11 @@ Haiku 4.5 has thinking off unless asked. No `cache_control` is sent: Haiku 4.5 c
 of at least 4,096 tokens, and every call's whole input is shorter than that (`server/README.md` ›
 Configuration).
 
-**`credentials.ts`** reads `.env.local` with `util.parseEnv(readFileSync(ENV_LOCAL_FILE, "utf8"))`.
+**`credentials.ts`** holds `AwsAccess`, a region and the credentials that sign there (fixed keys or
+the execution role's, `AwsCredentials` in `storage/dynamodb-manual-store.ts`), and `readAwsAccess`,
+which reads `rtfm-local`'s from `.env.local` with
+`util.parseEnv(readFileSync(ENV_LOCAL_FILE, "utf8"))`. The Web Function's access comes from its
+environment instead (`server/README.md` › The Web Function), never through this file.
 
 - `ENV_LOCAL_FILE` is in the main checkout's root, the parent of `git rev-parse
   --path-format=absolute --git-common-dir`, resolved once when the module loads. So a server
@@ -343,8 +379,9 @@ Configuration).
 - If any is missing, it throws `CredentialsMissing`, which names the missing variables and the
   models that need them (the section writer, the librarian and the planner) and never prints a
   value, so the server refuses to start with the Bedrock models. `app.ts` calls it when
-  `config.models` is `"bedrock"`, for the Bedrock client and for the table `rtfm-usage`, which the
-  same keys reach; `usage.ts` calls it to read that table.
+  `config.models` is `"bedrock"` and `config.modelAccess` is `"env-local"`, for the Bedrock client
+  and for the table `rtfm-usage`, which the same keys reach; `usage.ts` calls it to read that
+  table.
 
 ## Tests
 
@@ -357,13 +394,17 @@ with `@anthropic-ai/` or `@aws-sdk/`, or a listed adapter names none, or anythin
 `server/gateway/` and `server/app.ts` imports `bedrock-client`, so nothing can call the client
 without going through the caps.
 `bedrock-client.test.ts` runs the client against a local server that answers with real Bedrock
-event-stream frames, with fake keys and `AWS_PROFILE`, `AWS_BEARER_TOKEN_BEDROCK`,
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `ANTHROPIC_API_KEY`,
-`ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BEDROCK_BASE_URL` set to decoys: the request is signed with
-the fake key and carries no decoy, and with an empty key nothing is sent. Removing either guard
-fails it. The other tests next to the gateway, the spending ledgers, the ledger, `app.ts`,
-`config.ts` and `main.ts` cover each rule in this README, the shutdown order in `server/README.md`
-› How it runs and the committed config's room for the librarian. `app.test.ts` checks that a
+event-stream frames (`bedrock-testing.ts`, which the Web Function's test shares), with fake keys
+and `AWS_PROFILE`, `AWS_BEARER_TOKEN_BEDROCK`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+`AWS_REGION`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BEDROCK_BASE_URL` set to
+decoys: the request is signed with the fake key and carries no decoy, and with an empty key nothing
+is sent. Removing either guard fails it. As the execution role, it signs with the environment's
+keys and session token, read again for each call, and with what a container credentials endpoint
+on loopback hands out, asked for each call. It tells `onKeysRefused` of `ExpiredTokenException`
+and `UnrecognizedClientException`, named in the header or the body alone, and of nothing else.
+The other tests next to the gateway, the spending ledgers, the ledger, `app.ts`, `config.ts` and
+`main.ts` cover each rule in this README, the shutdown order in `server/README.md` › How it runs
+and the committed config's room for the librarian. `app.test.ts` checks that a
 server with Bedrock takes its kill switch and caps from `rtfm-usage` (on DynamoDB Local) and
 writes no ledger in its data folder.
 
@@ -405,7 +446,9 @@ data folder's ledger as it is.
 - `ledger-calls.ts`: pairs reserve and settle entries into calls (replay and usage).
 - `usage-import.ts`: `npm run usage -- --import`.
 - `prices.ts`: the dated price table, cost and worst-case cost.
-- `credentials.ts`: reads the AWS keys from `.env.local`.
+- `credentials.ts`: `AwsAccess`, and `readAwsAccess`, which reads the AWS keys from `.env.local`.
 - `bedrock-client.ts`: the only file that imports `@anthropic-ai/bedrock-sdk`.
+- `bedrock-testing.ts`: the tests' stand-in answers for Bedrock: event-stream frames and refused
+  keys.
 - `usage-report.ts`: `npm run usage`'s figures (`usageSummary`) and report.
 - `sdk-boundary.test.ts`: fails if anything else imports the SDK or the client.
