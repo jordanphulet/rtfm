@@ -7,8 +7,6 @@ import {
   APP_LOCAL_LOG_GROUP,
   APP_LOG_GROUP,
   APP_STACK,
-  APP_TABLE,
-  APP_TABLE_ARN,
   THROWAWAY_PASSCODE,
   WEB_FUNCTION,
   WEB_FUNCTION_ENDPOINT,
@@ -17,6 +15,8 @@ import {
 } from "./app-stack.ts";
 import { createApp } from "./app.ts";
 import {
+  APP_TABLE,
+  APP_TABLE_ARN,
   BOOTSTRAP_ROLES,
   BOUNDARY_POLICY,
   PROJECT_TAG,

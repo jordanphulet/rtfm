@@ -41,8 +41,10 @@ TypeScript directly on Node 22.18+, as `scripts/` does, with its own `tsconfig.s
   and runs the server as the whole process with `runServerProcess` (`app.ts`), as
   `web-function.ts` does (The Web Function, below). Its first line, `server.started`, says
   `API server on http://127.0.0.1:<port>` and the model source.
-  - On SIGINT and SIGTERM it closes the server and then exits. `close()` closes every connection,
-    which aborts the sections being written and the librarian's replies; waits until the gateway is
+  - On SIGINT and SIGTERM it closes the server and then exits. `close()` stops taking connections
+    and closes every open one, which aborts the sections being written and the librarian's replies
+    (`close(graceMs)` first lets the open requests end, for up to `graceMs`, as the Web Function
+    does before it is replaced: The Web Function, below); waits until the gateway is
     idle (`server/gateway/README.md` › Stopping); then releases the data folder's lock
     (`server/storage/README.md` › The data folder's lock) and logs `server.stopped`. Under
     `npm run dev` the signal comes from Ctrl-C, `dev.ts` forwarding one, or `node --watch`
@@ -88,11 +90,30 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
   or else the three key variables (`server/storage/README.md` › The table `rtfm-app`). The
   endpoint hands out new credentials whenever the store asks as the old ones near expiry. The key
   variables are read when the store asks too, but a running process's environment never changes,
-  so they are never renewed: if Lambda gives only those and an environment outlives them, its
-  DynamoDB calls fail. With neither, or without `RTFM_APP_TABLE` or `AWS_REGION`, the Web Function
+  so they are never renewed, and the Web Function has Lambda replace its environment before they
+  run out (below). With neither, without `RTFM_APP_TABLE` or `AWS_REGION`, or with an
+  `AWS_CREDENTIAL_EXPIRATION` that isn't an ISO 8601 time with its offset, the Web Function
   refuses to start and names what it needs. `server.started` logs which source it chose
-  (`credentials`: `container-endpoint` or `environment`), never a value, so the deployed app's log
-  shows which one Lambda really gives.
+  (`credentials`: `container-endpoint` or `environment`) and, for the key variables, when they
+  expire (`credentialsExpireAt`: the time `AWS_CREDENTIAL_EXPIRATION` gives, or `unset`), never a
+  key, so the deployed app's log shows what Lambda really gives.
+- **A new environment before its keys run out** (`replacement.ts`), since nothing else bounds an
+  environment's life while requests keep coming. When DynamoDB refuses the keys
+  (`ExpiredTokenException`, which is how it answers an expired session token, or
+  `UnrecognizedClientException`), it logs `server.keys-refused` with the `service`: the store
+  reports each refusal to the table's `onKeysRefused`, which only `web-function.ts` sets. When
+  `AWS_CREDENTIAL_EXPIRATION` is set, it logs `server.keys-expiring` 6 minutes before that time,
+  with `plannedExitAt` and `msUntilExpiry`, so keys that arrive with less than that left read as
+  such, and it exits at once; an expiry further away than a timer can wait (about 24.8 days) sets
+  none. The first of these starts the exit: it closes the server with 300 seconds' grace, the
+  revision's `timeoutSeconds`. It stops listening at once, so a request Lambda routes to the
+  environment on a new connection during the drain is refused; it answers a request that still
+  comes on an open connection with `Connection: close`, lets the open requests end and cuts any
+  still open after the grace; then it waits for the gateway, logs `server.stopped`, and exits
+  with code 1. AWS's error types name a process that
+  exits (`Runtime.Exit`, between requests, and `Runtime.ExitError`) and a request that finds it
+  gone (`Runtime.Unreachable`), but the docs don't say when Lambda replaces such an environment:
+  the deployed app's log shows it.
 - **Only here.** This is the one place the server takes AWS credentials from the environment, and
   only `web-function.ts` asks for the execution role. On this machine `main.ts` keeps the manuals
   in files and the server reads AWS keys from `.env.local` alone (Configuration, below); no client
@@ -118,7 +139,7 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
   curl -b /tmp/rtfm-cookies https://rtfm.moonfetus.com/api/manuals
   ```
 - On SIGTERM, which Lambda sends when it removes an environment, with 1 second to exit, it closes
-  the server as `main.ts` does.
+  the server as `main.ts` does, cutting any request still open, during the exit above too.
 
 `scripts/build-web-function.ts` builds its package (`infra/README.md` › The Web Function's
 package). To run it on this machine as Lambda would, on any free port:
@@ -329,6 +350,8 @@ the machine.
 
 - `main.ts`: starts the server from `config.ts` (`npm run server`).
 - `web-function.ts`: starts the server on a Lambda Web Function (The Web Function, above).
+- `replacement.ts`: `environmentReplacement`, the Web Function's exit before its keys run out
+  (The Web Function, above).
 - `exit.ts`: `exitOnceWritten`, which `app.ts`'s `runServerProcess` and `scripts/serve-temp.ts`
   exit through.
 - `dev.ts`: `npm run dev`: Vite plus `node --watch server/main.ts`.
@@ -336,8 +359,9 @@ the machine.
   (`httpEndpointFromEnv`, `builtAppDirFromEnv`, `webFunctionTableFromEnv`).
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
 - `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, models, gateway,
-  routes; `close()` waits for model calls to settle. `runServerProcess(config, logger)`: the
-  server as the whole process, for `main.ts` and `web-function.ts`.
+  routes; `close(graceMs?)` waits for model calls to settle. `runServerProcess(config, logger)`:
+  the server as the whole process, for `main.ts` and `web-function.ts`, giving back the started
+  server.
 - `testing.ts`: helpers shared by the tests: temp folders, the fake model's `FAST_PACE` and a
   fast fake writer that calls it directly, the price table with the test model (`TEST_PRICES`)
   and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`

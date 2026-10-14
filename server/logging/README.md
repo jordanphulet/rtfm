@@ -120,6 +120,9 @@ error's stack indented under it; `README.md` › Logs has its options.
   UTC day changes it moves to the new day's file.
 - Lines that aren't log entries are skipped.
 
+`npm run ops -- logs` (`README.md` › The ops tools) reads the deployed app's entries from CloudWatch
+with the same options (`LOG_OPTIONS` and `logOptionsFrom`), filter and format.
+
 ## Tests
 
 Tests next to each module check: the line's shape and levels; the daily files, retention, the
@@ -137,4 +140,5 @@ reaches the log file (`api/logging.test.ts`), nor the passcode, entered or in a 
 
 - `logger.ts`: `createLogger`, the line's shape, standard output and standard error.
 - `log-file.ts`: the daily log files in the data folder, and their retention.
-- `log-reader.ts`: reads, filters and formats entries for `npm run logs`.
+- `log-reader.ts`: reads, filters and formats entries for `npm run logs`, with the options it
+  shares with `npm run ops -- logs`.

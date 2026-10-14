@@ -158,13 +158,17 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
 
 The client (`createDynamoDbManualStore(table)`) takes everything from the `DynamoDbTable` it is
 given: the table's name, region, endpoint and credentials. The credentials are fixed keys
-(DynamoDB Local's, in the tests), or the Web Function's execution role: a provider on Lambda's
+(DynamoDB Local's, in the tests; a role's temporary keys with their session token, for the ops
+tools in `scripts/ops/`), or the Web Function's execution role: a provider on Lambda's
 container credentials endpoint (`fromHttp`, given its URI and token, with the environment's
 relative URI and token file set aside) or on the environment's key variables (`fromEnv`, which
 reads them at call time and honours `AWS_CREDENTIAL_EXPIRATION`). The client holds what a provider
 gives and asks again once it is within five minutes of expiring. The endpoint then hands out new
 credentials; the environment can't change under a running process, so its keys are never
-renewed.
+renewed. When the table names an `onKeysRefused`, the client calls it with the error of each call
+DynamoDB refuses for its keys (`ExpiredTokenException` or `UnrecognizedClientException`), once
+the SDK's retries are done, even where the caller goes on quietly, as a lease renewal does; only
+`web-function.ts` gives one, to have Lambda replace its environment.
 
 Every setting the AWS SDK would otherwise look up in the environment or in `~/.aws` (credentials,
 region, endpoint, retries, defaults mode, user agent app id, dual-stack and FIPS endpoints,
@@ -176,8 +180,9 @@ credentials against a stand-in. It refuses fixed keys that are empty. Who gives 
 credentials is `server/README.md` › The Web Function.
 
 **Room for what comes next.** Each kind of item has its own partition key, so later items fit
-beside these: the passcode's digest as one item of its own partition, which `rtfm-ops` can be
-limited to with `dynamodb:LeadingKeys`.
+beside these: the passcode's digest as one item of the partition `PASSCODE` (`PASSCODE_PARTITION`
+in `infra/rtfm.ts`), the one partition of `rtfm-app` that `rtfm-ops` may read and write, limited
+to it with `dynamodb:LeadingKeys` (`infra/README.md` › The identities).
 
 **Changing the stored form.** The table is deployed data: a change to these items carries its
 migration, or reads the old form too (`ARCHITECTURE.md` › Everything runs on one machine).
@@ -353,7 +358,8 @@ delete `.data/ledger/`, because the caps are computed from it.
   Its client builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's
   table `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
-- `dynamodb-testing.ts`: the tests' tables in DynamoDB Local.
+- `dynamodb-testing.ts`: the tests' tables in DynamoDB Local, and a stand-in in front of one that
+  refuses the keys when told to (`keyRefusingDynamoDb`).
 - `file-ledger.ts`: the usage ledger as JSON lines.
 - `files.ts`: reads a file or folder that may not exist; creates a file only if it doesn't exist.
 - `lock.ts`: the data folder's lock: one server per folder.

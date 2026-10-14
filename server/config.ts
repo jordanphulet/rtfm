@@ -120,8 +120,9 @@ export function webFunctionTableFromEnv(): DynamoDbTable {
  * Where the execution role's temporary credentials come from, by the names Lambda sets: its
  * container credentials endpoint (`AWS_CONTAINER_CREDENTIALS_FULL_URI`, with
  * `AWS_CONTAINER_AUTHORIZATION_TOKEN`) when it gives one, or else `AWS_ACCESS_KEY_ID`,
- * `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`. It reads no key itself: the DynamoDB store
- * reads the chosen source each time its credentials need refreshing.
+ * `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`, which expire at `AWS_CREDENTIAL_EXPIRATION` when
+ * Lambda sets it. It reads no key itself: the DynamoDB store reads the chosen source each time its
+ * credentials need refreshing.
  */
 function executionRoleCredentialsFromEnv(): TableCredentials {
   const fullUri = process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI;
@@ -129,12 +130,22 @@ function executionRoleCredentialsFromEnv(): TableCredentials {
     return { kind: "container-endpoint", fullUri, authorizationToken: process.env.AWS_CONTAINER_AUTHORIZATION_TOKEN };
   }
   if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_SESSION_TOKEN) {
-    return { kind: "environment" };
+    return { kind: "environment", expiresAt: expiryFromEnv(process.env.AWS_CREDENTIAL_EXPIRATION) };
   }
   throw new Error(
     "The Web Function needs its execution role's credentials: AWS_CONTAINER_CREDENTIALS_FULL_URI, " +
       "or AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN, which Lambda sets",
   );
+}
+
+/** An ISO 8601 date and time with its offset, as `2026-10-13T21:30:00Z`. */
+const ISO_8601_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+
+function expiryFromEnv(value = ""): Date | undefined {
+  if (value === "") return undefined;
+  const expiresAt = new Date(value);
+  if (ISO_8601_TIME.test(value) && !Number.isNaN(expiresAt.getTime())) return expiresAt;
+  throw new Error(`AWS_CREDENTIAL_EXPIRATION must be an ISO 8601 time, not "${value}"`);
 }
 
 /** The `host:port` a Web Function listens on, from `AWS_LAMBDA_HTTP_ENDPOINT`, which Lambda sets. */

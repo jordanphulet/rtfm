@@ -10,7 +10,7 @@ import { createRequestHandler } from "./api/node-adapter.ts";
 import { passcodeRoute } from "./api/passcode.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
-import { usageTableWith, type ServerConfig } from "./config.ts";
+import { usageTableWith, type ManualStorage, type ServerConfig } from "./config.ts";
 import { exitOnceWritten } from "./exit.ts";
 import { createBedrockClient } from "./gateway/bedrock-client.ts";
 import { ENV_LOCAL_FILE, readAwsCredentials } from "./gateway/credentials.ts";
@@ -21,7 +21,7 @@ import { prices } from "./gateway/prices.ts";
 import type { SpendingLedger } from "./gateway/spending-ledger.ts";
 import { FAKE_MODEL, type Job, type ModelClient } from "./gateway/types.ts";
 import { toLogFile } from "./logging/log-file.ts";
-import { createLogger, type Logger } from "./logging/logger.ts";
+import { createLogger, type LogFields, type Logger } from "./logging/logger.ts";
 import { createDynamoDbManualStore, createDynamoDbSectionLeases } from "./storage/dynamodb-manual-store.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
@@ -36,7 +36,11 @@ import type { SectionWriter } from "./writer/types.ts";
 
 export interface RunningServer {
   port: number;
-  close(): Promise<void>;
+  /**
+   * Stops taking connections, lets the open requests end for up to `graceMs`, then cuts any still
+   * open, and resolves once every model call is settled. A later call may cut them sooner.
+   */
+  close(graceMs?: number): Promise<void>;
 }
 
 /** Who writes sections, who answers as the librarian, and when their model calls have all been recorded. */
@@ -55,9 +59,9 @@ const nothingToSettle = async () => {};
 /**
  * Runs the server as this whole process, for `main.ts` and `web-function.ts`: it stops on SIGINT
  * or SIGTERM and exits with 0, or exits with 1 if the server can't start or crashes, each time
- * once standard output has taken every line.
+ * once standard output has taken every line. It gives back the started server.
  */
-export async function runServerProcess(config: ServerConfig, logger: Logger): Promise<void> {
+export async function runServerProcess(config: ServerConfig, logger: Logger): Promise<RunningServer | undefined> {
   // A closed pipe on standard output (EPIPE) would otherwise be an unhandled error that stops the server.
   process.stdout.on("error", () => {});
   process.on("uncaughtException", (error) => crash(logger, "An uncaught exception stopped the server", error));
@@ -66,9 +70,10 @@ export async function runServerProcess(config: ServerConfig, logger: Logger): Pr
   // Listening first, so a signal that comes while the server starts stops it once it has started.
   for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => started.then(stop, () => {}));
   try {
-    await started;
+    return await started;
   } catch {
     exitOnceWritten(1);
+    return undefined;
   }
 }
 
@@ -105,21 +110,40 @@ export async function startServer(config: ServerConfig, replaced: Replaced = {})
     models: config.models,
     dataDir: config.dataDir,
     manualStorage: config.manualStorage.kind,
-    ...(config.manualStorage.kind === "dynamodb" && { credentials: config.manualStorage.table.credentials.kind }),
+    ...credentialsLogged(config.manualStorage),
     passcodeGate: config.passcode !== undefined,
   });
 
+  const closed = new Promise<void>((resolve) => server.once("close", resolve));
+  let stopped: Promise<void> | undefined;
   return {
     port,
-    async close() {
-      const closed = new Promise<void>((resolve) => server.close(() => resolve()));
-      server.closeAllConnections();
-      await closed;
-      await models.idle();
-      await lock.release();
-      logger.info("server.stopped", "API server stopped", { port });
+    close(graceMs = 0) {
+      if (server.listening) {
+        // Kept-alive connections would otherwise go on taking requests, and stay open idle for
+        // seconds, while the open requests end.
+        server.prependListener("request", (_request, response) => response.setHeader("connection", "close"));
+        server.keepAliveTimeout = 1;
+        server.close();
+      }
+      const cuttingOff = setTimeout(() => server.closeAllConnections(), graceMs);
+      void closed.then(() => clearTimeout(cuttingOff));
+      stopped ??= closed.then(async () => {
+        await models.idle();
+        await lock.release();
+        logger.info("server.stopped", "API server stopped", { port });
+      });
+      return stopped;
     },
   };
+}
+
+/** Which credentials reach the table, and when the environment's keys expire: never a key. */
+function credentialsLogged(storage: ManualStorage): LogFields {
+  if (storage.kind === "files") return {};
+  const { credentials } = storage.table;
+  if (credentials.kind !== "environment") return { credentials: credentials.kind };
+  return { credentials: credentials.kind, credentialsExpireAt: credentials.expiresAt?.toISOString() ?? "unset" };
 }
 
 async function lockOrLogRefusal(dataDir: string, logger: Logger): Promise<DataFolderLock> {

@@ -13,7 +13,7 @@ import {
   type DynamoDbTable,
   type TableCredentials,
 } from "./dynamodb-manual-store.ts";
-import { DYNAMODB_LOCAL_CREDENTIALS, testAppTable } from "./dynamodb-testing.ts";
+import { DYNAMODB_LOCAL_CREDENTIALS, KEYS_REFUSED_BODIES, testAppTable } from "./dynamodb-testing.ts";
 import { sectionsInReadingOrder } from "./manual.ts";
 import { describeManualStore, manual } from "./manual-store-suite.ts";
 import type { StoredManual } from "./types.ts";
@@ -375,6 +375,15 @@ describe("the DynamoDB client's credentials", () => {
     expect(request!.headers["user-agent"]).not.toContain("decoy-app");
   });
 
+  it("signs with a role's temporary keys and their session token", async () => {
+    const dynamoDb = await standInDynamoDb();
+    const credentials = { kind: "keys", accessKeyId: "ASIAROLEKEY", secretAccessKey: "x", sessionToken: "the-session" } as const;
+
+    await createDynamoDbManualStore(dynamoDb.table(credentials)).getManual(manual.id);
+
+    expect(dynamoDb.requests.map(signedWith)).toEqual([{ accessKeyId: "ASIAROLEKEY", sessionToken: "the-session" }]);
+  });
+
   it("refuses fixed keys that are empty rather than looking for others", async () => {
     const dynamoDb = await standInDynamoDb();
     const credentials = { kind: "keys", accessKeyId: "", secretAccessKey: "x" } as const;
@@ -435,7 +444,7 @@ describe("the DynamoDB client's credentials", () => {
 
   it("takes the execution role's from the environment, read whenever the client asks", async () => {
     const dynamoDb = await standInDynamoDb();
-    const store = createDynamoDbManualStore(dynamoDb.table({ kind: "environment" }));
+    const store = createDynamoDbManualStore(dynamoDb.table({ kind: "environment", expiresAt: undefined }));
     onTestFinished(() => void vi.unstubAllEnvs());
     const expiringSoon = () => vi.stubEnv("AWS_CREDENTIAL_EXPIRATION", new Date(Date.now() + 60_000).toISOString());
 
@@ -451,5 +460,41 @@ describe("the DynamoDB client's credentials", () => {
       { accessKeyId: "AKIAENVIRONMENT1", sessionToken: "token-1" },
       { accessKeyId: "AKIAENVIRONMENT2", sessionToken: "token-2" },
     ]);
+  });
+});
+
+describe("the DynamoDB client's refused keys", { timeout: 30_000 }, () => {
+  for (const [name, body] of Object.entries(KEYS_REFUSED_BODIES)) {
+    it(`are reported with the failed call's error, as ${name}`, async () => {
+      const dynamoDb = await standInDynamoDb(() => ({ status: 400, body }));
+      const onKeysRefused = vi.fn();
+      const store = createDynamoDbManualStore({ ...dynamoDb.table(), onKeysRefused });
+
+      await expect(store.getManual(manual.id)).rejects.toMatchObject({ name });
+      expect(onKeysRefused).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name }));
+      expect(dynamoDb.requests).toHaveLength(1);
+    });
+  }
+
+  it("are reported from a lease's renewals too, which go on failing quietly", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count) =>
+      operation === "UpdateItem" && count > 1 ? { status: 400, body: KEYS_REFUSED_BODIES.ExpiredTokenException } : undefined,
+    );
+    const onKeysRefused = vi.fn();
+    const leases = createDynamoDbSectionLeases({ ...dynamoDb.table(), onKeysRefused }, { durationMs: 1_500, renewEveryMs: 50 });
+    const lease = (await leases.take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => onKeysRefused.mock.calls.length > 0);
+    expect(onKeysRefused).toHaveBeenCalledWith(expect.objectContaining({ name: "ExpiredTokenException" }));
+  });
+
+  it("are the only failures reported", async () => {
+    const dynamoDb = await standInDynamoDb(() => throttled);
+    const onKeysRefused = vi.fn();
+    const store = createDynamoDbManualStore({ ...dynamoDb.table(), onKeysRefused });
+
+    await expect(store.getManual(manual.id)).rejects.toMatchObject({ name: "ThrottlingException" });
+    expect(onKeysRefused).not.toHaveBeenCalled();
   });
 });

@@ -25,6 +25,7 @@ describe("the Web Function's table, from the environment Lambda and RtfmApp give
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
     "AWS_SESSION_TOKEN",
+    "AWS_CREDENTIAL_EXPIRATION",
   ];
 
   function stubEnvironment(values: Record<string, string>) {
@@ -53,7 +54,19 @@ describe("the Web Function's table, from the environment Lambda and RtfmApp give
 
   it("reaches the table as the execution role through the environment's keys, read by name only", () => {
     stubEnvironment(environmentKeys);
-    expect(webFunctionTableFromEnv().credentials).toEqual({ kind: "environment" });
+    expect(webFunctionTableFromEnv().credentials).toEqual({ kind: "environment", expiresAt: undefined });
+  });
+
+  it("knows when the environment's keys expire, when Lambda sets AWS_CREDENTIAL_EXPIRATION", () => {
+    stubEnvironment({ ...environmentKeys, AWS_CREDENTIAL_EXPIRATION: "2026-10-13T21:30:00Z" });
+    expect(webFunctionTableFromEnv().credentials).toEqual({
+      kind: "environment",
+      expiresAt: new Date("2026-10-13T21:30:00.000Z"),
+    });
+    for (const value of ["soon", "1", "9999-12-31", "2026-10-13T21:30:00", "2026-13-45T99:00:00Z"]) {
+      stubEnvironment({ ...environmentKeys, AWS_CREDENTIAL_EXPIRATION: value });
+      expect(() => webFunctionTableFromEnv(), value).toThrow(`AWS_CREDENTIAL_EXPIRATION must be an ISO 8601 time, not "${value}"`);
+    }
   });
 
   it("refuses to choose without the role's credentials or the table", () => {

@@ -211,9 +211,9 @@ Every read is strongly consistent.
   on the day's and the month's totals.
 - **The kill switch is read in each reservation's own transaction**, so nothing caches it: the
   first reservation after the item is put is refused. `npm run usage` reads it with a strongly
-  consistent `GetItem`. Its own partition leaves room for `rtfm-ops` to be limited to it with
-  `dynamodb:LeadingKeys`. How to turn it on and off is in `README.md` › The data folder and
-  spending.
+  consistent `GetItem`. It has its own partition, which `rtfm-ops` is limited to with
+  `dynamodb:LeadingKeys` (`infra/README.md` › The identities). How to turn it on and off is in
+  `README.md` › The data folder and spending.
 - **A crash between reserve and settle** leaves the call's item without `settle`, and both totals
   hold its worst case, as the data folder's ledger does.
 - **Retries.** The SDK retries a request that fails on its way (up to 3 attempts), and fills in
@@ -231,8 +231,9 @@ Every read is strongly consistent.
   transaction: a `Put` of the call's item on `attribute_not_exists(pk)` and `ADD` of what it was
   charged to its day and month, with no cap condition, since it was already spent. A call already
   there cancels the transaction and changes nothing, so an import can run any number of times.
-- **`setKillSwitch`** puts or deletes the kill-switch item. Only the tests call it, on DynamoDB
-  Local.
+- **`setKillSwitch`** puts or deletes the kill-switch item: `npm run ops -- kill-switch`, as
+  `rtfm-ops` (`README.md` › The ops tools), and the tests, on DynamoDB Local. The server never
+  calls it.
 - **Numbers** go to DynamoDB as JavaScript prints them, and DynamoDB adds them as exact decimals.
   `usd − worst case` is worked out in floating point, so a total can drift from the sum of its
   entries by far less than a millionth of a cent a call. The suite uses amounts a binary fraction
@@ -374,6 +375,8 @@ another data folder when given one, which the tests use; with `bedrock` it refus
 `FAKE_MODEL` are left out of each period's total, its counts, its groups by model and by job, and
 the unsettled reservations, and are counted on a line of their own with what they cost, so they
 can't hide or pad a real charge. Only that exact id is left out, and no Bedrock call can have it.
+`usageSummary` gives the same figures as data, which `npm run ops -- usage --json` prints, and
+`npm run ops -- usage` prints the same report of `rtfm-usage`, read as `rtfm-read`.
 
 **Importing the data folder's Bedrock calls.** Bedrock calls made before `rtfm-usage` existed are
 in the data folder's ledger, which the central caps can't see. `RTFM_MODELS=bedrock npm run usage
@@ -402,5 +405,5 @@ data folder's ledger as it is.
 - `prices.ts`: the dated price table, cost and worst-case cost.
 - `credentials.ts`: reads the AWS keys from `.env.local`.
 - `bedrock-client.ts`: the only file that imports `@anthropic-ai/bedrock-sdk`.
-- `usage-report.ts`: formats `npm run usage`.
+- `usage-report.ts`: `npm run usage`'s figures (`usageSummary`) and report.
 - `sdk-boundary.test.ts`: fails if anything else imports the SDK or the client.

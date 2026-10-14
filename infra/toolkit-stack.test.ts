@@ -14,6 +14,7 @@ import {
   BOUNDARY_POLICY,
   BUDGET,
   DEPLOY_ROLE,
+  OPS_ROLE,
   EXECUTION_POLICY,
   READ_ROLE,
   REGION,
@@ -242,7 +243,7 @@ describe("the boundary", () => {
       expect(denies("iam:CreatePolicyVersion", policyArn(policy))).toBe("deny");
       expect(denies("iam:DeletePolicy", policyArn(policy))).toBe("deny");
     }
-    for (const role of [READ_ROLE, DEPLOY_ROLE]) {
+    for (const role of [READ_ROLE, DEPLOY_ROLE, OPS_ROLE]) {
       expect(denies("iam:UpdateAssumeRolePolicy", roleArn(role))).toBe("deny");
       expect(denies("iam:PassRole", roleArn(role))).toBe("deny");
     }

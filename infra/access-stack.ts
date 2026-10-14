@@ -7,12 +7,16 @@ import {
   ACCESS_STACK,
   ACCOUNT,
   AGENT_USER,
+  APP_TABLE_ARN,
   BEDROCK_POLICY,
   BOOTSTRAP_ROLES,
   BUDGET,
   DEPLOY_ROLE,
   EDGE_STACKS,
+  KILL_SWITCH_PARTITION,
   LOCAL_USER,
+  OPS_ROLE,
+  PASSCODE_PARTITION,
   PROJECT_TAG,
   READ_ROLE,
   REGION,
@@ -64,11 +68,19 @@ export class RtfmAccessStack extends Stack {
       assumedBy: agent,
       inlinePolicies: { deploy: new PolicyDocument({ statements: [assumeBootstrapRoles()] }) },
     });
+    new Role(this, "OpsRole", {
+      roleName: OPS_ROLE,
+      assumedBy: agent,
+      inlinePolicies: { ops: new PolicyDocument({ statements: opsStatements() }) },
+    });
     new Policy(this, "AgentPolicy", {
       policyName: "assume-rtfm-roles",
       users: [agent],
       statements: [
-        new PolicyStatement({ actions: ["sts:AssumeRole"], resources: [READ_ROLE, DEPLOY_ROLE].map(roleArn) }),
+        new PolicyStatement({
+          actions: ["sts:AssumeRole"],
+          resources: [READ_ROLE, DEPLOY_ROLE, OPS_ROLE].map(roleArn),
+        }),
       ],
     });
     this.monthlyBudget();
@@ -149,6 +161,11 @@ function readStatements(): PolicyStatement[] {
       resources: RTFM_RESOURCES.tables,
     }),
     new PolicyStatement({
+      sid: "ReadUsageTableItems",
+      actions: ["dynamodb:GetItem", "dynamodb:Query"],
+      resources: [USAGE_TABLE_ARN],
+    }),
+    new PolicyStatement({
       sid: "DescribeResourceTypes",
       actions: ["cloudformation:DescribeType"],
       resources: ["*"],
@@ -169,6 +186,34 @@ function readStatements(): PolicyStatement[] {
       resources: ["*"],
     }),
   ];
+}
+
+/** The kill switch's item in `rtfm-usage` and the passcode's in `rtfm-app`, and no other item or table. */
+function opsStatements(): PolicyStatement[] {
+  return [
+    onlyPartition("KillSwitch", USAGE_TABLE_ARN, KILL_SWITCH_PARTITION, [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+    ]),
+    onlyPartition("Passcode", APP_TABLE_ARN, PASSCODE_PARTITION, ["dynamodb:GetItem", "dynamodb:PutItem"]),
+  ];
+}
+
+/**
+ * Item actions on one partition of a table. `ForAllValues` also holds for a request that names no
+ * partition key, so `Null` requires one.
+ */
+function onlyPartition(sid: string, tableArn: string, partition: string, actions: string[]): PolicyStatement {
+  return new PolicyStatement({
+    sid,
+    actions,
+    resources: [tableArn],
+    conditions: {
+      "ForAllValues:StringEquals": { "dynamodb:LeadingKeys": [partition] },
+      Null: { "dynamodb:LeadingKeys": "false" },
+    },
+  });
 }
 
 function assumeBootstrapRoles(): PolicyStatement {
