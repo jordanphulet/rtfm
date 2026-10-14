@@ -104,7 +104,7 @@ aren't RTFM's.
   refused its keys, what followed; if none was, it says so with the date range read.
 
 ### IN.25 — The Web Function can't write the passcode
-- **Status:** doing (agent a987d7eec36be8f48)
+- **Status:** doing (agent a987d7eec36be8f48; done, in review by ad939a2c4a4374574)
 - **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`,
   `infra/access-stack.ts` (the comment only)
