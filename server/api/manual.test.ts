@@ -3,7 +3,7 @@ import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore } from "../storage/types.ts";
-import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "../testing.ts";
+import { SAMPLE_ID, tempDataDir, testLibrary, UNWRITTEN_ID, waitUntil } from "../testing.ts";
 import { createRuns } from "../writer/runs.ts";
 import type { SectionWriter } from "../writer/types.ts";
 import { manualRoute } from "./manual.ts";
@@ -30,11 +30,12 @@ describe("GET /api/manuals/:manualId", () => {
     const leave = await runs.join((await seeded.getManual(SAMPLE_ID))!, UNWRITTEN_ID, ({ event }) => events.push(event));
     await waitUntil(() => events.includes("append"));
 
-    const response = await manualRoute(store, runs).handle({
+    const response = await manualRoute.handle({
       params: { manualId: SAMPLE_ID },
       query: new URLSearchParams(),
       body: undefined,
       signal: new AbortController().signal,
+      library: testLibrary({ store, runs }),
     });
     leave();
 

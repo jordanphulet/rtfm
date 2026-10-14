@@ -35,6 +35,10 @@ Any other path or method gets `404 { error: "Not found" }`, and a handler that t
 passcode gate, a request without the passcode's cookie gets `401` before any of these (The
 passcode, below).
 
+Every route acts on the request's library alone (The library of a request, below):
+`/api/manuals/:manualId` is the manual of that id in that library, and `404` in any other, and the
+librarian lists, finds, opens, creates and deletes that library's manuals only.
+
 ## Only the app's own pages
 
 The API deletes manuals and spends the model caps, so it answers nobody but the app's own pages.
@@ -140,19 +144,48 @@ The rules:
   `request.refused` (`401`, `Passcode required`), and each passcode entered as `passcode.wrong`,
   `passcode.accepted` or `passcode.unset` (`server/logging/README.md`).
 
+## The library of a request
+
+Each library is its own manuals, kept apart in storage (`server/storage/README.md`). The server
+holds a `Library` (`route.ts`) for each library id it has seen: its id, its `ManualStore` and
+`SectionLeases`, bound to that library, its section writer (the Bedrock writer reads its example
+sections through that store), the server's one `Runs` bound to it (`runs.forLibrary`,
+`server/writer/README.md` › One writer per section), and the one gateway every library shares.
+`startServer` builds the admin's, and seeds it, before it listens, and any other the first time a
+request is in it, then keeps each for the server's life, so a library has one store, one set of
+leases and one bound runs in each environment.
+
+- **The gate gives each request its library.** Once a request is past the passcode gate, the Node
+  adapter's `Gate.libraryOf` names its library, and the adapter puts it on the request as
+  `ApiRequest.library`. Every request is in the admin's library (`admin`). Tests put a request in
+  another with `startServer`'s `libraryIdOf` (`server/README.md` › Choosing the models). No path,
+  query or body names a library.
+- **Handlers reach manuals only through it.** The routes hold no store, runs or gateway of their
+  own: each takes the store, runs and gateway from `request.library`, and the librarian and its
+  previews take that library's store and gateway (`server/agent/README.md` › The route). The
+  manual, section and delete routes ask that library's runs whether a section is being written,
+  so a run in one library never shows as `writing`, or holds up a delete, in another.
+- **Logged** with its `libraryId`: the `request` line once the gate has given one,
+  `request.failed`, the `section.*` lines, `librarian.reply`, `agent.tool-failed`, `client.error`
+  and `client.limited` (`server/logging/README.md`).
+- **Tested** in `api/libraries.test.ts`, with two libraries on one server, each request put in one
+  by a header the test's `libraryIdOf` reads: neither reaches the other's manuals, sections, runs
+  or librarian, and the lines say which library.
+
 ## Handlers
 
 Handlers import only `api/route.ts`, never `node:http` or the Node adapter, so they don't depend on
 how they are served. A `Route` has a `method`, a `pattern` and a `handle(request)` that gets the
-route's `params`, the `query`, the parsed JSON `body` (undefined when there is none) and a `signal`
-that aborts when the client disconnects. It answers with a JSON response or an event stream, a
-function given an `EventSink` that ends the stream when it resolves; the choice is made inside
-`handle`, so a stream route can still answer `404`.
+route's `params`, the `query`, the parsed JSON `body` (undefined when there is none), a `signal`
+that aborts when the client disconnects, and the `library` the request is in (above). It answers
+with a JSON response or an event stream, a function given an `EventSink` that ends the stream when
+it resolves; the choice is made inside `handle`, so a stream route can still answer `404`.
 
 Before any route is matched, the Node adapter refuses a request from anywhere but the app's own
 pages (above), serves the built app when it has one (The built app, above), then refuses one
-without the passcode when one is set (The passcode, above), then reads the body, up to 262,144
-characters: one that is too long or isn't JSON gets `400 { error: "Bad request" }`. Then it:
+without the passcode when one is set (The passcode, above), then gives it its library (The library
+of a request, above), then reads the body, up to 262,144 characters: one that is too long or isn't
+JSON gets `400 { error: "Bad request" }`. Then it:
 
 - matches `method` exactly, and `pattern` by splitting the path on `/`;
 - turns `res.on("close")` into the `AbortSignal`, and logs the request then
@@ -279,10 +312,10 @@ data: {}
 ## Files
 
 - `types.ts`: the API contract shared with the browser (Types, above).
-- `route.ts`: `Route`, `ApiRequest`, `EventSink`: what handlers see.
+- `route.ts`: `Route`, `ApiRequest`, `Library`, `EventSink`: what handlers see.
 - `node-adapter.ts`: `node:http` ⇄ `ApiRequest`, the `Host` and `Origin` checks (with
-  `LOOPBACK_HOSTS` and `LOOPBACK_ORIGINS`), the passcode gate, JSON responses and their cookie,
-  the event stream and its heartbeat, and the built app's files.
+  `LOOPBACK_HOSTS` and `LOOPBACK_ORIGINS`), the `Gate` (the passcode, and the request's library),
+  JSON responses and their cookie, the event stream and its heartbeat, and the built app's files.
 - `app-files.ts`: `readAppFile`, a file of the built app for a path (The built app, above).
 - `lookup.ts`: finds a manual that has a given section.
 - `library.ts`: `GET /api/manuals`.

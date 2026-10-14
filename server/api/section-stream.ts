@@ -1,26 +1,24 @@
-import type { ManualStore, StoredManual } from "../storage/types.ts";
+import type { StoredManual } from "../storage/types.ts";
 import type { Runs } from "../writer/runs.ts";
 import { manualWithSection } from "./lookup.ts";
 import { badRequest, notFound, type EventSink, type Route } from "./route.ts";
 import { previewFrom, previewStream } from "./preview.ts";
 
-export function sectionStreamRoute(store: ManualStore, runs: Runs): Route {
-  return {
-    method: "GET",
-    pattern: "/api/manuals/:manualId/sections/:sectionId/stream",
-    async handle({ params: { manualId, sectionId }, query, signal }) {
-      const manual = await manualWithSection(store, manualId, sectionId);
-      if (!manual) return notFound;
+export const sectionStreamRoute: Route = {
+  method: "GET",
+  pattern: "/api/manuals/:manualId/sections/:sectionId/stream",
+  async handle({ params: { manualId, sectionId }, query, signal, library: { store, runs } }) {
+    const manual = await manualWithSection(store, manualId, sectionId);
+    if (!manual) return notFound;
 
-      const preview = previewFrom(query);
-      if (preview === "invalid") return badRequest;
-      if (preview && (await runs.statusOf(manualId, sectionId)) !== "written") {
-        return previewStream(preview, manualId, sectionId);
-      }
-      return (sink) => followRun(runs, manual, sectionId, signal, sink);
-    },
-  };
-}
+    const preview = previewFrom(query);
+    if (preview === "invalid") return badRequest;
+    if (preview && (await runs.statusOf(manualId, sectionId)) !== "written") {
+      return previewStream(preview, manualId, sectionId);
+    }
+    return (sink) => followRun(runs, manual, sectionId, signal, sink);
+  },
+};
 
 async function followRun(runs: Runs, manual: StoredManual, sectionId: string, signal: AbortSignal, sink: EventSink) {
   let finish = () => {};

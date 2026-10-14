@@ -103,6 +103,11 @@ reply's events.
   latest 10 exchanges whose reply finished, leaving out any with a message over the limit, so a
   failed reply never reaches the model and a long conversation keeps working. The limits also
   bound what one reply can cost.
+- **The request's library alone.** The route gives `sendReply` the store and gateway of the
+  library the request is in (`server/api/README.md` › Handlers), so every tool, and the planner a
+  new manual goes to, lists, finds, opens, creates and proposes deleting that library's manuals
+  only. Its logger adds the library's `libraryId` to the `librarian.reply` and
+  `agent.tool-failed` lines.
 - **Plain text only.** Each message becomes a prompt message with string content (`agent` becomes
   `assistant`). The model never sees earlier replies' tool calls, only what was said, and the
   system prompt tells it to check the library with a tool rather than trust earlier messages,
@@ -274,9 +279,10 @@ The fake model (`fakeModel` in `agent/fake-model.ts`) is the default (`config.mo
 `?freeze=<0–1>` on the librarian's route, in `api/preview.ts`. Whatever models are configured, it
 runs `sendReply` with the fake model at once (no waits) and collects the events. It then sends the
 statuses and the text up to the last chunk end at or before that fraction of the reply's text, then
-`frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never sent, its store saves no
-manual (`createManual` only answers `"created"`), and it calls the fake model outside the gateway
-(`unrecordedFakeModel`), so a preview costs nothing, records nothing and changes nothing.
+`frozen`, or `done` when nothing was cut (`?freeze=1`). Actions are never sent, its store, the
+request's library's, saves no manual (`createManual` only answers `"created"`), and it calls the
+fake model outside the gateway (`unrecordedFakeModel`), so a preview costs nothing, records nothing
+and changes nothing.
 The browser uses it for `?conversation=demo` and `?librarianFreeze=` (`src/librarian/README.md`).
 
 ## Tests

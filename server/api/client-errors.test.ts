@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../app.ts";
 import { config } from "../config.ts";
-import type { LogEntry } from "../logging/logger.ts";
-import { capturingLogger, tempDataDir } from "../testing.ts";
+import { silentLogger, type LogEntry } from "../logging/logger.ts";
+import { createFileManualStore } from "../storage/file-manual-store.ts";
+import { capturingLogger, tempDataDir, testLibrary } from "../testing.ts";
 import { CLIENT_ERRORS_PER_HOUR, clientErrorsRoute } from "./client-errors.ts";
 import type { ClientErrorReport } from "./types.ts";
 
@@ -48,11 +49,17 @@ describe("POST /api/client-errors", () => {
     expect(clientErrors()).toEqual([
       expect.objectContaining({
         level: "ERROR",
+        libraryId: "admin",
         kind: "error",
         page: UNCAUGHT.page,
         error: { name: "TypeError", message: UNCAUGHT.message, stack: UNCAUGHT.stack },
       }),
-      expect.objectContaining({ level: "ERROR", kind: "rejection", error: { name: "Error", message: "Failed to fetch" } }),
+      expect.objectContaining({
+        level: "ERROR",
+        libraryId: "admin",
+        kind: "rejection",
+        error: { name: "Error", message: "Failed to fetch" },
+      }),
     ]);
   });
 
@@ -66,6 +73,7 @@ describe("POST /api/client-errors", () => {
     expect(clientErrors()).toEqual([
       expect.objectContaining({
         level: "WARN",
+        libraryId: "admin",
         message: "GET /api/manuals answered 502 in the browser",
         path: "/api/manuals",
         status: 502,
@@ -112,8 +120,9 @@ describe("POST /api/client-errors", () => {
     const { logger, entries } = capturingLogger();
     let now = new Date("2026-10-12T08:00:00.000Z");
     const route = clientErrorsRoute(logger, () => now);
+    const library = testLibrary({ store: createFileManualStore(await tempDataDir(), silentLogger, "acme"), libraryId: "acme" });
     const report = () =>
-      route.handle({ params: {}, query: new URLSearchParams(), body: UNCAUGHT, signal: new AbortController().signal });
+      route.handle({ params: {}, query: new URLSearchParams(), body: UNCAUGHT, signal: new AbortController().signal, library });
 
     const statuses = [];
     for (let count = 0; count < CLIENT_ERRORS_PER_HOUR + 3; count++) statuses.push(((await report()) as { status: number }).status);
@@ -122,6 +131,9 @@ describe("POST /api/client-errors", () => {
 
     expect(statuses).toEqual([...Array(CLIENT_ERRORS_PER_HOUR).fill(204), 429, 429, 429, 204]);
     expect(entries.filter(({ event }) => event === "client.error")).toHaveLength(CLIENT_ERRORS_PER_HOUR + 1);
-    expect(entries.filter(({ event }) => event === "client.limited")).toEqual([expect.objectContaining({ level: "WARN" })]);
+    expect(entries.filter(({ event }) => event === "client.limited")).toEqual([
+      expect.objectContaining({ level: "WARN", libraryId: "acme" }),
+    ]);
+    expect(entries.every((entry) => entry.libraryId === "acme")).toBe(true);
   });
 });

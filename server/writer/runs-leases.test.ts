@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { deleteManualRoute } from "../api/delete-manual.ts";
 import { manualRoute } from "../api/manual.ts";
-import type { JsonResponse, Route } from "../api/route.ts";
+import type { JsonResponse, Library, Route } from "../api/route.ts";
 import { sectionRoute } from "../api/section.ts";
 import type { Manual, SectionEvent, SectionState } from "../api/types.ts";
 import { silentLogger } from "../logging/logger.ts";
@@ -18,7 +18,7 @@ import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import { seedStore } from "../storage/seed.ts";
 import type { ManualStore, StoredManual } from "../storage/types.ts";
 import {
-  capturingLogger, OTHER_UNWRITTEN_ID, recordingWriter, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil,
+  capturingLogger, OTHER_UNWRITTEN_ID, recordingWriter, SAMPLE_ID, tempDataDir, testLibrary, UNWRITTEN_ID, waitUntil,
 } from "../testing.ts";
 import { fakeBody } from "./fake.ts";
 import { createRuns, type LibraryScope, type Runs, type ServerRuns, type Waiting } from "./runs.ts";
@@ -243,9 +243,9 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
     const [{ runs: one }, { runs: other }] = setup.environments(held.writer);
     const reader = recorder();
     const statusesSeenByOther = async () => {
-      const manualResponse = await request(manualRoute(setup.store, other));
+      const manualResponse = await request(manualRoute, testLibrary({ store: setup.store, runs: other }));
       const sections = (manualResponse.body as Manual).chapters.flatMap((chapter) => chapter.sections);
-      const sectionResponse = await request(sectionRoute(setup.store, other), UNWRITTEN_ID);
+      const sectionResponse = await request(sectionRoute, testLibrary({ store: setup.store, runs: other }), UNWRITTEN_ID);
       return {
         inManual: sections.find((section) => section.id === UNWRITTEN_ID)?.status,
         ofSection: (sectionResponse.body as SectionState).status,
@@ -255,12 +255,12 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
     await one.join(manual, UNWRITTEN_ID, reader.listener);
     await waitUntil(() => reader.events.length > 0);
     expect(await statusesSeenByOther()).toEqual({ inManual: "writing", ofSection: "writing" });
-    expect((await request(deleteManualRoute(setup.store, other))).status).toBe(409);
+    expect((await request(deleteManualRoute, testLibrary({ store: setup.store, runs: other }))).status).toBe(409);
 
     held.finish();
     await waitUntil(() => reader.last() === "written", RUN_ENDS_WITHIN_MS);
     expect(await statusesSeenByOther()).toEqual({ inManual: "written", ofSection: "written" });
-    expect((await request(deleteManualRoute(setup.store, other))).status).toBe(204);
+    expect((await request(deleteManualRoute, testLibrary({ store: setup.store, runs: other }))).status).toBe(204);
   });
 
   it("refuses a delete whose check ran just before a section of the manual started being written", async () => {
@@ -271,7 +271,7 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
 
     await one.join(manual, UNWRITTEN_ID, reader.listener);
     await waitUntil(() => reader.events.length > 0);
-    const { status } = await request(deleteManualRoute(setup.store, checkedJustBefore));
+    const { status } = await request(deleteManualRoute, testLibrary({ store: setup.store, runs: checkedJustBefore }));
     held.finish();
     await waitUntil(() => reader.last() === "written" || reader.last() === "failed", RUN_ENDS_WITHIN_MS);
 
@@ -510,12 +510,12 @@ describe("runs in two environments", () => {
   });
 });
 
-/** The route's answer for the sample manual, or for one of its sections. */
-async function request(route: Route, sectionId?: string) {
+/** The route's answer for the sample manual, or for one of its sections, in the library. */
+async function request(route: Route, library: Library, sectionId?: string) {
   const params: Record<string, string> = { manualId: SAMPLE_ID };
   if (sectionId !== undefined) params.sectionId = sectionId;
   const signal = new AbortController().signal;
-  return (await route.handle({ params, query: new URLSearchParams(), body: undefined, signal })) as JsonResponse;
+  return (await route.handle({ params, query: new URLSearchParams(), body: undefined, signal, library })) as JsonResponse;
 }
 
 /** A lease on the section from another environment, taken as soon as it is free, within `timeoutMs`. */

@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "../logging/logger.ts";
 import { readAppFile, type AppFile } from "./app-files.ts";
 import { hasDigestForm, isDigest, PASSCODE_COOKIE, PASSCODE_PATH, passcodeRequired, type CurrentDigest } from "./passcode.ts";
-import { badRequest, notFound, type EventStream, type JsonResponse, type Route } from "./route.ts";
+import { badRequest, notFound, type EventStream, type JsonResponse, type Library, type Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
 const MAX_LOGGED_CHARACTERS = 300;
@@ -23,7 +23,17 @@ export interface AdapterConfig {
   eventStreamHeartbeatMs: number;
 }
 
-type RequestFields = { requestId: string; method: string | undefined; path: string };
+/**
+ * What lets a request in, and the library it is in: with a `currentDigest`, every API request but
+ * `POST /api/passcode` must carry the passcode's digest in its cookie, and without one there is no
+ * passcode gate; then `libraryOf` gives the request its library.
+ */
+export interface Gate {
+  currentDigest?: CurrentDigest;
+  libraryOf(request: IncomingMessage): Promise<Library>;
+}
+
+type RequestFields = { requestId: string; method: string | undefined; path: string; libraryId?: string };
 
 const hostNotAllowed: JsonResponse = { status: 403, body: { error: "Host not allowed" } };
 const originNotAllowed: JsonResponse = { status: 403, body: { error: "Origin not allowed" } };
@@ -38,11 +48,8 @@ class Refused extends Error {
   }
 }
 
-/**
- * With a `currentDigest`, every API request but `POST /api/passcode` must carry the passcode's
- * digest in its cookie; without one, there is no gate.
- */
-export function createRequestHandler(routes: Route[], logger: Logger, config: AdapterConfig, currentDigest?: CurrentDigest) {
+/** Checks each request, lets it through the gate into its library, and answers it with the route it matches. */
+export function createRequestHandler(routes: Route[], logger: Logger, config: AdapterConfig, gate: Gate) {
   return async (request: IncomingMessage, response: ServerResponse) => {
     const startedAt = performance.now();
     const logged: RequestFields = { requestId: randomUUID(), method: request.method, path: pathOf(request) };
@@ -57,7 +64,9 @@ export function createRequestHandler(routes: Route[], logger: Logger, config: Ad
       if (config.appDir !== undefined && !isApiPath(url.pathname)) {
         return writeAppFile(response, request.method, await readAppFile(config.appDir, url.pathname));
       }
-      if (currentDigest) await refuseWithoutPasscode(request, url.pathname, currentDigest);
+      if (gate.currentDigest) await refuseWithoutPasscode(request, url.pathname, gate.currentDigest);
+      const library = await gate.libraryOf(request);
+      logged.libraryId = library.libraryId;
       const body = await readJsonBody(request);
       const match = matchRoute(routes, request.method, url.pathname);
       if (!match) return writeJson(response, notFound);
@@ -67,6 +76,7 @@ export function createRequestHandler(routes: Route[], logger: Logger, config: Ad
         query: url.searchParams,
         body,
         signal: controller.signal,
+        library,
       });
       if (typeof result === "function") await writeEvents(response, result, config.eventStreamHeartbeatMs);
       else writeJson(response, result, request.headers.host);

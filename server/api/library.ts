@@ -4,16 +4,14 @@ import { wantsEmptyLibrary } from "./preview.ts";
 import type { Route } from "./route.ts";
 import type { ManualSummary } from "./types.ts";
 
-export function libraryRoute(store: ManualStore): Route {
-  return {
-    method: "GET",
-    pattern: "/api/manuals",
-    async handle({ query }) {
-      if (wantsEmptyLibrary(query)) return { status: 200, body: [] };
-      return { status: 200, body: await librarySummaries(store) };
-    },
-  };
-}
+export const libraryRoute: Route = {
+  method: "GET",
+  pattern: "/api/manuals",
+  async handle({ query, library }) {
+    if (wantsEmptyLibrary(query)) return { status: 200, body: [] };
+    return { status: 200, body: await librarySummaries(library.store) };
+  },
+};
 
 /** Every stored manual's summary, sorted by title. */
 export async function librarySummaries(store: ManualStore): Promise<ManualSummary[]> {

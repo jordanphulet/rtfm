@@ -176,10 +176,13 @@ Bedrock itself.
 section writer and the librarian's model, which also plans new manuals (`createModels` in `app.ts`);
 `RTFM_MODELS=bedrock` selects Claude for both.
 
-- Either way, `startServer` builds the manual store `config.manualStorage` names (files in the
-  data folder, unless the Web Function names its table), then one gateway on a spending ledger,
-  and the writer on it, all before it seeds or listens. The librarian and its planner use the same
-  gateway, so one set of caps, the kill switch and the ledger cover every job.
+- Either way, `startServer` builds one gateway on a spending ledger, then the admin's library
+  (`server/api/README.md` › The library of a request): the manual store `config.manualStorage`
+  names (files in the data folder, unless the Web Function names its table), bound to that library,
+  and a writer on the gateway, all before it seeds or listens. Each other library gets its own store
+  and writer, on the same gateway, the first time a request is in it. The librarian and its planner
+  use the same gateway, so one set of caps, the kill switch and the ledger cover every job in every
+  library.
 - **`RTFM_MODELS` also chooses the spending ledger** (`server/gateway/README.md` › The spending
   ledger): with `"fake"`, the data folder's ledger, totals and `STOP` file; with `"bedrock"`,
   always the table `rtfm-usage` (`config.usageTable`), on this machine too. There is no way to
@@ -193,8 +196,9 @@ section writer and the librarian's model, which also plans new manuals (`createM
 - With `"fake"`, every job's model is `FAKE_MODEL` (`server/gateway/README.md` › The fake model),
   with the job's own `maxTokens` and idle timeout, and the gateway calls the fake model
   (`agent/fake-model.ts`); the fake writer (`writer/fake.ts`) sends the section's sample
-  text through it. With `"bedrock"`, the jobs keep their Bedrock models, the gateway calls the
-  Bedrock client, and the writer is the Bedrock writer.
+  text through it, one writer for every library. With `"bedrock"`, the jobs keep their Bedrock
+  models, the gateway calls the Bedrock client, and each library's writer is a Bedrock writer that
+  reads its example sections through that library's store (`createModels`' `writerFor(store)`).
 - `createGateway` checks every job's model against the price table (`ModelNotPriced`), and only
   then calls the factories it is given, which, with Bedrock, read the credentials
   (`CredentialsMissing`, on this machine) and build the Bedrock client and the client for
@@ -202,9 +206,11 @@ section writer and the librarian's model, which also plans new manuals (`createM
   without reading any secret. The table isn't reached until the first call, so a server whose key
   can't reach it starts, and each call then fails.
 - `createModels` also returns `idle`, the gateway's `idle()`.
-- Tests replace either model with `startServer(config, { writer, librarian })`. A test that passes
-  its own gateway passes its `idle` too, and `close()` waits for it and for the configured
-  gateway, if one was built.
+- Tests replace either model with `startServer(config, { writer, librarian })`, the writer then
+  writing in every library. A test that passes its own gateway passes its `idle` too, and `close()`
+  waits for it and for the configured gateway, if one was built. A test puts each request in a
+  library of its choosing with `libraryIdOf(request)`, in place of the gate, which puts every
+  request in the admin's.
 
 ## Configuration
 
@@ -381,15 +387,17 @@ the machine.
   (`httpEndpointFromEnv`, `builtAppDirFromEnv`, `webFunctionAwsFromEnv`), and `tableWith`, a
   table by name reached with given credentials.
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
-- `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, the passcode's
-  digest, models, gateway, routes; `close(graceMs?)` waits for model calls to settle.
+- `app.ts`: `startServer(config, replaced?)`: locks the data folder; the passcode's digest,
+  models, gateway, each library's `Library` (its storage, writer and runs), routes;
+  `close(graceMs?)` waits for model calls to settle.
   `runServerProcess(config, logger)`: the server as the whole process, for `main.ts` and
   `web-function.ts`, giving back the started server.
 - `testing.ts`: helpers shared by the tests: temp folders, the fake model's `FAST_PACE` and a
   fast fake writer that calls it directly, the price table with the test model (`TEST_PRICES`)
   and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`
-  (`testGateway`, with a config and a ledger of the test's own if it gives them), `inPieces`,
-  `collect`, and `readEvents` for server-sent events.
+  (`testGateway`, with a config and a ledger of the test's own if it gives them), a `Library` on
+  a given store for a test that hands a route its request (`testLibrary`), `inPieces`, `collect`,
+  and `readEvents` for server-sent events.
 - `usage.ts`: `npm run usage`, and its `--import` of the data folder's Bedrock calls into
   `rtfm-usage`.
 - `logs.ts`: `npm run logs` (`server/logging/README.md`).

@@ -81,13 +81,15 @@ describe("the server's logs", () => {
     });
     await collect(readEvents(reply));
 
-    expect(entries.map(({ event }) => event).filter((event) => event !== "server.started")).toEqual([
+    const logged = entries.filter(({ event }) => event !== "server.started");
+    expect(logged.map(({ event }) => event)).toEqual([
       "section.started",
       "section.finished",
       "request",
       "librarian.reply",
       "request",
     ]);
+    expect(logged.every(({ libraryId }) => libraryId === "admin")).toBe(true);
   });
 
   it("record a request the local-only checks refuse, with the Host or Origin it named", async () => {

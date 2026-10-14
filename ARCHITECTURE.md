@@ -60,7 +60,8 @@ browser (Vite, :5173)                           server (node:http, :8787)
 ### The server: `server/`
 
 - The top level: `main.ts` starts the server on this machine and `web-function.ts` on a Lambda Web
-  Function, `app.ts` wires it (`startServer`, `createModels`) and runs it as a process
+  Function, `app.ts` wires it (`startServer`, `createModels`, and a `Library` per library id, built
+  once and kept) and runs it as a process
   (`runServerProcess`), `config.ts` holds the committed `ServerConfig`, `ports.ts` the
   `API_PORT`, `exit.ts` the `exitOnceWritten` that `app.ts` and `scripts/serve-temp.ts` share;
   `dev.ts`, `usage.ts` and `logs.ts` are the `npm run` commands; `escape-tags.ts` escapes text
@@ -68,10 +69,11 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `replacement.ts`: the Web Function's exit, with code 1, once a service refuses its keys or
   shortly before they expire, so Lambda replaces its environment (`server/README.md` › The Web
   Function).
-- `api/`: the routes (`Route`, `ApiRequest`, `EventSink` in `route.ts`), the Node adapter with the
-  `Host` and `Origin` checks, the passcode gate and the built app's files (`node-adapter.ts`, with
-  `passcode.ts` and `app-files.ts`), the previews (`preview.ts`) and the wire types (`types.ts`).
-  See `server/api/README.md`.
+- `api/`: the routes (`Route`, `ApiRequest`, `EventSink` in `route.ts`, and the `Library` each
+  request is in, which holds the only store, runs and gateway a route reaches), the Node adapter
+  with the `Host` and `Origin` checks, the gate (the passcode, and the request's library) and the
+  built app's files (`node-adapter.ts`, with `passcode.ts` and `app-files.ts`), the previews
+  (`preview.ts`) and the wire types (`types.ts`). See `server/api/README.md`.
 - `storage/`: `ManualStore` and `UsageLedger` (`types.ts`) as files in the data folder
   (`file-manual-store.ts`, `file-ledger.ts`), and `ManualStore` in the DynamoDB table `rtfm-app`
   (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the section

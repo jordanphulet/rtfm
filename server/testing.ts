@@ -3,14 +3,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, onTestFinished } from "vitest";
 import { INSTANT_PACE, unrecordedFakeModel, type FakeModelPace } from "./agent/fake-model.ts";
+import type { Library } from "./api/route.ts";
 import { openFileSpendingLedger } from "./gateway/file-spending-ledger.ts";
 import { createGateway } from "./gateway/gateway.ts";
 import { prices, type PriceTable } from "./gateway/prices.ts";
 import type { GatewayConfig, ModelClient } from "./gateway/types.ts";
 import { createLogger, silentLogger, type LogEntry } from "./logging/logger.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
-import type { StoredManual, UsageLedger } from "./storage/types.ts";
+import { createInProcessLeases } from "./storage/in-process-leases.ts";
+import { ADMIN_LIBRARY_ID } from "./storage/library.ts";
+import type { ManualStore, StoredManual, UsageLedger } from "./storage/types.ts";
 import { createFakeWriter } from "./writer/fake.ts";
+import { createRuns, type Runs } from "./writer/runs.ts";
 import type { SectionWriter } from "./writer/types.ts";
 
 export const SAMPLE_ID = "the-haunt-that-listens";
@@ -81,6 +85,22 @@ export async function tempDataDir(): Promise<string> {
   const dataDir = await mkdtemp(path.join(tmpdir(), "rtfm-test-"));
   onTestFinished(() => rm(dataDir, { recursive: true, force: true, maxRetries: 3 }));
   return dataDir;
+}
+
+/**
+ * A library for a test that hands a route its request, or gives the adapter its gate: these
+ * manuals, runs of their own unless given, and the unrecorded fake model. Routes use only the
+ * store, the runs and the gateway. Its `leases` and `writer` (in-process leases and the fake
+ * writer) are used by nothing but its own runs, so given runs may have been built with others.
+ */
+export function testLibrary({ store, runs, libraryId = ADMIN_LIBRARY_ID }: {
+  store: ManualStore;
+  runs?: Runs;
+  libraryId?: string;
+}): Library {
+  const scope = { libraryId, store, leases: createInProcessLeases(store), writer: fastFakeWriter() };
+  const ownRuns = () => createRuns({ ...scope, maxConcurrentRuns: 3, logger: silentLogger }).forLibrary(scope);
+  return { ...scope, runs: runs ?? ownRuns(), gateway: unrecordedFakeModel(FAST_PACE) };
 }
 
 /** The fake writer at `FAST_PACE`, calling the fake model directly rather than through a gateway. */

@@ -1,4 +1,4 @@
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fakeModel } from "./agent/fake-model.ts";
 import { clientErrorsRoute } from "./api/client-errors.ts";
@@ -8,6 +8,7 @@ import { libraryRoute } from "./api/library.ts";
 import { manualRoute } from "./api/manual.ts";
 import { createRequestHandler } from "./api/node-adapter.ts";
 import { cachedDigest, passcodeRoute, type CurrentDigest } from "./api/passcode.ts";
+import type { Library } from "./api/route.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
 import { tableWith, type ManualStorage, type ModelAccess, type ServerConfig } from "./config.ts";
@@ -26,16 +27,18 @@ import {
   createDynamoDbManualStore,
   createDynamoDbSectionLeases,
   readPasscodeDigest,
+  SECTION_LEASE_TIMING,
 } from "./storage/dynamodb-manual-store.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { createInProcessLeases } from "./storage/in-process-leases.ts";
+import { ADMIN_LIBRARY_ID } from "./storage/library.ts";
 import { DataFolderInUse, lockDataFolder, type DataFolderLock } from "./storage/lock.ts";
 import { seedStore } from "./storage/seed.ts";
 import type { ManualStore, SectionLeases } from "./storage/types.ts";
 import { createBedrockWriter } from "./writer/bedrock.ts";
 import { createFakeWriter } from "./writer/fake.ts";
-import { createRuns } from "./writer/runs.ts";
+import { createRuns, type LibraryScope } from "./writer/runs.ts";
 import type { SectionWriter } from "./writer/types.ts";
 
 export interface RunningServer {
@@ -49,17 +52,27 @@ export interface RunningServer {
 
 /** Who writes sections, who answers as the librarian, and when their model calls have all been recorded. */
 export interface Models {
-  writer: SectionWriter;
+  /** The section writer for a library's manuals, which the Bedrock writer reads its example section from. */
+  writerFor(store: ManualStore): SectionWriter;
   librarian: Gateway;
   /** Resolves once no model call is running and every one is settled in the ledger. */
   idle(): Promise<void>;
 }
 
 /**
- * Parts of the server a caller may supply in place of the configured ones. `now` is the clock the
- * stored passcode's digest is kept by, in milliseconds.
+ * Parts of the server a caller may supply in place of the configured ones: a section writer for
+ * every library, the librarian's gateway and its `idle`, the logger, `now`, the clock the stored
+ * passcode's digest is kept by, in milliseconds, and `libraryIdOf`, which library a request is in,
+ * where the gate gives every request the admin's.
  */
-export type Replaced = Partial<Models> & { logger?: Logger; now?: () => number };
+export interface Replaced {
+  writer?: SectionWriter;
+  librarian?: Gateway;
+  idle?: () => Promise<void>;
+  logger?: Logger;
+  now?: () => number;
+  libraryIdOf?: (request: IncomingMessage) => string;
+}
 
 const nothingToSettle = async () => {};
 
@@ -168,24 +181,23 @@ async function serve(
   replaced: Replaced,
   logger: Logger,
 ): Promise<{ server: Server; models: Models }> {
-  const { store, leases } = createStorage(config, logger);
   const currentDigest = passcodeDigestSource(config, replaced.now ?? Date.now);
-  const models = await modelsFor(config, store, replaced, logger);
-  const { writer, librarian } = models;
-  await seedStore(store);
-  const runs = createRuns({ store, leases, writer, maxConcurrentRuns: config.maxConcurrentRuns, logger });
+  const models = await modelsFor(config, replaced, logger);
+  const libraryFor = await createLibraries(config, models, logger);
+  const libraryIdOf = replaced.libraryIdOf ?? (() => ADMIN_LIBRARY_ID);
   const routes = [
-    libraryRoute(store),
-    manualRoute(store, runs),
-    deleteManualRoute(store, runs),
-    sectionRoute(store, runs),
-    sectionStreamRoute(store, runs),
-    librarianRoute(store, librarian, logger),
+    libraryRoute,
+    manualRoute,
+    deleteManualRoute,
+    sectionRoute,
+    sectionStreamRoute,
+    librarianRoute(logger),
     clientErrorsRoute(logger),
   ];
   if (currentDigest) routes.push(passcodeRoute(currentDigest, logger));
 
-  const server = createServer(createRequestHandler(routes, logger, config, currentDigest));
+  const libraryOf = async (request: IncomingMessage) => libraryFor(libraryIdOf(request));
+  const server = createServer(createRequestHandler(routes, logger, config, { currentDigest, libraryOf }));
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);
@@ -193,16 +205,45 @@ async function serve(
   return { server, models };
 }
 
-/** The manuals, and the section leases that keep one writer per section among the servers sharing them. */
-function createStorage(config: ServerConfig, logger: Logger): { store: ManualStore; leases: SectionLeases } {
+/**
+ * The `Library` of each library id, built the first time it is asked for and kept, so each has one
+ * store, one set of leases and one writer, bound to the one shared runs and gateway. The admin's is
+ * built and seeded at once.
+ */
+async function createLibraries(config: ServerConfig, models: Models, logger: Logger): Promise<(libraryId: string) => Library> {
+  const scopeOf = (libraryId: string): LibraryScope => {
+    const { store, leases } = createStorage(config, logger, libraryId);
+    return { libraryId, store, leases, writer: models.writerFor(store) };
+  };
+  const admin = scopeOf(ADMIN_LIBRARY_ID);
+  await seedStore(admin.store);
+  const runs = createRuns({ ...admin, maxConcurrentRuns: config.maxConcurrentRuns, logger });
+  const libraryOn = (scope: LibraryScope): Library => ({ ...scope, runs: runs.forLibrary(scope), gateway: models.librarian });
+
+  const libraries = new Map([[ADMIN_LIBRARY_ID, libraryOn(admin)]]);
+  return (libraryId) => {
+    let library = libraries.get(libraryId);
+    if (!library) {
+      library = libraryOn(scopeOf(libraryId));
+      libraries.set(libraryId, library);
+    }
+    return library;
+  };
+}
+
+/** A library's manuals, and the section leases that keep one writer per section among the servers sharing them. */
+function createStorage(config: ServerConfig, logger: Logger, libraryId: string): { store: ManualStore; leases: SectionLeases } {
   switch (config.manualStorage.kind) {
     case "files": {
-      const store = createFileManualStore(config.dataDir, logger);
+      const store = createFileManualStore(config.dataDir, logger, libraryId);
       return { store, leases: createInProcessLeases(store) };
     }
     case "dynamodb": {
       const { table } = config.manualStorage;
-      return { store: createDynamoDbManualStore(table), leases: createDynamoDbSectionLeases(table) };
+      return {
+        store: createDynamoDbManualStore(table, libraryId),
+        leases: createDynamoDbSectionLeases(table, SECTION_LEASE_TIMING, libraryId),
+      };
     }
   }
 }
@@ -228,12 +269,12 @@ function passcodeDigestSource(config: ServerConfig, now: () => number): CurrentD
 }
 
 /** The models passed in, and the configured ones for any that weren't. */
-async function modelsFor(config: ServerConfig, store: ManualStore, replaced: Replaced, logger: Logger): Promise<Models> {
+async function modelsFor(config: ServerConfig, replaced: Replaced, logger: Logger): Promise<Models> {
   const { writer, librarian, idle } = replaced;
-  if (writer && librarian) return { writer, librarian, idle: idle ?? nothingToSettle };
-  const configured = await createModels(config, store, logger);
+  if (writer && librarian) return { writerFor: () => writer, librarian, idle: idle ?? nothingToSettle };
+  const configured = await createModels(config, logger);
   return {
-    writer: writer ?? configured.writer,
+    writerFor: writer ? () => writer : configured.writerFor,
     librarian: librarian ?? configured.librarian,
     async idle() {
       await idle?.();
@@ -243,21 +284,17 @@ async function modelsFor(config: ServerConfig, store: ManualStore, replaced: Rep
 }
 
 /**
- * The writer and the librarian share one gateway, with the fake model or with Bedrock, so one set
- * of caps, the kill switch and the ledger cover every job.
+ * Every library's writer and the librarian share one gateway, with the fake model or with Bedrock,
+ * so one set of caps, the kill switch and the ledger cover every job.
  */
-export async function createModels(
-  config: ServerConfig,
-  store: ManualStore,
-  logger: Logger,
-  credentialsFile: URL = ENV_LOCAL_FILE,
-): Promise<Models> {
+export async function createModels(config: ServerConfig, logger: Logger, credentialsFile: URL = ENV_LOCAL_FILE): Promise<Models> {
   switch (config.models) {
     case "fake": {
       const openSpendingLedger = () =>
         openFileSpendingLedger({ ledger: createFileLedger(config.dataDir, logger), dataDir: config.dataDir });
       const gateway = await createModelGateway(withFakeModel(config), () => fakeModel(), openSpendingLedger, logger);
-      return { writer: createFakeWriter(gateway), librarian: gateway, idle: gateway.idle };
+      const writer = createFakeWriter(gateway);
+      return { writerFor: () => writer, librarian: gateway, idle: gateway.idle };
     }
     case "bedrock": {
       const aws = () => modelAws(config.modelAccess, credentialsFile);
@@ -271,13 +308,14 @@ export async function createModels(
         return createDynamoDbSpendingLedger({ ...tableWith(config.usageTable, access), onKeysRefused: keysRefusedBy("DynamoDB") });
       };
       const gateway = await createModelGateway(config, createClient, openSpendingLedger, logger);
-      const writer = createBedrockWriter({
-        gateway,
-        store,
-        wordsRequested: config.sectionWordsRequested,
-        expectedCharacters: config.sectionExpectedCharacters,
-      });
-      return { writer, librarian: gateway, idle: gateway.idle };
+      const writerFor = (store: ManualStore) =>
+        createBedrockWriter({
+          gateway,
+          store,
+          wordsRequested: config.sectionWordsRequested,
+          expectedCharacters: config.sectionExpectedCharacters,
+        });
+      return { writerFor, librarian: gateway, idle: gateway.idle };
     }
   }
 }

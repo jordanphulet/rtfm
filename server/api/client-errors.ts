@@ -47,7 +47,7 @@ export function clientErrorsRoute(logger: Logger, now = () => new Date()): Route
   return {
     method: "POST",
     pattern: "/api/client-errors",
-    async handle({ body }) {
+    async handle({ body, library: { libraryId } }) {
       const parsed = reportSchema.safeParse(body);
       if (!parsed.success) return badRequest;
 
@@ -59,25 +59,26 @@ export function clientErrorsRoute(logger: Logger, now = () => new Date()): Route
       reportsThisHour++;
       if (reportsThisHour === CLIENT_ERRORS_PER_HOUR + 1) {
         const message = `More than ${CLIENT_ERRORS_PER_HOUR} browser reports this hour; the rest are dropped`;
-        logger.warn("client.limited", message);
+        logger.warn("client.limited", message, { libraryId });
       }
       if (reportsThisHour > CLIENT_ERRORS_PER_HOUR) return tooMany;
 
-      logReport(logger, parsed.data);
+      logReport(logger, libraryId, parsed.data);
       return noContent;
     },
   };
 }
 
-function logReport(logger: Logger, report: ClientErrorReport) {
+function logReport(logger: Logger, libraryId: string, report: ClientErrorReport) {
   if (report.kind === "request") {
     const { kind, page, method, status } = report;
     const path = report.path.split("?")[0];
     const answer = status === undefined ? "got no answer" : `answered ${status}`;
-    logger.warn("client.error", `${method} ${path} ${answer} in the browser`, { kind, page, method, path, status });
+    const fields = { libraryId, kind, page, method, path, status };
+    logger.warn("client.error", `${method} ${path} ${answer} in the browser`, fields);
     return;
   }
   const { kind, page, name = "Error", message, stack } = report;
   const what = kind === "error" ? "An uncaught error" : "An unhandled rejection";
-  logger.error("client.error", `${what} in the browser`, { kind, page }, new BrowserError(name, message, stack));
+  logger.error("client.error", `${what} in the browser`, { libraryId, kind, page }, new BrowserError(name, message, stack));
 }

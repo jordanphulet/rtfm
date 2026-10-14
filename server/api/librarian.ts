@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { sendReply } from "../agent/librarian/reply.ts";
-import type { Gateway } from "../gateway/gateway.ts";
-import type { Logger } from "../logging/logger.ts";
-import type { ManualStore } from "../storage/types.ts";
+import type { Logger, LogMethod } from "../logging/logger.ts";
 import { librarianPreview, previewFraction } from "./preview.ts";
 import { badRequest, type Route } from "./route.ts";
 import { LIBRARIAN_LIMITS, type LibrarianEvent, type LibrarianMessage } from "./types.ts";
@@ -21,28 +19,40 @@ const requestSchema = z.object({
     .max(LIBRARIAN_LIMITS.earlierExchanges * 2 + 1),
 });
 
-/** POST /api/librarian: the conversation so far, ending with the user's message; the reply streams back. */
-export function librarianRoute(store: ManualStore, gateway: Gateway, logger: Logger): Route {
+/**
+ * POST /api/librarian: the conversation so far, ending with the user's message; the reply streams
+ * back, from the librarian and planner acting on the request's library alone.
+ */
+export function librarianRoute(logger: Logger): Route {
   return {
     method: "POST",
     pattern: "/api/librarian",
-    async handle({ body, query, signal }) {
+    async handle({ body, query, signal, library }) {
       const conversation = conversationFrom(body);
       if (!conversation) return badRequest;
       const freeze = previewFraction(query);
       if (Number.isNaN(freeze)) return badRequest;
-      if (freeze !== undefined) return librarianPreview(store, conversation, freeze);
+      if (freeze !== undefined) return librarianPreview(library.store, conversation, freeze);
       return (sink) =>
         sendReply({
-          gateway,
-          store,
+          gateway: library.gateway,
+          store: library.store,
           conversation,
           signal,
           send: ({ event, data }: LibrarianEvent) => sink.send(event, data),
-          logger,
+          logger: withLibraryId(logger, library.libraryId),
         });
     },
   };
+}
+
+/** The logger with the library's id on every line, so the reply's and its tools' lines say which library. */
+function withLibraryId(logger: Logger, libraryId: string): Logger {
+  const withId =
+    (log: LogMethod): LogMethod =>
+    (event, message, fields, error) =>
+      log(event, message, { libraryId, ...fields }, error);
+  return { info: withId(logger.info), warn: withId(logger.warn), error: withId(logger.error) };
 }
 
 /** The messages, if they alternate from the user's and end with the user's. */

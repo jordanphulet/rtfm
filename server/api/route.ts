@@ -1,8 +1,22 @@
+import type { Gateway } from "../gateway/gateway.ts";
+import type { LibraryScope, Runs } from "../writer/runs.ts";
+
+/**
+ * The library a request is in, as the gate gives it: its id, manuals, leases and section writer,
+ * the server's runs bound to it, and the gateway its librarian and planner call. A handler reaches
+ * manuals, runs and models only through it.
+ */
+export interface Library extends LibraryScope {
+  runs: Runs;
+  gateway: Gateway;
+}
+
 export interface ApiRequest {
   params: Record<string, string>;
   query: URLSearchParams;
   body: unknown;
   signal: AbortSignal;
+  library: Library;
 }
 
 export interface JsonResponse {

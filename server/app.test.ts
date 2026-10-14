@@ -52,8 +52,7 @@ describe("starting with Bedrock models", () => {
       `AWS_ACCESS_KEY_ID=${accessKeyId}\nAWS_SECRET_ACCESS_KEY=${secretAccessKey}\nAWS_REGION=${table.region}\n`,
     );
     const bedrockConfig = { ...config, dataDir, models: "bedrock" as const, usageTable: { name: table.name, endpoint: table.endpoint } };
-    const store = createFileManualStore(dataDir, silentLogger);
-    const models = await createModels(bedrockConfig, store, silentLogger, credentialsFile);
+    const models = await createModels(bedrockConfig, silentLogger, credentialsFile);
     const askLibrarian = () => collect(models.librarian.stream("librarian", GREETING, new AbortController().signal));
 
     await setKillSwitch(table, true);
@@ -68,10 +67,9 @@ describe("starting with Bedrock models", () => {
   it("refuses to start without credentials", async () => {
     const dataDir = await tempDataDir();
     const missingFile = pathToFileURL(path.join(dataDir, ".env.local"));
-    const store = createFileManualStore(dataDir, silentLogger);
-    await expect(
-      createModels({ ...config, dataDir, models: "bedrock" }, store, silentLogger, missingFile),
-    ).rejects.toThrow(CredentialsMissing);
+    await expect(createModels({ ...config, dataDir, models: "bedrock" }, silentLogger, missingFile)).rejects.toThrow(
+      CredentialsMissing,
+    );
   });
 });
 
@@ -81,10 +79,10 @@ describe("starting with the fake models", () => {
     const store = createFileManualStore(dataDir, silentLogger);
     await seedStore(store);
     const zeroCaps = { dailyUsd: 0, monthlyUsd: 0 };
-    const models = await createModels({ ...config, dataDir, models: "fake", caps: zeroCaps }, store, silentLogger);
+    const models = await createModels({ ...config, dataDir, models: "fake", caps: zeroCaps }, silentLogger);
     const geese = (await store.getManual(GEESE_ID))!;
     const sectionId = geese.chapters[0]!.sections[0]!.id;
-    const writeSection = () => collect(models.writer.write(geese, sectionId, new AbortController().signal));
+    const writeSection = () => collect(models.writerFor(store).write(geese, sectionId, new AbortController().signal));
     const askLibrarian = () => collect(models.librarian.stream("librarian", GREETING, new AbortController().signal));
 
     await Promise.all([writeSection(), askLibrarian()]);

@@ -5,7 +5,8 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { silentLogger, type Logger } from "../logging/logger.ts";
-import { capturingLogger, tempDataDir } from "../testing.ts";
+import { createFileManualStore } from "../storage/file-manual-store.ts";
+import { capturingLogger, tempDataDir, testLibrary } from "../testing.ts";
 import { createRequestHandler, LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./node-adapter.ts";
 import { cachedDigest, passcodeDigest, type CurrentDigest } from "./passcode.ts";
 import type { ApiRequest, Route } from "./route.ts";
@@ -32,7 +33,9 @@ async function serve(
   config: Partial<AdapterConfig> = {},
   currentDigest?: CurrentDigest,
 ): Promise<string> {
-  const server = createServer(createRequestHandler([route], logger, { ...LOOPBACK_ONLY, ...config }, currentDigest));
+  const library = testLibrary({ store: createFileManualStore(await tempDataDir(), silentLogger) });
+  const gate = { currentDigest, libraryOf: async () => library };
+  const server = createServer(createRequestHandler([route], logger, { ...LOOPBACK_ONLY, ...config }, gate));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -78,8 +81,15 @@ describe("the Node adapter", () => {
     const response = await fetch(`${base}/api/broken`);
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "Internal error" });
-    expect(entries.filter(({ event }) => event === "request.failed")).toEqual([
-      expect.objectContaining({ level: "ERROR", path: "/api/broken", error: expect.objectContaining({ message: "broken" }) }),
+    expect(entries.filter(({ event }) => event.startsWith("request"))).toEqual([
+      expect.objectContaining({
+        level: "ERROR",
+        event: "request.failed",
+        path: "/api/broken",
+        libraryId: "admin",
+        error: expect.objectContaining({ message: "broken" }),
+      }),
+      expect.objectContaining({ event: "request", status: 500, libraryId: "admin" }),
     ]);
   });
 

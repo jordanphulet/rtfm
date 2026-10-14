@@ -112,12 +112,14 @@ folder, so its leases (`storage/in-process-leases.ts`) grant every take, and the
 one writer per section, exactly as it would without them.
 
 **One map serves every library** (`research/libraries.md` › How the server carries the library).
-`createRuns` returns the admin's library's runs, made of the store, leases and writer it is given,
-so the routes use it as is. Its `forLibrary(scope)` gives another library's runs, with the same
-four methods bound to that library's `LibraryScope`: its id, `ManualStore`, `SectionLeases` and
-`SectionWriter`. Every library's runs share the one map and the one limit. A run reads, takes its
-lease, writes and saves through its own library's scope, so the same section id in two libraries
-is two runs, and a lease in one library never makes a section in another look busy.
+`createRuns` returns the admin's library's runs, made of the store, leases and writer it is given.
+Its `forLibrary(scope)` gives any library's runs, with the same four methods bound to that
+library's `LibraryScope`: its id, `ManualStore`, `SectionLeases` and `SectionWriter`. Each
+`Library` the server holds is such a scope, with its bound runs built once (`server/api/README.md`
+› The library of a request), and the routes use those. Every library's runs share the one map and
+the one limit. A run reads, takes its lease, writes and saves through its own library's scope, so
+the same section id in two libraries is two runs, and a lease in one library never makes a section
+in another look busy.
 
 - **Opening a section** checks the map, then storage (`getBody`), then the map again. If there is
   still no entry, it creates the run in the same tick, so two requests can't both start one. The

@@ -233,7 +233,7 @@ describe("web-function.ts", () => {
     expect((await send(port, "GET", "/", { host: ENDPOINT_HOST, origin: APP_ORIGIN })).status).toBe(200);
   });
 
-  it("streams the librarian's reply to a POST", { timeout: TEST_TIMEOUT_MS }, async () => {
+  it("streams the librarian's reply to a POST, logged in the admin's library", { timeout: TEST_TIMEOUT_MS }, async () => {
     const webFunction = await startWebFunction();
     const port = await webFunction.listening();
     const conversation = { messages: [{ role: "user", text: "Good morning" }] };
@@ -243,6 +243,10 @@ describe("web-function.ts", () => {
     expect(reply.headers["content-type"]).toBe("text/event-stream");
     expect(reply.text).toMatch(/event: text\n/);
     expect(reply.text).toMatch(/event: done\ndata: \{\}\n\n$/);
+    const librarianRequest = () => webFunction.entries().find(({ event, path }) => event === "request" && path === "/api/librarian");
+    await waitUntil(() => librarianRequest() !== undefined, 5000);
+    expect(librarianRequest()).toMatchObject({ libraryId: "admin", status: 200 });
+    expect(webFunction.entries().find(({ event }) => event === "librarian.reply")).toMatchObject({ libraryId: "admin" });
   });
 
   it("streams a section, and stops writing it once its only reader disconnects", { timeout: TEST_TIMEOUT_MS }, async () => {

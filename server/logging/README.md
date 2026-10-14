@@ -49,18 +49,21 @@ message and stack are logged as the browser reports them. The Bedrock client wri
 out of a thrown error's message and stack, since a signature error from AWS quotes the access key
 ID.
 
-Every `section.*` line has the section's `libraryId` (`admin` for the admin's library), `manualId`
-and `sectionId`.
+Every line about a request in a library has the library's `libraryId` (`admin` for the admin's
+library; `server/api/README.md` › The library of a request): `request` once the gate has given the
+request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `client.error`,
+`client.limited` and every `section.*` line, which also has the section's `manualId` and
+`sectionId`.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
 | `server.started`, `server.stopped` | INFO | `startServer` listening (`host`, `port`, `models`, `dataDir`, `manualStorage`: `files` or `dynamodb`, with DynamoDB `credentials`: where its keys come from, by name only, and `passcodeGate`: whether there is a passcode gate), and `close()` done |
 | `server.refused` | WARN | The data folder's lock is held by another server (`pid`, `dataDir`) |
 | `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use; on the Web Function, Bedrock models or no `AWS_LAMBDA_HTTP_ENDPOINT`); an uncaught exception or unhandled rejection in `runServerProcess` |
-| `request` | INFO, WARN for 5xx | Each request, the built app's files included, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
+| `request` | INFO, WARN for 5xx | Each request, the built app's files included, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `libraryId` once the gate has given one (never on a refused request or a file of the built app), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
 | `request.refused` | WARN | The `Host` and `Origin` checks refused it, it didn't carry the passcode (`401`), or its body was too long or not JSON (`status`, `host`, `origin`) |
 | `passcode.wrong`, `passcode.accepted`, `passcode.unset` | WARN, INFO, WARN | `POST /api/passcode` with a wrong passcode, the right one, or any while no passcode is set (no fields: never the passcode or its digest) |
-| `request.failed` | ERROR | A handler threw (the 500 in `server/api/README.md` › Routes) |
+| `request.failed` | ERROR | A handler threw (the 500 in `server/api/README.md` › Routes): the `request` line's ids, with `libraryId` once the gate has given one |
 | `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
 | `model.refused` | WARN | The gateway refused a call: `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap` or `busy`) |
 | `ledger.line-skipped` | WARN | A ledger line that isn't JSON (`file`, `line`) |
@@ -70,11 +73,11 @@ and `sectionId`.
 | `section.release-failed` | WARN | A run couldn't release its section's lease, which then expires, with the error |
 | `section.failed` | WARN for budget, ERROR | A run fails (`reason`), with the error unless the budget refused it |
 | `section.refused` | WARN | A run beyond `maxConcurrentRuns` (`activeRuns`) |
-| `librarian.reply` | INFO, WARN for budget, ERROR | A reply ends: `outcome` (`done`, `aborted`, `budget` or `error`), `messages`, `turns`, `tools` (the tools the model called, comma-separated), `durationMs`; a failed reply's error |
-| `agent.tool-failed` | WARN | A tool threw, and the model got an error result (`tool`) |
+| `librarian.reply` | INFO, WARN for budget, ERROR | A reply ends: `libraryId`, `outcome` (`done`, `aborted`, `budget` or `error`), `messages`, `turns`, `tools` (the tools the model called, comma-separated), `durationMs`; a failed reply's error |
+| `agent.tool-failed` | WARN | A tool threw, and the model got an error result (`libraryId`, `tool`) |
 | `manual.cleanup-failed` | ERROR | A deleted manual's folder couldn't be removed (`libraryId`, `manualId`, `folder`) |
-| `client.error` | ERROR, WARN for a request | What the browser reported (below) |
-| `client.limited` | WARN | Once an hour, when browser reports pass the hourly limit |
+| `client.error` | ERROR, WARN for a request | What the browser reported (below), with the reporting page's `libraryId` |
+| `client.limited` | WARN | Once an hour, when browser reports pass the hourly limit (`libraryId`: the library of the report that passed it; the limit is one for every library) |
 | `log.file-full` | WARN | Written by the log file itself, as the day's last line in it |
 
 ## Browser errors
@@ -106,7 +109,7 @@ entered the passcode reports nothing):
   a loop can't fill the disk.
 - The route logs an error or rejection as `client.error` at ERROR with the browser's error
   nested, and a failed request at WARN with its `method`, `path` (without its query) and
-  `status`.
+  `status`, each with the `libraryId` of the library the report's request is in.
 
 ## `npm run logs`
 
@@ -133,12 +136,13 @@ Tests next to each module check: the line's shape and levels; the daily files, r
 daily budget, and a failed write and the recovery after it; reading, filtering, formatting with
 control characters escaped, and reading whole lines from an offset (the follow loop itself is
 not tested); the request, refusal, model-call, run and reply entries; the client-error route
-(its fields, the `Host` and `Origin` checks, truncation and the hourly limit); `main.ts` writing
-the same lines to standard output and the file, and `web-function.ts` writing them to standard
-output; and that no cookie, query, conversation or section text
-reaches the log file (`api/logging.test.ts`), nor the passcode or its digest, entered, in a
-cookie or stored (`api/passcode.test.ts`), nor an AWS key from a Bedrock error
-(`gateway/bedrock-client.test.ts`, since only `server/gateway/` may use the Bedrock client).
+(its fields, the `Host` and `Origin` checks, truncation and the hourly limit); the `libraryId` on
+each line about a request in a library (`api/libraries.test.ts`, with two libraries); `main.ts`
+writing the same lines to standard output and the file, and `web-function.ts` writing them to
+standard output; and that no cookie, query, conversation or section text reaches the log file
+(`api/logging.test.ts`), nor the passcode or its digest, entered, in a cookie or stored
+(`api/passcode.test.ts`), nor an AWS key from a Bedrock error (`gateway/bedrock-client.test.ts`,
+since only `server/gateway/` may use the Bedrock client).
 
 ## Files
 
