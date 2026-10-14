@@ -65,23 +65,9 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.3 — Key the runs by library
-- **Status:** doing (agent a2567743a6f7534f6; done, being committed)
-- **Depends on:** —
-- **Files:** `server/writer/**`, `server/logging/README.md`
-- **Do:** as `research/libraries.md` › How the server carries the library describes: one `Runs`
-  for the server, its map keyed `<libraryId>/<manualId>/<sectionId>`, with `maxConcurrentRuns`
-  counted across libraries. `forLibrary(scope)` (a scope is the library's id, store, leases and
-  writer) returns the runs' methods bound to that library, with no scope parameter, so no call can
-  leave it out; what `createRuns` returns acts as the admin's library, so the routes keep working
-  unchanged. A run reads, takes its lease, writes and saves through its own scope. The `section.*` lines carry
-  `libraryId`. Extend the runs' shared suite (both kinds of leases) to two libraries.
-- **Done when:** the runs' tests write the same section id in two libraries at once, each saved in
-  its own library and counted toward the one limit, and `npm run build` and `npm test` pass.
-
 ### LB.4 — Carry the library through each request
-- **Status:** todo
-- **Depends on:** LB.3
+- **Status:** doing (agent acdd99f166601e4d9)
+- **Depends on:** —
 - **Files:** `server/api/**`, `server/agent/**`, `server/app.ts` and its test, `server/testing.ts`,
   `server/replacement.test.ts`, `server/web-function.test.ts`, `scripts/shot.ts`,
   `scripts/serve-temp.ts`, `server/logging/README.md`, `server/README.md`, `ARCHITECTURE.md`
