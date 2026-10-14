@@ -116,26 +116,6 @@ user revokes it, and with its activity visible to the user.
   still reserve, the central caps and kill switch refuse every library, and `npm run build` and
   `npm test` pass.
 
-### LB.7 — Give library links their AWS reach
-- **Status:** blocked (merged and RtfmApp deployed; the user deploys `RtfmAccess`)
-- **Depends on:** —
-- **Files:** `infra/rtfm.ts`, `infra/app-stack.ts` and its test,
-  `infra/access-stack.ts` and its test, `infra/README.md`, `server/storage/README.md`,
-  `infra/testing.test.ts`, `README.md`
-- **Do:** as `research/libraries.md` › AWS describes: `LINK_PARTITION`, `ACTIVITY_PARTITION` and the
-  recipients' manual-list pattern `L#*#LIBRARY` in `infra/rtfm.ts`; the Web Function's deny
-  `LeaveThePasscodeToOps` becomes `LeaveAccessToOps`, on `PASSCODE` and `LINK`; `rtfm-ops` gains
-  `GetItem`, `Query`, `PutItem` and `UpdateItem` on `LINK`; `rtfm-read` gains `GetItem` and `Query`
-  on `LINK` and `ACTIVITY`, and `Query` on `L#*#LIBRARY` (`ForAllValues:StringLike`), each with
-  `Null` false. The tests check, with the policy evaluator, that the Web Function can read `LINK`
-  and write `ACTIVITY` and an `L#…` partition but never write `LINK` (a transaction's part
-  included), that `rtfm-ops` reaches `LINK` and `rtfm-read` those partitions, and that neither
-  reaches `LIBRARY`, `MANUAL#…`, `L#<libraryId>#MANUAL#…`, `L#<libraryId>#SEEDED` or any other item
-  of `rtfm-app`. Give the full diff of `infra/rtfm.ts` and `infra/access-stack.ts` in the report.
-  After the merge the user deploys `RtfmAccess` (`infra/README.md` › Updating a stack you deploy).
-- **Done when:** the tests show each role's reach as above, `npm run cdk -- synth --quiet` writes
-  the templates, `npm test` passes, and the user has approved the diff.
-
 ### LB.8 — Open a library by its link
 - **Status:** todo
 - **Depends on:** LB.4, LB.6
