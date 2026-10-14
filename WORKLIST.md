@@ -119,7 +119,7 @@ aren't RTFM's.
   shows it in `rtfm-usage`.
 
 ### IN.21 — Replace an environment before its keys run out
-- **Status:** todo
+- **Status:** doing (agent a93636117612befb0; done, in review by a5fb11b0572d2e4e6)
 - **Depends on:** —
 - **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
