@@ -96,26 +96,6 @@ aren't RTFM's.
   section through `https://rtfm.moonfetus.com` (under $0.01) and `npm run usage` (or the ops tool)
   shows it in `rtfm-usage`.
 
-### IN.21 — Replace an environment before its keys run out
-- **Status:** doing (agent a93636117612befb0; done, being committed)
-- **Depends on:** —
-- **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
-  `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
-  `research/aws-design.md`, `server/replacement.ts` and its test,
-  `server/storage/dynamodb-testing.ts`, `server/storage/README.md`, `ARCHITECTURE.md`
-- **Do:** Lambda gives the Web Function its role's keys as environment variables, which a running
-  process can't renew, and nothing bounds an environment's life while requests keep coming less
-  than about 5 minutes apart (IN.10).
-  - `server.started` logs when the keys expire, from `AWS_CREDENTIAL_EXPIRATION` when Lambda sets
-    it (a time, never a key), or that it is unset.
-  - When DynamoDB (or, once IN.20 lands, Bedrock) refuses the keys (`ExpiredTokenException`,
-    `UnrecognizedClientException`), the Web Function logs it and exits with code 1 once its open
-    requests end or after a short bound, so Lambda replaces the environment with fresh keys; when
-    the expiry is known, it also exits that way shortly before it.
-- **Done when:** tests show the logged expiry or "unset", and the exit on a refused key and before
-  a known expiry; after the next deploy, `research/aws-design.md` › Measured records whether Lambda
-  sets the expiry and what happens after the exit.
-
 ### IN.22 — See the heartbeat through the edge
 - **Status:** todo
 - **Depends on:** IN.20
@@ -126,29 +106,28 @@ aren't RTFM's.
   the headers until the first byte, IN.10).
 - **Done when:** the doc's Measured section records it.
 
-### IN.23 — Close the delete race, and the section route's status
-- **Status:** doing (agent a638f795b3a12ff50; approved, wording fixes)
-- **Depends on:** IN.19
-- **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
-- **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
-  - a lease taken between the delete's `409` check and its transaction: condition each section
-    item's `Delete` in `deleteManual`'s transaction on `attribute_exists(body) OR leaseExpiresAt <
-    :now`, and answer `409` when that cancels it; and say what remains (a lease taken after the
-    delete's query, whose run's save then fails after a full paid section);
-  - the section route's `statusOf` sees only this environment's runs: use the lease attributes the
-    section item's strongly consistent read already returns, so a section written elsewhere shows
-    as writing.
-- **Done when:** the runs' shared suite covers both on both implementations, and `npm test` passes.
+### IN.24 — Record what the keys' expiry does on the deployed app
+- **Status:** todo
+- **Depends on:** IN.20 (so environments see real traffic first)
+- **Files:** `research/aws-design.md`
+- **Do:** IN.21's measurement, read with `npm run ops -- logs` (no other AWS call). Since IN.21's
+  deploy, `server.started` logs `credentialsExpireAt=unset` (first seen 2026-10-14T01:40Z):
+  Lambda doesn't set `AWS_CREDENTIAL_EXPIRATION`, so only a refused key starts a replacement.
+  Record that in `research/aws-design.md` › Measured, and any `server.keys-refused` line since
+  then with its error name, the gap to that environment's `server.stopped`, and the next
+  `server.started`.
+- **Done when:** Measured records whether Lambda sets the expiry and, if any environment was
+  refused its keys, what followed; if none was, it says so with the date range read.
 
 ## Upkeep
 
 Small fixes that keep the repo healthy.
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
-- **Status:** todo
+- **Status:** doing (agent a015ebd8e9ccc456e; done, being committed)
 - **Depends on:** IN.12, IN.13
 - **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
-  `server/api/librarian.test.ts`
+  `server/api/librarian.test.ts`, `server/usage.ts`, `server/app.test.ts`
 - **Do:** share the `TransactionConflict` retry loop that `storage/dynamodb-manual-store.ts` and
   `gateway/dynamodb-spending-ledger.ts` each have (about 12 lines), and move `killSwitchPath` from
   `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
