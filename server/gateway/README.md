@@ -389,10 +389,10 @@ The tests are all offline. They guard two boundaries. `sdk-boundary.test.ts` sca
 (`.ts`, `.tsx`, `.js`, `.jsx` and their `m`/`c` forms) under `src/`, `server/` and `scripts/`, and
 the root source files, and fails if any file but the SDK adapters it lists (`bedrock-client.ts`,
 `dynamodb-spending-ledger.ts` for the table `rtfm-usage`, and
-`server/storage/dynamodb-manual-store.ts` for the table `rtfm-app`) names a module starting
-with `@anthropic-ai/` or `@aws-sdk/`, or a listed adapter names none, or anything outside
-`server/gateway/` and `server/app.ts` imports `bedrock-client`, so nothing can call the client
-without going through the caps.
+`server/storage/dynamodb-manual-store.ts` and `server/storage/dynamodb-link-store.ts` for the table
+`rtfm-app`) names a module starting with `@anthropic-ai/` or `@aws-sdk/`, or a listed adapter
+names none, or anything outside `server/gateway/` and `server/app.ts` imports `bedrock-client`, so
+nothing can call the client without going through the caps.
 `bedrock-client.test.ts` runs the client against a local server that answers with real Bedrock
 event-stream frames (`bedrock-testing.ts`, which the Web Function's test shares), with fake keys
 and `AWS_PROFILE`, `AWS_BEARER_TOKEN_BEDROCK`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,

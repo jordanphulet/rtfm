@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import type { Logger } from "../logging/logger.ts";
-import { createExclusively, isErrorCode, namesInFolder, readIfExists, tempPathFor } from "./files.ts";
+import { createExclusively, isErrorCode, namesInFolder, readIfExists, writeAtomically } from "./files.ts";
 import { ADMIN_LIBRARY_ID, libraryFolder } from "./library.ts";
 import { ID_PATTERN, isSameManual } from "./manual.ts";
 import type { ManualStore, StoredManual } from "./types.ts";
@@ -105,12 +105,6 @@ async function makeSectionsDir(dir: string, manualId: string) {
     if (isErrorCode(error, "ENOENT")) throw new Error(`There is no manual "${manualId}" to save a section into`);
     throw error;
   }
-}
-
-async function writeAtomically(target: string, content: string) {
-  const temp = tempPathFor(target);
-  await writeFile(temp, content);
-  await rename(temp, target);
 }
 
 function checkedId(id: string): string {

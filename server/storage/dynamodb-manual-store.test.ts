@@ -50,8 +50,8 @@ describe("the DynamoDB manual store's libraries", () => {
 
   it("refuses a library id that isn't a slug", async () => {
     const table = await testAppTable();
-    expect(() => createDynamoDbManualStore(table, "acme#LIBRARY")).toThrow('Not a valid library id: "acme#LIBRARY"');
-    expect(() => createDynamoDbSectionLeases(table, undefined, "Acme")).toThrow('Not a valid library id: "Acme"');
+    expect(() => createDynamoDbManualStore(table, "acme#LIBRARY")).toThrow("Not a recipient library's id");
+    expect(() => createDynamoDbSectionLeases(table, undefined, "Acme")).toThrow("Not a recipient library's id");
   });
 });
 

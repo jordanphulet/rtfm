@@ -65,35 +65,16 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.2 — Keep each library's manuals apart
-- **Status:** doing (agent a3a01cb82bec10d68; done, being committed)
-- **Depends on:** —
-- **Files:** `server/storage/**`, `server/logging/README.md`, `ARCHITECTURE.md`
-- **Do:** bind `ManualStore` and `SectionLeases` to a library, as `research/libraries.md` ›
-  Isolation describes: one function builds each key in `rtfm-app` (`L#<libraryId>#` before the
-  partition key there is now, and no prefix for the admin's library, `admin`), and one each folder
-  in the data folder (`libraries/<libraryId>/`, or the data folder itself for the admin's). The
-  library is an argument of `createFileManualStore`, `createDynamoDbManualStore`,
-  `createInProcessLeases` and `createDynamoDbSectionLeases` that defaults to the admin's, so their
-  callers outside this task keep working unchanged; `seedStore` seeds whichever store it is given.
-  No recipient library may take the id `admin`. The file store's `manual.cleanup-failed` line
-  carries `libraryId`. Run `manual-store-suite.ts` against two libraries on one table and one
-  folder, check the admin's library reads items stored with no prefix, and take one section id's
-  lease in two libraries at once. Document the key scheme and the data folder in
-  `server/storage/README.md`.
-- **Done when:** the suite and the leases' tests show no library sees or changes another's items,
-  the admin's library reads the existing items as they are, and `npm run build` and `npm test`
-  pass.
-
 ### LB.3 — Key the runs by library
-- **Status:** todo
-- **Depends on:** LB.2
+- **Status:** doing (agent a2567743a6f7534f6; done, being committed)
+- **Depends on:** —
 - **Files:** `server/writer/**`, `server/logging/README.md`
 - **Do:** as `research/libraries.md` › How the server carries the library describes: one `Runs`
   for the server, its map keyed `<libraryId>/<manualId>/<sectionId>`, with `maxConcurrentRuns`
-  counted across libraries. Each method takes a library scope (id, store, leases and writer) that
-  defaults to the admin's, the one `createRuns` is given, so the routes keep working unchanged; a
-  run reads, takes its lease, writes and saves through its own scope. The `section.*` lines carry
+  counted across libraries. `forLibrary(scope)` (a scope is the library's id, store, leases and
+  writer) returns the runs' methods bound to that library, with no scope parameter, so no call can
+  leave it out; what `createRuns` returns acts as the admin's library, so the routes keep working
+  unchanged. A run reads, takes its lease, writes and saves through its own scope. The `section.*` lines carry
   `libraryId`. Extend the runs' shared suite (both kinds of leases) to two libraries.
 - **Done when:** the runs' tests write the same section id in two libraries at once, each saved in
   its own library and counted toward the one limit, and `npm run build` and `npm test` pass.
@@ -134,41 +115,6 @@ user revokes it, and with its activity visible to the user.
 - **Done when:** the suite shows a library refused at its cap while another library and the admin
   still reserve, the central caps and kill switch refuse every library, and `npm run build` and
   `npm test` pass.
-
-### LB.6 — Keep library links and activity
-- **Status:** doing (agent ad5dcc9675bc68f19; done, in review by aaef9295a39aa6729)
-- **Depends on:** —
-- **Files:** `server/storage/**`, `server/gateway/sdk-boundary.test.ts`, `ARCHITECTURE.md`
-- **Do:** the store of links and activity, as `research/libraries.md` › The key scheme and What is
-  recorded, and where describe: a link by its secret's digest (create on `attribute_not_exists`,
-  find, list, revoke, keeping the item), and a library's activity (first and last use, opens and
-  the counters, each an `ADD` or an `if_not_exists`, and reading one or all), in `rtfm-app`'s
-  `LINK` and `ACTIVITY` partitions and in `.data/links/` and `.data/activity/`, both held to one
-  suite, the DynamoDB one against DynamoDB Local. A find that fails throws, never answering "no
-  link". The secret's form, its making and its digest live here too. The server doesn't use it in
-  this task. Document it in `server/storage/README.md`.
-- **Done when:** the suite passes against both, no item or file holds a secret, and `npm run build`
-  and `npm test` pass.
-
-### LB.7 — Give library links their AWS reach
-- **Status:** blocked (merged and RtfmApp deployed; the user deploys `RtfmAccess`)
-- **Depends on:** —
-- **Files:** `infra/rtfm.ts`, `infra/app-stack.ts` and its test,
-  `infra/access-stack.ts` and its test, `infra/README.md`, `server/storage/README.md`,
-  `infra/testing.test.ts`, `README.md`
-- **Do:** as `research/libraries.md` › AWS describes: `LINK_PARTITION`, `ACTIVITY_PARTITION` and the
-  recipients' manual-list pattern `L#*#LIBRARY` in `infra/rtfm.ts`; the Web Function's deny
-  `LeaveThePasscodeToOps` becomes `LeaveAccessToOps`, on `PASSCODE` and `LINK`; `rtfm-ops` gains
-  `GetItem`, `Query`, `PutItem` and `UpdateItem` on `LINK`; `rtfm-read` gains `GetItem` and `Query`
-  on `LINK` and `ACTIVITY`, and `Query` on `L#*#LIBRARY` (`ForAllValues:StringLike`), each with
-  `Null` false. The tests check, with the policy evaluator, that the Web Function can read `LINK`
-  and write `ACTIVITY` and an `L#…` partition but never write `LINK` (a transaction's part
-  included), that `rtfm-ops` reaches `LINK` and `rtfm-read` those partitions, and that neither
-  reaches `LIBRARY`, `MANUAL#…`, `L#<libraryId>#MANUAL#…`, `L#<libraryId>#SEEDED` or any other item
-  of `rtfm-app`. Give the full diff of `infra/rtfm.ts` and `infra/access-stack.ts` in the report.
-  After the merge the user deploys `RtfmAccess` (`infra/README.md` › Updating a stack you deploy).
-- **Done when:** the tests show each role's reach as above, `npm run cdk -- synth --quiet` writes
-  the templates, `npm test` passes, and the user has approved the diff.
 
 ### LB.8 — Open a library by its link
 - **Status:** todo

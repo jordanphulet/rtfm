@@ -384,7 +384,7 @@ export function createDynamoDbSectionLeases(
 }
 
 /** The items of a partition that the filter keeps (all of them without one), read consistently, page by page. */
-async function queryPartition(
+export async function queryPartition(
   client: DynamoDBDocumentClient,
   TableName: string,
   pk: string,

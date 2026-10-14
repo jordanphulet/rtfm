@@ -149,6 +149,6 @@ describe("the file manual store's libraries", () => {
   });
 
   it("refuses a library id that isn't a slug", () => {
-    expect(() => createFileManualStore(dataDir, silentLogger, "../outside")).toThrow('Not a valid library id: "../outside"');
+    expect(() => createFileManualStore(dataDir, silentLogger, "../outside")).toThrow("Not a recipient library's id");
   });
 });
