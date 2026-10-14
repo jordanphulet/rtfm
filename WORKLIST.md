@@ -119,7 +119,7 @@ aren't RTFM's.
 - **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
 
 ### AW.1 — Check the ledger against the AWS bill
-- **Status:** todo
+- **Status:** doing (agent a5a235ae9222608b6)
 - **Depends on:** IN.12
 - **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
 - **Do:** with `npm run aws -- ce get-cost-and-usage` (as `rtfm-read`), compare what AWS charged
