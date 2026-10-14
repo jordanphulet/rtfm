@@ -59,6 +59,26 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.8 — A finished librarian reply shown as failed on the phone
+- **Status:** doing (agent a009e78e8b6478876)
+- **Depends on:** —
+- **Files:** `src/librarian/**`, `src/home/**`
+- **Do:** on the deployed app, on a phone, the user asked the librarian "Open the haunted house
+  one." The server logged a finished reply (2026-10-14T03:04:26Z: `librarian.reply` outcome
+  `done`, 3 turns, tools `find_manuals,open_manual`, `POST /api/librarian 200`), but the page showed
+  "In your library: The Haunt That Listens" and then "This reply failed." In `src/librarian/store.ts`
+  › `reply`, a reply turns into a failure when the stream ends without `done`, or when anything
+  throws, including `handOver(action)` after `done` has been shown. Reproduce it at a phone width
+  with the fake models (`npm run serve-temp`, Playwright), find which it is, fix it, and add a test
+  that fails without the fix. An action handler that throws must not turn a finished reply into a
+  failure.
+- **Done when:** a test reproduces the failure and passes with the fix, and the phone layout opens
+  the manual the librarian names, with the reply shown as finished.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
