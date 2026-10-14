@@ -151,10 +151,11 @@ user revokes it, and with its activity visible to the user.
   and `npm test` pass.
 
 ### LB.7 — Give library links their AWS reach
-- **Status:** doing (agent a6dafa202d05f2d36; review's fixes; the user approved the diff with the tightening)
+- **Status:** doing (agent a6dafa202d05f2d36; done, being committed; the user approved the diff with the tightening)
 - **Depends on:** —
 - **Files:** `infra/rtfm.ts`, `infra/app-stack.ts` and its test,
-  `infra/access-stack.ts` and its test, `infra/README.md`, `server/storage/README.md`
+  `infra/access-stack.ts` and its test, `infra/README.md`, `server/storage/README.md`,
+  `infra/testing.test.ts`, `README.md`
 - **Do:** as `research/libraries.md` › AWS describes: `LINK_PARTITION`, `ACTIVITY_PARTITION` and the
   recipients' manual-list pattern `L#*#LIBRARY` in `infra/rtfm.ts`; the Web Function's deny
   `LeaveThePasscodeToOps` becomes `LeaveAccessToOps`, on `PASSCODE` and `LINK`; `rtfm-ops` gains
