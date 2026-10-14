@@ -62,7 +62,7 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998; review round 3: test headroom under load, renewals only extend the lease)
+- **Status:** doing (agent a6eb3ca69062c8998; reviewed and committed on its branch; resolving merge conflicts in two docs)
 - **Depends on:** IN.11
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
   `server/writer/README.md`, and for the docs the leases touch: `ARCHITECTURE.md`,
