@@ -124,7 +124,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.6 — "and its test" across a line break
-- **Status:** doing (agent af2120585fde655f7)
+- **Status:** doing (agent af2120585fde655f7; done, being committed)
 - **Depends on:** —
 - **Files:** `scripts/commit-task.ts` and its test
 - **Do:** `commit-task` reads "`x.ts` and its test" as also naming `x.test.*` only when the words
