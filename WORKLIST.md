@@ -114,8 +114,24 @@ aren't RTFM's.
   data folder's), and find from the bill's usage types whether a call that doesn't complete is
   charged its full `max_tokens` or only what it used. Correct `prices.ts` or the gateway's charge
   for an incomplete call if they differ. Read-only in AWS.
-- **Done when:** the price table and the charge for an incomplete call match AWS's, and
-  `server/README.md` says what was checked and when.
+- **Done when:** `prices.ts` is checked against AWS's charges and `server/README.md` says what was
+  checked and when, with what the bill shows of incomplete calls.
+
+### AW.4 — Charge an aborted call as AWS does
+- **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
+- **Depends on:** AW.1
+- **Files:** `server/gateway/gateway.ts` and its test, `server/gateway/README.md`, `server/README.md`,
+  `README.md`
+- **Do:** AW.1 found AWS bills an aborted call its full input and almost none of its output (on
+  2026-10-11, two aborted sections were billed at most 6 output tokens between them), while the
+  gateway charges every incomplete call its full `max_tokens` of output. Read 2026-10-13's
+  complete numbers (two aborts, one of which had sent 1,788 characters): if AWS's `global.` output
+  that day is about the ledger's reported 46,494 plus a few tokens, charge an `aborted` call 0
+  output tokens; if it's 400–1,000+ higher, charge what the stream delivered (UTF-8 bytes received,
+  capped at `max_tokens`). Either way it stays `estimated`; a `failed` call keeps its full
+  `max_tokens`; the reservation keeps the worst case, so the caps don't change.
+- **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
+  evidence, and `npm test` passes.
 
 ## Upkeep
 
@@ -145,6 +161,11 @@ Small fixes that keep the repo healthy.
   `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
 - **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
   and `npm test` passes.
+
+## Waiting on AWS
+
+Work that can't start until the user does something in AWS. Each task stays `blocked` until the
+user says its step is done.
 
 ### AW.2 — Claude Platform on AWS
 - **Status:** blocked (the user signs up, following `research/aws-hosting.md` › "Your steps")
