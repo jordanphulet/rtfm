@@ -65,43 +65,9 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.8 — Open a library by its link
-- **Status:** doing (agent a07b2e7ab3bb8665c; done, being committed)
-- **Depends on:** —
-- **Merges after:** LB.5
-- **Files:** `server/api/**`, `server/storage/**`, `server/config.ts` and its test,
-  `server/app.ts` and its test, `server/web-function.test.ts`, `server/testing.ts`,
-  `server/logging/**`, `scripts/serve-temp.ts`, `README.md`, `ARCHITECTURE.md`, `server/README.md`,
-  `scripts/serve-temp.test.ts`
-- **Do:** as `research/libraries.md` › Access describes:
-  - the gate, generalized, gives each request its library from an `rtfm_library` cookie (the
-    secret, hashed, its link looked up; found links kept a minute, misses never; a failed lookup
-    `500`), then the passcode's, then the admin's library without a gate; a revoked link gets
-    `401 { error: "Link closed" }`;
-  - `POST /api/link { secret }` seeds the library's starters (`starterManualIds` in
-    `server/config.ts`: *The Haunt That Listens* and *Negotiating With Geese*, tables of contents
-    only), one seeding at a time per library in the environment, records the use, and sets the
-    cookie (a year) while clearing the passcode cookie, as two `Set-Cookie` headers;
-    `DELETE /api/link` clears the library cookie, with or without a gate; `POST /api/passcode`
-    clears it too;
-  - every response to a request the library cookie opened renews the cookie;
-  - count the activity in the gate and adapter (opens, `firstUsedAt`, `lastUsedAt`, `sectionsRead`,
-    `librarianMessages`) and in a wrapper of the library's store and leases (`manualsCreated`,
-    `sectionsWritten`), with seeding on the bare store; log `link.accepted`, `link.refused`,
-    `library.seeded` and `library.activity-failed`;
-  - give `npm run serve-temp` `--library <libraryId>`, which prints one link once;
-  - say in `README.md`, as plainly as for the passcode, that the link is a bearer token, that a
-    scanner that runs scripts opens it, and that `create` and `revoke` are the user's.
-- **Done when:** tests open two libraries by their links on one server and in `web-function.test.ts`
-  (DynamoDB Local), and show each sees only its own manuals, a new library starts with the two
-  starters and no section written, a revoked link is refused within the minute, a failed lookup
-  answers `500`, each counter counts as defined, the loopback path with no passcode is unchanged
-  and `DELETE /api/link` leaves a library there, no log line or file holds the secret or its digest,
-  and `npm run build` and `npm test` pass.
-
 ### LB.9 — Open a link in the browser
-- **Status:** todo
-- **Depends on:** LB.8
+- **Status:** doing (agent a64276ed31ca4654f)
+- **Depends on:** —
 - **Files:** `src/App.tsx`, `src/link/**`, `src/passcode/**`, `src/reportErrors.ts` and its test,
   `DESIGN.md`, `README.md`, `scripts/shot.ts`, `scripts/screenshots.ts`, `ARCHITECTURE.md`
 - **Do:** the page route `/l` reads the secret from the fragment as it loads, with no button, posts
