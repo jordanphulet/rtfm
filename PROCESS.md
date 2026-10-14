@@ -126,9 +126,10 @@ statuses", whose body names each task added, removed or whose status changed, an
 
 ### Adding work
 
-When the orchestrator discovers work that should be done, it **adds a task** to the right phase
-of `WORKLIST.md`: a new ID, **Depends on**, **Files**, **Do** and **Done when**. It also updates
-the dependencies of any existing task that must now wait for it.
+When the orchestrator discovers work that should be done, it **adds a task** to the right phase of
+`WORKLIST.md`: a new ID, **Depends on**, **Merges after** when the order of merges matters,
+**Files**, **Do** and **Done when**. It also updates the dependencies of any existing task that must
+now wait for it.
 
 Any session may propose a task by sending the orchestrator a draft task block in that form. The
 orchestrator decides whether to add it, may change it first, and tells the sender what it did.
@@ -156,8 +157,11 @@ folder READMEs", which matches nothing.
   committing, or sends the change back.
 - **Scheduling:** tasks that touch the same file may run at the same time: git merges their edits
   and stops only where two tasks changed the same lines. **Depends on** means one task needs
-  another's result, so a task starts once every task it depends on is gone from `WORKLIST.md`.
-  At most 3 task agents run at once.
+  another's result: its code, a finding, or something deployed. A task starts once every task it
+  depends on is gone from `WORKLIST.md`. **Merges after** means only the order of merges matters,
+  for example so nothing goes live before a safeguard. The task starts as soon as it is otherwise
+  ready, and the orchestrator merges it only once those tasks are gone. A task's Depends on names
+  only results it needs. At most 3 task agents run at once.
 - **Only the orchestrator commits.** Agents never run git commands that change anything.
 - **Only the orchestrator deploys** an app stack, and only from `main`: after a merge (Review loop
   › Approved, step 5), and once more when `RtfmApp` doesn't exist yet and the user has deployed

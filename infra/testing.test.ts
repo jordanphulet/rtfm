@@ -66,7 +66,25 @@ describe("decide, the tests' policy evaluator", () => {
     expect(decide([withNull], "dynamodb:GetItem", "x")).toBe("no allow");
   });
 
-  it("refuses a multivalued key under an operator without ForAllValues", () => {
+  it("holds ForAnyValue when at least one value matches, and never when none is given, as IAM does", () => {
+    const statements: Statement[] = [
+      { Effect: "Allow", Action: "dynamodb:PutItem", Resource: "*" },
+      {
+        Effect: "Deny",
+        Action: "dynamodb:PutItem",
+        Resource: "*",
+        Condition: { "ForAnyValue:StringEquals": { "dynamodb:LeadingKeys": ["PASSCODE"] } },
+      },
+    ];
+    const leadingKeys = (keys: string[]) => ({ "dynamodb:LeadingKeys": keys });
+    expect(decide(statements, "dynamodb:PutItem", "x", leadingKeys(["PASSCODE"]))).toBe("deny");
+    expect(decide(statements, "dynamodb:PutItem", "x", leadingKeys(["LIBRARY", "PASSCODE"]))).toBe("deny");
+    expect(decide(statements, "dynamodb:PutItem", "x", leadingKeys(["LIBRARY"]))).toBe("allow");
+    expect(decide(statements, "dynamodb:PutItem", "x", leadingKeys([]))).toBe("allow");
+    expect(decide(statements, "dynamodb:PutItem", "x")).toBe("allow");
+  });
+
+  it("refuses a multivalued key under an operator without ForAllValues or ForAnyValue", () => {
     const statement: Statement = {
       Effect: "Allow",
       Action: "*",

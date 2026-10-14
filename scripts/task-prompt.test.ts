@@ -38,6 +38,8 @@ Why this phase exists. When this phase is done:
   change; agent a1, reviewed by b2)
 - **Depends on:** XX.1 (both change
   \`README.md\`)
+- **Merges after:** XX.2 (its safeguard goes
+  live first)
 - **Files:** \`scripts/widget.ts\` and its test (new), \`PROCESS.md\` (the user
   approves)
 - **Do:**
@@ -74,7 +76,7 @@ Report back with:`,
     expect(prompt).not.toContain("Rules for this phase");
   });
 
-  it("carries a block whose items continue across lines and nest, with the phase's rules", () => {
+  it("carries a block whose items continue across lines and nest, Merges after included, with the phase's rules", () => {
     const prompt = taskPrompt(WORKLIST, "YY.1", "task");
     expect(prompt).toContain(
       `## A phase with rules
@@ -91,6 +93,8 @@ Why this phase exists. When this phase is done:
 ### YY.1 — Items across lines
 - **Depends on:** XX.1 (both change
   \`README.md\`)
+- **Merges after:** XX.2 (its safeguard goes
+  live first)
 - **Files:** \`scripts/widget.ts\` and its test (new), \`PROCESS.md\` (the user
   approves)
 - **Do:**
@@ -169,6 +173,7 @@ Report back with:`,
     expect(prompt.endsWith("\n\n**Worktree:** <path>. **The agent's Outside Files:** <list, or none>.")).toBe(true);
     expect(prompt).toContain("- **Phase rule one.**");
     expect(prompt).toContain("### YY.1 — Items across lines");
+    expect(prompt).toContain("- **Merges after:** XX.2 (its safeguard goes\n  live first)");
     expect(prompt).not.toContain("**task agent**");
     expect(prompt).not.toContain("Status");
   });

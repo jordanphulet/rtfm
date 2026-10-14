@@ -11,6 +11,7 @@ import {
 } from "aws-cdk-lib";
 import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
 import {
+  Effect,
   ManagedPolicy,
   PermissionsBoundary,
   PolicyDocument,
@@ -29,6 +30,7 @@ import {
   APP_TABLE,
   APP_TABLE_ARN,
   BOUNDARY_POLICY,
+  PASSCODE_PARTITION,
   REGION,
   USAGE_TABLE,
   USAGE_TABLE_ACTIONS,
@@ -53,6 +55,16 @@ const APP_TABLE_ACTIONS = [
   "dynamodb:PutItem",
   "dynamodb:UpdateItem",
   "dynamodb:DeleteItem",
+];
+/**
+ * The writes the Web Function's role may never make in the passcode's partition, which only
+ * `rtfm-ops` writes. `BatchWriteItem` isn't granted, but the deny names it as well.
+ */
+const PASSCODE_WRITE_ACTIONS = [
+  "dynamodb:PutItem",
+  "dynamodb:UpdateItem",
+  "dynamodb:DeleteItem",
+  "dynamodb:BatchWriteItem",
 ];
 /** The edge's resource policy names the Web Function, so its name never changes. */
 export const WEB_FUNCTION = "rtfm-app";
@@ -132,7 +144,16 @@ export class RtfmAppStack extends Stack {
           ],
         }),
         ReadAndWriteLibrary: new PolicyDocument({
-          statements: [new PolicyStatement({ actions: APP_TABLE_ACTIONS, resources: [APP_TABLE_ARN] })],
+          statements: [
+            new PolicyStatement({ actions: APP_TABLE_ACTIONS, resources: [APP_TABLE_ARN] }),
+            new PolicyStatement({
+              sid: "LeaveThePasscodeToOps",
+              effect: Effect.DENY,
+              actions: PASSCODE_WRITE_ACTIONS,
+              resources: [APP_TABLE_ARN],
+              conditions: { "ForAnyValue:StringEquals": { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] } },
+            }),
+          ],
         }),
         ReadAndWriteUsage: new PolicyDocument({
           statements: [new PolicyStatement({ actions: USAGE_TABLE_ACTIONS, resources: [USAGE_TABLE_ARN] })],

@@ -132,6 +132,8 @@ npm run commit-task -- RC.1 --body-file <path> --worktree .claude/worktrees/<nam
 - **Files** are read from their code spans: `**` matches any number of folders and `*` anything
   within one name, notes in parentheses are skipped, "`x.ts` and its test" adds `x.test.*`, and
   "except …" or a note starting with "except" or "not" leaves its paths out.
+- It refuses, naming them, while a task its optional **Merges after** line names is still in
+  `WORKLIST.md`. That line's task IDs (`IN.15`) are read outside notes in parentheses.
 - It runs only in the main checkout with `main` checked out. Anywhere else it refuses with the
   preflight's message (above).
 - With `--worktree <path>`, it reads the task from the main checkout's `WORKLIST.md` and stages and
@@ -346,8 +348,10 @@ npm run ops -- passcode set
 **The digest opens the app.** The cookie holds the digest itself, so whatever can read the
 passcode's item can open the app without the passcode: `rtfm-ops` (`npm run ops -- passcode
 cookie` prints the cookie, which is how an agent's smoke check gets in, `infra/README.md` ›
-Deploying the app stack), the Web Function's role `rtfm-app-web-function`, which reads and writes
-every item of `rtfm-app`, and any role an app stack creates with access to that table. The
+Deploying the app stack), the Web Function's role `rtfm-app-web-function`, which reads every item
+of `rtfm-app`, and any role an app stack creates with access to that table. Only `rtfm-ops`
+(`npm run ops -- passcode set`) writes the item: the Web Function's role is refused every write
+to its partition, `PASSCODE` (`infra/README.md` › The Web Function's role and the passcode). The
 passcode itself is in no file, log or table: only you see it, once.
 
 How the server checks it is in `server/api/README.md` › The passcode, and the screen's design in

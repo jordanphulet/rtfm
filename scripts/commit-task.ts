@@ -14,7 +14,7 @@ const USAGE = `Usage: npm run commit-task -- <ID> --body-file <path> --reviewed-
        npm run commit-task -- <ID> --body-file <path> --no-review "<reason>" [--worktree <path>]`;
 
 export type FilePatterns = { include: string[]; exclude: string[] };
-export type Task = { id: string; title: string; files: FilePatterns };
+export type Task = { id: string; title: string; files: FilePatterns; mergesAfter: string[] };
 export type WorklistTask = { id: string; title: string; status: string; agent?: string };
 type Review = { reviewedBy: string } | { noReviewReason: string };
 type CommitResult = { subject: string; committed: string[]; leftAlone: string[] };
@@ -24,11 +24,12 @@ type LineRange = { start: number; end: number };
 /**
  * Commits the changed files that task `id`'s **Files** match, with `body` and its review trailer,
  * in `repoDir` or, given `worktreeDir`, in that worktree of it. `repoDir` must be the main
- * checkout, on `main`. The task is read from its `WORKLIST.md`, since a worktree's copy may be stale. A
- * worktree holds one task's work, so every changed file in it must match. The commit is built in a
- * separate index holding HEAD and those files, so a refusal or a failed commit leaves the real
- * index as it was; after the commit, the real index takes the committed files. Both folders are
- * top folders, since git status names files relative to the top.
+ * checkout, on `main`. The task is read from its `WORKLIST.md`, since a worktree's copy may be stale,
+ * and is refused while a task its **Merges after** names is still there. A worktree holds one task's
+ * work, so every changed file in it must match. The commit is built in a separate index holding
+ * HEAD and those files, so a refusal or a failed commit leaves the real index as it was; after the
+ * commit, the real index takes the committed files. Both folders are top folders, since git status
+ * names files relative to the top.
  */
 export function commitTask(
   repoDir: string,
@@ -40,8 +41,10 @@ export function commitTask(
   const problem = mainCheckoutProblem(repoDir);
   if (problem) throw new Error(problem);
   if (body.trim() === "") throw new Error("The commit body is empty: write what changed and the checks that passed.");
-  const task = findTask(readFileSync(path.join(repoDir, "WORKLIST.md"), "utf8"), id);
+  const worklist = readFileSync(path.join(repoDir, "WORKLIST.md"), "utf8");
+  const task = findTask(worklist, id);
   if (!task) throw new Error(`There is no task ${id} in WORKLIST.md.`);
+  refuseEarlyMerge(task, worklist);
   if (worktreeDir !== undefined) refuseUnlessWorktree(repoDir, worktreeDir);
   const dir = worktreeDir ?? repoDir;
 
@@ -96,6 +99,14 @@ export function mainCheckoutProblem(dir: string): string | undefined {
     const checkedOut = branch ? `branch ${branch}` : "a detached HEAD";
     return `The main checkout is on ${checkedOut}, not ${MAIN}. Check out ${MAIN} there first.`;
   }
+}
+
+/** Refuses a task while a task its **Merges after** names is still in `WORKLIST.md`. */
+function refuseEarlyMerge(task: Task, worklist: string) {
+  const lines = worklist.split("\n");
+  const remaining = task.mergesAfter.filter((id) => findTaskBlock(lines, id));
+  if (remaining.length === 0) return;
+  throw new Error(`${task.id} merges after ${remaining.join(", ")}, still in WORKLIST.md: commit it once they are gone.`);
 }
 
 /** Refuses a folder that isn't the top folder of one of `repoDir`'s worktrees. */
@@ -171,13 +182,24 @@ function commitMessage(subject: string, body: string, review: Review): string {
   return `${subject}\n\n${body.replace(/^\s*\n/, "").trimEnd()}\n\nReviewed-by: ${reviewer}\n${CO_AUTHOR}\n`;
 }
 
-/** Task `id`'s title and **Files**, from the text of `WORKLIST.md`. */
+/** Task `id`'s title, **Files** and **Merges after**, from the text of `WORKLIST.md`. */
 export function findTask(worklist: string, id: string): Task | undefined {
   const lines = worklist.split("\n");
   const block = findTaskBlock(lines, id);
   if (!block) return undefined;
   const title = lines[block.start].slice(taskHeading(id).length).trim();
-  return { id, title, files: parseFiles(itemText(lines.slice(block.start + 1, block.end), "- **Files:**")) };
+  const items = lines.slice(block.start + 1, block.end);
+  return {
+    id,
+    title,
+    files: parseFiles(itemText(items, "- **Files:**")),
+    mergesAfter: parseTaskIds(itemText(items, "- **Merges after:**")),
+  };
+}
+
+/** The task IDs, such as `IN.15`, that a text names outside its notes in parentheses. */
+function parseTaskIds(text: string): string[] {
+  return [...text.replace(/\([^()]*\)/g, "").matchAll(/\b[A-Z]+\.\d+\b/g)].map((match) => match[0]);
 }
 
 /** Each task, with its status on one line and the agent the status records as `agent <id>`. */
@@ -187,7 +209,7 @@ export function worklistTasks(worklist: string): WorklistTask[] {
     const heading = line.match(/^### (\S+) — (.*)$/);
     if (!heading) return [];
     const block = lines.slice(start, blockEnd(lines, start));
-    const status = itemText(block, "- **Status:**").replace(/\s+/g, " ").trim();
+    const status = itemText(block, "- **Status:**").trim();
     return [{ id: heading[1], title: heading[2].trim(), status, agent: status.match(RECORDED_AGENT)?.[1] }];
   });
 }
@@ -217,11 +239,14 @@ export function findItem(block: string[], label: string): LineRange | undefined 
   return { start, end: end === -1 ? block.length : end };
 }
 
-/** The text after `label` of a task block's item, with its continuation lines joined; empty if it has none. */
+/**
+ * The text after `label` of a task block's item, with its continuation lines joined and each run of
+ * whitespace collapsed to one space; empty if it has none.
+ */
 function itemText(block: string[], label: string): string {
   const item = findItem(block, label);
   if (!item) return "";
-  return block.slice(item.start, item.end).join(" ").slice(label.length);
+  return block.slice(item.start, item.end).join(" ").slice(label.length).replace(/\s+/g, " ");
 }
 
 /**

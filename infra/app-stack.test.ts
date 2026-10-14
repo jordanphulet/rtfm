@@ -59,15 +59,21 @@ const TABLE_HANDLER_ACTIONS = [
   "dynamodb:UntagResource",
   "dynamodb:ListTagsOfResource",
 ];
+/** The library's partitions in `rtfm-app` (`server/storage/README.md` › The table `rtfm-app`). */
+const LIBRARY_PARTITIONS = ["LIBRARY", "SEEDED", "MANUAL#a-manual"];
 /** CloudFormation can't tag a Web Function's revisions or endpoints. */
 const UNTAGGABLE = ["AWS::Lambda::WebFunctionRevision", "AWS::Lambda::WebFunctionEndpoint"];
 
+const webFunctionStatements = (role!.Policies as { PolicyDocument: { Statement: Statement[] } }[]).flatMap(
+  ({ PolicyDocument }) => PolicyDocument.Statement,
+);
+
 /** Whether the Web Function's role may make a request: its own policy and the boundary both allow it. */
 function webFunctionCan(action: string, resource: string, context: RequestContext = {}): boolean {
-  const statements = (role!.Policies as { PolicyDocument: { Statement: Statement[] } }[]).flatMap(
-    ({ PolicyDocument }) => PolicyDocument.Statement,
+  return (
+    decide(webFunctionStatements, action, resource, context) === "allow" &&
+    decide(boundary, action, resource, context) === "allow"
   );
-  return decide(statements, action, resource, context) === "allow" && decide(boundary, action, resource, context) === "allow";
 }
 
 describe("the RtfmApp stack", () => {
@@ -239,8 +245,44 @@ describe("the Web Function's role", () => {
     expect(webFunctionCan("dynamodb:Query", `${USAGE_TABLE_ARN}/index/any`)).toBe(false);
   });
 
-  it("reads the passcode's digest, in its partition of rtfm-app", () => {
-    expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN, { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] })).toBe(true);
+  it("reads the passcode's digest, in its partition of rtfm-app, and every other item", () => {
+    for (const partition of [PASSCODE_PARTITION, ...LIBRARY_PARTITIONS]) {
+      const leadingKeys = { "dynamodb:LeadingKeys": [partition] };
+      expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN, leadingKeys), partition).toBe(true);
+      expect(webFunctionCan("dynamodb:Query", APP_TABLE_ARN, leadingKeys), partition).toBe(true);
+    }
+  });
+
+  it("writes every item of rtfm-app outside the passcode's partition, a transaction's parts included", () => {
+    for (const partition of LIBRARY_PARTITIONS) {
+      for (const action of ["PutItem", "UpdateItem", "DeleteItem"]) {
+        const context = { "dynamodb:LeadingKeys": [partition] };
+        expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN, context), `${action} ${partition}`).toBe(true);
+        const inTransaction = { ...context, "dynamodb:EnclosingOperation": "TransactWriteItems" };
+        expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN, inTransaction), `${action} ${partition}`).toBe(true);
+      }
+    }
+  });
+
+  it("is refused every write to the passcode's partition, which only rtfm-ops writes", () => {
+    const writes: [string, RequestContext][] = [
+      ["PutItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] }],
+      ["UpdateItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] }],
+      ["DeleteItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] }],
+      ["PutItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
+      ["UpdateItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
+      ["DeleteItem", { "dynamodb:LeadingKeys": [PASSCODE_PARTITION], "dynamodb:EnclosingOperation": "TransactWriteItems" }],
+      ["BatchWriteItem", { "dynamodb:LeadingKeys": ["LIBRARY", PASSCODE_PARTITION] }],
+    ];
+    for (const [action, context] of writes) {
+      expect(decide(webFunctionStatements, `dynamodb:${action}`, APP_TABLE_ARN, context), action).toBe("deny");
+    }
+  });
+
+  it("can't use PartiQL, which it isn't granted", () => {
+    for (const action of ["PartiQLInsert", "PartiQLUpdate", "PartiQLDelete", "PartiQLSelect"]) {
+      expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN), action).toBe(false);
+    }
   });
 
   it("calls Claude on Bedrock, through the global profile and the models it routes to, and no other model", () => {

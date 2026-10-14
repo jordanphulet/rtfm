@@ -185,13 +185,14 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
     and 100 requests a second (`rateLimit`). No role of RTFM's may invoke it; only the edge's
     distribution may, through the resource policy in `RtfmEdge`. The stack's output
     `EndpointDomain` is its domain, which stays as long as the endpoint does.
-  - **its role `rtfm-app-web-function`**, which Lambda assumes, and which may only write log
-    streams in `/rtfm/app` and `/rtfm/app.local`, read and write items in the table `rtfm-app`
-    (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `DeleteItem`, which also cover the store's
-    transactions and the passcode's item, so it can read the digest that opens the app, and
-    write it too), read and write items in the table `rtfm-usage` as `rtfm-local` may
-    (`GetItem`, `Query`, `PutItem`, `UpdateItem`, `ConditionCheckItem`), so it reserves every
-    Bedrock call against the shared caps and kill switch, and call Claude as `rtfm-bedrock` does,
+  - **its role `rtfm-app-web-function`**, which Lambda assumes. It may only write log streams in
+    `/rtfm/app` and `/rtfm/app.local`, read and write items in the tables `rtfm-app` and
+    `rtfm-usage`, and call Claude. In `rtfm-app` it has `GetItem`, `Query`, `PutItem`, `UpdateItem`
+    and `DeleteItem`, which also cover the store's transactions and reading the passcode's digest.
+    It writes no item of the passcode's partition, `PASSCODE`, which only `rtfm-ops` writes (The
+    Web Function's role and the passcode, below). In `rtfm-usage` it may do what `rtfm-local` may:
+    `GetItem`, `Query`, `PutItem`, `UpdateItem` and `ConditionCheckItem`, so it reserves every
+    Bedrock call against the shared caps and kill switch. It calls Claude as `rtfm-bedrock` does,
     less the Marketplace subscription (`claudeStatements()` in `bedrock.ts`, which the boundary
     already allows): `bedrock:InvokeModel` and `InvokeModelWithResponseStream` on Claude's
     inference profiles and foundation models, and `bedrock-mantle:CreateInference` and
@@ -267,6 +268,38 @@ Both edge stacks carry no asset at all: no CDK custom resource, no `crossRegionR
 `DnsValidatedCertificate`, no `BucketDeployment`. An asset would go through the staging bucket,
 which `rtfm-deploy` can write, so it could change what you deploy. The tests fail an edge stack
 with an asset or a custom resource, or a template over the inline limit.
+
+### The Web Function's role and the passcode
+
+The passcode's digest opens the app (`README.md` › A passcode), and only `rtfm-ops` writes its
+item, with `npm run ops -- passcode set`. The Web Function's role reads it with `GetItem`, and
+its policy on `rtfm-app` allows every item, so a statement beside it, `LeaveThePasscodeToOps`,
+denies `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` on the table when
+`dynamodb:LeadingKeys` includes `PASSCODE` (`ForAnyValue:StringEquals`). An explicit deny wins
+over the allow.
+
+- **Every write names its partition.** The Service Authorization Reference gives
+  `dynamodb:LeadingKeys` (`ArrayOfString`) to `PutItem`, `UpdateItem`, `DeleteItem` and
+  `BatchWriteItem`. `ForAnyValue` holds when any of the request's partition keys is `PASSCODE`.
+  The role isn't granted `BatchWriteItem`; the deny names it as well.
+- **Transactions are covered.** DynamoDB authorizes each part of a `TransactWriteItems` as its
+  item action, `PutItem`, `UpdateItem`, `DeleteItem` or `ConditionCheckItem`, with that item's
+  partition key, so a transaction that writes the passcode's item is refused too. A
+  `ConditionCheckItem` only reads, and the role isn't granted it on `rtfm-app`.
+- **PartiQL isn't granted.** PartiQL needs its own actions (`dynamodb:PartiQLInsert`,
+  `PartiQLUpdate`, `PartiQLDelete`, `PartiQLSelect`), which the role doesn't have, so the deny
+  leaves them out.
+- **Reads are untouched.** The deny names no read action, so `GetItem` and `Query` reach the
+  passcode's item and every other as before. A request that names no partition key, such as a
+  `Scan`, never matches `ForAnyValue`; it isn't a write, and the role isn't granted it.
+
+DynamoDB's guide says to use `ForAllValues` with `dynamodb:LeadingKeys`, which suits an allow
+limited to some partitions, as `rtfm-ops`'s is. A deny of one partition needs `ForAnyValue`, the
+IAM set operator that holds when at least one value matches. Sources, all read 2026-10-13: the
+Service Authorization Reference, "Actions, resources, and condition keys for Amazon DynamoDB";
+the Amazon DynamoDB Developer Guide, "Using IAM with DynamoDB transactions", "IAM security
+policies with PartiQL for DynamoDB" and "Using IAM policy conditions for fine-grained access
+control"; the IAM User Guide, "Single-valued vs. multivalued context keys".
 
 ### The Web Function's package
 
@@ -860,8 +893,8 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
 - `run-aws.ts`: `npm run aws` and `npm run cdk`, and `openAwsSession`, the ops tools' way to AWS.
 - `testing.ts`: the tests' policy evaluator: whether a role's or user's policies, and its
   boundary, allow an action on a resource. It reads `Allow`, `Deny`, `NotAction` and the
-  condition operators the stacks use, `ForAllValues` on a multivalued key such as
-  `dynamodb:LeadingKeys` among them.
+  condition operators the stacks use, `ForAllValues` and `ForAnyValue` on a multivalued key such
+  as `dynamodb:LeadingKeys` among them.
 - `cdk-imports.test.ts`: only `infra/` imports the CDK packages, so they never reach the browser
   bundle or the server.
 
