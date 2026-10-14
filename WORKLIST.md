@@ -188,8 +188,14 @@ Small fixes that keep the repo healthy.
     with a body generated from its diff: each task added, removed, or whose status changed (with
     the new status), plus an optional `--reason "<text>"` line. It refuses any other staged or
     changed file in the commit.
-  - `PROCESS.md` › Review loop › Approved, step 1, and When the orchestrator does work itself: say
-    what the bodies hold (the user approves the wording).
+  - `PROCESS.md`, with the wording the user approved: in Review loop › Approved, step 1, after
+    "…as `<task id>: <task title>` with a `Reviewed-by:` trailer.", add "Its body (`--body-file`)
+    is 2–4 lines the orchestrator writes from the agent's report and the review: what changed, any
+    decision made, the checks that passed, and anything left for the user, without repeating the
+    task's **Do**."; in When the orchestrator does work itself, the last sentence becomes
+    "`WORKLIST.md` changes are committed on their own with `npm run commit-worklist`, as "Update
+    work list statuses", whose body names each task added, removed or whose status changed, and
+    why."
   - `README.md` › Committing task work describes both commands.
 - **Done when:** both commands' tests cover the body (required, refused when empty, placed before
   the trailers, generated from a `WORKLIST.md` diff), and the user has approved the `PROCESS.md`
