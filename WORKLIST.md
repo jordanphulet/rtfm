@@ -63,17 +63,17 @@ aren't RTFM's.
 
 Small fixes that keep the repo healthy.
 
-### UP.9 — Report a librarian reply that fails in the browser
-- **Status:** doing (agent a4586a9dbacf6a3c9; done, being committed)
+### UP.11 — Report a librarian reply cut before its end
+- **Status:** doing (agent ac130cf4910101149)
 - **Depends on:** —
-- **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`,
-  `src/librarian/api.ts`
-- **Do:** `reply`'s `catch` in `src/librarian/store.ts` shows "This reply failed." and drops the
-  error, so UP.8's `TypeError` never reached the server log. Pass the error to
-  `window.reportError` (which `src/reportErrors.ts` sends to the server log), except for failures
-  `apiFetch` already reports, so nothing is reported twice.
-- **Done when:** a test shows a stream that throws reported once, a request `apiFetch` already
-  reported not reported again, and the reply still shown as failed.
+- **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`
+- **Do:** a reply whose stream ends without `done`, `frozen` or `failed` shows "This reply failed."
+  and reports nothing. When the server finished but something between it and the browser
+  (CloudFront, Lambda's streaming) cut the reply, the server logs `done` while the page shows a
+  failure, the mismatch UP.8 had to find by hand. Report that ending with `window.reportError`, as
+  an error naming the last event received (never any reply text).
+- **Done when:** a test shows a stream that ends without a final event reported once, with the
+  reply shown as failed, and the existing reporting tests still pass.
 
 ### UP.10 — Check the phone layout in WebKit
 - **Status:** blocked (the user approves downloading Playwright's WebKit build)
