@@ -66,12 +66,13 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.8 — Open a library by its link
-- **Status:** doing (agent a07b2e7ab3bb8665c; review's fixes: a failed lookup logged the digest)
+- **Status:** doing (agent a07b2e7ab3bb8665c; done, being committed)
 - **Depends on:** —
 - **Merges after:** LB.5
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts` and its test,
   `server/app.ts` and its test, `server/web-function.test.ts`, `server/testing.ts`,
-  `server/logging/**`, `scripts/serve-temp.ts`, `README.md`, `ARCHITECTURE.md`
+  `server/logging/**`, `scripts/serve-temp.ts`, `README.md`, `ARCHITECTURE.md`, `server/README.md`,
+  `scripts/serve-temp.test.ts`
 - **Do:** as `research/libraries.md` › Access describes:
   - the gate, generalized, gives each request its library from an `rtfm_library` cookie (the
     secret, hashed, its link looked up; found links kept a minute, misses never; a failed lookup
@@ -114,8 +115,8 @@ user revokes it, and with its activity visible to the user.
   states, and `npm run build` and `npm test` pass.
 
 ### LB.10 — Make, list and revoke libraries with the ops tools
-- **Status:** todo (its `CLAUDE.md` line is the user's to approve)
-- **Depends on:** LB.2, LB.5, LB.6
+- **Status:** doing (agent aa5395c0f371031a1; the user approved its `CLAUDE.md` line)
+- **Depends on:** —
 - **Merges after:** LB.7, LB.8, LB.9
 - **Files:** `scripts/ops/**`, `server/logging/log-reader.ts` and its test, `server/logs.ts`,
   `README.md`, `CLAUDE.md`
