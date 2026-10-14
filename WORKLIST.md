@@ -59,6 +59,43 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
+## A library per recipient
+
+The user shares RTFM with each job application as its own library: one secret link per library,
+each library isolated from the others, starting from the same starter manuals, living until the
+user revokes it, and with its activity visible to the user.
+
+### LB.1 — Design a library per recipient
+- **Status:** doing (agent af1e1383b0c085e70)
+- **Depends on:** —
+- **Files:** `research/libraries.md`
+- **Do:** write a dated design, opening with a status line, for what the user decided:
+  - **Access:** each library has a secret link (`https://rtfm.moonfetus.com/l/<secret>` or
+    similar) that sets a cookie for that library; the link alone is enough, with no passcode.
+    The user's passcode stays as the admin way in. Say how the secret is stored (a digest, as the
+    passcode is), how a request is scoped to its library, and what a revoked link does.
+  - **Isolation:** the key scheme for manuals, sections, leases and the library list in
+    `rtfm-app` and in the data folder, so one library can never read or change another's; how the
+    API, the runs, the librarian and the client-error log carry the library; what the current
+    library becomes (the admin's own).
+  - **Starters:** every new library starts with the same starter manuals, written. List the seven
+    in `server/seed/` with a line each on what it shows off, and recommend a smaller set (three or
+    four) for the user to choose from; say how a new library gets its copies.
+  - **Lifetime and activity:** a library lives until the user revokes it. The user sees each
+    library's activity: when the link was first and last used, manuals created, sections written
+    and read, librarian messages, and spend. Say where that is recorded (log fields, items, or
+    both) and what `npm run ops` gains: create (prints the link once), list with activity, show
+    one library's activity, revoke.
+  - **Spend:** every library stays under the central caps and kill switch; propose a per-library
+    daily cap and where it lives.
+  - **AWS:** any change to `rtfm-ops`'s reach (it writes the link items) is an `RtfmAccess` change
+    the user approves and deploys; the Web Function's role and the passcode deny (IN.25) change
+    as needed. Name each.
+  - **Build tasks:** end with the build tasks in `WORKLIST.md`'s form (ID `LB.n`, Depends on,
+    Merges after, Files, Do, Done when), in an order where each step deploys safely.
+- **Done when:** the doc covers each point above, and its build tasks are ready for the
+  orchestrator to add.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
