@@ -28,20 +28,25 @@ export interface DynamoDbTable {
   region: string;
   endpoint: string;
   credentials: TableCredentials;
+  /** Called with a call's error each time DynamoDB refuses the keys (`KEYS_REFUSED`). */
+  onKeysRefused?: (error: Error) => void;
 }
 
 /**
  * Fixed keys (DynamoDB Local's, in tests), or the Web Function's execution role, through Lambda's
  * container credentials endpoint, which hands out new ones whenever the client asks as they near
  * expiry, or the variables Lambda sets, which a running process can't see change, so those are
- * never renewed (`server/README.md` › The Web Function).
+ * never renewed and last until `expiresAt`, when Lambda gives it (`server/README.md` › The Web
+ * Function).
  */
 export type TableCredentials =
   | { kind: "keys"; accessKeyId: string; secretAccessKey: string }
   | { kind: "container-endpoint"; fullUri: string; authorizationToken: string | undefined }
-  | { kind: "environment" };
+  | { kind: "environment"; expiresAt: Date | undefined };
 
 const CREDENTIAL_CHAIN_REFUSED = "The AWS default credential chain is never used";
+/** What DynamoDB answers when the keys have expired, or when it doesn't know them at all. */
+const KEYS_REFUSED = ["ExpiredTokenException", "UnrecognizedClientException"];
 /** One transaction holds at most 100 items: the manual and 99 section items. */
 export const MOST_SECTIONS_DELETED_AT_ONCE = 99;
 export const TRANSACTION_ATTEMPTS = 8;
@@ -423,8 +428,8 @@ export function documentClient(table: DynamoDbTable): DynamoDBDocumentClient {
  * The client with every setting the SDK would otherwise look up in the environment or `~/.aws`
  * given here: the table's own credentials, region and endpoint, and a credential chain that throws.
  */
-function dynamoDbClient({ region, endpoint, credentials }: DynamoDbTable): DynamoDBClient {
-  return new DynamoDBClient({
+function dynamoDbClient({ region, endpoint, credentials, onKeysRefused }: DynamoDbTable): DynamoDBClient {
+  const client = new DynamoDBClient({
     region,
     endpoint,
     credentials: credentialsFor(credentials),
@@ -442,6 +447,25 @@ function dynamoDbClient({ region, endpoint, credentials }: DynamoDbTable): Dynam
     userAgentAppId: "rtfm",
     requestHandler: { connectionTimeout: 3_000, requestTimeout: 10_000 },
   });
+  if (onKeysRefused) {
+    // Around the whole call, retries included, so it sees the call's final error.
+    client.middlewareStack.add(
+      (next) => async (args) => {
+        try {
+          return await next(args);
+        } catch (error) {
+          if (keysRefused(error)) onKeysRefused(error);
+          throw error;
+        }
+      },
+      { step: "initialize", name: "reportKeysRefused" },
+    );
+  }
+  return client;
+}
+
+function keysRefused(error: unknown): error is Error {
+  return error instanceof Error && KEYS_REFUSED.includes(error.name);
 }
 
 /**

@@ -154,7 +154,10 @@ relative URI and token file set aside) or on the environment's key variables (`f
 reads them at call time and honours `AWS_CREDENTIAL_EXPIRATION`). The client holds what a provider
 gives and asks again once it is within five minutes of expiring. The endpoint then hands out new
 credentials; the environment can't change under a running process, so its keys are never
-renewed.
+renewed. When the table names an `onKeysRefused`, the client calls it with the error of each call
+DynamoDB refuses for its keys (`ExpiredTokenException` or `UnrecognizedClientException`), once
+the SDK's retries are done, even where the caller goes on quietly, as a lease renewal does; only
+`web-function.ts` gives one, to have Lambda replace its environment.
 
 Every setting the AWS SDK would otherwise look up in the environment or in `~/.aws` (credentials,
 region, endpoint, retries, defaults mode, user agent app id, dual-stack and FIPS endpoints,
@@ -321,7 +324,8 @@ delete `.data/ledger/`, because the caps are computed from it.
   Its client builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's
   table `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
-- `dynamodb-testing.ts`: the tests' tables in DynamoDB Local.
+- `dynamodb-testing.ts`: the tests' tables in DynamoDB Local, and a stand-in in front of one that
+  refuses the keys when told to (`keyRefusingDynamoDb`).
 - `file-ledger.ts`: the usage ledger as JSON lines.
 - `files.ts`: reads a file or folder that may not exist; creates a file only if it doesn't exist.
 - `lock.ts`: the data folder's lock: one server per folder.
