@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.3 — Key the runs by library
-- **Status:** doing (agent a2567743a6f7534f6; done, in review)
+- **Status:** doing (agent a2567743a6f7534f6; done, in review by a2cd4162e2ddc366e)
 - **Depends on:** —
 - **Files:** `server/writer/**`, `server/logging/README.md`
 - **Do:** as `research/libraries.md` › How the server carries the library describes: one `Runs`
