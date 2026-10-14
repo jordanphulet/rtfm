@@ -103,20 +103,6 @@ aren't RTFM's.
 - **Done when:** Measured records whether Lambda sets the expiry and, if any environment was
   refused its keys, what followed; if none was, it says so with the date range read.
 
-## Upkeep
-
-Small fixes that keep the repo healthy.
-
-### UP.7 — The passcode screen's tests flake under load
-- **Status:** doing (agent a71c5ec5b405c6096; done, being committed)
-- **Depends on:** —
-- **Files:** `src/passcode/PasscodeScreen.test.tsx`
-- **Do:** during IN.25's review, a full `npm test` on a loaded machine failed 7 tests in
-  `src/passcode/PasscodeScreen.test.tsx`, each timing out waiting for `.ui.passcode`; the file
-  alone and a second full run passed. Find the cause (a real race, or only a wait too short for a
-  loaded machine) and fix it as `server/README.md` › Tests asks.
-- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
