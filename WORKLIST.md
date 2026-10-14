@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.11 — Report a librarian reply cut before its end
-- **Status:** doing (agent ac130cf4910101149; done, in review by a7a3f4d85af9cb3b2)
+- **Status:** doing (agent ac130cf4910101149; done, being committed)
 - **Depends on:** —
 - **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`
 - **Do:** a reply whose stream ends without `done`, `frozen` or `failed` shows "This reply failed."
@@ -76,7 +76,7 @@ Small fixes that keep the repo healthy.
   reply shown as failed, and the existing reporting tests still pass.
 
 ### UP.10 — Check the phone layout in WebKit
-- **Status:** blocked (the user approves downloading Playwright's WebKit build)
+- **Status:** doing (agent a0fe57c5dfadc0239)
 - **Depends on:** —
 - **Files:** `scripts/screenshots.ts`, `scripts/shot.ts`, `package.json`, `README.md`
 - **Do:** checks and screenshots run only Chromium, which is how a WebKit-only gap (UP.8: no
