@@ -59,21 +59,6 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
-## Upkeep
-
-Small fixes that keep the repo healthy.
-
-### UP.10 — Check the phone layout in WebKit
-- **Status:** doing (agent a0fe57c5dfadc0239)
-- **Depends on:** —
-- **Files:** `scripts/screenshots.ts`, `scripts/shot.ts`, `package.json`, `README.md`
-- **Do:** checks and screenshots run only Chromium, which is how a WebKit-only gap (UP.8: no
-  `for await` over a stream before Safari 27) reached iPhones. With Playwright's WebKit installed
-  (`npx playwright install webkit`), add a WebKit phone-width run of the librarian flow (ask, get a
-  finished reply, open the named manual) to the screenshot or check script, and say in
-  `README.md` how to run it.
-- **Done when:** the WebKit run passes on `main` and fails on UP.8's parent commit.
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
