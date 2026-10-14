@@ -104,7 +104,7 @@ aren't RTFM's.
   refused its keys, what followed; if none was, it says so with the date range read.
 
 ### IN.25 — The Web Function can't write the passcode
-- **Status:** doing (agent a987d7eec36be8f48; done, in review by ad939a2c4a4374574)
+- **Status:** doing (agent a987d7eec36be8f48; approved, doc fixes)
 - **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`,
   `infra/access-stack.ts` (the comment only)
@@ -123,16 +123,15 @@ aren't RTFM's.
 
 Small fixes that keep the repo healthy.
 
-### UP.6 — "and its test" across a line break
-- **Status:** doing (agent af2120585fde655f7; done, being committed)
+### UP.7 — The passcode screen's tests flake under load
+- **Status:** doing (agent a71c5ec5b405c6096)
 - **Depends on:** —
-- **Files:** `scripts/commit-task.ts` and its test
-- **Do:** `commit-task` reads "`x.ts` and its test" as also naming `x.test.*` only when the words
-  sit on one line. When **Files** wraps between "and its" and "test", the test file goes unmatched
-  and the commit is refused (IN.14 and UP.5 both hit it). Read the item's text with its line
-  breaks and indentation collapsed to single spaces before matching.
-- **Done when:** a test shows a **Files** item wrapped inside "and its test" matching the test
-  file, and the existing tests pass.
+- **Files:** `src/passcode/PasscodeScreen.test.tsx`
+- **Do:** during IN.25's review, a full `npm test` on a loaded machine failed 7 tests in
+  `src/passcode/PasscodeScreen.test.tsx`, each timing out waiting for `.ui.passcode`; the file
+  alone and a second full run passed. Find the cause (a real race, or only a wait too short for a
+  loaded machine) and fix it as `server/README.md` › Tests asks.
+- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
 
 ## Waiting on AWS
 
