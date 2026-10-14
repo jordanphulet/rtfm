@@ -43,24 +43,6 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.15 — The passcode as a digest
-- **Status:** doing (agent afd47823474f3e015; done, being committed)
-- **Depends on:** IN.11, IN.14
-- **Files:** `server/api/**`, `server/storage/**`, `server/config.ts`, `server/app.ts`,
-  `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`,
-  `server/web-function.ts` and its test, `server/README.md`, `server/logging/README.md`,
-  `ARCHITECTURE.md`, `CLAUDE.md`
-- **Do:**
-  - The passcode's SHA-256 digest in `rtfm-app`; the cookie holds the digest, compared in constant
-    time; `RTFM_PASSCODE` hashed the same way locally. The throwaway passcode of IN.8 goes.
-  - The user's `ops` command to set it, which needs a terminal and doesn't echo; agents' smoke
-    checks build the cookie from the digest, read with `rtfm-ops`.
-  - `README.md` says the digest opens the app: whatever can read the passcode item (`rtfm-ops`,
-    the Web Function's role, any role an app stack creates) can.
-- **Done when:** the tests show the digest compared in constant time, a rotated digest refusing
-  the old cookie, and the set command refusing to run without a terminal; no file or log an agent
-  can read holds the passcode.
-
 ### AW.4 — Charge an aborted call as AWS does
 - **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
 - **Depends on:** AW.1
@@ -78,8 +60,8 @@ aren't RTFM's.
   evidence, and `npm test` passes.
 
 ### IN.20 — Claude on Bedrock in the deployed app
-- **Status:** todo
-- **Depends on:** IN.15
+- **Status:** doing (agent a7545610be7bdd537)
+- **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
   `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
@@ -122,10 +104,11 @@ aren't RTFM's.
   refused its keys, what followed; if none was, it says so with the date range read.
 
 ### IN.25 — The Web Function can't write the passcode
-- **Status:** todo
-- **Depends on:** IN.15
+- **Status:** doing (agent a987d7eec36be8f48; done, being committed)
+- **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`,
-  `infra/access-stack.ts` (the comment only)
+  `infra/access-stack.ts` (the comment only), `infra/testing.ts` and its test,
+  `server/storage/README.md`
 - **Do:** the Web Function's role may put, update and delete any item of `rtfm-app`, so it could
   rewrite the passcode's item, which only `rtfm-ops` (the user's `passcode set`) should. Add a
   `Deny` of `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` on `rtfm-app` where
@@ -136,6 +119,20 @@ aren't RTFM's.
   this comment change; the template doesn't change.
 - **Done when:** the policy evaluator's tests show the role reading the passcode's item and every
   other item as before, and refused each write to the `PASSCODE` partition.
+
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.7 — The passcode screen's tests flake under load
+- **Status:** doing (agent a71c5ec5b405c6096)
+- **Depends on:** —
+- **Files:** `src/passcode/PasscodeScreen.test.tsx`
+- **Do:** during IN.25's review, a full `npm test` on a loaded machine failed 7 tests in
+  `src/passcode/PasscodeScreen.test.tsx`, each timing out waiting for `.ui.passcode`; the file
+  alone and a second full run passed. Find the cause (a real race, or only a wait too short for a
+  loaded machine) and fix it as `server/README.md` › Tests asks.
+- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
 
 ## Waiting on AWS
 

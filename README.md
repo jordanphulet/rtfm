@@ -131,6 +131,8 @@ npm run commit-task -- RC.1 --body-file <path> --worktree .claude/worktrees/<nam
 - **Files** are read from their code spans: `**` matches any number of folders and `*` anything
   within one name, notes in parentheses are skipped, "`x.ts` and its test" adds `x.test.*`, and
   "except …" or a note starting with "except" or "not" leaves its paths out.
+- It refuses, naming them, while a task its optional **Merges after** line names is still in
+  `WORKLIST.md`. That line's task IDs (`IN.15`) are read outside notes in parentheses.
 - It runs only in the main checkout with `main` checked out. Anywhere else it refuses with the
   preflight's message (above).
 - With `--worktree <path>`, it reads the task from the main checkout's `WORKLIST.md` and stages and
