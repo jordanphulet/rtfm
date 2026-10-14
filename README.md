@@ -345,8 +345,10 @@ npm run ops -- passcode set
 **The digest opens the app.** The cookie holds the digest itself, so whatever can read the
 passcode's item can open the app without the passcode: `rtfm-ops` (`npm run ops -- passcode
 cookie` prints the cookie, which is how an agent's smoke check gets in, `infra/README.md` ›
-Deploying the app stack), the Web Function's role `rtfm-app-web-function`, which reads and writes
-every item of `rtfm-app`, and any role an app stack creates with access to that table. The
+Deploying the app stack), the Web Function's role `rtfm-app-web-function`, which reads every item
+of `rtfm-app`, and any role an app stack creates with access to that table. Only `rtfm-ops`
+(`npm run ops -- passcode set`) writes the item: the Web Function's role is refused every write
+to its partition, `PASSCODE` (`infra/README.md` › The Web Function's role and the passcode). The
 passcode itself is in no file, log or table: only you see it, once.
 
 How the server checks it is in `server/api/README.md` › The passcode, and the screen's design in
