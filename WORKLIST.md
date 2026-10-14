@@ -124,7 +124,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
-- **Status:** doing (agent a015ebd8e9ccc456e)
+- **Status:** doing (agent a015ebd8e9ccc456e; done, in review by a8ad2309988c81f44)
 - **Depends on:** IN.12, IN.13
 - **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
   `server/api/librarian.test.ts`
