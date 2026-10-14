@@ -66,11 +66,12 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.4 — Carry the library through each request
-- **Status:** doing (agent acdd99f166601e4d9; approved, small fixes)
+- **Status:** doing (agent acdd99f166601e4d9; done, being committed)
 - **Depends on:** —
 - **Files:** `server/api/**`, `server/agent/**`, `server/app.ts` and its test, `server/testing.ts`,
   `server/replacement.test.ts`, `server/web-function.test.ts`, `scripts/shot.ts`,
-  `scripts/serve-temp.ts`, `server/logging/README.md`, `server/README.md`, `ARCHITECTURE.md`
+  `scripts/serve-temp.ts`, `server/logging/README.md`, `server/README.md`, `ARCHITECTURE.md`,
+  `server/writer/runs-leases.test.ts`, `server/writer/README.md`
 - **Do:** a `Library` per library id, built once per environment (its store, leases, writer, and
   the one shared gateway), as `research/libraries.md` › How the server carries the library
   describes. The Node adapter's gate puts the library on `ApiRequest.library`, and every route, the
