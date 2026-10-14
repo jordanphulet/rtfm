@@ -4,10 +4,17 @@ import type { LibrarianEvent, LibrarianMessage } from "./types";
 const LIBRARIAN_URL = "/api/librarian";
 
 /**
- * Sends the conversation and yields the reply's events as they arrive. Throws if the server
- * can't be reached or answers with an error. Once the caller stops early, as it does at `done`,
- * the rest of the stream is cancelled and anything it then fails with is ignored. It reads
- * through a reader, since Safari before 27 can't iterate a stream with `for await`.
+ * A request that got no answer, which `apiFetch` reports, or an answer that isn't a stream, which
+ * is in the server's own request log.
+ */
+export class RequestFailedError extends Error {}
+
+/**
+ * Sends the conversation and yields the reply's events as they arrive. Throws a
+ * `RequestFailedError` if the server can't be reached or answers with an error. Once the caller
+ * stops early, as it does at `done`, the rest of the stream is cancelled and anything it then
+ * fails with is ignored. It reads through a reader, since Safari before 27 can't iterate a stream
+ * with `for await`.
  */
 export async function* streamReply(messages: LibrarianMessage[], freeze?: number): AsyncGenerator<LibrarianEvent> {
   const url = freeze === undefined ? LIBRARIAN_URL : `${LIBRARIAN_URL}?freeze=${freeze}`;
@@ -15,8 +22,10 @@ export async function* streamReply(messages: LibrarianMessage[], freeze?: number
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ messages }),
+  }).catch((error: unknown) => {
+    throw new RequestFailedError(`POST ${url} got no answer`, { cause: error });
   });
-  if (!response.ok || !response.body) throw new Error(`POST ${url} answered ${response.status}`);
+  if (!response.ok || !response.body) throw new RequestFailedError(`POST ${url} answered ${response.status}`);
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   try {

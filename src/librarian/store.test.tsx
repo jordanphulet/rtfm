@@ -8,6 +8,7 @@ interface Request {
   messages: LibrarianMessage[];
   send: (...events: LibrarianEvent[]) => void;
   end: () => void;
+  fail: (error: Error) => void;
 }
 
 /** Stands in for the server: each POST waits for the test to send its events. */
@@ -26,6 +27,7 @@ function fakeServer() {
         }
       },
       end: () => controller.close(),
+      fail: (error) => controller.error(error),
     });
     return new Response(body, { headers: { "content-type": "text/event-stream" } });
   });
@@ -196,13 +198,35 @@ describe("useLibrarian", () => {
     expect(readLibrarian().messages[1]).toMatchObject({ role: "agent", text: "You have", failure: reason });
   });
 
-  it("marks the reply failed when the server can't be reached", async () => {
-    const server = { fetch: vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))), requests: [] };
-    const { readLibrarian } = await loadLibrarian("", server);
+  it.each([
+    ["can't be reached", async () => Promise.reject(new TypeError("Failed to fetch"))],
+    ["answers with an error", async () => new Response("Internal error", { status: 500 })],
+  ])("marks the reply failed when the server %s, without reporting what is already logged", async (_, fetch) => {
+    const { readLibrarian } = await loadLibrarian("", { fetch: vi.fn(fetch), requests: [] });
+    const reportError = vi.fn();
+    vi.stubGlobal("window", { location: { search: "" }, reportError });
     readLibrarian().send("What do I have?");
     await flush();
     expect(readLibrarian().status).toBe("idle");
     expect(readLibrarian().messages[1]).toMatchObject({ role: "agent", text: "", failure: "error" });
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("marks the reply failed when its stream throws, and reports the error once", async () => {
+    const { readLibrarian, requests } = await loadLibrarian();
+    const reportError = vi.fn();
+    vi.stubGlobal("window", { location: { search: "" }, reportError });
+    readLibrarian().send("What do I have?");
+    await flush();
+    requests[0]!.send(text("You have"));
+    await flush();
+    const streamError = new TypeError("network error");
+    requests[0]!.fail(streamError);
+    await flush();
+    expect(readLibrarian().status).toBe("idle");
+    expect(readLibrarian().messages[1]).toMatchObject({ role: "agent", text: "You have", failure: "error" });
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError).toHaveBeenCalledWith(streamError);
   });
 
   it("ignores blank sends and sends while a reply is in progress", async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { repairPartialMarkdown } from "../manual/repair";
-import { streamReply } from "./api";
+import { RequestFailedError, streamReply } from "./api";
 import {
   LIBRARIAN_LIMITS,
   type ConversationMessage,
@@ -97,7 +97,8 @@ function reportDeleteOutcome(deleteOutcome: DeleteOutcome) {
  * Sends the finished exchanges and the new message, and shows the reply as it streams. Withdrawn
  * text stays on screen until the text that follows it replaces it, and a reply with no text shows
  * no message. A page action is handed to the page once the reply is done, except `created`, which
- * reports a manual already saved and is handed over as it arrives. `freeze` asks for the scripted
+ * reports a manual already saved and is handed over as it arrives. A reply that throws is
+ * reported, unless its request failed, which is already logged. `freeze` asks for the scripted
  * reply, cut at that fraction, which then stays as it is.
  */
 async function reply(text: string, freeze?: number) {
@@ -144,7 +145,8 @@ async function reply(text: string, freeze?: number) {
       }
     }
     showReply({ failure: "error" }, "idle");
-  } catch {
+  } catch (error) {
+    if (!(error instanceof RequestFailedError)) window.reportError(error);
     showReply({ failure: "error" }, "idle");
   }
 }

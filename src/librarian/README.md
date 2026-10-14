@@ -71,6 +71,10 @@ Every component that calls `useLibrarian()` sees the same conversation.
    - `"error"`: anything else, including a stream that ends early and a server that can't be
      reached.
 
+   A reply that throws while its stream is read is reported with `window.reportError`. One whose
+   request got no answer or an error status isn't: `apiFetch` or the server's request log already
+   has it.
+
 ### Rendering a reply mid-stream
 
 - While `status` is `"thinking"`, show your thinking indicator with `activity` after the last
@@ -199,7 +203,8 @@ function Conversation({ onProposeDelete }: { onProposeDelete: (manualId: string)
 - `types.ts`: `ConversationMessage`, `LibrarianStatus` and `LibrarianAction`, and the wire types
   re-exported from `server/api/types.ts` with `export type`, with `LIBRARIAN_LIMITS`, the one
   value it re-exports.
-- `api.ts`: `streamReply`, which posts the conversation and parses the server-sent events. Uses
+- `api.ts`: `streamReply`, which posts the conversation and parses the server-sent events, and
+  `RequestFailedError`, which it throws for a request that got no answer or an error status. Uses
   `apiFetch` (`src/reportErrors.ts`).
 - `store.ts`: the conversation, `send`, the URL options, `useLibrarian` and `useLibrarianActions`
   (`handleActions` is the same registration without the hook, for tests).
