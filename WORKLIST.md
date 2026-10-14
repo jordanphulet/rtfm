@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.12 — Render equations in sections
-- **Status:** doing (agent ae5b33cd876b1e085; fourth round done, in final review)
+- **Status:** needs-human (fourth round: the strut check is bypassed by \\smash/\\hphantom and top-level \\\\[-…]; worktree kept)
 - **Depends on:** —
 - **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `server/writer/**`, `package.json`,
   `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `scripts/shot.ts`
@@ -98,7 +98,7 @@ Small fixes that keep the repo healthy.
   build` and `npm test` pass.
 
 ### UP.13 — Bring in the UI design iteration
-- **Status:** doing (agent a254561e13310c51d)
+- **Status:** doing (agent a254561e13310c51d; done, in review by a6bd21566a2e0f95f)
 - **Depends on:** —
 - **Files:** `src/home/**`, `src/reader/**`, `src/ui/**`, `index.html`, `package.json`,
   `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `research/ui-references.md`
