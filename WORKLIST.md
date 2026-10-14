@@ -124,10 +124,10 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
-- **Status:** doing (agent a015ebd8e9ccc456e; done, in review by a8ad2309988c81f44)
+- **Status:** doing (agent a015ebd8e9ccc456e; done, being committed)
 - **Depends on:** IN.12, IN.13
 - **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
-  `server/api/librarian.test.ts`
+  `server/api/librarian.test.ts`, `server/usage.ts`, `server/app.test.ts`
 - **Do:** share the `TransactionConflict` retry loop that `storage/dynamodb-manual-store.ts` and
   `gateway/dynamodb-spending-ledger.ts` each have (about 12 lines), and move `killSwitchPath` from
   `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
