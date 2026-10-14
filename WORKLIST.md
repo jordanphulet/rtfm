@@ -77,38 +77,6 @@ Small fixes that keep the repo healthy.
   the viewport with a too-wide inline formula, ordinary inline formulas unchanged, and `npm run
   build` and `npm test` pass.
 
-### UP.13 — Bring in the UI design iteration
-- **Status:** doing (agent a254561e13310c51d; done, being committed)
-- **Depends on:** —
-- **Files:** `src/home/**`, `src/reader/**`, `src/ui/**`, `index.html`, `package.json`,
-  `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `research/ui-references.md`
-- **Do:** port the UI changes the user made and approved in the session "UI design iteration",
-  parked uncommitted in the worktree `.claude/worktrees/repo-agent-behavior-283c77` (branch
-  `claude/ui-design-iteration-12464b`, at a4c2d64). Read them there without changing that
-  worktree: `git -C <path> diff a4c2d64` for modified and deleted files, plus its untracked files
-  `research/ui-references.md`, `src/home/Greeting.tsx`, `src/home/Greeting.css`,
-  `src/home/Wordmark.tsx` and `src/ui/Icon.tsx`. Bring them into your worktree as they are,
-  reconciling with what `main` has gained since a4c2d64. The changes:
-  - Reader: a Library bar with a books icon at the top of the contents, and the same icon in the
-    compact header; the contents' expanded outline no longer repeats the section's own title, and
-    a section with no headings doesn't expand.
-  - Landing page: an "rtfm" wordmark in Space Mono in place of the "Library" title, with an intro
-    under it; "Start a new manual" is a button with a plus icon; a row's Delete is a trash icon
-    with a hidden label and a tooltip.
-  - Librarian panel: no visible header or message count; live status in the composer's readout;
-    tighter composer padding; Esc leaves the field; a librarian greeting with three icon cues in
-    place of the empty state.
-  - Icons: Lucide (`lucide-react` 1.49.0, pinned) through a shared `Icon` in `src/ui`, with rules
-    in `DESIGN.md` › Icons; `@fontsource/space-mono` 5.3.0 pinned for the wordmark.
-  - The tab title is "rtfm".
-  - Docs: `DESIGN.md`, `src/home/DESIGN.md`, `src/reader/DESIGN.md`, `src/ui/README.md` and
-    `ARCHITECTURE.md` describe it; `research/ui-references.md` is the dated reference study behind
-    the icon rules.
-  Don't redesign: fix only what review or the checks find.
-- **Done when:** the landing page and reader match the above; `npm run build` and `npm test`
-  pass; `npm run shot` differs from `main`'s shots only in the landing page's states and the
-  reader's Library icon.
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
