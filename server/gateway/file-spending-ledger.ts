@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { monthOf } from "../storage/file-ledger.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import type { UsageLedger } from "../storage/types.ts";
 import { callsFrom, chargedUsd, dayOf } from "./ledger-calls.ts";
 import type { SpendingLedger } from "./spending-ledger.ts";
@@ -29,9 +30,16 @@ export async function openFileSpendingLedger({
 }: FileSpendingLedgerDeps): Promise<SpendingLedger> {
   const committedUsd = new Map<string, number>();
 
-  function commit(reservedAt: string, usd: number) {
-    for (const period of [dayOf(reservedAt), monthOf(reservedAt)]) {
-      committedUsd.set(period, (committedUsd.get(period) ?? 0) + usd);
+  /** The totals a call counts toward: its day's, its month's, and a recipient library's day's. */
+  function periodsOf(reservedAt: string, libraryId: string) {
+    const day = dayOf(reservedAt);
+    const libraryDay = libraryId === ADMIN_LIBRARY_ID ? undefined : `${day}#${libraryId}`;
+    return { day, month: monthOf(reservedAt), libraryDay };
+  }
+
+  function commit(reservedAt: string, libraryId: string, usd: number) {
+    for (const period of Object.values(periodsOf(reservedAt, libraryId))) {
+      if (period !== undefined) committedUsd.set(period, (committedUsd.get(period) ?? 0) + usd);
     }
   }
 
@@ -42,29 +50,31 @@ export async function openFileSpendingLedger({
   const killSwitchOn = () => existsSync(killSwitchPath(dataDir));
 
   for (const call of callsFrom(await ledger.entriesForMonth(monthOf(now().toISOString())))) {
-    commit(call.reservedAt, chargedUsd(call));
+    commit(call.reservedAt, call.libraryId, chargedUsd(call));
   }
 
   return {
     async reserve(entry, caps) {
-      const { reservedAt, worstCaseUsd } = entry;
+      const { reservedAt, libraryId, worstCaseUsd } = entry;
+      const { day, month, libraryDay } = periodsOf(reservedAt, libraryId);
       if (killSwitchOn()) throw new SpendingRefused("kill-switch");
-      if (wouldCross(dayOf(reservedAt), worstCaseUsd, caps.dailyUsd)) throw new SpendingRefused("daily-cap");
-      if (wouldCross(monthOf(reservedAt), worstCaseUsd, caps.monthlyUsd)) throw new SpendingRefused("monthly-cap");
-      commit(reservedAt, worstCaseUsd);
+      if (wouldCross(day, worstCaseUsd, caps.dailyUsd)) throw new SpendingRefused("daily-cap");
+      if (wouldCross(month, worstCaseUsd, caps.monthlyUsd)) throw new SpendingRefused("monthly-cap");
+      if (libraryDay && wouldCross(libraryDay, worstCaseUsd, caps.libraryDailyUsd)) throw new SpendingRefused("library-cap");
+      commit(reservedAt, libraryId, worstCaseUsd);
       try {
         await ledger.append(entry);
       } catch (error) {
-        commit(reservedAt, -worstCaseUsd);
+        commit(reservedAt, libraryId, -worstCaseUsd);
         throw error;
       }
     },
 
-    async settle(entry, worstCaseUsd) {
+    async settle(entry, reserved) {
       try {
         await ledger.append(entry);
       } finally {
-        commit(entry.reservedAt, entry.usd - worstCaseUsd);
+        commit(reserved.reservedAt, reserved.libraryId, entry.usd - reserved.worstCaseUsd);
       }
     },
 

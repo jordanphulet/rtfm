@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { silentLogger } from "../logging/logger.ts";
 import { createFileLedger } from "../storage/file-ledger.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import type { LedgerEntry } from "../storage/types.ts";
 import { tempDataDir } from "../testing.ts";
 import { createDynamoDbSpendingLedger } from "./dynamodb-spending-ledger.ts";
@@ -68,11 +69,11 @@ describe("importing the data folder's Bedrock calls into rtfm-usage", () => {
     const again = await importUsage({ from, into, month: "2026-10", apply: true });
     expect(again).toContain("  2026-10-02T10:00:00.000Z  section  write-section  $0.0090  already in rtfm-usage");
     expect(again).toContain("Imported: 0 of 2 calls, $0.0000; 2 already in rtfm-usage.");
-    const next = (worstCaseUsd: number) =>
-      into.reserve(
-        { kind: "reserve", callId: `next-${worstCaseUsd}`, reservedAt: "2026-10-04T00:00:00.000Z", job: "librarian", model: HAIKU, worstCaseUsd },
-        { dailyUsd: 2, monthlyUsd: 1 },
-      );
+    const next = (worstCaseUsd: number) => {
+      const call = { callId: `next-${worstCaseUsd}`, reservedAt: "2026-10-04T00:00:00.000Z", libraryId: ADMIN_LIBRARY_ID };
+      const reserve = { kind: "reserve" as const, ...call, job: "librarian", model: HAIKU, worstCaseUsd };
+      return into.reserve(reserve, { dailyUsd: 2, monthlyUsd: 1, libraryDailyUsd: 0.5 });
+    };
     await expect(next(0.98)).rejects.toMatchObject({ reason: "monthly-cap" });
     await next(0.97);
   });

@@ -7,6 +7,7 @@ import { logFileName, logsDir, toLogFile } from "../logging/log-file.ts";
 import { createLogger, silentLogger, type Logger } from "../logging/logger.ts";
 import type { AwsCredentials } from "../storage/dynamodb-manual-store.ts";
 import { createFileLedger, monthOf } from "../storage/file-ledger.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import type { SettleEntry } from "../storage/types.ts";
 import { collect, tempDataDir, testGatewayConfig, waitUntil } from "../testing.ts";
 import { createBedrockClient, KEYS_MISSING } from "./bedrock-client.ts";
@@ -436,14 +437,14 @@ describe("Bedrock client", () => {
     ): Promise<{ result: Promise<ModelEvent[]>; settles: () => Promise<SettleEntry[]> }> {
       dataDir ??= await tempDataDir();
       const ledger = createFileLedger(dataDir, logger);
-      const gateway = await createGateway({
+      const running = await createGateway({
         createClient: () => bedrockClient(),
         openSpendingLedger: () => openFileSpendingLedger({ ledger, dataDir }),
         config,
         prices,
         logger,
       });
-      const result = collect(gateway.stream(job, prompt, new AbortController().signal));
+      const result = collect(running.forLibrary(ADMIN_LIBRARY_ID).stream(job, prompt, new AbortController().signal));
       const month = monthOf(new Date().toISOString());
       const settles = async () =>
         (await ledger.entriesForMonth(month)).filter((entry): entry is SettleEntry => entry.kind === "settle");
@@ -555,13 +556,14 @@ describe("Bedrock client", () => {
         const dataDir = await tempDataDir();
         const ledger = createFileLedger(dataDir, silentLogger);
         const shortTimeout = { ...config, idleTimeoutMs: IDLE_TIMEOUT_MS };
-        const gateway = await createGateway({
+        const running = await createGateway({
           createClient: () => bedrockClient(),
           openSpendingLedger: () => openFileSpendingLedger({ ledger, dataDir }),
           config: shortTimeout,
           prices,
           logger: silentLogger,
         });
+        const gateway = running.forLibrary(ADMIN_LIBRARY_ID);
         const result = collect(gateway.stream("plan-manual", PLAN_PROMPT, new AbortController().signal));
         const settles = async () =>
           (await ledger.entriesForMonth(monthOf(new Date().toISOString()))).filter((entry) => entry.kind === "settle");

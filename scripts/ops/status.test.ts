@@ -45,7 +45,8 @@ const DEPLOYED: StandInAnswer[] = [
 
 async function usageTableWithSpend() {
   const usageTable = await testUsageTable();
-  const call = { job: "write-section", model: "global.anthropic.claude-haiku-4-5-20251001-v1:0", worstCaseUsd: 0.01 };
+  const model = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
+  const call = { libraryId: "admin", job: "write-section", model, worstCaseUsd: 0.01 };
   await createDynamoDbSpendingLedger(usageTable).importCall({ callId: "a", reservedAt: "2026-10-13T09:00:00.000Z", ...call });
   return usageTable;
 }

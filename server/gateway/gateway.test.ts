@@ -4,10 +4,20 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { silentLogger, type Logger } from "../logging/logger.ts";
 import { createFileLedger } from "../storage/file-ledger.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import type { LedgerEntry, SettleEntry, UsageLedger } from "../storage/types.ts";
-import { capturingLogger, collect, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, waitUntil } from "../testing.ts";
+import {
+  capturingLogger,
+  collect,
+  tempDataDir,
+  TEST_MODEL,
+  TEST_PRICES,
+  testGatewayConfig,
+  waitUntil,
+  type TestGatewayOverrides,
+} from "../testing.ts";
 import { killSwitchPath, openFileSpendingLedger } from "./file-spending-ledger.ts";
-import { createGateway, type RunningGateway } from "./gateway.ts";
+import { createGateway, type Gateway, type RunningGateway } from "./gateway.ts";
 import {
   GatewayBusy,
   ModelNotPriced,
@@ -42,7 +52,7 @@ const COMPLETE_EVENTS: ModelEvent[] = [
   { type: "stop", reason: "end_turn" },
 ];
 
-function gatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
+function gatewayConfig(overrides: TestGatewayOverrides = {}): GatewayConfig {
   return testGatewayConfig({ jobs: JOBS, ...overrides });
 }
 
@@ -115,6 +125,7 @@ describe("model gateway", () => {
     return controllers.at(-1)!;
   }
 
+  /** The admin's library's gateway, with the running gateway's `forLibrary` and `idle`. */
   async function gateway(
     client: ModelClient,
     {
@@ -122,9 +133,11 @@ describe("model gateway", () => {
       now = () => NOW,
       logger = silentLogger,
     }: { config?: GatewayConfig; now?: () => Date; logger?: Logger } = {},
-  ): Promise<RunningGateway> {
+  ): Promise<RunningGateway & Gateway> {
     const openSpendingLedger = () => openFileSpendingLedger({ ledger, dataDir, now });
-    return createGateway({ createClient: () => client, openSpendingLedger, config, prices: TEST_PRICES, now, logger });
+    const createClient = () => client;
+    const running = await createGateway({ createClient, openSpendingLedger, config, prices: TEST_PRICES, now, logger });
+    return { ...running, ...running.forLibrary(ADMIN_LIBRARY_ID) };
   }
 
   async function seedLedger(entries: LedgerEntry[]) {
@@ -291,6 +304,31 @@ describe("model gateway", () => {
 
     const events = await collect(running.stream("write-section", EMPTY_PROMPT, signal()));
     expect(events).toEqual(fullOutput);
+  });
+
+  describe("libraries", () => {
+    it("reserves each call in its library's name, refusing a recipient library past its daily cap while others go on", async () => {
+      const config = gatewayConfig({ maxConcurrentCalls: 5, caps: { libraryDailyUsd: 0.75 } });
+      const { client, requests } = fakeClient({ events: [], ending: "hang" });
+      const running = await gateway(client, { config });
+      const start = (library: Gateway) => void collect(library.stream("write-section", EMPTY_PROMPT, signal())).catch(() => {});
+
+      start(running.forLibrary("acme"));
+      await waitUntil(() => requests.length === 1);
+      const overItsCap = running.forLibrary("acme").stream("write-section", EMPTY_PROMPT, signal());
+      await expect(collect(overItsCap)).rejects.toMatchObject({ reason: "library-cap" });
+      start(running.forLibrary("globex"));
+      start(running);
+      await waitUntil(() => requests.length === 3);
+
+      const reserved = (await ledger.entriesForMonth("2026-10")).filter((entry) => entry.kind === "reserve");
+      expect(reserved.map(({ libraryId }) => libraryId).toSorted()).toEqual(["acme", ADMIN_LIBRARY_ID, "globex"]);
+    });
+
+    it("refuses a library id that isn't a slug, so it can't reach another library's total", async () => {
+      const running = await gateway(fakeClient().client);
+      expect(() => running.forLibrary("acme#2026-10-11")).toThrow("Not a recipient library's id");
+    });
   });
 
   it("refuses a call while too many are running, and accepts one once a call ends", async () => {
@@ -549,6 +587,7 @@ describe("model gateway", () => {
           level: "INFO",
           event: "model.call",
           callId: settle!.callId,
+          libraryId: ADMIN_LIBRARY_ID,
           job: "write-section",
           model: TEST_MODEL,
           outcome: "complete",
@@ -584,11 +623,12 @@ describe("model gateway", () => {
       ]);
     });
 
-    it("logs each refusal with its reason: the kill switch, too many calls, or a cap", async () => {
+    it("logs each refusal with its library and reason: the kill switch, too many calls, or a cap", async () => {
       const { logger, entries } = capturingLogger();
       const { client, requests } = fakeClient({ ending: "hang" });
       const oneCallAtATime = await gateway(client, { config: gatewayConfig({ maxConcurrentCalls: 1 }), logger });
-      const tinyCap = await gateway(client, { config: gatewayConfig({ caps: { dailyUsd: 0.0001, monthlyUsd: 20 } }), logger });
+      const tinyCap = await gateway(client, { config: gatewayConfig({ caps: { dailyUsd: 0.0001 } }), logger });
+      const tinyLibraryCap = await gateway(client, { config: gatewayConfig({ caps: { libraryDailyUsd: 0.0001 } }), logger });
 
       await writeFile(killSwitchPath(dataDir), "");
       await expect(collect(oneCallAtATime.stream("write-section", EMPTY_PROMPT, signal()))).rejects.toThrow(SpendingRefused);
@@ -597,12 +637,16 @@ describe("model gateway", () => {
       await waitUntil(() => requests.length === 1);
       await expect(collect(oneCallAtATime.stream("librarian", EMPTY_PROMPT, signal()))).rejects.toThrow(GatewayBusy);
       await expect(collect(tinyCap.stream("plan-manual", EMPTY_PROMPT, signal()))).rejects.toThrow(SpendingRefused);
+      const recipient = tinyLibraryCap.forLibrary("acme");
+      await expect(collect(recipient.stream("librarian", EMPTY_PROMPT, signal()))).rejects.toThrow(SpendingRefused);
 
       const refusals = entries.filter(({ event }) => event === "model.refused");
-      expect(refusals.map(({ level, job, model, reason }) => ({ level, job, model, reason }))).toEqual([
-        { level: "WARN", job: "write-section", model: TEST_MODEL, reason: "kill-switch" },
-        { level: "WARN", job: "librarian", model: TEST_MODEL, reason: "busy" },
-        { level: "WARN", job: "plan-manual", model: TEST_MODEL, reason: "daily-cap" },
+      const fields = refusals.map(({ level, libraryId, job, model, reason }) => ({ level, libraryId, job, model, reason }));
+      expect(fields).toEqual([
+        { level: "WARN", libraryId: ADMIN_LIBRARY_ID, job: "write-section", model: TEST_MODEL, reason: "kill-switch" },
+        { level: "WARN", libraryId: ADMIN_LIBRARY_ID, job: "librarian", model: TEST_MODEL, reason: "busy" },
+        { level: "WARN", libraryId: ADMIN_LIBRARY_ID, job: "plan-manual", model: TEST_MODEL, reason: "daily-cap" },
+        { level: "WARN", libraryId: "acme", job: "librarian", model: TEST_MODEL, reason: "library-cap" },
       ]);
     });
   });

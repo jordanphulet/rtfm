@@ -25,6 +25,7 @@ export interface PeriodSpend extends Spend {
   unsettled: number;
   byModel: Record<string, Spend>;
   byJob: Record<string, Spend>;
+  byLibrary: Record<string, Spend>;
   fakeModel: Spend;
 }
 
@@ -82,6 +83,7 @@ function periodSpend(period: string, periodCalls: LedgerCall[], capUsd: number):
     unsettled: count((call) => !call.settle),
     byModel: spendBy(calls, (call) => call.model),
     byJob: spendBy(calls, (call) => call.job),
+    byLibrary: spendBy(calls, (call) => call.libraryId),
     fakeModel: spendOf(periodCalls.filter((call) => call.model === FAKE_MODEL)),
   };
 }
@@ -104,6 +106,8 @@ function periodLines(title: string, spend: PeriodSpend): string[] {
     ...groupLines(spend.byModel),
     "  by job:",
     ...groupLines(spend.byJob),
+    "  by library:",
+    ...groupLines(spend.byLibrary),
     `  ${FAKE_MODEL}, not counted above: ${formatUsd(spend.fakeModel.usd)}, ${callCount(spend.fakeModel.calls)}`,
   ];
 }

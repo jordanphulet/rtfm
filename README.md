@@ -71,7 +71,7 @@ the same caps and kill switch as a laptop's (Bedrock's spending, below).
 | `npm run preview`            | Serves the built app, passing `/api` to `npm run server` on 8787.            |
 | `npm run shot`               | Screenshots both pages in every state; `--compare` diffs against a baseline. |
 | `npm run serve-temp`         | A throwaway copy of the app, on free ports and a new data folder. See below. |
-| `npm run usage`              | Today's and this month's model spend, by model and by job. See below.        |
+| `npm run usage`              | Today's and this month's model spend, by model, job and library. See below.  |
 | `npm run logs`               | The server's recent log entries, filtered or followed. See below.            |
 | `npm run audit`              | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
 | `npm run orchestrator-check` | Checks the orchestrator can start here, and lists leftovers. See below.      |
@@ -363,22 +363,31 @@ Everything but the credentials and the passcode is committed:
 
 - `server/config.ts`: the data folder (`RTFM_DATA_DIR` overrides it), the port (`RTFM_PORT`
   overrides it), the models (`RTFM_MODELS`), the passcode (`RTFM_PASSCODE`, above), the spending
-  caps ($2 a day and $20 a month, UTC), how many sections may be written and how many model calls
-  may run at once, the 30s stall timeout (60s for planning a manual), each job's model and
-  `max_tokens`, the most model turns one librarian reply may take (8), the length in words the
-  prompt asks Claude for (`sectionWordsRequested`), and the length in characters a section's
-  progress counts to while Claude writes (`sectionExpectedCharacters`), and the table Bedrock's
-  spending is kept in (`rtfm-usage`). The default API port is `API_PORT` in `server/ports.ts`.
+  caps ($2 a day and $20 a month, and $0.50 a day for each recipient library, UTC), how many
+  sections may be written and how many model calls may run at once, the 30s stall timeout (60s
+  for planning a manual), each job's model and `max_tokens`, the most model turns one librarian
+  reply may take (8), the length in words the prompt asks Claude for (`sectionWordsRequested`),
+  and the length in characters a section's progress counts to while Claude writes
+  (`sectionExpectedCharacters`), and the table Bedrock's spending is kept in (`rtfm-usage`). The
+  default API port is `API_PORT` in `server/ports.ts`.
 - `server/gateway/prices.ts`: the dated price table, with the fake model at $0. The server refuses
   to start with a model that isn't in it.
 
-The gateway refuses a model call that could cross the daily or monthly cap: nothing is charged,
-and the reader shows "budget reached" (the librarian's reply says its budget is used up). How it
-reserves each call's worst case and settles it afterwards is in `server/gateway/README.md` › Each
-call.
+The gateway refuses a model call that could cross the daily or monthly cap, which every library
+shares, the admin's too, or, for a recipient's library, that library's own daily cap: nothing is
+charged, and the reader shows "budget reached" (the librarian's reply says its budget is used up).
+The admin's library has no cap of its own, and no library has a monthly one. How it reserves each
+call's worst case and settles it afterwards is in `server/gateway/README.md` › Each call.
+
+**The monthly exposure.** $0.50 a day reads both starter manuals end to end, with a new manual or
+two besides. One library at its cap every day is about $15 a month. Two at their caps for most of a
+month reach the central $20, and from then on the monthly cap refuses every library, the admin's
+too, for the rest of the month; four at their caps on one day reach the central $2 and refuse
+everyone for the rest of that day. `npm run usage` gives each library's spend that day and that
+month (below).
 
 To try a different setting without changing the committed one (a tiny cap, say), call
-`startServer({ ...config, caps: { dailyUsd: 0.001, monthlyUsd: 20 } })` from a scratch script,
+`startServer({ ...config, caps: { ...config.caps, dailyUsd: 0.001 } })` from a scratch script,
 as `scripts/shot.ts` does for its own settings. Stop `npm run dev` first, or give the script its
 own `dataDir` and `port: 0` as the shot script does: otherwise the data folder's lock refuses it,
 and port 8787 is taken.
@@ -429,13 +438,13 @@ refused while no server is using the folder, delete `.data/server.lock`. How the
 
 **`RTFM_MODELS` chooses the ledger.** With `fake`, it is the data folder's, above. With `bedrock`,
 it is always the DynamoDB table `rtfm-usage`, on this machine as in AWS: every call's reservation
-and settlement, the day's and the month's spend that the caps are checked against, and the kill
-switch. Every server running Bedrock, on any laptop or deployed, reserves each call in that table
-in one conditional transaction, so together they never pass the caps, and one kill switch stops
-them all. The fake model's calls never reach it. On this machine the server reaches it with
-`rtfm-local`'s keys from `.env.local` (The models, above), and the deployed app as its Web
-Function's role; `RtfmApp` holds it (`infra/README.md`). How it works is in
-`server/gateway/README.md` › The spending ledger.
+and settlement, the day's and the month's spend and each recipient library's day's that the caps
+are checked against, and the kill switch. Every server running Bedrock, on any laptop or
+deployed, reserves each call in that table in one conditional transaction, so together they never
+pass the caps, and one kill switch stops them all. The fake model's calls never reach it. On this
+machine the server reaches it with `rtfm-local`'s keys from `.env.local` (The models, above), and
+the deployed app as its Web Function's role; `RtfmApp` holds it (`infra/README.md`). How it works
+is in `server/gateway/README.md` › The spending ledger.
 
 **The kill switch** is the item `KILL_SWITCH` in `rtfm-usage`: while it exists, every server
 refuses every new Bedrock call, from its very next one, with no restart. A call already running
@@ -464,9 +473,10 @@ any cap.
 
 ### `npm run usage`
 
-`npm run usage` prints today's and this month's spend against the caps, by model and by job,
-with counts of aborted, failed and estimated calls, any unsettled reservations, and whether the
-kill switch is on. A call cut short (the reader closed the tab, the model stalled) is marked
+`npm run usage` prints today's and this month's spend against the caps, by model, by job and by
+library (`admin` for the admin's library: a reserve entry without `libraryId` is the admin's), with
+counts of aborted, failed and estimated calls, any unsettled reservations, and whether the kill
+switch is on. A call cut short (the reader closed the tab, the model stalled) is marked
 estimated; what it is charged is in `server/gateway/README.md` › Each call.
 
 - It reads the ledger `RTFM_MODELS` chooses: `npm run usage` reads the data folder's, and

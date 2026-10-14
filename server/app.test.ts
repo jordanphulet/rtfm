@@ -21,12 +21,14 @@ import { silentLogger } from "./logging/logger.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS } from "./storage/dynamodb-testing.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
+import { ADMIN_LIBRARY_ID } from "./storage/library.ts";
 import { DataFolderInUse, LOCK_FILE_NAME } from "./storage/lock.ts";
 import { seedStore } from "./storage/seed.ts";
 import type { UsageLedger } from "./storage/types.ts";
 import { collect, tempDataDir, testGateway, waitUntil } from "./testing.ts";
 import { WriteFailed } from "./writer/types.ts";
 
+const RECIPIENT_ID = "acme";
 /** A seed manual with no sample text, so the fake writer plays its short placeholder. */
 const GEESE_ID = "negotiating-with-geese";
 /** A message the fake librarian answers in one short turn, its fallback reply. */
@@ -53,13 +55,18 @@ describe("starting with Bedrock models", () => {
     );
     const bedrockConfig = { ...config, dataDir, models: "bedrock" as const, usageTable: { name: table.name, endpoint: table.endpoint } };
     const models = await createModels(bedrockConfig, silentLogger, credentialsFile);
-    const askLibrarian = () => collect(models.librarian.stream("librarian", GREETING, new AbortController().signal));
+    const store = createFileManualStore(dataDir, silentLogger);
+    const askLibrarian = (libraryId = ADMIN_LIBRARY_ID) =>
+      collect(models.forLibrary(libraryId, store).gateway.stream("librarian", GREETING, new AbortController().signal));
+    const spentToday = { reservedAt: new Date().toISOString(), job: "librarian", model: config.jobs.librarian.model };
 
     await setKillSwitch(table, true);
     await expect(askLibrarian()).rejects.toMatchObject({ reason: "kill-switch" });
     await setKillSwitch(table, false);
-    const spentToday = { callId: "spent", reservedAt: new Date().toISOString(), job: "librarian", model: config.jobs.librarian.model };
-    await createDynamoDbSpendingLedger(table).importCall({ ...spentToday, worstCaseUsd: config.caps.dailyUsd });
+    const ledger = createDynamoDbSpendingLedger(table);
+    await ledger.importCall({ ...spentToday, callId: "acme", libraryId: "acme", worstCaseUsd: config.caps.libraryDailyUsd });
+    await expect(askLibrarian("acme")).rejects.toMatchObject({ reason: "library-cap" });
+    await ledger.importCall({ ...spentToday, callId: "spent", libraryId: ADMIN_LIBRARY_ID, worstCaseUsd: config.caps.dailyUsd });
     await expect(askLibrarian()).rejects.toMatchObject({ reason: "daily-cap" });
     expect(await readdir(dataDir)).not.toContain("ledger");
   });
@@ -76,14 +83,15 @@ describe("starting with Bedrock models", () => {
 describe("starting with the fake models", () => {
   it("sends their calls through the gateway: recorded at $0 under the fake model, never capped, and refused by the kill switch", async () => {
     const dataDir = await tempDataDir();
-    const store = createFileManualStore(dataDir, silentLogger);
+    const store = createFileManualStore(dataDir, silentLogger, RECIPIENT_ID);
     await seedStore(store);
-    const zeroCaps = { dailyUsd: 0, monthlyUsd: 0 };
+    const zeroCaps = { dailyUsd: 0, monthlyUsd: 0, libraryDailyUsd: 0 };
     const models = await createModels({ ...config, dataDir, models: "fake", caps: zeroCaps }, silentLogger);
+    const { writer, gateway } = models.forLibrary(RECIPIENT_ID, store);
     const geese = (await store.getManual(GEESE_ID))!;
     const sectionId = geese.chapters[0]!.sections[0]!.id;
-    const writeSection = () => collect(models.writerFor(store).write(geese, sectionId, new AbortController().signal));
-    const askLibrarian = () => collect(models.librarian.stream("librarian", GREETING, new AbortController().signal));
+    const writeSection = () => collect(writer.write(geese, sectionId, new AbortController().signal));
+    const askLibrarian = () => collect(gateway.stream("librarian", GREETING, new AbortController().signal));
 
     await Promise.all([writeSection(), askLibrarian()]);
     await models.idle();
@@ -95,12 +103,36 @@ describe("starting with the fake models", () => {
       "settle write-section",
     ]);
     for (const entry of entries) {
-      expect(entry).toMatchObject(entry.kind === "reserve" ? { model: FAKE_MODEL, worstCaseUsd: 0 } : { model: FAKE_MODEL, usd: 0 });
+      expect(entry).toMatchObject(
+        entry.kind === "reserve" ? { libraryId: RECIPIENT_ID, model: FAKE_MODEL, worstCaseUsd: 0 } : { model: FAKE_MODEL, usd: 0 },
+      );
     }
 
     await writeFile(killSwitchPath(dataDir), "");
     await expect(writeSection()).rejects.toEqual(new WriteFailed("budget"));
     await expect(askLibrarian()).rejects.toThrow(SpendingRefused);
+  });
+});
+
+describe("each library's gateway", () => {
+  it("reserves every call a request makes in the name of the request's library", async () => {
+    const dataDir = await tempDataDir();
+    const server = await startServer(
+      { ...config, port: 0, dataDir, models: "fake", passcode: undefined },
+      { libraryIdOf: (request) => String(request.headers["x-test-library"]) },
+    );
+    const ask = (libraryId: string) =>
+      fetch(`http://127.0.0.1:${server.port}/api/librarian`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-library": libraryId },
+        body: JSON.stringify({ messages: [{ role: "user", text: "Good morning" }] }),
+      }).then((response) => response.text());
+
+    await Promise.all([ask(RECIPIENT_ID), ask(ADMIN_LIBRARY_ID)]);
+    await server.close();
+    const entries = await createFileLedger(dataDir, silentLogger).entriesForMonth(monthOf(new Date().toISOString()));
+    const reserved = entries.filter((entry) => entry.kind === "reserve");
+    expect(reserved.map(({ libraryId }) => libraryId).toSorted()).toEqual([RECIPIENT_ID, ADMIN_LIBRARY_ID]);
   });
 });
 

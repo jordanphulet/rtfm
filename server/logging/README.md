@@ -51,9 +51,9 @@ ID.
 
 Every line about a request in a library has the library's `libraryId` (`admin` for the admin's
 library; `server/api/README.md` › The library of a request): `request` once the gate has given the
-request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `client.error`,
-`client.limited` and every `section.*` line, which also has the section's `manualId` and
-`sectionId`.
+request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `model.call`,
+`model.refused`, `client.error`, `client.limited` and every `section.*` line, which also has the
+section's `manualId` and `sectionId`.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
@@ -64,8 +64,8 @@ request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `
 | `request.refused` | WARN | The `Host` and `Origin` checks refused it, it didn't carry the passcode (`401`), or its body was too long or not JSON (`status`, `host`, `origin`) |
 | `passcode.wrong`, `passcode.accepted`, `passcode.unset` | WARN, INFO, WARN | `POST /api/passcode` with a wrong passcode, the right one, or any while no passcode is set (no fields: never the passcode or its digest) |
 | `request.failed` | ERROR | A handler threw (the 500 in `server/api/README.md` › Routes): the `request` line's ids, with `libraryId` once the gate has given one |
-| `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
-| `model.refused` | WARN | The gateway refused a call: `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap` or `busy`) |
+| `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `libraryId`, `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
+| `model.refused` | WARN | The gateway refused a call: `libraryId`, `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap`, `library-cap` or `busy`) |
 | `ledger.line-skipped` | WARN | A ledger line that isn't JSON (`file`, `line`) |
 | `section.started`, `section.joined` | INFO | A run starts; a reader joins one (`listeners`, `backlogCharacters`) |
 | `section.finished`, `section.aborted` | INFO | A run ends with `written` (`placeholder`; `elsewhere` when another environment wrote the body), or its last reader left; `characters` and `durationMs` |

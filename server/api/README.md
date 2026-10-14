@@ -150,7 +150,9 @@ Each library is its own manuals, kept apart in storage (`server/storage/README.m
 holds a `Library` (`route.ts`) for each library id it has seen: its id, its `ManualStore` and
 `SectionLeases`, bound to that library, its section writer (the Bedrock writer reads its example
 sections through that store), the server's one `Runs` bound to it (`runs.forLibrary`,
-`server/writer/README.md` › One writer per section), and the one gateway every library shares.
+`server/writer/README.md` › One writer per section), and the server's one gateway bound to it
+(`forLibrary`, `server/gateway/README.md`), which its librarian, planner and writer call, so every
+call is reserved in the library's name.
 `startServer` builds the admin's, and seeds it, before it listens, and any other the first time a
 request is in it, then keeps each for the server's life, so a library has one store, one set of
 leases and one bound runs in each environment.
