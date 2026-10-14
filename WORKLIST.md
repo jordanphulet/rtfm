@@ -70,7 +70,9 @@ user revokes it, and with its activity visible to the user.
 - **Depends on:** —
 - **Merges after:** LB.7, LB.8, LB.9
 - **Files:** `scripts/ops/**`, `server/logging/log-reader.ts` and its test, `server/logs.ts`,
-  `README.md`, `CLAUDE.md`
+  `README.md`, `CLAUDE.md`, `server/storage/dynamodb-manual-store.ts`,
+  `server/gateway/dynamodb-spending-ledger.ts`, `server/storage/README.md`,
+  `server/gateway/README.md`, `infra/README.md`
 - **Do:** `npm run ops -- library create <libraryId> [--label <text>]`, `list`, `show <libraryId>`
   and `revoke <libraryId>`, as `research/libraries.md` › What `npm run ops` gains describes, under
   `README.md` › The ops tools' rules, with `--json`; `create` prints the link once on standard
