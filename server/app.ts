@@ -44,7 +44,7 @@ import { seedStarters, seedStore } from "./storage/seed.ts";
 import type { ManualStore, SectionLeases } from "./storage/types.ts";
 import { createBedrockWriter } from "./writer/bedrock.ts";
 import { createFakeWriter } from "./writer/fake.ts";
-import { createRuns, type LibraryScope } from "./writer/runs.ts";
+import { createRuns } from "./writer/runs.ts";
 import type { SectionWriter } from "./writer/types.ts";
 
 export interface RunningServer {
@@ -58,11 +58,19 @@ export interface RunningServer {
 
 /** Who writes sections, who answers as the librarian, and when their model calls have all been recorded. */
 export interface Models {
-  /** The section writer for a library's manuals, which the Bedrock writer reads its example section from. */
-  writerFor(store: ManualStore): SectionWriter;
-  librarian: Gateway;
+  /**
+   * A library's models: the gateway its librarian and planner call, and the section writer for its
+   * manuals, which the Bedrock writer reads its example section from. Each reserves every call in
+   * the library's name.
+   */
+  forLibrary(libraryId: string, store: ManualStore): LibraryModels;
   /** Resolves once no model call is running and every one is settled in the ledger. */
   idle(): Promise<void>;
+}
+
+interface LibraryModels {
+  gateway: Gateway;
+  writer: SectionWriter;
 }
 
 /**
@@ -221,7 +229,7 @@ async function serve(config: ServerConfig, replaced: Replaced, logger: Logger): 
 
 /**
  * The `Library` of each library id, built the first time it is asked for and kept, so each has one
- * store, one set of leases and one writer, bound to the one shared runs and gateway. The admin's is
+ * store, one set of leases, one gateway and one writer, the shared runs bound to it. The admin's is
  * built and seeded at once. A recipient's store and leases count its activity; its starters are
  * seeded through its bare store, so they never count as made.
  */
@@ -231,30 +239,26 @@ async function createLibraries(
   logger: Logger,
   activityOf: (libraryId: string) => Activity,
 ): Promise<{ libraryFor(libraryId: string): Library; seedStarters(libraryId: string): Promise<string[]> }> {
-  const scopeOf = (libraryId: string, { store, leases }: Storage): LibraryScope => ({
+  const scopeOf = (libraryId: string, { store, leases }: Storage, activity: Activity): Omit<Library, "runs"> => ({
     libraryId,
     store,
     leases,
-    writer: models.writerFor(store),
+    activity,
+    ...models.forLibrary(libraryId, store),
   });
-  const admin = scopeOf(ADMIN_LIBRARY_ID, createStorage(config, logger, ADMIN_LIBRARY_ID));
+  const admin = scopeOf(ADMIN_LIBRARY_ID, createStorage(config, logger, ADMIN_LIBRARY_ID), recordsNothing);
   await seedStore(admin.store);
   const runs = createRuns({ ...admin, maxConcurrentRuns: config.maxConcurrentRuns, logger });
-  const libraryOn = (scope: LibraryScope, activity: Activity): Library => ({
-    ...scope,
-    runs: runs.forLibrary(scope),
-    gateway: models.librarian,
-    activity,
-  });
+  const libraryOn = (scope: Omit<Library, "runs">): Library => ({ ...scope, runs: runs.forLibrary(scope) });
 
-  const libraries = new Map([[ADMIN_LIBRARY_ID, { library: libraryOn(admin, recordsNothing), bareStore: admin.store }]]);
+  const libraries = new Map([[ADMIN_LIBRARY_ID, { library: libraryOn(admin), bareStore: admin.store }]]);
   const builtLibrary = (libraryId: string) => {
     let built = libraries.get(libraryId);
     if (!built) {
       const bare = createStorage(config, logger, libraryId);
       const activity = activityOf(libraryId);
       const counted = { store: countingStore(bare.store, activity), leases: countingLeases(bare.leases, activity) };
-      built = { library: libraryOn(scopeOf(libraryId, counted), activity), bareStore: bare.store };
+      built = { library: libraryOn(scopeOf(libraryId, counted, activity)), bareStore: bare.store };
       libraries.set(libraryId, built);
     }
     return built;
@@ -317,11 +321,13 @@ function passcodeDigestSource(config: ServerConfig, now: () => number): CurrentD
 /** The models passed in, and the configured ones for any that weren't. */
 async function modelsFor(config: ServerConfig, replaced: Replaced, logger: Logger): Promise<Models> {
   const { writer, librarian, idle } = replaced;
-  if (writer && librarian) return { writerFor: () => writer, librarian, idle: idle ?? nothingToSettle };
+  if (writer && librarian) return { forLibrary: () => ({ gateway: librarian, writer }), idle: idle ?? nothingToSettle };
   const configured = await createModels(config, logger);
   return {
-    writerFor: writer ? () => writer : configured.writerFor,
-    librarian: librarian ?? configured.librarian,
+    forLibrary(libraryId, store) {
+      const models = configured.forLibrary(libraryId, store);
+      return { gateway: librarian ?? models.gateway, writer: writer ?? models.writer };
+    },
     async idle() {
       await idle?.();
       await configured.idle();
@@ -330,17 +336,21 @@ async function modelsFor(config: ServerConfig, replaced: Replaced, logger: Logge
 }
 
 /**
- * Every library's writer and the librarian share one gateway, with the fake model or with Bedrock,
- * so one set of caps, the kill switch and the ledger cover every job.
+ * Every library's writer, librarian and planner share one gateway, with the fake model or with
+ * Bedrock, so one set of caps, the kill switch and the ledger cover every job, each library through
+ * its own binding of it.
  */
 export async function createModels(config: ServerConfig, logger: Logger, credentialsFile: URL = ENV_LOCAL_FILE): Promise<Models> {
   switch (config.models) {
     case "fake": {
       const openSpendingLedger = () =>
         openFileSpendingLedger({ ledger: createFileLedger(config.dataDir, logger), dataDir: config.dataDir });
-      const gateway = await createModelGateway(withFakeModel(config), () => fakeModel(), openSpendingLedger, logger);
-      const writer = createFakeWriter(gateway);
-      return { writerFor: () => writer, librarian: gateway, idle: gateway.idle };
+      const running = await createModelGateway(withFakeModel(config), () => fakeModel(), openSpendingLedger, logger);
+      const forLibrary = (libraryId: string) => {
+        const gateway = running.forLibrary(libraryId);
+        return { gateway, writer: createFakeWriter(gateway) };
+      };
+      return { forLibrary, idle: running.idle };
     }
     case "bedrock": {
       const aws = () => modelAws(config.modelAccess, credentialsFile);
@@ -353,15 +363,18 @@ export async function createModels(config: ServerConfig, logger: Logger, credent
         const { access, keysRefusedBy } = aws();
         return createDynamoDbSpendingLedger({ ...tableWith(config.usageTable, access), onKeysRefused: keysRefusedBy("DynamoDB") });
       };
-      const gateway = await createModelGateway(config, createClient, openSpendingLedger, logger);
-      const writerFor = (store: ManualStore) =>
-        createBedrockWriter({
+      const running = await createModelGateway(config, createClient, openSpendingLedger, logger);
+      const forLibrary = (libraryId: string, store: ManualStore) => {
+        const gateway = running.forLibrary(libraryId);
+        const writer = createBedrockWriter({
           gateway,
           store,
           wordsRequested: config.sectionWordsRequested,
           expectedCharacters: config.sectionExpectedCharacters,
         });
-      return { writerFor, librarian: gateway, idle: gateway.idle };
+        return { gateway, writer };
+      };
+      return { forLibrary, idle: running.idle };
     }
   }
 }

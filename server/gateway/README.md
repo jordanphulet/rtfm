@@ -15,11 +15,17 @@ ID, a price or the SDK.
   `tool_use` block; `usage`, with input, output and cache token counts; and `stop`, with the stop
   reason.
 - **`createGateway`** takes a `createClient` factory, an `openSpendingLedger` factory (The spending
-  ledger, below), the `GatewayConfig` and the price table. It returns a `RunningGateway`: the
-  `Gateway` that the writer and the loop see (`stream(job, prompt, signal)`), plus `idle()`.
-- **Errors:** the stream's first step throws `SpendingRefused` (`"daily-cap"`, `"monthly-cap"` or
-  `"kill-switch"`) or `GatewayBusy`; a stalled call throws `ModelStalled`, and a stream that ends
-  without a stop reason throws `ModelStreamIncomplete`.
+  ledger, below), the `GatewayConfig` and the price table. It returns a `RunningGateway`:
+  `forLibrary(libraryId)`, the `Gateway` of one library that its writer, librarian and planner see
+  (`stream(job, prompt, signal)`), plus `idle()`. The `RunningGateway` itself has no `stream`, so
+  no call can leave its library out: `app.ts` binds one per `Library` (`server/api/README.md` ›
+  The library of a request), and every call through it is reserved in that library's name. Every
+  binding shares the one gateway's concurrency, caps, kill switch and ledger. `forLibrary` refuses
+  an id that isn't the admin's or a recipient library's slug (`checkedRecipientLibraryId`).
+- **Errors:** the stream's first step throws `SpendingRefused` (`"kill-switch"`, `"daily-cap"`,
+  `"monthly-cap"` or `"library-cap"`) or `GatewayBusy`; a stalled call throws `ModelStalled`, and a
+  stream that ends without a stop reason throws `ModelStreamIncomplete`. Every `SpendingRefused`
+  reaches the reader and the librarian as `budget`, a library's cap as any other.
 
 `createGateway` rejects with `ModelNotPriced` if any job's model is missing from the price table,
 so the server refuses to start. It checks before it calls either factory, so with Bedrock an
@@ -67,13 +73,19 @@ For each call, in order:
      `max_tokens`.
    - `"daily-cap"` or `"monthly-cap"` when, for the day or the month (UTC, as AWS bills), the
      committed spend (settled calls at what they cost, unsettled ones at their worst case) plus
-     this worst case would pass the cap.
+     this worst case would pass the cap: `caps.dailyUsd` ($2) and `caps.monthlyUsd` ($20), which
+     every library's calls count toward, the admin's too.
+   - `"library-cap"` when the call is a recipient library's and its library's committed spend that
+     day plus this worst case would pass `caps.libraryDailyUsd` ($0.50). The admin's library has no
+     cap of its own, and no library has a monthly one.
 
-   Otherwise it records `{ kind: "reserve", callId, reservedAt, job, model, worstCaseUsd }` and adds
-   the worst case to the day's and the month's committed spend, in one step that no other
-   reservation can come between, so two calls can't both slip under a cap. If the reservation fails
-   for another reason (a full disk, DynamoDB out of reach), the error is rethrown and no call is
-   made.
+   Otherwise it records
+   `{ kind: "reserve", callId, reservedAt, libraryId, job, model, worstCaseUsd }` and adds the
+   worst case to the day's and the month's committed spend, and a recipient library's to its
+   day's, in one step that no other reservation can come between, so two calls can't both slip
+   under a cap. If the reservation fails for another reason (a full disk, DynamoDB out of reach),
+   the error is rethrown and no call is made. A reserve entry without `libraryId` is the admin's
+   (`callsFrom` in `ledger-calls.ts`).
 4. **Call.** `client.stream(...)`, re-yielding events.
    - The writer's signal goes straight to the SDK request, combined (`AbortSignal.any`) with the
      gateway's own cut-off signal, so a disconnect aborts the HTTP call. If the writer stops
@@ -93,9 +105,9 @@ For each call, in order:
 5. **Settle** (in `finally`, so it runs after completion, error or abort). The spending ledger
    records `{ kind: "settle", callId, reservedAt, at, job, model, inputTokens, outputTokens,
    cacheWriteTokens, cacheReadTokens, usd, outcome: "complete" | "aborted" | "failed", estimated }`
-   and adds `usd − worst case` to the committed spend.
+   and adds `usd − worst case` to the committed spend its reservation was added to.
    - It goes into the reservation's month, and the cost is charged to the reservation's day and
-     month, so a call that crosses midnight stays in one period.
+     month, and its library's day, so a call that crosses midnight stays in one period.
    - **A call is `complete` only when a `stop` event arrived.** When the client's stream ends,
      the gateway checks, in order: if its cut-off fired (a stall), it throws `ModelStalled`; if
      the writer's signal aborted, it throws the abort; if no `stop` arrived, it throws
@@ -147,11 +159,13 @@ reads a month's entries and says whether the kill switch is on. `RTFM_MODELS` ch
 
 Both keep the same rules, which `spending-ledger-suite.ts` checks against each: reserving within
 and up to each cap, refusing past it, the daily and monthly periods, settling, a reservation left
-unsettled by a crash counting at its worst case after a restart, the kill switch, and reservations
+unsettled by a crash counting at its worst case after a restart, the kill switch, reservations
 racing for one cap (from two servers' ledgers on the table; from the one server's in a data
-folder). `dynamodb-spending-ledger.test.ts` also
-runs two gateways on one DynamoDB Local table, as two servers with Bedrock, and checks that only
-the calls the cap allows reach the model.
+folder), and a recipient library's daily cap: one library refused at it while another and the
+admin's still reserve, the admin's with none, the kill switch and the central caps checked first
+and refusing every library, and reservations racing for one library's cap.
+`dynamodb-spending-ledger.test.ts` also runs two gateways on one DynamoDB Local table, as two
+servers with Bedrock, and checks that only the calls the cap allows reach the model.
 
 A `reserve` with no `settle` (the server died mid-call) keeps counting at its worst case in either
 one, and `npm run usage` lists it under "Unsettled reservations". Nothing settles it later.
@@ -165,9 +179,10 @@ and `npm run usage` both use it, so they count spend the same way. `monthOf` com
 - **The files** are the ledger in `storage/file-ledger.ts` (`server/storage/README.md` › The data
   folder): one JSON line per entry, by month. On open, it replays this month's file into its
   totals.
-- **Totals in memory** are one map from period (`2026-10-11` or `2026-10`) to committed dollars.
-  Reserving adds the worst case to the reservation's day and month; settling adds `usd − worst
-  case` to the same two periods.
+- **Totals in memory** are one map from period (`2026-10-11` or `2026-10`, or a recipient
+  library's day, `2026-10-11#<libraryId>`) to committed dollars. Reserving adds the worst case to
+  the reservation's day and month, and a recipient library's day; settling adds `usd − worst case`
+  to the same periods.
 - **The check and the reservation are one synchronous step** on those totals, before the append is
   awaited; if the append fails, the worst case is taken off again.
 - **The kill switch is `.data/STOP`**, checked with `existsSync` at each reservation.
@@ -191,6 +206,7 @@ told apart by their keys, two strings:
 | --- | --- | --- | --- |
 | A call | `LEDGER#<yyyy-mm>`, its reservation's month | `<reservedAt>#<callId>` | `reserve`: its reserve entry, as a map; `settle`: its settle entry, absent until it settles |
 | A period's committed spend | `TOTAL` | the day (`2026-10-13`) or the month (`2026-10`) | `committedUsd`: a number |
+| A recipient library's day's committed spend | `TOTAL` | `LIBRARY#<libraryId>#<day>` (`LIBRARY#acme#2026-10-13`) | `committedUsd`: a number |
 | The kill switch | `KILL_SWITCH` | `KILL_SWITCH` | none: it is on while the item exists |
 
 Every read is strongly consistent.
@@ -203,15 +219,18 @@ Every read is strongly consistent.
     total not made yet is $0); when the worst case alone is over the cap, the limit is negative
     and the condition is just `committedUsd <= :limit`, which nothing meets;
   - the same `Update` of the month's total, against the monthly cap;
+  - for a recipient library's call, the same `Update` of its library's day's total, against the
+    library cap;
   - a `Put` of the call's item, on `attribute_not_exists(pk)`.
 
-  All four happen or none does, and no other transaction comes between the checks and the adds.
+  All of them happen or none does, and no other transaction comes between the checks and the adds.
   When it is cancelled, the first failed condition, in that order, names the refusal. The caps
   are the reserving server's own `config.caps`; every server runs the committed ones
-  (`server/config.ts`), so they share one $2 a day and $20 a month.
+  (`server/config.ts`), so they share one $2 a day and $20 a month, and each recipient library
+  one $0.50 a day.
 - **Settling** is one `TransactWriteItems`: an `Update` that sets the call's `settle`, on the
   condition that the call is there and not yet settled, and `ADD committedUsd :usdLessWorstCase`
-  on the day's and the month's totals.
+  on the day's and the month's totals, and a recipient library's day's.
 - **The kill switch is read in each reservation's own transaction**, so nothing caches it: the
   first reservation after the item is put is refused. `npm run usage` reads it with a strongly
   consistent `GetItem`. It has its own partition, which `rtfm-ops` is limited to with
@@ -234,8 +253,9 @@ Every read is strongly consistent.
   neither can turn the kill switch off.
 - **`importCall`** copies a call from the data folder's ledger (`npm run usage`, below) in one
   transaction: a `Put` of the call's item on `attribute_not_exists(pk)` and `ADD` of what it was
-  charged to its day and month, with no cap condition, since it was already spent. A call already
-  there cancels the transaction and changes nothing, so an import can run any number of times.
+  charged to its day and month, and a recipient library's day, with no cap condition, since it was
+  already spent. A call already there cancels the transaction and changes nothing, so an import
+  can run any number of times.
 - **`setKillSwitch`** puts or deletes the kill-switch item: `npm run ops -- kill-switch`, as
   `rtfm-ops` (`README.md` › The ops tools), and the tests, on DynamoDB Local. The server never
   calls it.
@@ -404,9 +424,10 @@ on loopback hands out, asked for each call. It tells `onKeysRefused` of `Expired
 and `UnrecognizedClientException`, named in the header or the body alone, and of nothing else.
 The other tests next to the gateway, the spending ledgers, the ledger, `app.ts`, `config.ts` and
 `main.ts` cover each rule in this README, the shutdown order in `server/README.md` › How it runs
-and the committed config's room for the librarian. `app.test.ts` checks that a
-server with Bedrock takes its kill switch and caps from `rtfm-usage` (on DynamoDB Local) and
-writes no ledger in its data folder.
+and the committed config's room for the librarian. `app.test.ts` checks that a server with
+Bedrock takes its kill switch and caps, a library's included, from `rtfm-usage` (on DynamoDB
+Local) and writes no ledger in its data folder, and that each request's calls are reserved in its
+library's name.
 
 ## `npm run usage`
 
@@ -415,11 +436,13 @@ today's and this month's spend (UTC) against the caps, as `README.md` describes,
 `RTFM_MODELS` chooses: the data folder's with `fake` (the default), or `rtfm-usage` with `bedrock`,
 read with `rtfm-local`'s keys as the server reads it. The report is the same either way. It reads
 another data folder when given one, which the tests use; with `bedrock` it refuses one. Calls on
-`FAKE_MODEL` are left out of each period's total, its counts, its groups by model and by job, and
-the unsettled reservations, and are counted on a line of their own with what they cost, so they
-can't hide or pad a real charge. Only that exact id is left out, and no Bedrock call can have it.
-`usageSummary` gives the same figures as data, which `npm run ops -- usage --json` prints, and
-`npm run ops -- usage` prints the same report of `rtfm-usage`, read as `rtfm-read`.
+`FAKE_MODEL` are left out of each period's total, its counts, its groups, and the unsettled
+reservations, and are counted on a line of their own with what they cost, so they can't hide or
+pad a real charge. Only that exact id is left out, and no Bedrock call can have it. Each period's
+spend is grouped by model, by job and by library (`admin` for the admin's library: a reserve
+entry without `libraryId` is the admin's). `usageSummary` gives the same figures as data, which
+`npm run ops -- usage --json` prints, and `npm run ops -- usage` prints the same report of
+`rtfm-usage`, read as `rtfm-read`.
 
 **Importing the data folder's Bedrock calls.** Bedrock calls made before `rtfm-usage` existed are
 in the data folder's ledger, which the central caps can't see. `RTFM_MODELS=bedrock npm run usage

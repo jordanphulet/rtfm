@@ -65,51 +65,14 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.4 — Carry the library through each request
-- **Status:** doing (agent acdd99f166601e4d9; done, being committed)
-- **Depends on:** —
-- **Files:** `server/api/**`, `server/agent/**`, `server/app.ts` and its test, `server/testing.ts`,
-  `server/replacement.test.ts`, `server/web-function.test.ts`, `scripts/shot.ts`,
-  `scripts/serve-temp.ts`, `server/logging/README.md`, `server/README.md`, `ARCHITECTURE.md`,
-  `server/writer/runs-leases.test.ts`, `server/writer/README.md`
-- **Do:** a `Library` per library id, built once per environment (its store, leases, writer, and
-  the one shared gateway), as `research/libraries.md` › How the server carries the library
-  describes. The Node adapter's gate puts the library on `ApiRequest.library`, and every route, the
-  librarian, the planner and the previews take their store, runs scope and gateway from it. Add
-  `libraryId` to `request`, `request.failed`, `librarian.reply`, `agent.tool-failed`,
-  `client.error` and `client.limited`, `admin` for the admin's library. The gate gives every request
-  the admin's library, so nothing anyone sees changes.
-- **Done when:** the API's tests, run with two libraries put on requests directly, show neither
-  reaches the other's manuals, sections, runs or librarian, the log lines carry `libraryId`, and
-  `npm run build` and `npm test` pass.
-
-### LB.5 — Cap each library's daily spend
-- **Status:** todo
-- **Depends on:** LB.4
-- **Files:** `server/gateway/**`, `server/config.ts` and its test, `server/storage/types.ts`,
-  `server/storage/file-ledger.ts` and its test, `server/app.ts` and its test, `server/usage.ts`,
-  `README.md`, `server/README.md`, `server/logging/README.md`
-- **Do:** as `research/libraries.md` › Spend describes: the gateway is bound to each `Library`
-  (`server/gateway/gateway.ts`), and every reserve entry carries `libraryId` (an entry without one
-  is the admin's); a recipient library's reservation also adds its worst case to its day's total
-  (`TOTAL` / `LIBRARY#<libraryId>#<day>` in `rtfm-usage`, `<day>#<libraryId>` in the data folder's
-  totals) within `caps.libraryDailyUsd`, $0.50, in the same atomic step, and its settle adds
-  `usd − worst case` there; past it, `SpendingRefused("library-cap")`, after the kill switch and
-  the central caps. The admin's calls have no library cap. `model.call` and `model.refused` carry
-  `libraryId`, and `npm run usage` groups spend by library. Extend `spending-ledger-suite.ts` to the
-  library cap on both ledgers, racing reservations included. Say the monthly exposure in
-  `README.md` as that section does.
-- **Done when:** the suite shows a library refused at its cap while another library and the admin
-  still reserve, the central caps and kill switch refuse every library, and `npm run build` and
-  `npm test` pass.
-
 ### LB.8 — Open a library by its link
-- **Status:** todo
-- **Depends on:** LB.4, LB.6
+- **Status:** doing (agent a07b2e7ab3bb8665c; done, being committed)
+- **Depends on:** —
 - **Merges after:** LB.5
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts` and its test,
   `server/app.ts` and its test, `server/web-function.test.ts`, `server/testing.ts`,
-  `server/logging/**`, `scripts/serve-temp.ts`, `README.md`, `ARCHITECTURE.md`
+  `server/logging/**`, `scripts/serve-temp.ts`, `README.md`, `ARCHITECTURE.md`, `server/README.md`,
+  `scripts/serve-temp.test.ts`
 - **Do:** as `research/libraries.md` › Access describes:
   - the gate, generalized, gives each request its library from an `rtfm_library` cookie (the
     secret, hashed, its link looked up; found links kept a minute, misses never; a failed lookup
@@ -152,8 +115,8 @@ user revokes it, and with its activity visible to the user.
   states, and `npm run build` and `npm test` pass.
 
 ### LB.10 — Make, list and revoke libraries with the ops tools
-- **Status:** todo (its `CLAUDE.md` line is the user's to approve)
-- **Depends on:** LB.2, LB.5, LB.6
+- **Status:** doing (agent aa5395c0f371031a1; the user approved its `CLAUDE.md` line)
+- **Depends on:** —
 - **Merges after:** LB.7, LB.8, LB.9
 - **Files:** `scripts/ops/**`, `server/logging/log-reader.ts` and its test, `server/logs.ts`,
   `README.md`, `CLAUDE.md`

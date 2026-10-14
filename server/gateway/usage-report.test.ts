@@ -13,16 +13,16 @@ import { FAKE_MODEL } from "./types.ts";
 import { usageReport } from "./usage-report.ts";
 
 const HAIKU = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
-const CAPS = { dailyUsd: 2, monthlyUsd: 20 };
+const CAPS = { dailyUsd: 2, monthlyUsd: 20, libraryDailyUsd: 0.5 };
 const USAGE_SCRIPT = fileURLToPath(new URL("../usage.ts", import.meta.url));
 
 function call(
   callId: string,
   reservedAt: string,
   settle: Partial<SettleEntry> | "unsettled",
-  { job = "write-section", model = HAIKU } = {},
+  { job = "write-section", model = HAIKU, libraryId }: { job?: string; model?: string; libraryId?: string } = {},
 ): LedgerEntry[] {
-  const reserve: LedgerEntry = { kind: "reserve", callId, reservedAt, job, model, worstCaseUsd: 0.02 };
+  const reserve: LedgerEntry = { kind: "reserve", callId, reservedAt, libraryId, job, model, worstCaseUsd: 0.02 };
   if (settle === "unsettled") return [reserve];
   return [
     reserve,
@@ -56,12 +56,12 @@ describe("usage report", () => {
     expect(report).not.toContain("Unsettled reservations");
   });
 
-  it("splits today's and this month's spend by model and by job", () => {
+  it("splits today's and this month's spend by model, by job and by library, a reserve entry without libraryId the admin's", () => {
     const monthEntries = [
-      ...call("a", "2026-10-11T09:00:00.000Z", { usd: 0.005 }),
+      ...call("a", "2026-10-11T09:00:00.000Z", { usd: 0.005 }, { libraryId: "admin" }),
       ...call("b", "2026-10-11T10:00:00.000Z", { usd: 0.0102, outcome: "aborted", estimated: true }),
       ...call("c", "2026-10-11T11:00:00.000Z", "unsettled"),
-      ...call("d", "2026-10-03T11:00:00.000Z", { usd: 0.1 }, { job: "write-toc", model: "us.model" }),
+      ...call("d", "2026-10-03T11:00:00.000Z", { usd: 0.1 }, { job: "write-toc", model: "us.model", libraryId: "acme" }),
     ];
     const report = usageReport({ monthEntries, now, caps: CAPS, killSwitchOn: true });
 
@@ -75,6 +75,8 @@ describe("usage report", () => {
         `    ${HAIKU}  $0.0352  3 calls`,
         "  by job:",
         "    write-section  $0.0352  3 calls",
+        "  by library:",
+        "    admin  $0.0352  3 calls",
         "  fake-model, not counted above: $0.0000, 0 calls",
         "",
         "This month, 2026-10: $0.1352 of $20.00, 4 calls",
@@ -85,6 +87,9 @@ describe("usage report", () => {
         "  by job:",
         "    write-section  $0.0352  3 calls",
         "    write-toc      $0.1000  1 call",
+        "  by library:",
+        "    admin  $0.0352  3 calls",
+        "    acme   $0.1000  1 call",
         "  fake-model, not counted above: $0.0000, 0 calls",
         "",
         "Unsettled reservations, counted at their worst case:",
@@ -113,6 +118,8 @@ describe("usage report", () => {
         `    ${HAIKU}  $0.0050  1 call`,
         "  by job:",
         "    write-section  $0.0050  1 call",
+        "  by library:",
+        "    admin  $0.0050  1 call",
         "  fake-model, not counted above: $0.0000, 3 calls",
         "",
         "This month, 2026-10: $0.0050 of $20.00, 1 call",
@@ -121,6 +128,8 @@ describe("usage report", () => {
         `    ${HAIKU}  $0.0050  1 call`,
         "  by job:",
         "    write-section  $0.0050  1 call",
+        "  by library:",
+        "    admin  $0.0050  1 call",
         "  fake-model, not counted above: $0.0000, 3 calls",
       ].join("\n"),
     );

@@ -91,7 +91,7 @@ export const config: ServerConfig = {
   sectionWordsRequested: 650,
   sectionExpectedCharacters: 4800,
   starterManualIds: ["the-haunt-that-listens", "negotiating-with-geese"],
-  caps: { dailyUsd: 2, monthlyUsd: 20 },
+  caps: { dailyUsd: 2, monthlyUsd: 20, libraryDailyUsd: 0.5 },
   maxConcurrentCalls: MAX_CONCURRENT_RUNS + CALLS_BESIDE_RUNS,
   idleTimeoutMs: 30_000,
   jobs: {

@@ -50,14 +50,15 @@ export type ModelEvent =
   | { type: "stop"; reason: string };
 
 export interface GatewayConfig {
-  caps: { dailyUsd: number; monthlyUsd: number };
+  /** UTC. Every library's calls count toward the daily and monthly caps, a recipient library's toward its own daily cap too. */
+  caps: { dailyUsd: number; monthlyUsd: number; libraryDailyUsd: number };
   maxConcurrentCalls: number;
   idleTimeoutMs: number;
   /** A job's own `idleTimeoutMs`, if it has one, replaces the shared one for its calls. */
   jobs: Record<Job, { model: string; maxTokens: number; idleTimeoutMs?: number }>;
 }
 
-export type SpendingRefusal = "daily-cap" | "monthly-cap" | "kill-switch";
+export type SpendingRefusal = "kill-switch" | "daily-cap" | "monthly-cap" | "library-cap";
 
 export class SpendingRefused extends Error {
   reason: SpendingRefusal;

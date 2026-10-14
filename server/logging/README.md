@@ -52,10 +52,10 @@ ID.
 
 Every line about a request in a library has the library's `libraryId` (`admin` for the admin's
 library; `server/api/README.md` › The library of a request): `request` once the gate has given the
-request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `client.error`,
-`client.limited`, `link.accepted`, `library.seeded`, `library.activity-failed`, a revoked link's
-`link.refused`, and every `section.*` line, which also has the section's `manualId` and
-`sectionId`.
+request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `model.call`,
+`model.refused`, `client.error`, `client.limited`, `link.accepted`, `library.seeded`,
+`library.activity-failed`, a revoked link's `link.refused`, and every `section.*` line, which also
+has the section's `manualId` and `sectionId`.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
@@ -69,8 +69,8 @@ request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `
 | `library.seeded` | INFO | A link's first use seeded its library's starters (`libraryId`, `manualIds`, comma-separated) |
 | `library.activity-failed` | WARN | A library's activity couldn't be written, and the request went on (`libraryId`, `activity`: the counter, `opens` or `lastUsedAt`), with the error |
 | `request.failed` | ERROR | A handler threw, or the gate couldn't read a link or the passcode's digest (the 500 in `server/api/README.md` › Routes): the `request` line's ids, with `libraryId` once the gate has given one |
-| `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
-| `model.refused` | WARN | The gateway refused a call: `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap` or `busy`) |
+| `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `libraryId`, `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
+| `model.refused` | WARN | The gateway refused a call: `libraryId`, `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap`, `library-cap` or `busy`) |
 | `ledger.line-skipped` | WARN | A ledger line that isn't JSON (`file`, `line`) |
 | `section.started`, `section.joined` | INFO | A run starts; a reader joins one (`listeners`, `backlogCharacters`) |
 | `section.finished`, `section.aborted` | INFO | A run ends with `written` (`placeholder`; `elsewhere` when another environment wrote the body), or its last reader left; `characters` and `durationMs` |

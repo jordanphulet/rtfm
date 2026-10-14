@@ -4,12 +4,14 @@ import { describe, expect, it, onTestFinished } from "vitest";
 import { silentLogger } from "../logging/logger.ts";
 import { TRANSACTION_ATTEMPTS, type DynamoDbTable } from "../storage/dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS } from "../storage/dynamodb-testing.ts";
-import type { ReserveEntry, SettleEntry } from "../storage/types.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
+import type { SettleEntry } from "../storage/types.ts";
 import { collect, TEST_MODEL, TEST_PRICES, testGatewayConfig, waitUntil } from "../testing.ts";
 import { createDynamoDbSpendingLedger, setKillSwitch } from "./dynamodb-spending-ledger.ts";
 import { testUsageTable } from "./dynamodb-testing.ts";
 import { createGateway } from "./gateway.ts";
 import { callsFrom } from "./ledger-calls.ts";
+import type { LibraryReservation } from "./spending-ledger.ts";
 import { describeSpendingLedger } from "./spending-ledger-suite.ts";
 import { SpendingRefused, type ModelClient, type ModelRequest, type Prompt } from "./types.ts";
 
@@ -23,13 +25,13 @@ describeSpendingLedger("the table rtfm-usage's spending ledger", async () => {
 });
 
 const RESERVED_AT = "2026-10-11T08:00:00.000Z";
-const CAPS = { dailyUsd: 1, monthlyUsd: 2 };
+const CAPS = { dailyUsd: 1, monthlyUsd: 2, libraryDailyUsd: 0.5 };
 
-function reserve(callId: string, worstCaseUsd: number, reservedAt = RESERVED_AT): ReserveEntry {
-  return { kind: "reserve", callId, reservedAt, job: "write-section", model: TEST_MODEL, worstCaseUsd };
+function reserve(callId: string, worstCaseUsd: number, libraryId = ADMIN_LIBRARY_ID): LibraryReservation {
+  return { kind: "reserve", callId, reservedAt: RESERVED_AT, libraryId, job: "write-section", model: TEST_MODEL, worstCaseUsd };
 }
 
-function settle({ callId, reservedAt, job, model }: ReserveEntry, usd: number): SettleEntry {
+function settle({ callId, reservedAt, job, model }: LibraryReservation, usd: number): SettleEntry {
   return {
     kind: "settle",
     callId,
@@ -79,9 +81,10 @@ describe("two servers with Bedrock", () => {
       ),
     );
     const controller = new AbortController();
-    const calls = servers.flatMap((gateway) =>
-      Array.from({ length: 4 }, () => collect(gateway.stream("librarian", prompt, controller.signal))),
-    );
+    const calls = servers.flatMap((running) => {
+      const gateway = running.forLibrary(ADMIN_LIBRARY_ID);
+      return Array.from({ length: 4 }, () => collect(gateway.stream("librarian", prompt, controller.signal)));
+    });
     const refusals = calls.map((call) => call.catch((error: unknown) => error));
     await waitUntil(() => requests.length === callsTheCapAllows, 5000);
 
@@ -110,6 +113,18 @@ describe("importing calls into rtfm-usage", () => {
 
     await expect(ledger.reserve(reserve("over", 0.375), CAPS)).rejects.toMatchObject({ reason: "daily-cap" });
     await ledger.reserve(reserve("fits", 0.25), CAPS);
+  });
+
+  it("adds a recipient library's call to its day's total too, and a reserve entry without libraryId to the admin's", async () => {
+    const ledger = createDynamoDbSpendingLedger(await testUsageTable());
+    const { libraryId: _, ...withoutLibrary } = reserve("without-library", 0.25);
+    const [recipientCall, callWithoutLibrary] = callsFrom([reserve("acme", 0.375, "acme"), withoutLibrary]);
+
+    await ledger.importCall(recipientCall!);
+    await ledger.importCall(callWithoutLibrary!);
+    expect(await ledger.entriesForMonth("2026-10")).toContainEqual(reserve("without-library", 0.25));
+    await expect(ledger.reserve(reserve("over", 0.25, "acme"), CAPS)).rejects.toMatchObject({ reason: "library-cap" });
+    await ledger.reserve(reserve("fits", 0.125, "acme"), CAPS);
   });
 });
 
@@ -180,7 +195,7 @@ describe("the table rtfm-usage's transactions", () => {
   it("settles in one transaction: the settlement once, and what the call cost less its worst case on each total", async () => {
     const { requests, ledger } = await standInDynamoDb([]);
     const call = reserve("call", 0.75);
-    await ledger.settle(settle(call, 0.25), call.worstCaseUsd);
+    await ledger.settle(settle(call, 0.25), call);
 
     const [settlement, day, month] = requests[0]!.body.TransactItems as Record<string, Record<string, unknown>>[];
     expect(settlement!.Update).toMatchObject({
@@ -215,7 +230,7 @@ describe("the table rtfm-usage's transactions", () => {
     const { requests, ledger } = await standInDynamoDb([conflict, conflict]);
     const call = reserve("call", 0.25);
     await ledger.reserve(call, CAPS);
-    await ledger.settle(settle(call, 0.125), call.worstCaseUsd);
+    await ledger.settle(settle(call, 0.125), call);
     expect(requests.map(({ target }) => target)).toEqual(Array(4).fill("TransactWriteItems"));
   });
 
@@ -225,14 +240,37 @@ describe("the table rtfm-usage's transactions", () => {
     expect(requests).toHaveLength(TRANSACTION_ATTEMPTS);
   });
 
-  it("names the refusal by the condition that failed, the kill switch first", async () => {
+  it("names the refusal by the condition that failed, the kill switch first and a library's cap last", async () => {
     const { ledger } = await standInDynamoDb([
-      cancelled("ConditionalCheckFailed", "ConditionalCheckFailed", "None", "None"),
-      cancelled("None", "ConditionalCheckFailed", "ConditionalCheckFailed", "None"),
-      cancelled("None", "None", "ConditionalCheckFailed", "None"),
+      cancelled("ConditionalCheckFailed", "ConditionalCheckFailed", "None", "ConditionalCheckFailed", "None"),
+      cancelled("None", "ConditionalCheckFailed", "ConditionalCheckFailed", "ConditionalCheckFailed", "None"),
+      cancelled("None", "None", "ConditionalCheckFailed", "ConditionalCheckFailed", "None"),
+      cancelled("None", "None", "None", "ConditionalCheckFailed", "None"),
     ]);
-    for (const reason of ["kill-switch", "daily-cap", "monthly-cap"]) {
-      await expect(ledger.reserve(reserve(reason, 0.25), CAPS)).rejects.toMatchObject({ reason });
+    for (const reason of ["kill-switch", "daily-cap", "monthly-cap", "library-cap"]) {
+      await expect(ledger.reserve(reserve(reason, 0.25, "acme"), CAPS)).rejects.toMatchObject({ reason });
     }
+  });
+
+  it("reserves a recipient library's call within its day's cap too, in the same transaction, and settles it there", async () => {
+    const { requests, ledger } = await standInDynamoDb([]);
+    const call = reserve("call", 0.25, "acme");
+    await ledger.reserve(call, CAPS);
+    await ledger.settle(settle(call, 0.125), call);
+
+    const [reserving, settling] = requests.map(({ body }) => body.TransactItems as Record<string, Record<string, unknown>>[]);
+    expect(reserving!.map((part) => Object.keys(part)[0])).toEqual(["ConditionCheck", "Update", "Update", "Update", "Put"]);
+    expect(reserving![3]!.Update).toMatchObject({
+      Key: { pk: { S: "TOTAL" }, sk: { S: "LIBRARY#acme#2026-10-11" } },
+      UpdateExpression: "ADD committedUsd :usd",
+      ConditionExpression: "attribute_not_exists(committedUsd) OR committedUsd <= :limit",
+      ExpressionAttributeValues: { ":usd": { N: "0.25" }, ":limit": { N: "0.25" } },
+    });
+    expect(reserving![4]!.Put).toMatchObject({ Item: { reserve: { M: { libraryId: { S: "acme" } } } } });
+    expect(settling).toHaveLength(4);
+    expect(settling![3]!.Update).toMatchObject({
+      Key: { pk: { S: "TOTAL" }, sk: { S: "LIBRARY#acme#2026-10-11" } },
+      ExpressionAttributeValues: { ":usd": { N: "-0.125" } },
+    });
   });
 });

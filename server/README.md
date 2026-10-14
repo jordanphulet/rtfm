@@ -72,10 +72,11 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 - **Claude on Bedrock**, since `RtfmApp` sets `RTFM_MODELS=bedrock` in the revision's
   environment (Choosing the models, below). Every call is reserved first in the table
   `RTFM_USAGE_TABLE` names, `rtfm-usage`, which `RtfmApp` also sets: the same caps ($2 a day, $20
-  a month) and kill switch as every laptop's (`server/gateway/README.md` › The table
-  `rtfm-usage`). Its role may call Claude's models and profiles and read and write the items of
-  `rtfm-usage`, as `rtfm-local` may (`infra/README.md` › The stacks). Unset, `RTFM_MODELS` runs
-  the fake models, as its tests do, with their spending in the throwaway data folder (below).
+  a month, $0.50 a day for each recipient library) and kill switch as every laptop's
+  (`server/gateway/README.md` › The table `rtfm-usage`). Its role may call Claude's models and
+  profiles and read and write the items of `rtfm-usage`, as `rtfm-local` may (`infra/README.md` ›
+  The stacks). Unset, `RTFM_MODELS` runs the fake models, as its tests do, with their spending in
+  the throwaway data folder (below).
 - **The manuals in the table `rtfm-app`** (`server/storage/README.md` › The table `rtfm-app`),
   which every environment shares and each seeds when it starts, once across all of them. The
   table's name is `RTFM_APP_TABLE`, which `RtfmApp` sets in the revision's environment.
@@ -182,10 +183,11 @@ section writer and the librarian's model, which also plans new manuals (`createM
 - Either way, `startServer` builds one gateway on a spending ledger, then the admin's library
   (`server/api/README.md` › The library of a request): the manual store `config.manualStorage`
   names (files in the data folder, unless the Web Function names its table), bound to that library,
-  and a writer on the gateway, all before it seeds or listens. Each other library gets its own store
-  and writer, on the same gateway, the first time a request is in it. The librarian and its planner
-  use the same gateway, so one set of caps, the kill switch and the ledger cover every job in every
-  library.
+  the gateway bound to it (`forLibrary`, `server/gateway/README.md`), and a writer on that binding,
+  all before it seeds or listens. Each other library gets its own store, binding and writer the
+  first time a request is in it. The librarian and its planner call the library's binding too, so
+  one set of caps, the kill switch and the ledger cover every job in every library, and every call
+  is reserved in its library's name, a recipient library's within its own daily cap.
 - **`RTFM_MODELS` also chooses the spending ledger** (`server/gateway/README.md` › The spending
   ledger): with `"fake"`, the data folder's ledger, totals and `STOP` file; with `"bedrock"`,
   always the table `rtfm-usage` (`config.usageTable`), on this machine too. There is no way to
@@ -198,10 +200,11 @@ section writer and the librarian's model, which also plans new manuals (`createM
   refused the keys (The Web Function, above).
 - With `"fake"`, every job's model is `FAKE_MODEL` (`server/gateway/README.md` › The fake model),
   with the job's own `maxTokens` and idle timeout, and the gateway calls the fake model
-  (`agent/fake-model.ts`); the fake writer (`writer/fake.ts`) sends the section's sample
-  text through it, one writer for every library. With `"bedrock"`, the jobs keep their Bedrock
+  (`agent/fake-model.ts`); each library's fake writer (`writer/fake.ts`) sends the section's
+  sample text through the library's binding. With `"bedrock"`, the jobs keep their Bedrock
   models, the gateway calls the Bedrock client, and each library's writer is a Bedrock writer that
-  reads its example sections through that library's store (`createModels`' `writerFor(store)`).
+  reads its example sections through that library's store (`createModels`'
+  `forLibrary(libraryId, store)`, which gives the library's binding and writer).
 - `createGateway` checks every job's model against the price table (`ModelNotPriced`), and only
   then calls the factories it is given, which, with Bedrock, read the credentials
   (`CredentialsMissing`, on this machine) and build the Bedrock client and the client for
@@ -209,8 +212,8 @@ section writer and the librarian's model, which also plans new manuals (`createM
   without reading any secret. The table isn't reached until the first call, so a server whose key
   can't reach it starts, and each call then fails.
 - `createModels` also returns `idle`, the gateway's `idle()`.
-- Tests replace either model with `startServer(config, { writer, librarian })`, the writer then
-  writing in every library. A test that passes its own gateway passes its `idle` too, and `close()`
+- Tests replace either model with `startServer(config, { writer, librarian })`, each then
+  serving every library. A test that passes its own gateway passes its `idle` too, and `close()`
   waits for it and for the configured gateway, if one was built. A test opens a recipient's
   library as a page does, by its link (`createTestLink` in `testing.ts`, then `POST /api/link`).
 
@@ -398,11 +401,12 @@ the machine.
   `web-function.ts`, giving back the started server.
 - `testing.ts`: helpers shared by the tests: temp folders, the fake model's `FAST_PACE` and a
   fast fake writer that calls it directly, the price table with the test model (`TEST_PRICES`)
-  and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`
-  (`testGateway`, with a config and a ledger of the test's own if it gives them), a `Library` on
-  a given store for a test that hands a route its request (`testLibrary`), a link to a recipient's
-  library (`createTestLink`) and the cookies a response sets (`cookiesSet`), `inPieces`,
-  `collect`, and `readEvents` for server-sent events.
+  and its gateway config (`testGatewayConfig`, with any caps given in place of the committed
+  ones), the real gateway over any `ModelClient`, bound to the admin's library (`testGateway`,
+  with a config and a ledger of the test's own if it gives them), a `Library` on a given store for
+  a test that hands a route its request (`testLibrary`), a link to a recipient's library
+  (`createTestLink`) and the cookies a response sets (`cookiesSet`), `inPieces`, `collect`, and
+  `readEvents` for server-sent events.
 - `usage.ts`: `npm run usage`, and its `--import` of the data folder's Bedrock calls into
   `rtfm-usage`.
 - `logs.ts`: `npm run logs` (`server/logging/README.md`).

@@ -2,14 +2,18 @@ import { CreateTableCommand } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, GetCommand, PutCommand, paginateQuery } from "@aws-sdk/lib-dynamodb";
 import { monthOf } from "../storage/file-ledger.ts";
 import { documentClient, transactWrite, type DynamoDbTable } from "../storage/dynamodb-manual-store.ts";
+import { ADMIN_LIBRARY_ID } from "../storage/library.ts";
 import type { LedgerEntry, ReserveEntry, SettleEntry } from "../storage/types.ts";
 import { chargedUsd, dayOf, type LedgerCall } from "./ledger-calls.ts";
-import type { SpendingLedger } from "./spending-ledger.ts";
+import type { LibraryReservation, SpendingLedger } from "./spending-ledger.ts";
 import { SpendingRefused } from "./types.ts";
 
 /** The kill switch is on while this item exists. Its own partition, which `rtfm-ops` is limited to. */
 export const KILL_SWITCH_KEY = { pk: "KILL_SWITCH", sk: "KILL_SWITCH" };
 const totalKey = (period: string) => ({ pk: "TOTAL", sk: period });
+/** The period of a recipient library's day's total, beside the central totals; the admin's library has none. */
+const libraryDay = (libraryId: string, reservedAt: string) =>
+  libraryId === ADMIN_LIBRARY_ID ? undefined : `LIBRARY#${libraryId}#${dayOf(reservedAt)}`;
 const callKey = (reservedAt: string, callId: string) => ({
   pk: `LEDGER#${monthOf(reservedAt)}`,
   sk: `${reservedAt}#${callId}`,
@@ -22,8 +26,8 @@ interface CallItem {
 
 export interface DynamoDbSpendingLedger extends SpendingLedger {
   /**
-   * Copies a call from another ledger and adds what it was charged to its day and month, whatever
-   * the caps; a call already in the table is left as it is.
+   * Copies a call from another ledger and adds what it was charged to its day's and month's totals,
+   * and a recipient library's day's, whatever the caps; a call already in the table is left as it is.
    */
   importCall(call: LedgerCall): Promise<"imported" | "already-there">;
 }
@@ -74,26 +78,32 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
 
   return {
     async reserve(entry, caps) {
-      const { reservedAt, worstCaseUsd } = entry;
+      const { reservedAt, libraryId, worstCaseUsd } = entry;
+      const library = libraryDay(libraryId, reservedAt);
       const cancelled = await transactWrite(client, {
         TransactItems: [
           { ConditionCheck: { TableName, Key: KILL_SWITCH_KEY, ConditionExpression: "attribute_not_exists(pk)" } },
           addWithinCap(dayOf(reservedAt), worstCaseUsd, caps.dailyUsd),
           addWithinCap(monthOf(reservedAt), worstCaseUsd, caps.monthlyUsd),
+          ...(library ? [addWithinCap(library, worstCaseUsd, caps.libraryDailyUsd)] : []),
           putCall({ reserve: entry }),
         ],
       });
       if (!cancelled) return;
       const failed = (cancelled.CancellationReasons ?? []).map(({ Code }) => Code === "ConditionalCheckFailed");
-      const [killSwitch, day, month] = failed;
+      const [killSwitch, day, month, libraryCap] = failed;
       if (killSwitch) throw new SpendingRefused("kill-switch");
       if (day) throw new SpendingRefused("daily-cap");
       if (month) throw new SpendingRefused("monthly-cap");
+      if (library && libraryCap) throw new SpendingRefused("library-cap");
       throw cancelled;
     },
 
-    async settle(entry, worstCaseUsd) {
-      const { reservedAt, callId, usd } = entry;
+    async settle(entry, reserved) {
+      const { reservedAt, callId, libraryId } = reserved;
+      const library = libraryDay(libraryId, reservedAt);
+      const { usd } = entry;
+      const unusedUsd = usd - reserved.worstCaseUsd;
       const cancelled = await transactWrite(client, {
         TransactItems: [
           {
@@ -105,8 +115,9 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
               ExpressionAttributeValues: { ":settle": entry },
             },
           },
-          addToTotal(dayOf(reservedAt), usd - worstCaseUsd),
-          addToTotal(monthOf(reservedAt), usd - worstCaseUsd),
+          addToTotal(dayOf(reservedAt), unusedUsd),
+          addToTotal(monthOf(reservedAt), unusedUsd),
+          ...(library ? [addToTotal(library, unusedUsd)] : []),
         ],
       });
       if (cancelled) throw cancelled;
@@ -138,13 +149,15 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
     },
 
     async importCall(call) {
-      const { callId, reservedAt, job, model, worstCaseUsd, settle } = call;
-      const reserve: ReserveEntry = { kind: "reserve", callId, reservedAt, job, model, worstCaseUsd };
+      const { callId, reservedAt, libraryId, job, model, worstCaseUsd, settle } = call;
+      const reserve: LibraryReservation = { kind: "reserve", callId, reservedAt, libraryId, job, model, worstCaseUsd };
+      const library = libraryDay(libraryId, reservedAt);
       const cancelled = await transactWrite(client, {
         TransactItems: [
           putCall({ reserve, settle }),
           addToTotal(dayOf(reservedAt), chargedUsd(call)),
           addToTotal(monthOf(reservedAt), chargedUsd(call)),
+          ...(library ? [addToTotal(library, chargedUsd(call))] : []),
         ],
       });
       if (!cancelled) return "imported";

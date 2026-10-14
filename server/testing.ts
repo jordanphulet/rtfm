@@ -37,10 +37,12 @@ export const TEST_PRICES: PriceTable = {
 /** The fake model at a pace quick enough for tests, with a section still taking a few milliseconds a chunk. */
 export const FAST_PACE: FakeModelPace = { ...INSTANT_PACE, chunkIntervalMs: 2 };
 
-/** A gateway config for the test model, with the committed caps and room for 3 calls. */
-export function testGatewayConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
+export type TestGatewayOverrides = Partial<Omit<GatewayConfig, "caps">> & { caps?: Partial<GatewayConfig["caps"]> };
+
+/** A gateway config for the test model, with the committed caps, but for any given, and room for 3 calls. */
+export function testGatewayConfig({ caps, ...overrides }: TestGatewayOverrides = {}): GatewayConfig {
   return {
-    caps: { dailyUsd: 2, monthlyUsd: 20 },
+    caps: { dailyUsd: 2, monthlyUsd: 20, libraryDailyUsd: 0.5, ...caps },
     maxConcurrentCalls: 3,
     idleTimeoutMs: 1000,
     jobs: {
@@ -59,20 +61,22 @@ interface TestGatewayOptions {
 
 /**
  * The real gateway, with its caps, kill switch and the data folder's spending ledger (on a file
- * ledger in the data folder, unless one is given), calling a fake model client.
+ * ledger in the data folder, unless one is given), calling a fake model client: `gateway` is the
+ * admin's library's, with the running gateway's `idle`.
  */
 export async function testGateway(
   client: ModelClient,
   dataDir: string,
   { config = testGatewayConfig(), ledger = createFileLedger(dataDir, silentLogger) }: TestGatewayOptions = {},
 ) {
-  const gateway = await createGateway({
+  const running = await createGateway({
     logger: silentLogger,
     createClient: () => client,
     openSpendingLedger: () => openFileSpendingLedger({ ledger, dataDir }),
     config,
     prices: TEST_PRICES,
   });
+  const gateway = { ...running.forLibrary(ADMIN_LIBRARY_ID), idle: running.idle };
   const ledgerEntries = () => ledger.entriesForMonth(monthOf(new Date().toISOString()));
   return { gateway, ledgerEntries };
 }

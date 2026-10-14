@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../logging/logger.ts";
+import { ADMIN_LIBRARY_ID, checkedRecipientLibraryId } from "../storage/library.ts";
 import type { SettleEntry } from "../storage/types.ts";
 import { costUsd, worstCaseCostUsd, type ModelPrice, type PriceTable, type TokenCounts } from "./prices.ts";
-import type { SpendingLedger } from "./spending-ledger.ts";
+import type { LibraryReservation, SpendingLedger } from "./spending-ledger.ts";
 import {
   GatewayBusy,
   ModelNotPriced,
@@ -17,11 +18,17 @@ import {
   type PromptMessage,
 } from "./types.ts";
 
+/** A library's way to a model: what the section writer, the librarian and the planner call. */
 export interface Gateway {
   stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncIterable<ModelEvent>;
 }
 
-export interface RunningGateway extends Gateway {
+export interface RunningGateway {
+  /**
+   * The gateway of a library, whose every call is reserved in its name: a recipient library's
+   * within its daily cap, besides the caps every library shares.
+   */
+  forLibrary(libraryId: string): Gateway;
   /** Resolves once no call is running and every call's settle has been written to the spending ledger. */
   idle(): Promise<void>;
 }
@@ -40,14 +47,10 @@ export interface GatewayDeps {
 }
 
 interface Reservation {
-  callId: string;
-  reservedAt: string;
-  job: Job;
-  model: string;
+  entry: LibraryReservation;
   maxTokens: number;
   price: ModelPrice;
   inputBound: number;
-  worstCaseUsd: number;
 }
 
 type Outcome = SettleEntry["outcome"];
@@ -80,7 +83,7 @@ export async function createGateway({
    * then reserves the call's worst case in the spending ledger, which checks the kill switch and
    * the caps.
    */
-  async function reserve(job: Job, prompt: ModelPrompt): Promise<Reservation> {
+  async function reserve(libraryId: string, job: Job, prompt: ModelPrompt): Promise<Reservation> {
     if (runningCalls >= config.maxConcurrentCalls) throw new GatewayBusy(config.maxConcurrentCalls);
     runningCalls++;
 
@@ -88,15 +91,22 @@ export async function createGateway({
     const price = prices.models[model]!;
     const inputBound = inputTokenBound(prompt, price.toolUseSystemPromptTokens);
     const worstCaseUsd = worstCaseCostUsd(price, inputBound, maxTokens);
-    const callId = randomUUID();
-    const reservedAt = now().toISOString();
+    const entry: LibraryReservation = {
+      kind: "reserve",
+      callId: randomUUID(),
+      reservedAt: now().toISOString(),
+      libraryId,
+      job,
+      model,
+      worstCaseUsd,
+    };
     try {
-      await spending.reserve({ kind: "reserve", callId, reservedAt, job, model, worstCaseUsd }, config.caps);
+      await spending.reserve(entry, config.caps);
     } catch (error) {
       endCall();
       throw error;
     }
-    return { callId, reservedAt, job, model, maxTokens, price, inputBound, worstCaseUsd };
+    return { entry, maxTokens, price, inputBound };
   }
 
   function endCall() {
@@ -109,13 +119,13 @@ export async function createGateway({
     return new Promise((resolve) => idleWaiters.push(resolve));
   }
 
-  async function reserveOrLogRefusal(job: Job, prompt: ModelPrompt): Promise<Reservation> {
+  async function reserveOrLogRefusal(libraryId: string, job: Job, prompt: ModelPrompt): Promise<Reservation> {
     try {
-      return await reserve(job, prompt);
+      return await reserve(libraryId, job, prompt);
     } catch (error) {
       if (error instanceof SpendingRefused || error instanceof GatewayBusy) {
         const reason = error instanceof SpendingRefused ? error.reason : "busy";
-        logger.warn("model.refused", error.message, { job, model: config.jobs[job].model, reason });
+        logger.warn("model.refused", error.message, { libraryId, job, model: config.jobs[job].model, reason });
       }
       throw error;
     }
@@ -131,26 +141,32 @@ export async function createGateway({
     };
     const usd = costUsd(reservation.price, tokens);
     const estimated = !outputKnown || reported.inputTokens === undefined;
-    const { callId, reservedAt, job, model } = reservation;
+    const { callId, reservedAt, libraryId, job, model } = reservation.entry;
     const at = now().toISOString();
     const durationMs = Date.parse(at) - Date.parse(reservedAt);
     const log = outcome === "failed" ? logger.warn : logger.info;
-    const fields = { callId, job, model, outcome, ...tokens, usd, estimated, durationMs };
+    const fields = { callId, libraryId, job, model, outcome, ...tokens, usd, estimated, durationMs };
     log("model.call", `${job} call ${outcome}`, fields, failure);
     try {
       await spending.settle(
         { kind: "settle", callId, reservedAt, at, job, model, ...tokens, usd, outcome, estimated },
-        reservation.worstCaseUsd,
+        reservation.entry,
       );
     } finally {
       endCall();
     }
   }
 
-  async function* stream(job: Job, prompt: ModelPrompt, signal: AbortSignal): AsyncGenerator<ModelEvent> {
+  async function* stream(
+    libraryId: string,
+    job: Job,
+    prompt: ModelPrompt,
+    signal: AbortSignal,
+  ): AsyncGenerator<ModelEvent> {
     signal.throwIfAborted();
-    const reservation = await reserveOrLogRefusal(job, prompt);
-    const { model, maxTokens } = reservation;
+    const reservation = await reserveOrLogRefusal(libraryId, job, prompt);
+    const { maxTokens } = reservation;
+    const { model } = reservation.entry;
 
     const reported: Partial<TokenCounts> = {};
     let stopped = false;
@@ -188,7 +204,12 @@ export async function createGateway({
     }
   }
 
-  return { stream, idle };
+  function forLibrary(libraryId: string): Gateway {
+    if (libraryId !== ADMIN_LIBRARY_ID) checkedRecipientLibraryId(libraryId);
+    return { stream: (job, prompt, signal) => stream(libraryId, job, prompt, signal) };
+  }
+
+  return { forLibrary, idle };
 }
 
 function inputTokenBound({ system, tools = [], messages }: ModelPrompt, toolUseSystemPromptTokens: number): number {

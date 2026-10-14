@@ -13,7 +13,7 @@ describe("npm run ops -- usage", () => {
   it("reports rtfm-usage's spend as npm run usage does, read as rtfm-read", async () => {
     const usageTable = await testUsageTable();
     const ledger = createDynamoDbSpendingLedger(usageTable);
-    const settled = { job: "write-section", model: HAIKU, worstCaseUsd: 0.02 };
+    const settled = { libraryId: "admin", job: "write-section", model: HAIKU, worstCaseUsd: 0.02 };
     await ledger.importCall({ callId: "a", reservedAt: "2026-10-13T09:00:00.000Z", ...settled });
     await ledger.importCall({ callId: "b", reservedAt: "2026-10-02T09:00:00.000Z", ...settled });
     await setKillSwitch(usageTable, true);

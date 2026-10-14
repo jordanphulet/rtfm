@@ -77,6 +77,8 @@ export interface ReserveEntry {
   kind: "reserve";
   callId: string;
   reservedAt: string;
+  /** The library the call was made for. A reserve entry without `libraryId` is the admin's. */
+  libraryId?: string;
   job: string;
   model: string;
   worstCaseUsd: number;

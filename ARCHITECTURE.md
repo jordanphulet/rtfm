@@ -194,7 +194,7 @@ other page:
 | `agent/planner/` | `agent/tool.ts`, `storage/`, the gateway's types, `escape-tags.ts` |
 | `agent/` | the gateway's types, the logger's types; `fake-model.ts` also `agent/planner/fake-planner.ts` and `writer/fake.ts` (`chunkEnds`) |
 | `writer/` | `storage/`, the gateway's types, `api/types.ts`, `escape-tags.ts`, the logger's types |
-| `gateway/` | `storage/` (the ledger and its entries' types, `files.ts`, and the DynamoDB client builder, the AWS credentials' types and the execution role's credential provider in `dynamodb-manual-store.ts`), the logger's types |
+| `gateway/` | `storage/` (the ledger and its entries' types, `files.ts`, the library ids in `library.ts`, and the DynamoDB client builder, the AWS credentials' types and the execution role's credential provider in `dynamodb-manual-store.ts`), the logger's types |
 | `storage/` | `api/types.ts`, the logger's types |
 | `logging/` | `storage/files.ts` |
 
