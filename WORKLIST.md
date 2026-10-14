@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.14 — Keep wide inline formulas inside the column
-- **Status:** doing (agent a7f26bb256a6fb764; done, in review)
+- **Status:** doing (agent a7f26bb256a6fb764; approved, small fixes)
 - **Depends on:** —
 - **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`
 - **Do:** UP.12's third review found that nothing limits an inline formula's width, and the
