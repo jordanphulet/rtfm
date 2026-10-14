@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.8 — A finished librarian reply shown as failed on the phone
-- **Status:** doing (agent a009e78e8b6478876; done, in review by a4a12081dfb0a5197)
+- **Status:** doing (agent a009e78e8b6478876; done, being committed)
 - **Depends on:** —
 - **Files:** `src/librarian/**`, `src/home/**`
 - **Do:** on the deployed app, on a phone, the user asked the librarian "Open the haunted house
