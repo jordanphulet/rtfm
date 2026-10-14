@@ -65,23 +65,8 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.9 — Open a link in the browser
-- **Status:** doing (agent a64276ed31ca4654f; done, being committed)
-- **Depends on:** —
-- **Files:** `src/App.tsx`, `src/link/**`, `src/passcode/**`, `src/reportErrors.ts` and its test,
-  `DESIGN.md`, `README.md`, `scripts/shot.ts`, `scripts/screenshots.ts`, `ARCHITECTURE.md`
-- **Do:** the page route `/l` reads the secret from the fragment as it loads, with no button, posts
-  it to `/api/link`, and on `204` replaces the address with `/`; on `401` it shows the passcode
-  screen with "This link is closed." above the form, as does any API request answered
-  `401 { error: "Link closed" }`. The page route `/admin` calls `DELETE /api/link` and opens `/`.
-  Design the link page and the closed line in `DESIGN.md`, add their shots to `npm run shot`, and
-  name both routes in `README.md` › Where things live.
-- **Done when:** component tests cover opening, a closed link, a closed library mid-visit and
-  `/admin` from a library, the address keeps no secret after opening, `npm run shot` takes the new
-  states, and `npm run build` and `npm test` pass.
-
 ### LB.10 — Make, list and revoke libraries with the ops tools
-- **Status:** doing (agent aa5395c0f371031a1; approved, waits to merge after LB.9; the user approved its `CLAUDE.md` line)
+- **Status:** doing (agent aa5395c0f371031a1; done, being committed; the user approved its `CLAUDE.md` line)
 - **Depends on:** —
 - **Merges after:** LB.7, LB.8, LB.9
 - **Files:** `scripts/ops/**`, `server/logging/log-reader.ts` and its test, `server/logs.ts`,
