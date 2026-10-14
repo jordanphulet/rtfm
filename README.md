@@ -267,14 +267,17 @@ To switch to Claude:
    The server reads these three from that file and from nowhere else: never from the
    environment, a profile or `~/.aws`. If any is missing, the server refuses to start and names
    the missing ones.
-3. Start it with Bedrock:
+3. The table `rtfm-usage` must exist (`RtfmApp`, `infra/README.md`) and `rtfm-local` must be able
+   to use it (`RtfmAccess`): every Bedrock call is reserved there first (The data folder and
+   spending › Bedrock's spending, below), and fails without it.
+4. Start it with Bedrock:
 
    ```sh
    RTFM_MODELS=bedrock npm run dev
    ```
 
-4. Open an unwritten section or ask the librarian something, then run `npm run usage` to see what
-   it cost.
+5. Open an unwritten section or ask the librarian something, then run
+   `RTFM_MODELS=bedrock npm run usage` to see what it cost.
 
 Any value of `RTFM_MODELS` other than `fake` or `bedrock` stops the server from starting.
 
@@ -310,8 +313,8 @@ Everything but the credentials and the passcode is committed:
   may run at once, the 30s stall timeout (60s for planning a manual), each job's model and
   `max_tokens`, the most model turns one librarian reply may take (8), the length in words the
   prompt asks Claude for (`sectionWordsRequested`), and the length in characters a section's
-  progress counts to while Claude writes (`sectionExpectedCharacters`). The default API port is
-  `API_PORT` in `server/ports.ts`.
+  progress counts to while Claude writes (`sectionExpectedCharacters`), and the table Bedrock's
+  spending is kept in (`rtfm-usage`). The default API port is `API_PORT` in `server/ports.ts`.
 - `server/gateway/prices.ts`: the dated price table, with the fake model at $0. The server refuses
   to start with a model that isn't in it.
 
@@ -339,24 +342,25 @@ as it is.
   server, delete its file, and start the server again.
 - `.data/seeded.json`: the ids of the seed manuals already seeded. To reset every manual to the
   seed, stop the server, delete `.data/manuals/` and `.data/seeded.json`, and start it again.
-- `.data/ledger/<yyyy-mm>.jsonl`: the usage ledger, one line per model call reserved and settled.
-  The fake model's calls are in it too, under `fake-model` at $0. The caps are computed from it,
-  so **never delete or edit it**.
+- `.data/ledger/<yyyy-mm>.jsonl`: the fake models' usage ledger, one line per model call reserved
+  and settled, under `fake-model` at $0. Bedrock calls made before the table `rtfm-usage` existed
+  are in it too. The fake models' caps are computed from it, so **never delete or edit it**.
 - `.data/logs/<yyyy-mm-dd>.jsonl`: the server's log, one file per UTC day (see Logs, below).
 - `.data/server.lock`: the PID of the server using the folder (below).
-- `.data/STOP`: **the kill switch.** While this file exists, the gateway refuses every new model
-  call at once, the fake model's included, with no restart, and the reader and the librarian say
-  their budget is reached. Delete it to resume.
-  A call already running finishes.
+- `.data/STOP`: **the fake models' kill switch.** While this file exists, the gateway refuses
+  every new fake model call at once, with no restart, and the reader and the librarian say their
+  budget is reached. Delete it to resume. A call already running finishes. **It doesn't stop
+  Bedrock**, whose kill switch is in `rtfm-usage` (below).
 
 ```sh
-touch .data/STOP   # stop all model calls
+touch .data/STOP   # stop the fake models' calls
 rm .data/STOP      # allow them again
 ```
 
-**One server per data folder.** The caps are checked in the server's memory, so a second server
-on the same folder refuses to start. It logs this as a `server.refused` line and exits with code
-1:
+**One server per data folder.** The fake models' caps are checked in the server's memory, so a
+second server on the same folder refuses to start. With Bedrock the data folder's lock no longer
+guards money, since the caps are kept in `rtfm-usage` (below), but it still keeps one server per
+data folder. A refused server logs a `server.refused` line and exits with code 1:
 
 ```text
 Another server (PID <pid>) is using the data folder <folder>. Stop it first, or use another data folder.
@@ -367,12 +371,62 @@ taken. To run a second server, give it another folder with `RTFM_DATA_DIR`. If a
 refused while no server is using the folder, delete `.data/server.lock`. How the lock works is in
 `server/storage/README.md` › The data folder's lock.
 
+### Bedrock's spending: the table `rtfm-usage`
+
+**`RTFM_MODELS` chooses the ledger.** With `fake`, it is the data folder's, above. With `bedrock`,
+it is always the DynamoDB table `rtfm-usage`, on this machine as in AWS: every call's reservation
+and settlement, the day's and the month's spend that the caps are checked against, and the kill
+switch. Every server running Bedrock, on any laptop or deployed, reserves each call in that table
+in one conditional transaction, so together they never pass the caps, and one kill switch stops
+them all. The fake model's calls never reach it. On this machine the server reaches it with
+`rtfm-local`'s keys from `.env.local` (The models, above); `RtfmApp` holds it
+(`infra/README.md`). How it works is in `server/gateway/README.md` › The spending ledger.
+
+**The kill switch** is the item `KILL_SWITCH` in `rtfm-usage`: while it exists, every server
+refuses every new Bedrock call, from its very next one, with no restart. A call already running
+finishes. You turn it on and off from CloudShell, with your own sign-in (`rtfm-local` may turn it
+on, but not off, and `rtfm-read` reads no item):
+
+```sh
+aws dynamodb put-item --region us-west-2 --table-name rtfm-usage \
+  --item '{"pk":{"S":"KILL_SWITCH"},"sk":{"S":"KILL_SWITCH"}}'     # stop all Bedrock calls
+aws dynamodb delete-item --region us-west-2 --table-name rtfm-usage \
+  --key '{"pk":{"S":"KILL_SWITCH"},"sk":{"S":"KILL_SWITCH"}}'      # allow them again
+```
+
+**Bedrock spend from before the table.** Bedrock calls made before the table existed are in the
+data folder's ledger, which the table's caps can't see. Importing this month's once (`--import`,
+below) puts them in the table, so its monthly cap counts them; earlier months' don't count toward
+any cap.
+
+### `npm run usage`
+
 `npm run usage` prints today's and this month's spend against the caps, by model and by job,
 with counts of aborted, failed and estimated calls, any unsettled reservations, and whether the
-kill switch is on. The fake model's calls are counted on a line of their own, in none of these.
-`npm run usage -- <dataDir>` reads another data folder. A call cut short (the
-reader closed the tab, the model stalled) is marked estimated; what it is charged is in
-`server/gateway/README.md` › Each call.
+kill switch is on. A call cut short (the reader closed the tab, the model stalled) is marked
+estimated; what it is charged is in `server/gateway/README.md` › Each call.
+
+- It reads the ledger `RTFM_MODELS` chooses: `npm run usage` reads the data folder's, and
+  `RTFM_MODELS=bedrock npm run usage` reads `rtfm-usage`, with `rtfm-local`'s keys.
+- The fake model's calls are counted on a line of their own, in none of the totals.
+- An unsettled reservation is a call whose server stopped before it settled (a crash, a kill). It
+  stays counted at its worst case, in the table as in the data folder, and is listed under
+  "Unsettled reservations", with when it was reserved, its call id, its job and its worst case.
+- `npm run usage -- <dataDir>` reads another data folder; with `RTFM_MODELS=bedrock` it refuses
+  one.
+
+To import this month's Bedrock calls from the data folder's ledger into `rtfm-usage`, run the dry
+run, read what it lists, then run it again with `--apply`:
+
+```sh
+RTFM_MODELS=bedrock npm run usage -- --import            # lists them, with what each cost; writes nothing
+RTFM_MODELS=bedrock npm run usage -- --import --apply    # copies each one rtfm-usage doesn't have yet
+```
+
+It reads `.data` (or the data folder given with `--import`), leaves out the fake model's calls,
+and copies each call with what it was charged, an unsettled one at its worst case, adding it to
+its day's and month's totals whatever the caps. A call already in the table is left as it is, so
+running it again changes nothing. The data folder's ledger is left as it is.
 
 ## Logs
 

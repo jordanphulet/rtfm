@@ -22,6 +22,8 @@ import {
   PROJECT_TAG,
   STAGING_BUCKET,
   TOOLKIT_STACK,
+  USAGE_TABLE,
+  USAGE_TABLE_ARN,
   logGroupArn,
   policyArn,
   roleArn,
@@ -83,6 +85,7 @@ describe("the RtfmApp stack", () => {
       WEB_FUNCTION,
       WEB_FUNCTION,
       WEB_FUNCTION,
+      USAGE_TABLE,
     ]);
     expect(canExecute("logs:CreateLogGroup", logGroupArn(APP_LOG_GROUP))).toBe(true);
     expect(canExecute("logs:CreateLogGroup", logGroupArn(APP_LOCAL_LOG_GROUP))).toBe(true);
@@ -100,10 +103,13 @@ describe("the RtfmApp stack", () => {
     template.hasResource("AWS::S3::Bucket", { DeletionPolicy: "Retain", UpdateReplacePolicy: "Retain" });
   });
 
-  it("keeps the library in rtfm-app: on demand, recoverable, protected from deletion and kept when it leaves the stack", () => {
+  it.each([
+    ["the library in rtfm-app", APP_TABLE],
+    ["the spending ledger in rtfm-usage", USAGE_TABLE],
+  ])("keeps %s: on demand, recoverable, protected from deletion and kept when it leaves the stack", (_, TableName) => {
     template.hasResource("AWS::DynamoDB::Table", {
       Properties: {
-        TableName: APP_TABLE,
+        TableName,
         KeySchema: [
           { AttributeName: "pk", KeyType: "HASH" },
           { AttributeName: "sk", KeyType: "RANGE" },
@@ -122,8 +128,10 @@ describe("the RtfmApp stack", () => {
     });
   });
 
-  it("lets CloudFormation create, change and delete the table under the boundary", () => {
-    for (const action of TABLE_HANDLER_ACTIONS) expect(canExecute(action, APP_TABLE_ARN), action).toBe(true);
+  it("lets CloudFormation create, change and delete the tables under the boundary", () => {
+    for (const table of [APP_TABLE_ARN, USAGE_TABLE_ARN]) {
+      for (const action of TABLE_HANDLER_ACTIONS) expect(canExecute(action, table), action).toBe(true);
+    }
   });
 
   it("tags every resource CloudFormation can tag, for the budget", () => {
@@ -219,15 +227,22 @@ describe("the Web Function's role", () => {
     expect(webFunctionCan("logs:DeleteLogGroup", logGroupArn(APP_LOG_GROUP))).toBe(false);
   });
 
-  it("reads and writes the library's items in rtfm-app, and nothing else in DynamoDB", () => {
+  it("reads and writes the library's items in rtfm-app, and the spending ledger's in rtfm-usage, and nothing else in DynamoDB", () => {
     for (const action of ["GetItem", "Query", "PutItem", "UpdateItem", "DeleteItem"]) {
       expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN), action).toBe(true);
     }
     for (const action of ["Scan", "BatchWriteItem", "DeleteTable", "UpdateTable", "ConditionCheckItem"]) {
       expect(webFunctionCan(`dynamodb:${action}`, APP_TABLE_ARN), action).toBe(false);
     }
-    expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN.replace(APP_TABLE, "rtfm-usage"))).toBe(false);
+    for (const action of ["GetItem", "Query", "PutItem", "UpdateItem", "ConditionCheckItem"]) {
+      expect(webFunctionCan(`dynamodb:${action}`, USAGE_TABLE_ARN), action).toBe(true);
+    }
+    for (const action of ["DeleteItem", "Scan", "BatchWriteItem", "DeleteTable", "UpdateTable"]) {
+      expect(webFunctionCan(`dynamodb:${action}`, USAGE_TABLE_ARN), action).toBe(false);
+    }
+    expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN.replace(APP_TABLE, "rtfm-other"))).toBe(false);
     expect(webFunctionCan("dynamodb:Query", `${APP_TABLE_ARN}/index/any`)).toBe(false);
+    expect(webFunctionCan("dynamodb:Query", `${USAGE_TABLE_ARN}/index/any`)).toBe(false);
   });
 
   it("can't call Bedrock: the Web Function runs only the fake models", () => {

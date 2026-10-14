@@ -36,7 +36,21 @@ describe("the RtfmAccess stack", () => {
     expect(artifact.terminationProtection).toBe(true);
   });
 
-  it("lets rtfm-local call Claude on Bedrock, and nothing else", () => {
+  it("lets rtfm-local read and write the spending ledger's items in rtfm-usage, and no other table's", () => {
+    const can = reachOf(resources, "AWS::IAM::User", LOCAL_USER);
+    for (const action of ["GetItem", "Query", "PutItem", "UpdateItem", "ConditionCheckItem"]) {
+      expect(can(`dynamodb:${action}`, table("rtfm-usage")), action).toBe(true);
+    }
+    for (const action of ["DeleteItem", "Scan", "BatchWriteItem", "DeleteTable", "UpdateTable", "UpdateContinuousBackups"]) {
+      expect(can(`dynamodb:${action}`, table("rtfm-usage")), action).toBe(false);
+    }
+    expect(can("dynamodb:Query", table("rtfm-usage/index/any"))).toBe(false);
+    expect(can("dynamodb:GetItem", table("rtfm-app"))).toBe(false);
+    expect(can("dynamodb:PutItem", table("work-orders"))).toBe(false);
+    expect(can("dynamodb:GetItem", table("rtfm-usage", "us-east-1"))).toBe(false);
+  });
+
+  it("lets rtfm-local call Claude on Bedrock, and nothing else there", () => {
     const can = reachOf(resources, "AWS::IAM::User", LOCAL_USER);
     expect(can("bedrock:InvokeModel", bedrock(`us-west-2:${ACCOUNT}:inference-profile/global.${HAIKU}`))).toBe(true);
     expect(can("bedrock:InvokeModelWithResponseStream", bedrock(`::foundation-model/${HAIKU}`))).toBe(true);

@@ -67,9 +67,10 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 
 - **It listens on `AWS_LAMBDA_HTTP_ENDPOINT`**, the `host:port` Lambda sets
   (`httpEndpointFromEnv` in `config.ts`). Without it, or with no port in it, it doesn't start.
-- **The fake models only.** With `RTFM_MODELS=bedrock` it refuses to start: Bedrock's spend needs
-  one ledger shared by every environment, which a data folder can't be. Its role has no Bedrock
-  permission either.
+- **The fake models only.** With `RTFM_MODELS=bedrock` it refuses to start, and its role has no
+  Bedrock permission either. Its role may read and write the items of `rtfm-usage`, Bedrock's
+  spending ledger, as `rtfm-local` may, but the server doesn't reach that table with the fake
+  models: their spending stays in its throwaway data folder (below).
 - **The manuals in the table `rtfm-app`** (`server/storage/README.md` › The table `rtfm-app`),
   which every environment shares and each seeds when it starts, once across all of them. The
   table's name is `RTFM_APP_TABLE`, which `RtfmApp` sets in the revision's environment.
@@ -138,18 +139,26 @@ section writer and the librarian's model, which also plans new manuals (`createM
 `RTFM_MODELS=bedrock` selects Claude for both.
 
 - Either way, `startServer` builds the manual store `config.manualStorage` names (files in the
-  data folder, unless the Web Function names its table), then one gateway on the file ledger, and
-  the writer on it, all before it seeds or listens. The librarian and its planner use the same
+  data folder, unless the Web Function names its table), then one gateway on a spending ledger,
+  and the writer on it, all before it seeds or listens. The librarian and its planner use the same
   gateway, so one set of caps, the kill switch and the ledger cover every job.
+- **`RTFM_MODELS` also chooses the spending ledger** (`server/gateway/README.md` › The spending
+  ledger): with `"fake"`, the data folder's ledger, totals and `STOP` file; with `"bedrock"`,
+  always the table `rtfm-usage` (`config.usageTable`), on this machine too, reached with
+  `rtfm-local`'s keys. There is no way to run Bedrock on the data folder's ledger. With Bedrock the
+  data folder's lock no longer guards money, since the caps are kept in the table; it still keeps
+  one server per data folder.
 - With `"fake"`, every job's model is `FAKE_MODEL` (`server/gateway/README.md` › The fake model),
   with the job's own `maxTokens` and idle timeout, and the gateway calls the fake model
   (`agent/fake-model.ts`); the fake writer (`writer/fake.ts`) sends the section's sample
   text through it. With `"bedrock"`, the jobs keep their Bedrock models, the gateway calls the
   Bedrock client, and the writer is the Bedrock writer.
 - `createGateway` checks every job's model against the price table (`ModelNotPriced`), and only
-  then calls the client factory it is given, which, with Bedrock, reads the credentials
-  (`CredentialsMissing`) and builds the Bedrock client. Either problem stops the server from
-  starting, and an unpriced model is reported without reading any secret.
+  then calls the factories it is given, which, with Bedrock, read the credentials
+  (`CredentialsMissing`) and build the Bedrock client and the client for `rtfm-usage`. Either
+  problem stops the server from starting, and an unpriced model is reported without reading any
+  secret. The table isn't reached until the first call, so a server whose key can't reach it
+  starts, and each call then fails.
 - `createModels` also returns `idle`, the gateway's `idle()`.
 - Tests replace either model with `startServer(config, { writer, librarian })`. A test that passes
   its own gateway passes its `idle` too, and `close()` waits for it and for the configured
@@ -160,7 +169,7 @@ section writer and the librarian's model, which also plans new manuals (`createM
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the IAM user `rtfm-local`'s, `infra/README.md`), `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat | `server/config.ts` | no |
+| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat, Bedrock's spending table (`usageTable`: `rtfm-usage`, in the region `.env.local` names) | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | The passcode: `RTFM_PASSCODE` | the environment, read by `server/config.ts` | yes |
@@ -303,7 +312,8 @@ the machine.
   and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`
   (`testGateway`, with a config and a ledger of the test's own if it gives them), `inPieces`,
   `collect`, and `readEvents` for server-sent events.
-- `usage.ts`: `npm run usage`.
+- `usage.ts`: `npm run usage`, and its `--import` of the data folder's Bedrock calls into
+  `rtfm-usage`.
 - `logs.ts`: `npm run logs` (`server/logging/README.md`).
 - `escape-tags.ts`: escapes `<` in text inserted in a prompt (the section writer's and the
   planner's).

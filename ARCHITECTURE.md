@@ -12,9 +12,9 @@ that it costs and records nothing (`server/agent/README.md` › Previews).
 This doc is a map: what each folder holds, which folders may import which, and the rules that cut
 across them. The detail sits next to the code, in each folder's README: `server/README.md`, each
 `server/*/README.md`, each `src/*/README.md` and `infra/README.md`. `README.md` covers running the
-app, its routes, the data folder and its kill switch, resetting the manuals, and what the models
-cost. `DESIGN.md` covers the design both pages share, and each page's own design is in its
-`src/<page>/DESIGN.md`: `src/home/DESIGN.md` and `src/reader/DESIGN.md`.
+app, its routes, the data folder, Bedrock's spending table and both kill switches, resetting the
+manuals, and what the models cost. `DESIGN.md` covers the design both pages share, and each page's
+own design is in its `src/<page>/DESIGN.md`: `src/home/DESIGN.md` and `src/reader/DESIGN.md`.
 
 ```
 browser (Vite, :5173)                           server (node:http, :8787)
@@ -23,9 +23,11 @@ browser (Vite, :5173)                           server (node:http, :8787)
   src/librarian store ─┴ /api (Vite proxy) ──▶  api/ routes ──▶ writer/runs ──▶ fake or Bedrock writer ┐
                                                      │                                                 │
                                                      ├──▶ librarian ──▶ agent loop ────────────────────┼──▶ gateway ──▶ Bedrock,
-                                                     │       └──▶ planner ─────────────────────────────┘              or the fake model
+                                                     │       └──▶ planner ─────────────────────────────┘     │        or the fake model
+                                                     │                                                       └──▶ spending ledger (Bedrock: the table
+                                                     │                                                            rtfm-usage; fake: files in .data/)
                                                      └──▶ storage/ (manuals and sections: files in .data/, or the table
-                                                                    rtfm-app on the Web Function; the ledger: files in .data/)
+                                                                    rtfm-app on the Web Function)
 ```
 
 ## Codemap
@@ -77,9 +79,12 @@ browser (Vite, :5173)                           server (node:http, :8787)
   (`prompt.ts`) and output handling (`section-text.ts`, `validate.ts`), and one run per section
   (`runs.ts`). See `server/writer/README.md`.
 - `gateway/`: `createGateway` (`gateway.ts`), the `Gateway` every model call goes through; the
-  `ModelClient` for Bedrock (`bedrock-client.ts`), the price table (`prices.ts`, with the fake
-  model, `FAKE_MODEL` in `types.ts`, at $0) and the credentials (`credentials.ts`). See
-  `server/gateway/README.md`.
+  `SpendingLedger` (`spending-ledger.ts`) that keeps every call, the caps' totals and the kill
+  switch, in the data folder for the fake models (`file-spending-ledger.ts`) and in the table
+  `rtfm-usage` for Bedrock (`dynamodb-spending-ledger.ts`), both held to one suite
+  (`spending-ledger-suite.ts`); the `ModelClient` for Bedrock (`bedrock-client.ts`), the price
+  table (`prices.ts`, with the fake model, `FAKE_MODEL` in `types.ts`, at $0) and the credentials
+  (`credentials.ts`). See `server/gateway/README.md`.
 - `agent/`: the agent loop (`runAgent` in `loop.ts`, `defineTool` in `tool.ts`); the librarian
   (`librarian/`, `sendReply`) and its planner (`planner/`, `planManual`); and the fake model
   (`fake-model.ts`), the `ModelClient` that stands in for Claude in every job. See
@@ -126,7 +131,8 @@ aren't RTFM's. See `infra/README.md`.
 - `access-stack.ts`: `RtfmAccess`, RTFM's IAM users and roles and its budget alarm. The user
   deploys it and the bootstrap.
 - `app-stack.ts`: `RtfmApp`, the app: the Web Function `rtfm-app`, its role, endpoint and log
-  groups, the table `rtfm-app`, and the bucket. The orchestrator deploys it.
+  groups, the tables `rtfm-app` (the library) and `rtfm-usage` (Bedrock's spending), and the
+  bucket. The orchestrator deploys it.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`, which run the AWS and CDK CLIs as RTFM's own
   roles from `~/.aws/rtfm/`.
 - `edge-certificate-stack.ts` and `edge-stack.ts`: `RtfmEdgeCertificate` and `RtfmEdge`, which
@@ -166,7 +172,7 @@ other page:
 | `agent/planner/` | `agent/tool.ts`, `storage/`, the gateway's types, `escape-tags.ts` |
 | `agent/` | the gateway's types, the logger's types; `fake-model.ts` also `agent/planner/fake-planner.ts` and `writer/fake.ts` (`chunkEnds`) |
 | `writer/` | `storage/`, the gateway's types, `api/types.ts`, `escape-tags.ts`, the logger's types |
-| `gateway/` | `storage/` (the ledger, `files.ts`), the logger's types |
+| `gateway/` | `storage/` (the ledger and its entries' types, `files.ts`, and the DynamoDB client builder in `dynamodb-manual-store.ts`), the logger's types |
 | `storage/` | `api/types.ts`, the logger's types |
 | `logging/` | `storage/files.ts` |
 
@@ -181,20 +187,27 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 
 - **The gateway is the only way to reach Bedrock.** Nothing but the SDK adapters that
   `gateway/sdk-boundary.test.ts` lists (`gateway/bedrock-client.ts`, and
-  `storage/dynamodb-manual-store.ts` for DynamoDB) imports an Anthropic or AWS SDK, and nothing
-  outside `server/gateway/` and `server/app.ts` imports that client; the test
-  enforces both. So every model call is reserved against the caps, checked against the kill
-  switch and written to the ledger (`server/gateway/README.md`). The fake model is called through
-  the same gateway, at $0, so all of this runs without Bedrock too, except in a librarian preview,
-  which plays the fake model directly so that it costs and records nothing.
-- **One server per data folder.** The caps are totalled in one process's memory, so the server
-  locks its data folder before it starts (`server/storage/README.md` › The data folder's lock).
+  `gateway/dynamodb-spending-ledger.ts` and `storage/dynamodb-manual-store.ts` for DynamoDB)
+  imports an Anthropic or AWS SDK, and nothing outside `server/gateway/` and `server/app.ts`
+  imports that client; the test enforces both. So every model call is reserved against the caps,
+  checked against the kill switch and written to the spending ledger (`server/gateway/README.md`).
+  The fake model is called through the same gateway, at $0, so all of this runs without Bedrock
+  too, except in a librarian preview, which plays the fake model directly so that it costs and
+  records nothing.
+- **`RTFM_MODELS` chooses the spending ledger.** With the fake models it is the data folder's;
+  with Bedrock it is always the table `rtfm-usage`, from a laptop as deployed, where each call is
+  reserved in one conditional transaction, so every server running Bedrock shares one set of caps
+  and one kill switch (`server/gateway/README.md` › The spending ledger).
+- **One server per data folder.** The fake models' caps are totalled in one process's memory, so
+  the server locks its data folder before it starts (`server/storage/README.md` › The data
+  folder's lock). With Bedrock the lock no longer guards money, whose caps are in `rtfm-usage`.
 - **Configuration** is committed, apart from the AWS keys in `.env.local`, which only
   `gateway/credentials.ts` reads, from the main checkout's root even in a linked worktree
-  (`server/README.md` › Configuration). The one exception is the Web Function, whose entry asks
-  for its execution role's temporary credentials, from Lambda's container credentials endpoint or
-  the variables Lambda sets, for the table `rtfm-app` alone (`server/README.md` › The Web
-  Function). No AWS client falls back to the environment, a profile or `~/.aws`.
+  (`server/README.md` › Configuration); they reach Bedrock and the table `rtfm-usage`. The one
+  exception is the Web Function, whose entry asks for its execution role's temporary
+  credentials, from Lambda's container credentials endpoint or the variables Lambda sets, for the
+  table `rtfm-app` alone (`server/README.md` › The Web Function). No AWS client falls back to the
+  environment, a profile or `~/.aws`.
 - **Only the app's own pages.** On this machine the server listens on `127.0.0.1` and answers only
   this machine's `Host`s and `Origin`s; on the Web Function, only an endpoint's `Host` and the
   origin `https://rtfm.moonfetus.com`. The Node adapter refuses any other `Host` or `Origin`, and
@@ -223,7 +236,9 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
     (`server/README.md` › Tests).
   - Each such interface has one shared test suite that runs against every implementation, so the
     local one stays as strict as the AWS one: `ManualStore`'s runs against the files and against
-    DynamoDB Local, which the tests start on loopback (`server/storage/README.md`).
+    DynamoDB Local, which the tests start on loopback (`server/storage/README.md`), and
+    `SpendingLedger`'s against the data folder and against DynamoDB Local
+    (`server/gateway/README.md` › The spending ledger).
   - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
     adapters on purpose, or the test fails.
   - An AWS deployment runs this same server, on a Lambda Web Function behind CloudFront

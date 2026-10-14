@@ -11,7 +11,9 @@ interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledge
   (`dynamodb-manual-store.ts`), which the Web Function uses (`server/README.md` › The Web
   Function). `config.manualStorage` chooses one.
 - **`UsageLedger`** appends an entry (into the file for its `reservedAt` month) and reads a
-  month's entries (`"2026-10"`, UTC). It is files in the data folder, wherever the server runs.
+  month's entries (`"2026-10"`, UTC). It is files in the data folder, which the gateway's spending
+  ledger for the fake models keeps its record in; Bedrock's spending is in the table `rtfm-usage`
+  (`server/gateway/README.md` › The spending ledger).
 
 ## The data folder
 
@@ -21,8 +23,8 @@ The local files live in `.data/` (gitignored). Tests and the shot script pass a 
 .data/manuals/<manualId>/manual.json         StoredManual
 .data/manuals/<manualId>/sections/<id>.md    one file per written section
 .data/seeded.json                            the ids of the seed manuals already seeded
-.data/ledger/2026-10.jsonl                   one JSON line per ledger entry, append-only
-.data/STOP                                   the kill switch (server/gateway/README.md)
+.data/ledger/2026-10.jsonl                   the fake models' ledger: one JSON line per entry, append-only
+.data/STOP                                   the fake models' kill switch (server/gateway/README.md)
 .data/server.lock                            the PID of the server using the folder
 .data/logs/2026-10-12.jsonl                  the server's log for one UTC day (server/logging/README.md)
 ```
@@ -226,7 +228,9 @@ delete `.data/ledger/`, because the caps are computed from it.
 - `types.ts`: `ManualStore`, `UsageLedger`.
 - `file-manual-store.ts`: manuals and sections as files.
 - `dynamodb-manual-store.ts`: manuals and sections in a table shaped as `rtfm-app`, and
-  `createAppTable` for DynamoDB Local. The one file here that imports the AWS SDK.
+  `createAppTable` for DynamoDB Local. The one file here that imports the AWS SDK. Its client
+  builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's table
+  `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
 - `dynamodb-testing.ts`: the tests' tables in DynamoDB Local.
 - `file-ledger.ts`: the usage ledger as JSON lines.

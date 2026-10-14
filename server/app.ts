@@ -10,12 +10,15 @@ import { createRequestHandler } from "./api/node-adapter.ts";
 import { passcodeRoute } from "./api/passcode.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
-import type { ServerConfig } from "./config.ts";
+import { usageTableWith, type ServerConfig } from "./config.ts";
 import { exitOnceWritten } from "./exit.ts";
 import { createBedrockClient } from "./gateway/bedrock-client.ts";
 import { ENV_LOCAL_FILE, readAwsCredentials } from "./gateway/credentials.ts";
+import { createDynamoDbSpendingLedger } from "./gateway/dynamodb-spending-ledger.ts";
+import { openFileSpendingLedger } from "./gateway/file-spending-ledger.ts";
 import { createGateway, type Gateway, type RunningGateway } from "./gateway/gateway.ts";
 import { prices } from "./gateway/prices.ts";
+import type { SpendingLedger } from "./gateway/spending-ledger.ts";
 import { FAKE_MODEL, type Job, type ModelClient } from "./gateway/types.ts";
 import { toLogFile } from "./logging/log-file.ts";
 import { createLogger, type Logger } from "./logging/logger.ts";
@@ -193,13 +196,17 @@ export async function createModels(
 ): Promise<Models> {
   switch (config.models) {
     case "fake": {
-      const gateway = await createModelGateway(withFakeModel(config), () => fakeModel(), logger);
+      const openSpendingLedger = () =>
+        openFileSpendingLedger({ ledger: createFileLedger(config.dataDir, logger), dataDir: config.dataDir });
+      const gateway = await createModelGateway(withFakeModel(config), () => fakeModel(), openSpendingLedger, logger);
       return { writer: createFakeWriter(gateway), librarian: gateway, idle: gateway.idle };
     }
     case "bedrock": {
       const createClient = () =>
         createBedrockClient(readAwsCredentials(credentialsFile), { timeoutMs: config.idleTimeoutMs });
-      const gateway = await createModelGateway(config, createClient, logger);
+      const openSpendingLedger = async () =>
+        createDynamoDbSpendingLedger(usageTableWith(config.usageTable, readAwsCredentials(credentialsFile)));
+      const gateway = await createModelGateway(config, createClient, openSpendingLedger, logger);
       const writer = createBedrockWriter({
         gateway,
         store,
@@ -221,14 +228,8 @@ function withFakeModel(config: ServerConfig): ServerConfig {
 function createModelGateway(
   config: ServerConfig,
   createClient: () => ModelClient,
+  openSpendingLedger: () => Promise<SpendingLedger>,
   logger: Logger,
 ): Promise<RunningGateway> {
-  return createGateway({
-    createClient,
-    ledger: createFileLedger(config.dataDir, logger),
-    config,
-    prices,
-    dataDir: config.dataDir,
-    logger,
-  });
+  return createGateway({ createClient, openSpendingLedger, config, prices, logger });
 }
