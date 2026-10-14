@@ -82,7 +82,7 @@ aren't RTFM's.
   caps in a test against DynamoDB Local, and the docs say so.
 
 ### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998; in review)
+- **Status:** doing (agent a6eb3ca69062c8998; review round 1: the holder fences itself when renewals fail)
 - **Depends on:** IN.11
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
   `server/writer/README.md`
@@ -134,6 +134,8 @@ aren't RTFM's.
   section is being written (`409`), see only the answering environment's runs. Make them also see
   other environments' live leases in the manual's partition, so a section being written elsewhere
   shows as writing and its manual can't be deleted mid-run.
+  This comes before the deployed app uses Bedrock: until then a delete answered on one
+  environment can abort a paid run on the other.
 - **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
 
 ### AW.1 — Check the ledger against the AWS bill
