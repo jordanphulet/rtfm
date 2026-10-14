@@ -69,7 +69,7 @@ ID.
 | `section.refused` | WARN | A run beyond `maxConcurrentRuns` (`activeRuns`) |
 | `librarian.reply` | INFO, WARN for budget, ERROR | A reply ends: `outcome` (`done`, `aborted`, `budget` or `error`), `messages`, `turns`, `tools` (the tools the model called, comma-separated), `durationMs`; a failed reply's error |
 | `agent.tool-failed` | WARN | A tool threw, and the model got an error result (`tool`) |
-| `manual.cleanup-failed` | ERROR | A deleted manual's folder couldn't be removed (`manualId`, `folder`) |
+| `manual.cleanup-failed` | ERROR | A deleted manual's folder couldn't be removed (`libraryId`, `manualId`, `folder`) |
 | `client.error` | ERROR, WARN for a request | What the browser reported (below) |
 | `client.limited` | WARN | Once an hour, when browser reports pass the hourly limit |
 | `log.file-full` | WARN | Written by the log file itself, as the day's last line in it |

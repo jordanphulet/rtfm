@@ -4,10 +4,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { silentLogger } from "../logging/logger.ts";
 import { capturingLogger, tempDataDir } from "../testing.ts";
 import { createFileManualStore } from "./file-manual-store.ts";
+import { ADMIN_LIBRARY_ID } from "./library.ts";
 import { describeManualStore, manual } from "./manual-store-suite.ts";
 import type { ManualStore } from "./types.ts";
 
-describeManualStore("the file manual store", async () => createFileManualStore(await tempDataDir(), silentLogger));
+describeManualStore("the file manual store", async () => {
+  const dataDir = await tempDataDir();
+  return (libraryId) => createFileManualStore(dataDir, silentLogger, libraryId);
+});
 
 describe("the file manual store's files", () => {
   let dataDir: string;
@@ -80,7 +84,12 @@ describe("the file manual store's files", () => {
       expect(await store.getManual(manual.id)).toBeUndefined();
       expect(await store.listManuals()).toEqual([]);
       expect(entries).toEqual([
-        expect.objectContaining({ level: "ERROR", event: "manual.cleanup-failed", manualId: manual.id }),
+        expect.objectContaining({
+          level: "ERROR",
+          event: "manual.cleanup-failed",
+          libraryId: ADMIN_LIBRARY_ID,
+          manualId: manual.id,
+        }),
       ]);
     } finally {
       const [leftover] = await readdir(manualsDir);
@@ -98,5 +107,48 @@ describe("the file manual store's files", () => {
   it("keeps the record of seeded manuals in the data folder", async () => {
     await store.markSeeded("one");
     expect(await createFileManualStore(dataDir, silentLogger).seededManualIds()).toEqual(["one"]);
+  });
+});
+
+describe("the file manual store's libraries", () => {
+  let dataDir: string;
+
+  beforeEach(async () => {
+    dataDir = await tempDataDir();
+  });
+
+  it("reads the admin's library from the manuals and seeding record in the data folder itself", async () => {
+    await mkdir(path.join(dataDir, "manuals", manual.id, "sections"), { recursive: true });
+    await writeFile(path.join(dataDir, "manuals", manual.id, "manual.json"), JSON.stringify(manual));
+    await writeFile(path.join(dataDir, "manuals", manual.id, "sections", "s.md"), "body");
+    await writeFile(path.join(dataDir, "seeded.json"), JSON.stringify([manual.id]));
+
+    const unnamed = createFileManualStore(dataDir, silentLogger);
+    const named = createFileManualStore(dataDir, silentLogger, ADMIN_LIBRARY_ID);
+    for (const admin of [unnamed, named]) {
+      expect(await admin.listManuals()).toEqual([manual]);
+      expect(await admin.writtenSectionIds(manual.id)).toEqual(["s"]);
+      expect(await admin.getBody(manual.id, "s")).toBe("body");
+      expect(await admin.seededManualIds()).toEqual([manual.id]);
+    }
+    const recipient = createFileManualStore(dataDir, silentLogger, "acme");
+    expect(await recipient.listManuals()).toEqual([]);
+    expect(await recipient.seededManualIds()).toEqual([]);
+  });
+
+  it("keeps a recipient's library under libraries/<libraryId>/, in the same layout", async () => {
+    const recipient = createFileManualStore(dataDir, silentLogger, "acme");
+    await recipient.createManual(manual);
+    await recipient.saveBody(manual.id, "s", "body");
+    await recipient.markSeeded(manual.id);
+
+    const libraryDir = path.join(dataDir, "libraries", "acme");
+    expect(await readdir(dataDir)).toEqual(["libraries"]);
+    expect((await readdir(libraryDir)).sort()).toEqual(["manuals", "seeded.json"]);
+    expect(await readFile(path.join(libraryDir, "manuals", manual.id, "sections", "s.md"), "utf8")).toBe("body");
+  });
+
+  it("refuses a library id that isn't a slug", () => {
+    expect(() => createFileManualStore(dataDir, silentLogger, "../outside")).toThrow('Not a valid library id: "../outside"');
   });
 });

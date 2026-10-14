@@ -76,7 +76,8 @@ browser (Vite, :5173)                           server (node:http, :8787)
   (`file-manual-store.ts`, `file-ledger.ts`), and `ManualStore` in the DynamoDB table `rtfm-app`
   (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the section
   leases (`SectionLeases`) that keep one writer per section across the Web Function's environments,
-  in the process (`in-process-leases.ts`) or in `rtfm-app`; the data folder's lock (`lock.ts`) and
+  in the process (`in-process-leases.ts`) or in `rtfm-app`; each store and its leases bound to one
+  library, whose keys and folder `library.ts` gives; the data folder's lock (`lock.ts`) and
   seeding (`seed.ts`). See `server/storage/README.md`.
 - `seed/<manualId>/`: `manual.json`, a TOC, a voice, and which sections start written; and
   `sections/*.md`, bodies (only the sample, the-haunt-that-listens, has them: all 18).

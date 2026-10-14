@@ -18,14 +18,51 @@ interfaces in `server/storage/types.ts`, so the gateway only ever sees the ledge
   ledger for the fake models keeps its record in; Bedrock's spending is in the table `rtfm-usage`
   (`server/gateway/README.md` › The spending ledger).
 
+Each `ManualStore` and `SectionLeases` is bound to one library (Libraries, below), the admin's
+unless its maker names another.
+
+## Libraries
+
+Each library's manuals, sections, leases and seeding record are kept apart from every other's, in
+the same table or data folder. `library.ts` holds the scheme, and every key and path the stores
+and leases use goes through it:
+
+- **A library id** is a slug (`ID_PATTERN`), so it holds no `#` or `/`; any other id throws
+  (`Not a valid library id`). The admin's library is `admin` (`ADMIN_LIBRARY_ID`), and no
+  recipient's library may take that id (`isRecipientLibraryId`).
+- **In `rtfm-app`**, `libraryPartition` puts `L#<libraryId>#` before each partition key (The
+  table `rtfm-app`, below): a recipient's manuals are in `L#<libraryId>#LIBRARY`, a manual's
+  sections in `L#<libraryId>#MANUAL#<manualId>`, its seeding record in `L#<libraryId>#SEEDED`. The
+  sort keys don't change. The admin's library has no prefix, so it reads the items already stored
+  at the unprefixed keys as they are, with nothing moved or migrated. No other partition starts `L#`, and a slug can't hold the `#` that ends the prefix, so no library's
+  key is ever another's.
+- **In the data folder**, `libraryFolder` gives the folder a library's files are in:
+  `libraries/<libraryId>/`, with the layout the data folder itself has for the admin's
+  (The data folder, below).
+- **The makers** take the library as their last argument, which defaults to the admin's:
+  `createFileManualStore(dataDir, logger, libraryId)`, `createDynamoDbManualStore(table,
+  libraryId)` and `createDynamoDbSectionLeases(table, timing, libraryId)`. `createInProcessLeases`
+  is bound to the library of the store it is given, through which it saves and reads.
+- **Leases come along.** A section's lease is on its item, in its library's partition, so two
+  libraries can each write a section of one manual id at once, and a lease in one library never
+  holds up a take, a delete or the statuses in another.
+- `manual-store-suite.ts` runs every rule in the admin's library and in a recipient's, on one
+  table or data folder beside another library holding manuals of the same ids, which each test
+  checks it left unchanged; then that the same manual id lives apart in two libraries, with its
+  own sections, deletes and seeding record. The DynamoDB store's tests check the keys every call
+  sends: the admin's with no prefix, a recipient's under `L#<libraryId>#`. The DynamoDB leases'
+  tests take one section id's lease in two libraries at once.
+
 ## The data folder
 
 The local files live in `.data/` (gitignored). Tests and the shot script pass a temp `dataDir`.
 
 ```
-.data/manuals/<manualId>/manual.json         StoredManual
+.data/manuals/<manualId>/manual.json         the admin's library: StoredManual
 .data/manuals/<manualId>/sections/<id>.md    one file per written section
 .data/seeded.json                            the ids of the seed manuals already seeded
+.data/libraries/<libraryId>/manuals/…        a recipient's library: the same layout under its folder
+.data/libraries/<libraryId>/seeded.json      its seeding record
 .data/ledger/2026-10.jsonl                   the fake models' ledger: one JSON line per entry, append-only
 .data/STOP                                   the fake models' kill switch (server/gateway/README.md)
 .data/server.lock                            the PID of the server using the folder
@@ -110,12 +147,16 @@ of item, told apart by its keys, two strings:
 | A seed manual already seeded | `SEEDED` | `MANUAL#<manualId>` | none |
 | The passcode | `PASSCODE` | `PASSCODE` | `digest`: the passcode's SHA-256 digest, 64 lowercase hex characters (`server/api/README.md` › The passcode) |
 
-Every manual is in the one partition `LIBRARY`, apart from the bodies, so listing the library
-reads no body, and each manual's `written` set gives its written sections without reading them.
+These are the admin's library's keys. A recipient's library has the same items with
+`L#<libraryId>#` before each `pk` (Libraries, above); the passcode belongs to no library.
+
+Every manual of a library is in one partition, its `LIBRARY`, apart from the bodies, so listing
+the library reads no body, and each manual's `written` set gives its written sections without
+reading them.
 The table has no index. Every read is strongly consistent, so a write is seen at once, as with the
 files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB item limit.
 
-- **`listManuals`** queries the partition `LIBRARY`, page by page, for the `manual` attribute.
+- **`listManuals`** queries the library's partition `LIBRARY`, page by page, for the `manual` attribute.
 - **`getManual`** and **`writtenSectionIds`** get the manual's item.
 - **`createManual`** puts the manual's item on the condition `attribute_not_exists(pk)`. When the
   condition fails it reads the stored manual: if it is exactly the one being created, the SDK
@@ -146,7 +187,7 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
     by its run, or expires.
   - One transaction holds 100 items, so a manual with more than 99 section items can't be
     deleted; a planned manual has at most 32 sections.
-- **`seededManualIds`** queries the partition `SEEDED`; **`markSeeded`** puts its item.
+- **`seededManualIds`** queries the library's partition `SEEDED`; **`markSeeded`** puts its item.
 - **`readPasscodeDigest(table)`** gets the passcode's item (`PASSCODE_KEY`), strongly consistent,
   and gives its digest, or undefined when there is no item; **`writePasscodeDigest(table,
   digest)`** puts it, replacing the one before. Both hold the digest to its form,
@@ -249,8 +290,8 @@ body and whether another environment holds its lease, for the section's status
     one saved without a lease (the seed's), it answers `"already-written"`; otherwise it throws.
   - **Releasing** deletes the item on the condition that it holds this owner's lease and no body,
     so a body, or another writer's lease, is never deleted.
-  - **Held elsewhere** is one `Query` of the manual's partition (`pk = MANUAL#<manualId>`), page by
-    page, for the items whose `leaseExpiresAt` is not yet past by this environment's clock (live,
+  - **Held elsewhere** is one `Query` of the manual's partition (`pk = MANUAL#<manualId>`, in the
+    leases' library), page by page, for the items whose `leaseExpiresAt` is not yet past by this environment's clock (live,
     as a take would read it) and whose `leaseOwner` doesn't start with this environment's id. Its
     own runs are in its runs' map already. A written section's item holds no lease, so it is
     never named. DynamoDB filters after reading, so the query costs a read unit per 4 KB of the
@@ -337,8 +378,9 @@ A crash mid-append can leave a last line with no newline.
 
 ## Seeding
 
-On start, `seedStore` seeds each manual in `server/seed/` once. The store keeps a record of the seed
-manuals it has seeded (`seededManualIds`), and for each seed manual not in it:
+On start, `seedStore` seeds each manual in `server/seed/` once into the store it is given, in that
+store's library. The store keeps a record of the seed manuals it has seeded (`seededManualIds`),
+and for each seed manual not in it:
 
 - if the store has no manual with that id, it puts the TOC, then saves the bodies of the
   sections the seed marks written (the sample's 7 of 18; none for the others). If another server
@@ -364,6 +406,7 @@ delete `.data/ledger/`, because the caps are computed from it.
 - `types.ts`: `ManualStore`, `SectionLeases`, `UsageLedger`.
 - `file-manual-store.ts`: manuals and sections as files.
 - `in-process-leases.ts`: section leases for a server alone on its store.
+- `library.ts`: the admin's library id, and a library's partition keys and folder.
 - `dynamodb-manual-store.ts`: manuals, sections, section leases and the passcode's digest in a
   table shaped as `rtfm-app`, and `createAppTable` for DynamoDB Local. The one file here that
   imports the AWS SDK. Its client builder (`documentClient`) and transaction retry loop
