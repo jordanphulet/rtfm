@@ -69,19 +69,6 @@ aren't RTFM's.
   the headers until the first byte, IN.10).
 - **Done when:** the doc's Measured section records it.
 
-### IN.24 — Record what the keys' expiry does on the deployed app
-- **Status:** doing (agent a9a8263a6eaa6741b; done, being committed)
-- **Depends on:** —
-- **Files:** `research/aws-design.md`
-- **Do:** IN.21's measurement, read with `npm run ops -- logs` (no other AWS call). Since IN.21's
-  deploy, `server.started` logs `credentialsExpireAt=unset` (first seen 2026-10-14T01:40Z):
-  Lambda doesn't set `AWS_CREDENTIAL_EXPIRATION`, so only a refused key starts a replacement.
-  Record that in `research/aws-design.md` › Measured, and any `server.keys-refused` line since
-  then with its error name, the gap to that environment's `server.stopped`, and the next
-  `server.started`.
-- **Done when:** Measured records whether Lambda sets the expiry and, if any environment was
-  refused its keys, what followed; if none was, it says so with the date range read.
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
