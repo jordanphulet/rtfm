@@ -1,5 +1,5 @@
 import type { ClientError, ClientErrorReport } from "../server/api/types";
-import { requirePasscode } from "./passcode/required";
+import { requirePasscode, type PasscodeReason } from "./passcode/required";
 
 const REPORT_URL = "/api/client-errors";
 /** Reports one page load may send, so a page that fails in a loop stops reporting. */
@@ -22,7 +22,8 @@ export function startReportingErrors() {
 
 /**
  * `fetch`, reporting a request that gets no answer or a server error (5xx). A 401 shows the
- * passcode screen and never settles, so no page shows it as a failure.
+ * passcode screen, saying so when the library's link is closed, and never settles, so no page
+ * shows it as a failure.
  */
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const method = init?.method ?? "GET";
@@ -34,11 +35,17 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
     throw error;
   }
   if (response.status === 401) {
-    requirePasscode();
+    requirePasscode(await refusalReason(response));
     return untilReload;
   }
   if (response.status >= 500) reportFailedRequest(method, url, response.status);
   return response;
+}
+
+async function refusalReason(response: Response): Promise<PasscodeReason> {
+  const body: unknown = await response.json().catch(() => undefined);
+  const linkClosed = typeof body === "object" && body !== null && "error" in body && body.error === "Link closed";
+  return linkClosed ? "link-closed" : "passcode-required";
 }
 
 function reportFailedRequest(method: string, path: string, status?: number) {

@@ -17,7 +17,10 @@ and these docs disagree, one of them is a bug.
 - A local API server (`server/`, described in `server/README.md`) stores the manuals, writes their
   sections, and runs the librarian.
 - **The passcode screen** (`src/passcode/`): when the server has a passcode and the browser hasn't
-  entered it, it takes either page's place ([The passcode screen](#the-passcode-screen)).
+  entered it, or a library's link is closed, it takes either page's place ([The passcode
+  screen](#the-passcode-screen)).
+- **The link page** (`/l#<secret>`, `src/link/`): a library's link, which opens its library at `/`
+  with no button ([The link page](#the-link-page)); `/admin` leaves it again.
 - **Failure states only where something can fail:** a section the server couldn't write has two
   (see [When a section can’t be written](src/reader/DESIGN.md#when-a-section-cant-be-written));
   on the landing page, the library can fail to load ([The library can’t be
@@ -25,7 +28,8 @@ and these docs disagree, one of them is a bug.
   fails](src/home/DESIGN.md#when-a-delete-fails)), and a reply can fail ([When a reply
   fails](src/home/DESIGN.md#when-a-reply-fails)). A new manual whose plan fails its checks isn't
   created, and the librarian says so in its reply, as words, not as a failure state. The passcode
-  screen says when a passcode is wrong or couldn't be checked.
+  screen says when a passcode is wrong or couldn't be checked, and the link page when the server
+  didn't open the library.
 - **Dark only.**
 
 ## Data model
@@ -67,7 +71,9 @@ These rules are locked for both pages, as are the craft requirements and the ban
 
 With a passcode set on the server (`server/api/README.md` › The passcode), any `401` from the API
 replaces whichever page asked with this screen, at the same URL. It is the stage door: one
-question, asked plainly, then you're back where you were.
+question, asked plainly, then you're back where you were. A recipient whose library's link is
+closed gets it too, from any request answered `401 { error: "Link closed" }` or from the link
+page, with one line saying why.
 
 - **Root** `<div class="ui passcode">`, its CSS in `src/passcode/PasscodeScreen.css`, scoped under
   `.passcode`. No header, no panel, no dock, no skip link: the field is the first stop.
@@ -75,6 +81,10 @@ question, asked plainly, then you're back where you were.
   768–1023px; 32px from the top and a 16px gutter on phone), its content capped at `--measure`.
   Nothing is centred and nothing is boxed.
 - **Content**, top to bottom:
+  - **only when the link is closed**, `This link is closed.`, `--text-ui` 600 `--ink-strong` (the
+    status line's title voice, so the screen's news all speaks alike), 16px above the title. It
+    comes first because it is why the screen is there: a recipient reads the reason before the
+    question;
   - `This library is private`, `<h1>`, `--text-h3` 600 `--ink-strong`, `balance` (the notice
     size, not a hero), 4px above `Enter its passcode to open it.`, `--text-lead` `--ink-muted`;
   - 32px, the label `Passcode`, `--text-micro` Sans 600 `--ink-muted`, 8px above one row:
@@ -99,7 +109,35 @@ question, asked plainly, then you're back where you were.
 - No red, no lock icon, no warning glyph: the words carry it. No motion beyond the shared hover
   and focus transitions.
 - **States** (`npm run shot`, `passcode/<state>-<desktop|phone>.png`): `start` (desktop: the
-  field focused), `wrong` (a wrong passcode entered).
+  field focused), `wrong` (a wrong passcode entered); and with the closed line, the link page's
+  `closed`.
+
+## The link page
+
+A library's link, `/l#<secret>` (`README.md` › A library's link), is a door held open: the
+recipient clicks once and is in their library, with no button and nothing to read on the way.
+
+- **Root** `<div class="ui library-link">`, its CSS in `src/link/LinkPage.css`, scoped under
+  `.library-link`.
+- **While the server checks the link**, the bare ground, as every page shows while it loads: no
+  spinner, no words, and never a flash of the passcode screen. A visually hidden status says
+  `Opening your library…` to screen readers. The secret leaves the address before the request is
+  sent, so the address bar reads `/l` and the back history never holds it.
+- **Open:** the address becomes `/`, replacing `/l`, and the landing page loads as on any visit.
+- **Closed:** the passcode screen, with `This link is closed.` above it, at `/`, so entering the
+  passcode opens the admin's library.
+- **Not opened** (the server fails, gives any other answer, or doesn't answer within 10
+  seconds): a notice in the type and words of the landing page's unreachable library, placed like
+  the passcode screen (its padding and `--measure`). `Couldn’t open your library`, `<h1>`,
+  `--text-h3` 600 `--ink-strong`, `balance`, 4px above
+  `Your library didn’t open, so there’s nothing to show yet. Try again.` in `--text-lead`
+  `--ink-muted`, **Try again** a `.link` button in `--ink-strong`, which sends the same secret
+  again; the page holds it, since the address no longer does. Never the closed line: a server
+  that failed hasn't said the link is closed.
+- **`/admin`** shows the same bare ground while it leaves the library, then opens `/`: the admin's
+  library on this machine with no passcode, or the passcode screen.
+- **States** (`npm run shot`, `link/<state>-<desktop|phone>.png`): `opening` (the server not yet
+  answering), `failed` (a `500`) and `closed` (a link the server refuses).
 
 ## Craft requirements
 

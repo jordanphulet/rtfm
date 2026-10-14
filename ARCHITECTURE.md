@@ -50,12 +50,15 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `POST /api/librarian` and streamed back. See `src/librarian/README.md`, which also has its URL
   options.
 - `passcode/`: the passcode screen (`PasscodeScreen`), which `App.tsx` shows in either page's
-  place once an API request answers `401` (`usePasscodeRequired`). See
-  `src/passcode/README.md`.
+  place once an API request answers `401` (`usePasscodeReason`), saying so when a library's link
+  is closed. See `src/passcode/README.md`.
+- `link/`: the page routes `/l` (`LinkPage`), which opens a library by its link's secret, and
+  `/admin` (`AdminPage`), which leaves it. See `src/link/README.md`.
 - `ui/`: the shared design system: tokens, fonts, base styles, the write head, `StatusRing`,
   `Sheet`, `ReplyMarkdown`. See `src/ui/README.md`.
 - `reportErrors.ts`: `startReportingErrors` and `apiFetch`, which report the page's errors and
-  failed API requests to the server's log; `apiFetch` also shows the passcode screen on a `401`.
+  failed API requests to the server's log, with the page's path but never its query or fragment;
+  `apiFetch` also shows the passcode screen on a `401`.
 
 ### The server: `server/`
 
@@ -176,7 +179,8 @@ other page:
 
 | Folder | Imports from `src/` |
 | --- | --- |
-| `App.tsx` | `home/`, `reader/` (lazily), `passcode/` |
+| `App.tsx` | `home/`, `reader/` (lazily), `link/`, `passcode/` |
+| `link/` | `passcode/`, `reportErrors.ts`, `ui/` |
 | `home/` | `library/`, `librarian/`, `ui/` |
 | `reader/` | `manual/`, `ui/` |
 | `manual/`, `library/` | `reportErrors.ts` |

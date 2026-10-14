@@ -19,6 +19,9 @@ const BASELINE_DIR = values.compare;
 const READER_DIR = `${SHOTS_DIR}/reader`;
 const HOME_DIR = `${SHOTS_DIR}/home`;
 const PASSCODE_DIR = `${SHOTS_DIR}/passcode`;
+const LINK_DIR = `${SHOTS_DIR}/link`;
+/** A secret of the right form that no link has, so the server answers that the link is closed. */
+const UNKNOWN_SECRET = "Qk3vX9_tLmN2pRs7Yw-AbC";
 const SHOT_PASSCODE = "copper lantern tidal owl";
 const WRONG_PASSCODE = "copper lantern";
 const TYPED_MESSAGE = "Delete the manual about birthday parties";
@@ -47,6 +50,7 @@ type Shot = {
   state: string;
   path: string;
   fullPage?: boolean;
+  waitUntil?: "load" | "networkidle";
   beforeLoad?: (page: Page) => Promise<void>;
   prepare?: (page: Page, size: Size) => Promise<void>;
   expectedErrors?: RegExp[];
@@ -90,12 +94,13 @@ try {
   if (dataDir) await rm(dataDir, { recursive: true, force: true });
 }
 
-/** Both pages on a server with no passcode, then the passcode screen on a second server with one. */
+/** Both pages and a link's on a server with no passcode, then the passcode screen on a second server with one. */
 async function captureWithServers(dataDir: string): Promise<boolean> {
   await clearShots();
   const pages = await captureOnServer({ dataDir: path.join(dataDir, "open"), passcode: undefined }, [
     ...captureGroups(READER_DIR, READER_SIZES, readerShots()),
     ...captureGroups(HOME_DIR, HOME_SIZES, homeShots()),
+    ...captureGroups(LINK_DIR, HOME_SIZES, linkShots()),
   ]);
   const passcode = await captureOnServer(
     { dataDir: path.join(dataDir, "gated"), passcode: fixedPasscode(SHOT_PASSCODE) },
@@ -124,6 +129,7 @@ async function clearShots() {
   await mkdir(READER_DIR, { recursive: true });
   await mkdir(HOME_DIR, { recursive: true });
   await mkdir(PASSCODE_DIR, { recursive: true });
+  await mkdir(LINK_DIR, { recursive: true });
 }
 
 function readerShots(): Shot[] {
@@ -180,6 +186,24 @@ function passcodeShots(): Shot[] {
   return [
     { state: "start", path: "/", expectedErrors: refusals },
     { state: "wrong", path: "/", prepare: enterWrongPasscode, expectedErrors: refusals },
+  ];
+}
+
+function linkShots(): Shot[] {
+  const linkPath = `/l#${UNKNOWN_SECRET}`;
+  return [
+    { state: "opening", path: linkPath, waitUntil: "load", beforeLoad: holdLinkRequests },
+    {
+      state: "failed",
+      path: linkPath,
+      beforeLoad: failLinkRequests,
+      expectedErrors: [/Failed to load resource: the server responded with a status of 500/],
+    },
+    {
+      state: "closed",
+      path: linkPath,
+      expectedErrors: [/Failed to load resource: the server responded with a status of 401/],
+    },
   ];
 }
 
@@ -282,6 +306,15 @@ async function enterWrongPasscode(page: Page) {
   await input.press("Enter");
   await page.getByText("Wrong passcode.").waitFor({ timeout: REPLY_TIMEOUT_MS });
   await settle(page);
+}
+
+/** Never answers the link's request, so the page stays as it is while the server checks a link. */
+async function holdLinkRequests(page: Page) {
+  await page.route("**/api/link", () => {});
+}
+
+async function failLinkRequests(page: Page) {
+  await page.route("**/api/link", (route) => route.fulfill({ status: 500, json: { error: "Internal error" } }));
 }
 
 async function openDeleteConfirmation(page: Page) {

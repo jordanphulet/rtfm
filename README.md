@@ -372,14 +372,17 @@ only its own manuals: it can't see, change or spend from any other library.
 
 - Opening the link posts its secret to `POST /api/link`, which sets a cookie holding the secret
   for a year, renewed on every use, and clears the passcode cookie. A link works whether or not a
-  passcode is set.
+  passcode is set. The page takes the secret out of the address before it posts it, then opens
+  the library at `/`; a closed link, and any request once a library's link is closed, shows the
+  passcode screen with "This link is closed." (`DESIGN.md` › The link page).
 - The server keeps only the secret's SHA-256 digest, and never logs the secret or its digest.
 - A revoked link is refused within a minute, by its cookie and its secret alike; the library's
   manuals and activity stay.
 - The server counts each library's activity: links opened, the first and last use, sections read
   and written, librarian messages and manuals made.
 - `DELETE /api/link` clears the library cookie, so the browser is back in the admin's library on
-  this machine with no passcode, or at the passcode screen.
+  this machine with no passcode, or at the passcode screen. The page `/admin` calls it, then opens
+  `/`: that is how you leave a library you opened in your own browser.
 
 **The link is a bearer token.** Whoever has the link, or the cookie it sets, opens that library
 until it is revoked: the person it was sent to, anyone they forward it to, and any mail scanner
@@ -629,9 +632,11 @@ clearing that folder first and nothing else:
   (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
 - `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in
   `src/home/DESIGN.md`, under "States");
+- `link/<state>-<desktop|phone>.png`, for the link page's `opening`, `failed` and `closed` (the
+  passcode screen with its closed line), opened with a secret no link has;
 - `passcode/<state>-<desktop|phone>.png`, for the passcode screen's `start` and `wrong`, taken
-  through a second API server and Vite server, with a passcode set. The pages' shots are taken
-  with none, whatever `RTFM_PASSCODE` is.
+  through a second API server and Vite server, with a passcode set. The pages' and the link's
+  shots are taken with none, whatever `RTFM_PASSCODE` is.
 
 `--compare <baseline>` checks a run against an earlier one, such as a copy of `shots/` taken
 before a change:
@@ -655,7 +660,8 @@ npm run shot -- /tmp/shots-after --compare /tmp/shots-before
 ## Where things live
 
 The routes are in `src/App.tsx`, which loads both pages lazily: `/` is the landing page,
-`/read/:manualId` (a manual's contents) and `/read/:manualId/:sectionId` are the reader, and
+`/read/:manualId` (a manual's contents) and `/read/:manualId/:sectionId` are the reader, `/l`
+opens a library by its link (`/l#<secret>`) and `/admin` leaves it again (`src/link/`), and
 anything else, bare `/read` included, redirects to `/`. The settings are in `server/config.ts`
 (Configuration, above), and everything the server keeps is in its data folder (above).
 

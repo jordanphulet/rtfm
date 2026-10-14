@@ -31,13 +31,21 @@ afterEach(() => {
 
 /** Loads the whole app fresh at `path`, as a new page load does, and waits for the passcode screen. */
 async function openApp(path: string) {
+  await loadApp(path);
+  await waitForSelector(".ui.passcode");
+}
+
+async function loadApp(path: string) {
   const { default: App } = await import("../App");
   const appRouter = createMemoryRouter([{ path: "*", element: <App /> }], { initialEntries: [path] });
   router = appRouter;
   await act(async () => render(<RouterProvider router={appRouter} />));
+}
+
+async function waitForSelector(selector: string) {
   await vi.waitFor(async () => {
     await settle();
-    expect(document.querySelector(".ui.passcode")).not.toBeNull();
+    expect(document.querySelector(selector)).not.toBeNull();
   }, APP_LOAD_TIMEOUT_MS);
 }
 
@@ -84,6 +92,25 @@ describe("the passcode screen", { timeout: 3 * APP_LOAD_TIMEOUT_MS }, () => {
     expect(document.querySelector(".ui.passcode")).not.toBeNull();
     expect(document.querySelector(".home")).toBeNull();
     expect(document.body.textContent).not.toContain("Couldn’t open your library");
+    expect(document.querySelector(".passcode-closed")).toBeNull();
+    expect(field().getAttribute("aria-describedby")).toBe("passcode-status");
+  });
+
+  it("says the link is closed when a library's link closes mid-visit", async () => {
+    answer = async (url) => (url === "/api/manuals" ? Response.json([]) : refuseEverything(url));
+    await loadApp("/");
+    await waitForSelector(".ui.home");
+
+    answer = async () => Response.json({ error: "Link closed" }, { status: 401 });
+    await act(() => router!.navigate("/read/the-haunt-that-listens"));
+    await waitForSelector(".ui.passcode");
+
+    expect(document.querySelector(".passcode-closed")?.textContent).toBe("This link is closed.");
+    expect(field().getAttribute("aria-describedby")).toBe("passcode-closed passcode-status");
+    expect(document.getElementById("passcode-closed")?.textContent).toBe("This link is closed.");
+    expect(document.querySelector("h1")?.textContent).toBe("This library is private");
+    expect(document.querySelector(".reader")).toBeNull();
+    expect(document.body.textContent).not.toContain("Couldn’t open this manual");
   });
 
   it("takes the reader's place when the manual answers 401", async () => {

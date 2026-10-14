@@ -1,0 +1,43 @@
+.library-link .link-page {
+  padding: var(--space-16);
+}
+
+.library-link .link-inner {
+  max-width: var(--measure);
+}
+
+.library-link .link-title {
+  margin: 0 0 var(--space-1);
+  font: 600 var(--text-h3) / var(--leading-h3) var(--font-sans);
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}
+
+.library-link .link-lead {
+  margin: 0;
+  font: var(--text-lead) / var(--leading-lead) var(--font-sans);
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.library-link .link-retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink-strong);
+  cursor: pointer;
+}
+
+@media (max-width: 1023px) {
+  .library-link .link-page {
+    padding: var(--space-16) var(--space-8);
+  }
+}
+
+@media (max-width: 767px) {
+  .library-link .link-page {
+    padding: var(--space-8) var(--space-4);
+  }
+}
