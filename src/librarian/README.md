@@ -102,7 +102,8 @@ from a reply that failed, or any action that arrives while no component is handl
 dropped. A `created` action is handed over **as soon as it arrives**, even if the reply then
 fails: it reports a manual the server has already saved. The latest
 `handler` is always used, so it can be an inline function. Only one component should call it at
-a time.
+a time. A handler that throws is reported with `window.reportError` and leaves the reply as it
+is: a finished reply stays finished.
 
 - `open`: the librarian opened the manual; go to `/read/<manualId>`.
 - `propose-delete`: the librarian asks to delete the manual. **Nothing is deleted.** Open the

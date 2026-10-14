@@ -230,6 +230,28 @@ describe("useLibrarian", () => {
     expect(actions).toEqual([{ type: "propose-delete", manualId: "negotiating-with-geese" }]);
   });
 
+  it("keeps a reply finished when the page's action handler throws, and reports the error", async () => {
+    const { readLibrarian, requests, handleActions } = await loadLibrarian();
+    const reportError = vi.fn();
+    vi.stubGlobal("window", { location: { search: "" }, reportError });
+    const handlerError = new Error("The page couldn't open it");
+    handleActions(() => {
+      throw handlerError;
+    });
+    readLibrarian().send("Open the haunted house one.");
+    await flush();
+    const open: LibrarianEvent = { event: "action", data: { type: "open", manualId: "the-haunt-that-listens" } };
+    await reply(requests[0]!, open, text("Opening *The Haunt That Listens*."), done);
+
+    expect(readLibrarian()).toMatchObject({ status: "idle" });
+    expect(readLibrarian().messages[1]).toEqual({
+      id: expect.any(String),
+      role: "agent",
+      text: "Opening *The Haunt That Listens*.",
+    });
+    expect(reportError).toHaveBeenCalledWith(handlerError);
+  });
+
   it("drops a page action when the reply fails, or when nothing is handling actions", async () => {
     const { readLibrarian, requests, handleActions } = await loadLibrarian();
     const actions: LibrarianAction[] = [];

@@ -41,4 +41,42 @@ describe("streamReply", () => {
       { event: "done", data: {} },
     ]);
   });
+
+  it("reads the stream in a browser that can't iterate streams, as Safari before 27 can't", async () => {
+    const { prototype } = ReadableStream as unknown as { prototype: Record<symbol | string, unknown> };
+    const iterate = { asyncIterator: prototype[Symbol.asyncIterator], values: prototype.values };
+    delete prototype[Symbol.asyncIterator];
+    delete prototype.values;
+    try {
+      vi.stubGlobal("fetch", vi.fn(async () => streamed('event: text\ndata: {"text":"Opening."}\n\n', "event: done\ndata: {}\n\n")));
+
+      const events: LibrarianEvent[] = [];
+      for await (const event of streamReply([{ role: "user", text: "Open the haunted house one." }])) events.push(event);
+
+      expect(events).toEqual([
+        { event: "text", data: { text: "Opening." } },
+        { event: "done", data: {} },
+      ]);
+    } finally {
+      prototype[Symbol.asyncIterator] = iterate.asyncIterator;
+      prototype.values = iterate.values;
+    }
+  });
+
+  it("ignores the stream failing after the event the caller stops at", async () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start: (c) => (controller = c) });
+    controller.enqueue(new TextEncoder().encode("event: done\ndata: {}\n\n"));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body)));
+
+    const events: LibrarianEvent[] = [];
+    for await (const event of streamReply([{ role: "user", text: "Open the haunted house one." }])) {
+      events.push(event);
+      controller.error(new TypeError("The network connection was lost."));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      break;
+    }
+
+    expect(events).toEqual([{ event: "done", data: {} }]);
+  });
 });

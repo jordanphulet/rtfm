@@ -129,7 +129,7 @@ async function reply(text: string, freeze?: number) {
           raw = "";
           break;
         case "action":
-          if (event.data.type === "created") actionHandler?.(event.data);
+          if (event.data.type === "created") callActionHandler(event.data);
           else action = event.data;
           break;
         case "done":
@@ -153,7 +153,16 @@ async function reply(text: string, freeze?: number) {
 function handOver(action: LibrarianAction, replyId: string) {
   if (!actionHandler) return;
   if (action.type === "propose-delete") proposedDeleteReplyId = replyId;
-  actionHandler(action);
+  callActionHandler(action);
+}
+
+/** Calls the page's handler. One that throws is reported, and leaves the reply as it is. */
+function callActionHandler(action: LibrarianAction) {
+  try {
+    actionHandler?.(action);
+  } catch (error) {
+    window.reportError(error);
+  }
 }
 
 /**
