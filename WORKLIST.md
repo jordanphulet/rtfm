@@ -33,24 +33,6 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
-### IN.10 — Measure the deployed app
-- **Status:** doing (agent a7748e10835ba97ca; done, being committed)
-- **Depends on:** —
-- **Files:** `research/aws-design.md`, `infra/README.md`
-- **Do:** through `https://rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is
-  in AWS), with the throwaway passcode's cookie, and recorded in `research/aws-design.md`:
-  - events arriving one by one on a section stream, and the 15s heartbeat through CloudFront;
-  - a `POST` with a body (the librarian);
-  - a disconnect aborting the run (the server's log shows the abort);
-  - the cold start to a section's first byte;
-  - how long an idle environment lives (its `SIGTERM` in `/rtfm/app`), over at least a few hours;
-  - the credentials: `server.started` logs `credentials: "environment"` (Lambda sets the role's
-    keys as environment variables, which a running process can't renew), so check whether any
-    environment outlives its keys: look for `ExpiredToken` or `server` errors in `/rtfm/app`, and
-    compare environment lifetimes with the keys' expiry if `AWS_CREDENTIAL_EXPIRATION` is
-    visible. If environments can outlive their keys, propose the fix as a task.
-- **Done when:** each measurement is in the doc, and any problem it found is a proposed task.
-
 ### IN.18 — Read the idle cost
 - **Status:** blocked (until 2026-10-15, two days after the Web Function's first deploy)
 - **Depends on:** IN.10
@@ -160,7 +142,7 @@ aren't RTFM's.
 - **Done when:** the doc's Measured section records it.
 
 ### IN.23 — Close the delete race, and the section route's status
-- **Status:** todo
+- **Status:** doing (agent a638f795b3a12ff50)
 - **Depends on:** IN.19
 - **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
 - **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
@@ -176,20 +158,6 @@ aren't RTFM's.
 ## Upkeep
 
 Small fixes that keep the repo healthy.
-
-### UP.4 — Two more tests that flake under load
-- **Status:** doing (agent af499d66e98fae880; done, being committed)
-- **Depends on:** —
-- **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
-- **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
-  signalled" once failed with `SyntaxError: Unexpected end of JSON input`: the stand-in `aws`
-  writes `started.json` with `writeFileSync`, and the test can read the empty file before the
-  write finishes. Make that write atomic (a temporary file renamed into place) or wait for content
-  that parses. `scripts/hooks/rule-copies.test.ts` › "prints nothing and exits 0 without a saved
-  copy, without git, or with bad input" once timed out at the default 5 s under load: give it a
-  timeout that follows `server/README.md` › Tests, or make it lighter. `scripts/serve-temp.test.ts`
-  › "refuses an unknown option" also hit its 5 s timeout once under load: the same treatment.
-- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
 - **Status:** todo
