@@ -59,16 +59,6 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
-### IN.22 — See the heartbeat through the edge
-- **Status:** doing (agent a94f0f92660183672; done, being committed)
-- **Depends on:** —
-- **Files:** `research/aws-design.md`
-- **Do:** through `https://rtfm.moonfetus.com`, `curl -N` a section stream or a librarian reply
-  with each line timestamped, and confirm a `: heartbeat` arrives about 15 s into a silence, and
-  that a silence before the first event shows nothing until that first heartbeat (the edge holds
-  the headers until the first byte, IN.10).
-- **Done when:** the doc's Measured section records it.
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
