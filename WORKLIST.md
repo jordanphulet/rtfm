@@ -94,7 +94,7 @@ aren't RTFM's.
   can read holds the passcode.
 
 ### IN.19 — Statuses and deletes see every environment's runs
-- **Status:** doing (agent a7083d6fb1dd46f90)
+- **Status:** doing (agent a7083d6fb1dd46f90; in review)
 - **Depends on:** IN.13
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`
 - **Do:** the manual route's written and writing statuses, and the delete route's refusal while a
@@ -147,7 +147,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.4 — Two more tests that flake under load
-- **Status:** todo
+- **Status:** doing (agent af499d66e98fae880)
 - **Depends on:** —
 - **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
 - **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
