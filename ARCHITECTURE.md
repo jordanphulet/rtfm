@@ -55,7 +55,7 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `link/`: the page routes `/l` (`LinkPage`), which opens a library by its link's secret, and
   `/admin` (`AdminPage`), which leaves it. See `src/link/README.md`.
 - `ui/`: the shared design system: tokens, fonts, base styles, the write head, `StatusRing`,
-  `Sheet`, `ReplyMarkdown`. See `src/ui/README.md`.
+  `Sheet`, `ReplyMarkdown`, `Icon`. See `src/ui/README.md`.
 - `reportErrors.ts`: `startReportingErrors` and `apiFetch`, which report the page's errors and
   failed API requests to the server's log, with the page's path but never its query or fragment;
   `apiFetch` also shows the passcode screen on a `401`.

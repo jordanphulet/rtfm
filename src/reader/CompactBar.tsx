@@ -1,7 +1,8 @@
 import { useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { LibraryBig } from "lucide-react";
 import { Link } from "react-router";
 import type { Section } from "../manual";
-import { Sheet, StatusRing } from "../ui";
+import { Icon, Sheet, StatusRing } from "../ui";
 import { HiddenStatusWord } from "./HiddenStatusWord";
 import { sectionPath } from "./manualParts";
 import { Toc } from "./Toc";
@@ -33,6 +34,7 @@ export function CompactBar({ current, previous, next, currentOutline }: CompactB
     <div ref={barRef} className="compact-bar">
       <header className="compact-header">
         <Link to="/" className="library-link">
+          <Icon of={LibraryBig} />
           Library
         </Link>
         <button

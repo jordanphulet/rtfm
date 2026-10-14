@@ -32,7 +32,10 @@
 /* Touch: the shared link and text-button hovers would stick after a tap */
 
 @media (hover: none) {
-  .home .start-link:hover,
+  .home .start-button:hover {
+    color: var(--ink-strong);
+  }
+
   .home .named-link:hover {
     color: var(--ink);
     text-decoration-color: var(--cue-deep);
@@ -47,7 +50,7 @@
     background: none;
   }
 
-  .home .row-delete:hover {
+  .home .row-delete:hover .icon {
     color: var(--ink-faint);
   }
 

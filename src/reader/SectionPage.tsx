@@ -46,14 +46,12 @@ export function SectionPage({ id }: { id: string }) {
   const activeId = useActiveHeading(outlineHeadings.map((heading) => heading.id));
   usePrevNextKeys(previous && sectionPath(manualId, previous.id), next && sectionPath(manualId, next.id));
 
-  const outline = (
-    <OutlineList
-      sectionLabel={section.label}
-      title={section.title}
-      headings={outlineHeadings}
-      activeId={activeId}
-      isWriting={phaseOf(sectionState) === "writing"}
-    />
+  const isWriting = phaseOf(sectionState) === "writing";
+  const outlineProps = { sectionLabel: section.label, headings: outlineHeadings, activeId, isWriting };
+  const tocOutline = (outlineHeadings.length > 0 || isWriting) && (
+    <div className="toc-outline">
+      <OutlineList {...outlineProps} />
+    </div>
   );
 
   return (
@@ -61,12 +59,12 @@ export function SectionPage({ id }: { id: string }) {
       current={section}
       previous={previous}
       next={next}
-      currentOutline={<div className="toc-outline">{outline}</div>}
+      currentOutline={tocOutline}
       asideLabel="On this page"
       aside={
         <>
           <h2 className="outline-label">On this page</h2>
-          {outline}
+          <OutlineList {...outlineProps} title={section.title} />
           <ReferencedSections sections={linkedSections} />
         </>
       }

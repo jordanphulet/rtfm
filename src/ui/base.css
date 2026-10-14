@@ -35,6 +35,17 @@ body {
   border-radius: var(--radius-s);
 }
 
+.ui .icon {
+  flex: none;
+  color: var(--ink-muted);
+  transition: color var(--dur-quick) var(--ease-out);
+}
+
+.ui a:hover > .icon,
+.ui button:hover > .icon {
+  color: inherit;
+}
+
 .ui .visually-hidden {
   position: absolute;
   width: 1px;

@@ -1,5 +1,8 @@
 import type { Ref } from "react";
+import { Plus } from "lucide-react";
 import type { ManualSummary } from "../library";
+import { Icon } from "../ui";
+import { Wordmark } from "./Wordmark";
 import { manualCount } from "./manualCount";
 import "./LibraryHead.css";
 
@@ -12,10 +15,15 @@ interface LibraryHeadProps {
 export function LibraryHead({ manuals, onStartNewManual, startRef }: LibraryHeadProps) {
   return (
     <header className="library-head">
-      <h1 className="library-title">Library</h1>
+      <Wordmark />
+      <p className="library-intro">
+        Writes manuals on any subject, in any voice. Tell the librarian what you’d like to read
+        and who you’d like it to sound like, and each section is written the first time you open it.
+      </p>
       <p className="library-meta">{summary(manuals)}</p>
-      <button type="button" ref={startRef} className="link start-link" onClick={onStartNewManual}>
-        Start a new manual ›
+      <button type="button" ref={startRef} className="start-button" onClick={onStartNewManual}>
+        <Icon of={Plus} />
+        Start a new manual
       </button>
     </header>
   );

@@ -10,7 +10,7 @@ import "./Outline.css";
 
 interface OutlineListProps {
   sectionLabel: string;
-  title: string;
+  title?: string;
   headings: Heading[];
   activeId?: string;
   isWriting: boolean;
@@ -19,9 +19,11 @@ interface OutlineListProps {
 export function OutlineList({ sectionLabel, title, headings, activeId, isWriting }: OutlineListProps) {
   return (
     <ol className="outline-list" data-writing={isWriting || undefined}>
-      <OutlineItem id={TITLE_ID} level={2} number={sectionLabel} isActive={activeId === undefined}>
-        {title}
-      </OutlineItem>
+      {title && (
+        <OutlineItem id={TITLE_ID} level={2} number={sectionLabel} isActive={activeId === undefined}>
+          {title}
+        </OutlineItem>
+      )}
       {headings.filter(isOutlineLevel).map((heading, index) => (
         <OutlineItem
           key={index}

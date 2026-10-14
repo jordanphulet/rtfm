@@ -1,5 +1,7 @@
+import { Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import type { ManualSummary } from "../library";
+import { Icon } from "../ui";
 import { SectionStrip } from "./SectionStrip";
 
 interface LedgerRowProps {
@@ -36,9 +38,11 @@ export function LedgerRow({ manual, named, hovered, lifted, onDelete, registerRo
         type="button"
         className="text-button row-delete"
         data-shot="delete"
+        title="Delete"
         onClick={() => onDelete(manual)}
       >
-        Delete<span className="visually-hidden"> {manual.title}</span>
+        <Icon of={Trash2} />
+        <span className="visually-hidden">Delete {manual.title}</span>
       </button>
     </li>
   );

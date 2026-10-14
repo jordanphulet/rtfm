@@ -1,26 +1,7 @@
-.home .cues {
-  margin-top: auto;
-}
-
-.home .cues-title {
+.home .greeting-text {
   margin: 0 0 var(--space-2);
-  font: 600 var(--text-h3) / var(--leading-h3) var(--font-sans);
-  letter-spacing: -0.005em;
-  color: var(--ink-strong);
-  text-wrap: balance;
-}
-
-.home .cues-intro {
-  margin: 0 0 var(--space-6);
-  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
-  color: var(--ink-muted);
-  text-wrap: pretty;
-}
-
-.home .cues-label {
-  margin: 0 0 var(--space-2);
-  font: 600 var(--text-micro) / var(--leading-micro) var(--font-sans);
-  color: var(--ink-muted);
+  font: var(--text-reply) / var(--leading-reply) var(--font-sans);
+  color: var(--ink);
 }
 
 .home .cue-list {
@@ -30,7 +11,9 @@
 }
 
 .home .cue {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   width: calc(100% + var(--space-3));
   margin-left: calc(-1 * var(--space-3));
   padding: var(--space-2) var(--space-3);

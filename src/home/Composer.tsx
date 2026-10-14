@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type KeyboardEvent, type RefObject } from "react";
 import { LIBRARIAN_LIMITS } from "../librarian";
+import { StatusRing } from "../ui";
 import { NewestButton } from "./NewestButton";
 import "./Composer.css";
 
@@ -16,6 +17,7 @@ interface ComposerProps {
   canSend: boolean;
   busy: boolean;
   fieldRef: RefObject<HTMLTextAreaElement | null>;
+  activity?: string | null;
   newest?: NewestJump | null;
 }
 
@@ -27,6 +29,7 @@ export function Composer({
   canSend,
   busy,
   fieldRef,
+  activity,
   newest,
 }: ComposerProps) {
   const [focused, setFocused] = useState(false);
@@ -36,8 +39,10 @@ export function Composer({
     onSend();
   }
 
-  function sendOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === "Escape") event.currentTarget.blur();
+    if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     onSend();
   }
@@ -55,12 +60,12 @@ export function Composer({
         maxLength={LIBRARIAN_LIMITS.messageCharacters}
         value={draft}
         onChange={(event) => onDraftChange(event.target.value)}
-        onKeyDown={sendOnEnter}
+        onKeyDown={handleKeyDown}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
       />
       <div className="composer-row">
-        {layout === "panel" && <Readout focused={focused} newest={newest ?? null} />}
+        {layout === "panel" && <Readout focused={focused} activity={activity ?? null} newest={newest ?? null} />}
         <button type="submit" className="send" aria-disabled={!canSend || undefined}>
           Send
           {busy && <span className="visually-hidden"> (waiting for the reply)</span>}
@@ -70,8 +75,22 @@ export function Composer({
   );
 }
 
-function Readout({ focused, newest }: { focused: boolean; newest: NewestJump | null }) {
+interface ReadoutProps {
+  focused: boolean;
+  activity: string | null;
+  newest: NewestJump | null;
+}
+
+function Readout({ focused, activity, newest }: ReadoutProps) {
   if (newest) return <NewestButton replying={newest.replying} onJump={newest.onJump} />;
+  if (activity) {
+    return (
+      <p className="readout readout-live">
+        <StatusRing status="writing" />
+        <span className="status-text">{activity}</span>
+      </p>
+    );
+  }
   if (focused) return <p className="readout">Enter sends · Shift+Enter, new line</p>;
   return (
     <p className="readout readout-shortcut">

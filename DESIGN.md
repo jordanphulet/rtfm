@@ -210,6 +210,7 @@ or timing.
 | --- | --- | --- | --- |
 | Text and interface | **IBM Plex Sans Variable**, `--font-sans` | wght 400 / 500 / 600; wdth 100 for reading, **85** (`--wdth-tight`) for dense UI: the TOC, outline, tables, pager, previews and the librarian's header and lines | Engineering-manual lineage, and it has every glyph the content needs (`I²C`, `1½`, `N·m`, `‹ ›`, `↑ ↓`). wdth 85 packs dense UI about 6% tighter without a second family. |
 | Code and readouts | **IBM Plex Mono**, `--font-mono` | 400 and 700, roman and italic, are loaded; readouts use 400 | Same superfamily, so metrics and texture match. It is the "machine voice" for status readouts, language tags, percentages and counts. |
+| The wordmark | **Space Mono**, `--font-wordmark` | 700 only, lowercase | Used once, for `rtfm` on the landing page: a retro terminal face with more character than Plex Mono, set like a command. |
 
 Body italics are Plex's true italic. No `font-optical-sizing` (Plex has no opsz axis). Measured on
 the sample text: Plex Sans 17px is about 7.58px per character, 16px about 7.13px.
@@ -226,10 +227,10 @@ A minor third (×1.2) on the body size, with line heights on the 4px grid. Each 
 | `--text-reply` | 400 · wdth 100 | The librarian's replies (`ReplyMarkdown`), your messages and the field |
 | `--text-body` | 400 · wdth 100 | Paragraphs, lists, H4, pager titles, ledger titles |
 | `--text-lead` | 400 | Section summary, start-page subtitle, blockquotes, the empty library's sentence |
-| `--text-h3` | 600, −0.005em | H3, start-page chapter headings, the empty conversation's "Ask about your manuals", the delete confirmation's title, the unreachable library's title |
+| `--text-h3` | 600, −0.005em | H3, start-page chapter headings, the delete confirmation's title, the unreachable library's title |
 | `--text-h2` | 600, −0.008em | H2, start-page "Appendices" |
 | `--text-h1` | 600, −0.012em | Section title |
-| `--text-title` | 600, −0.015em | The page's one largest title: the manual title on the start page, `Library` on the landing page |
+| `--text-title` | 600, −0.015em | The page's one largest title: the manual title on the start page, and the landing page's `rtfm` wordmark (Space Mono 700, lowercase) |
 
 "Phone" means below 768px. On phone the body steps off the scale on purpose: at 375px it keeps
 the measure at about 48 characters (the desktop size would sit at the 45 limit), and a short line
@@ -270,9 +271,9 @@ No second accent. Hairlines are always `--rule` or `--rule-strong`.
 ### Radii, motion and sizes
 
 - **Radii:** `--radius-s` for code, inline code, checkboxes, the focus ring and small buttons;
-  `--radius-m` for the TOC's `Library` link and manual title, start-page and ledger row
-  highlights, previews, compact header buttons, the librarian's field, the cue rows, the dock's
-  toggle and the delete confirmation. Rings are circles. Nothing else is rounded.
+  `--radius-m` for the TOC's manual title, start-page and ledger row highlights, previews, compact
+  header buttons, the librarian's field, the cue rows, the dock's toggle and the delete
+  confirmation. Rings are circles. Nothing else is rounded.
 - **Durations:** `--dur-quick` for hover color; `--dur-base` for previews, sheets, outline rows
   and rows collapsing; `--dur-settle` for the write-head retract, rule color, ring fill and
   progress fill; `--dur-breathe` for the live pulse; `--dur-target` for a target highlight
@@ -286,6 +287,24 @@ No second accent. Hairlines are always `--rule` or `--rule-strong`.
 - **Reduced motion** sets `--dur-quick`, `--dur-base`, `--dur-settle` and `--delay-preview` to 0ms;
   each animation (breathe, outline rows, write head, target flash, thinking line) is switched off
   where it is defined.
+
+### Icons
+
+One set, **Lucide** (`lucide-react`), drawn through `Icon` in `src/ui`, so every icon has the same
+size and weight: 16px, a 1.75px stroke, `aria-hidden`. The patterns come from comparable products
+(`research/ui-references.md`).
+
+- **An icon carries meaning or isn't there.** It names what a control does or where it goes; it is
+  never ornament (see Banned). No emoji, no hand-drawn icons, no second set.
+- **Beside a word, not instead of one.** Icon, 8px, then the label. An icon stands alone only for a
+  universal action repeated in a tight place, like a row's delete; it then has a visually hidden
+  name and a `title` tooltip.
+- **Quieter than its words.** `.icon` is `--ink-muted` beside brighter text, and takes its
+  control's color on hover, so the words still lead.
+- **One icon per meaning, everywhere:** the library is `LibraryBig` (the reader's way back and the
+  greeting's cue), starting a manual is `Plus` (the shelf's button and the greeting's cue), opening
+  one is `BookOpen`, deleting is `Trash2`.
+- The status rings are not icons: they are drawn in CSS by `StatusRing` and keep their own rules.
 
 ### Page
 

@@ -154,10 +154,16 @@
   grid-area: action;
   position: relative;
   z-index: 1;
+  display: grid;
+  place-items: center;
   justify-self: end;
+  width: var(--space-8);
+  height: var(--space-8);
   margin-right: calc(-1 * var(--space-2));
-  font: var(--text-ui) / var(--leading-ui) var(--font-sans);
-  font-stretch: calc(var(--wdth-tight) * 1%);
+  padding: 0;
+}
+
+.home .row-delete .icon {
   color: var(--ink-faint);
 }
 

@@ -1,6 +1,7 @@
 :root {
   --font-sans: "IBM Plex Sans Variable", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-wordmark: "Space Mono", var(--font-mono);
   --wdth-tight: 85;
 
   --text-micro: 12px;

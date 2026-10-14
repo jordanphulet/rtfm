@@ -3,7 +3,7 @@ import { StatusRing } from "../ui";
 import "./LibrarianHead.css";
 
 interface LibrarianStatusProps {
-  messageCount: number;
+  isEmpty: boolean;
   status: LibrarianStatus;
   activity: string;
 }
@@ -19,29 +19,29 @@ export function LibrarianHead({ edge, ...detail }: LibrarianStatusProps & { edge
   );
 }
 
-export function StatusDetail({ messageCount, status, activity }: LibrarianStatusProps) {
+export function StatusDetail({ isEmpty, status, activity }: LibrarianStatusProps) {
   if (status !== "idle") {
     return (
       <span className="status-detail" data-live="">
         <Separator />
         <StatusRing status="writing" />
-        <span className="status-text">{status === "thinking" ? activity : "Replying…"}</span>
+        <span className="status-text">{describeActivity(status, activity)}</span>
       </span>
     );
   }
+  if (!isEmpty) return null;
   return (
     <span className="status-detail">
       <Separator />
-      {describeCount(messageCount)}
+      Try asking
     </span>
   );
 }
 
-export function Separator() {
-  return <span aria-hidden="true">·</span>;
+export function describeActivity(status: Exclude<LibrarianStatus, "idle">, activity: string): string {
+  return status === "thinking" ? activity : "Replying…";
 }
 
-function describeCount(messageCount: number): string {
-  if (messageCount === 0) return "Try asking";
-  return messageCount === 1 ? "1 message" : `${messageCount} messages`;
+export function Separator() {
+  return <span aria-hidden="true">·</span>;
 }

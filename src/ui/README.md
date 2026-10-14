@@ -8,7 +8,7 @@ the reasoning behind every value are in `DESIGN.md`.
 ## Using it
 
 ```tsx
-import { ExternalLink, MarkdownLink, ReplyMarkdown, Sheet, StatusRing } from "../ui";
+import { ExternalLink, Icon, MarkdownLink, ReplyMarkdown, Sheet, StatusRing } from "../ui";
 
 export default function Home() {
   return <div className="ui home">…</div>;
@@ -36,13 +36,14 @@ export default function Home() {
 | `index.ts` | The entry: loads `fonts.ts` and the stylesheets, exports the components |
 | `fonts.ts` | IBM Plex Sans (variable: weight and width axes, roman and italic) and IBM Plex Mono (400 and 700, roman and italic) |
 | `tokens.css` | Every shared token, on `:root` |
-| `base.css` | The page, the `.ui` root, selection, focus, `.visually-hidden`, `.skip-link`, `.scroll-x`, the `breathe` and `target-flash` keyframes |
+| `base.css` | The page, the `.ui` root, selection, focus, `.icon`, `.visually-hidden`, `.skip-link`, `.scroll-x`, the `breathe` and `target-flash` keyframes |
 | `controls.css` | `.text-button`, `.link`, `.external-link` |
 | `markdown.css` | `.markdown` (shared by the reader's prose and `ReplyMarkdown`) and `.reply-markdown` |
 | `write-head.css` | The write head: `.write-head`, `.write-head-line`, `.write-head-lamp` |
 | `StatusRing.tsx`, `StatusRing.css` | The state ring |
 | `Sheet.tsx`, `Sheet.css` | A panel with a focus trap |
 | `ExternalLink.tsx` | A link that leaves the app |
+| `Icon.tsx` | A Lucide icon at the shared size and stroke, hidden from screen readers (`DESIGN.md` › Icons) |
 | `MarkdownLink.tsx` | The link for rendered markdown: an `ExternalLink` for a web URL, else a plain `<a>` |
 | `ReplyMarkdown.tsx` | Short markdown for the librarian's replies |
 
