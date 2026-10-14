@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.2 — Keep each library's manuals apart
-- **Status:** doing (agent a3a01cb82bec10d68)
+- **Status:** doing (agent a3a01cb82bec10d68; done, in review by a355a773bd722125b)
 - **Depends on:** —
 - **Files:** `server/storage/**`, `server/logging/README.md`, `ARCHITECTURE.md`
 - **Do:** bind `ManualStore` and `SectionLeases` to a library, as `research/libraries.md` ›
@@ -136,7 +136,7 @@ user revokes it, and with its activity visible to the user.
   `npm test` pass.
 
 ### LB.6 — Keep library links and activity
-- **Status:** doing (agent ad5dcc9675bc68f19)
+- **Status:** doing (agent ad5dcc9675bc68f19; done, in review by aaef9295a39aa6729)
 - **Depends on:** —
 - **Files:** `server/storage/**`, `server/gateway/sdk-boundary.test.ts`, `ARCHITECTURE.md`
 - **Do:** the store of links and activity, as `research/libraries.md` › The key scheme and What is
@@ -151,7 +151,7 @@ user revokes it, and with its activity visible to the user.
   and `npm test` pass.
 
 ### LB.7 — Give library links their AWS reach
-- **Status:** doing (agent a6dafa202d05f2d36)
+- **Status:** doing (agent a6dafa202d05f2d36; review's fixes; the user approved the diff with the tightening)
 - **Depends on:** —
 - **Files:** `infra/rtfm.ts`, `infra/app-stack.ts` and its test,
   `infra/access-stack.ts` and its test, `infra/README.md`, `server/storage/README.md`
