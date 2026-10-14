@@ -81,7 +81,7 @@ user revokes it, and with its activity visible to the user.
   states, and `npm run build` and `npm test` pass.
 
 ### LB.10 — Make, list and revoke libraries with the ops tools
-- **Status:** doing (agent aa5395c0f371031a1; done, in review by af29fe840f7bbc050; the user approved its `CLAUDE.md` line)
+- **Status:** doing (agent aa5395c0f371031a1; review's fixes: escape recipient titles; the user approved its `CLAUDE.md` line)
 - **Depends on:** —
 - **Merges after:** LB.7, LB.8, LB.9
 - **Files:** `scripts/ops/**`, `server/logging/log-reader.ts` and its test, `server/logs.ts`,
