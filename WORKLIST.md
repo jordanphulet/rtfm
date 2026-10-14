@@ -59,6 +59,30 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.12 — Render equations in sections
+- **Status:** doing (agent ae5b33cd876b1e085)
+- **Depends on:** —
+- **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `server/writer/**`, `package.json`,
+  `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `scripts/shot.ts`
+- **Do:** sections written by Claude hold LaTeX (`$$f = \frac{c}{4(L + 0.61d)}$$`, seen on the
+  deployed app in a pyrophone manual), and the reader shows it raw: `react-markdown` with
+  `remark-gfm` has no math. The user chose KaTeX: add `remark-math` and `rehype-katex` (and
+  KaTeX's CSS and fonts, self-hosted like the app's other fonts) wherever section bodies render,
+  display and inline, styled to the design in both themes and at phone width, loaded only with a
+  section. Check what the writer's text passes do to math on the way (`typographic-quotes.ts`
+  must not curl quotes or touch backslashes inside `$…$`/`$$…$$`, `code-fences.ts`, the partial
+  repair while streaming), and that a half-streamed `$$` block doesn't break the page. Tell the
+  writer's prompt (`server/writer/prompt.ts`) to write formulas as `$…$` or `$$…$$` LaTeX, and
+  only real formulas. A dollar amount in prose (`$5 and $10`) must not turn into math.
+- **Done when:** tests show display and inline math rendered, prices left as text, the text
+  passes leaving math intact, and a partial `$$` while streaming rendering safely; `npm run shot`
+  shows a section with an equation at desktop and phone width; `npm run build` and `npm test`
+  pass.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
