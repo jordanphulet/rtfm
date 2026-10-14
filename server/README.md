@@ -236,10 +236,13 @@ section writer and the librarian's model, which also plans new manuals (`createM
   checked 2026-10-11). The table holds the larger, so the bound holds whatever `tool_choice` is
   sent.
 - **Sources:**
+  - **AWS's bill** (Checked against AWS's bill, below) confirms the input and output prices of
+    both profiles.
   - Anthropic's Haiku 4.5 list price, $1 / $5 (the `claude-api` skill, cached 2026-10-06).
   - Anthropic's Bedrock guide, checked 2026-10-11: regional endpoints cost 10% more for Sonnet 4.5
     and later models.
-  - Cache prices use the standard 1.25× and 0.1× multipliers.
+  - Cache prices use the standard 1.25× and 0.1× multipliers. No call caches, so the bill doesn't
+    show them.
   - **Not from AWS's pricing page**, whose Claude tables don't render.
 
 **Measured** with Haiku 4.5 (`global.`): the sections and librarian turns on 2026-10-11, the plan
@@ -252,6 +255,31 @@ records them, not read from AWS's bill.
 | A section aborted mid-stream | as above | charged at 2,048 | — | about $0.013 | about $0.025 |
 | A librarian turn | 2,000–2,700 | up to a few hundred | — | $0.002–0.004 | $0.013–0.016 (about $0.014 for a first turn) |
 | A plan of 23 sections | 3,957 | 2,481 | 21.3s, the longest silence 11.2s (the chapters, about 116 tokens a second) | $0.0164 | about $0.036 |
+
+## Checked against AWS's bill
+
+On 2026-10-14 (UTC), as `rtfm-read`, Cost Explorer's daily cost and usage by usage type for the
+service "Claude Haiku 4.5 (Amazon Bedrock Edition)" (`npm run aws -- ce get-cost-and-usage`), set
+against the calls in `rtfm-usage` by the day they were reserved (UTC). Both days are complete in
+Cost Explorer; the next day, 2026-10-13, was still arriving.
+
+| Day | Input, AWS / ledger | Output, AWS / ledger as reported / ledger as charged | Cost, AWS / ledger |
+| --- | --- | --- | --- |
+| 2026-10-11, 29 calls, 2 aborted | 74,473 / 74,459 | 19,751 / 19,745 / 23,841 | $0.1733 / $0.1937 |
+| 2026-10-12, 46 calls | 116,843 / 116,829 | 10,095 / 10,091 / 10,091 | $0.1673 / $0.1673 |
+
+- **Prices.** Each usage type's cost over its quantity is $1.00 input and $5.00 output per million
+  for `USW2-MP:USW2_InputTokenCount_Global-Units` and `…OutputTokenCount_Global-Units` (the
+  `global.` profile), and $1.10 and $5.50 for `USW2-MP:USW2_InputTokenCount-Units` and
+  `…OutputTokenCount-Units` (the `us.` profile), as `gateway/prices.ts` holds.
+- **Complete calls match to the token.** What AWS billed beyond the ledger each day is one call of
+  14 input and 4–6 output tokens on the `global.` profile, and on 2026-10-11 one more on the `us.`
+  profile, which RTFM never uses: calls made outside the server, worth $0.0001 in all.
+- **An aborted call is billed its input and almost none of its output.** The two sections aborted
+  mid-stream on 2026-10-11 were billed their full input (5,954 tokens) and at most 6 output tokens
+  between them, against the hundreds a section streams in its first 5 seconds (Measured, above).
+  The ledger charged each its full `max_tokens` of output (`server/gateway/README.md` › Each call),
+  2,048 tokens or about $0.01, which is the whole of the day's difference.
 
 ## Tests
 

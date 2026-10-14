@@ -114,7 +114,10 @@ For each call, in order:
        an `output_tokens`, but it is a placeholder (1), so the client doesn't map it.
      - **Any call that doesn't complete (aborted, stalled or failed) is charged its full reserved
        output (`max_tokens`)** and marked `estimated: true`. The stream doesn't tell us what
-       Bedrock billed after the cut, so the gateway assumes the most it can be.
+       Bedrock billed after the cut, so the gateway assumes the most it can be. AWS's bill shows
+       an aborted call billed its input and almost none of its output (`server/README.md` ›
+       Checked against AWS's bill), so the ledger overstates each by nearly its full
+       `max_tokens` of output.
      - `estimated` is also set if a complete call never reported its input or output tokens.
    - **The call stays running until its settle is written.** Only then does it free its
      concurrency slot, and its unused worst case is freed with the settle, so until then the
