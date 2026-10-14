@@ -1,6 +1,6 @@
 import type { ConversationMessage, LibrarianStatus } from "../librarian";
 import type { ManualSummary } from "../library";
-import { Cues } from "./Cues";
+import { Greeting } from "./Greeting";
 import { Turn } from "./Turn";
 import type { StickToBottom } from "./useStickToBottom";
 import "./Conversation.css";
@@ -27,28 +27,25 @@ export function Conversation({ messages, status, activity, manuals, stick, onJum
       tabIndex={0}
     >
       <div ref={stick.contentRef} className="conversation-content">
-        {messages.length === 0 ? (
-          <Cues manuals={manuals} onCue={onCue} />
-        ) : (
-          <ol className="turns">
-            {messages.map((message, index) => (
-              <Turn
-                key={message.id}
-                message={message}
-                live={status === "streaming" && index === messages.length - 1}
-                manuals={manuals}
-                onJump={onJump}
-                onHover={onHover}
-              />
-            ))}
-            {status === "thinking" && (
-              <li className="thinking write-head-line" data-live>
-                <span className="visually-hidden">Librarian: </span>
-                <span className="thinking-text">{activity}</span>
-              </li>
-            )}
-          </ol>
-        )}
+        <ol className="turns">
+          <Greeting manuals={manuals} onCue={onCue} />
+          {messages.map((message, index) => (
+            <Turn
+              key={message.id}
+              message={message}
+              live={status === "streaming" && index === messages.length - 1}
+              manuals={manuals}
+              onJump={onJump}
+              onHover={onHover}
+            />
+          ))}
+          {status === "thinking" && (
+            <li className="thinking write-head-line" data-live>
+              <span className="visually-hidden">Librarian: </span>
+              <span className="thinking-text">{activity}</span>
+            </li>
+          )}
+        </ol>
       </div>
     </div>
   );

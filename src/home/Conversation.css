@@ -28,10 +28,6 @@
   margin-top: var(--space-8);
 }
 
-.home .turn-user:first-child {
-  margin-top: 0;
-}
-
 .home .said {
   margin: 0;
   padding-left: var(--space-3);

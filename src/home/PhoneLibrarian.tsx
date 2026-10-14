@@ -79,7 +79,7 @@ export function PhoneLibrarian({ librarian, manuals, composer, onJump, onHover, 
         focusOnOpen={focusOnOpen}
       >
         <LibrarianHead
-          messageCount={librarian.messages.length}
+          isEmpty={librarian.messages.length === 0}
           status={librarian.status}
           activity={librarian.activity}
           edge={stick.scrolledFromTop}
@@ -116,7 +116,7 @@ export function PhoneLibrarian({ librarian, manuals, composer, onJump, onHover, 
           ) : (
             <span className="dock-label">
               <span className="dock-name">Librarian</span>
-              <StatusDetail messageCount={librarian.messages.length} status={librarian.status} activity={librarian.activity} />
+              <StatusDetail isEmpty={librarian.messages.length === 0} status={librarian.status} activity={librarian.activity} />
             </span>
           )}
           <span className="dock-action">{open ? "Hide ↓" : "Show ↑"}</span>

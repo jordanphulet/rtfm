@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import { LibraryBig } from "lucide-react";
 import { Link } from "react-router";
 import { sectionsInReadingOrder, useManual, type Chapter, type Section } from "../manual";
-import { StatusRing } from "../ui";
+import { Icon, StatusRing } from "../ui";
 import { HiddenStatusWord } from "./HiddenStatusWord";
 import { contentsPath, sectionPath } from "./manualParts";
 import { StatusLegend } from "./StatusLegend";
@@ -20,10 +21,11 @@ export function Toc({ currentId, currentOutline }: TocProps) {
 
   return (
     <nav className="toc" aria-label="Contents">
+      <Link to="/" className="toc-library">
+        <Icon of={LibraryBig} />
+        Library
+      </Link>
       <div className="toc-masthead">
-        <Link to="/" className="toc-library">
-          Library
-        </Link>
         <Link to={contentsPath(manual.id)} className="toc-manual-title" aria-current={currentId ? undefined : "page"}>
           {manual.title}
         </Link>

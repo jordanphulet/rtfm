@@ -64,9 +64,11 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.14 — Keep wide inline formulas inside the column
-- **Status:** todo
+- **Status:** doing (agent a7f26bb256a6fb764; done, being committed)
 - **Depends on:** —
-- **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`
+- **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `DESIGN.md`,
+  `scripts/wide-formula.test.ts`, `scripts/shot.ts`, `README.md`, `ARCHITECTURE.md`,
+  `server/README.md`
 - **Do:** UP.12's third review found that nothing limits an inline formula's width, and the
   reader's main column doesn't clip overflow: at 375px, 40 subscripts in a row were 923px wide and
   `\Bigg(` ×200 made the page 3,083px wide, so the whole page scrolls sideways. KaTeX breaks
@@ -77,37 +79,43 @@ Small fixes that keep the repo healthy.
   the viewport with a too-wide inline formula, ordinary inline formulas unchanged, and `npm run
   build` and `npm test` pass.
 
-### UP.13 — Bring in the UI design iteration
-- **Status:** doing (agent a254561e13310c51d; done, in review by a6bd21566a2e0f95f)
+## A public repository
+
+RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
+
+### GH.1 — Scrub the history and publish it
+- **Status:** blocked (the user gives the go-ahead; until then, planning only)
 - **Depends on:** —
-- **Files:** `src/home/**`, `src/reader/**`, `src/ui/**`, `index.html`, `package.json`,
-  `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `research/ui-references.md`
-- **Do:** port the UI changes the user made and approved in the session "UI design iteration",
-  parked uncommitted in the worktree `.claude/worktrees/repo-agent-behavior-283c77` (branch
-  `claude/ui-design-iteration-12464b`, at a4c2d64). Read them there without changing that
-  worktree: `git -C <path> diff a4c2d64` for modified and deleted files, plus its untracked files
-  `research/ui-references.md`, `src/home/Greeting.tsx`, `src/home/Greeting.css`,
-  `src/home/Wordmark.tsx` and `src/ui/Icon.tsx`. Bring them into your worktree as they are,
-  reconciling with what `main` has gained since a4c2d64. The changes:
-  - Reader: a Library bar with a books icon at the top of the contents, and the same icon in the
-    compact header; the contents' expanded outline no longer repeats the section's own title, and
-    a section with no headings doesn't expand.
-  - Landing page: an "rtfm" wordmark in Space Mono in place of the "Library" title, with an intro
-    under it; "Start a new manual" is a button with a plus icon; a row's Delete is a trash icon
-    with a hidden label and a tooltip.
-  - Librarian panel: no visible header or message count; live status in the composer's readout;
-    tighter composer padding; Esc leaves the field; a librarian greeting with three icon cues in
-    place of the empty state.
-  - Icons: Lucide (`lucide-react` 1.49.0, pinned) through a shared `Icon` in `src/ui`, with rules
-    in `DESIGN.md` › Icons; `@fontsource/space-mono` 5.3.0 pinned for the wordmark.
-  - The tab title is "rtfm".
-  - Docs: `DESIGN.md`, `src/home/DESIGN.md`, `src/reader/DESIGN.md`, `src/ui/README.md` and
-    `ARCHITECTURE.md` describe it; `research/ui-references.md` is the dated reference study behind
-    the icon rules.
-  Don't redesign: fix only what review or the checks find.
-- **Done when:** the landing page and reader match the above; `npm run build` and `npm test`
-  pass; `npm run shot` differs from `main`'s shots only in the landing page's states and the
-  reader's Library icon.
+- **Files:** `PROCESS.md`, `README.md`
+- **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
+  while no task is running, every task branch is merged, and no worktree is mid-task.
+  - **What the user decided to scrub:**
+    - Every commit's author and committer email, the user's work address, becomes
+      `1161666+jordanphulet@users.noreply.github.com`. It appears in no file or message.
+    - The 16 images under `docs/inspo/` (`*.png`, `*.jpg`) leave every commit. They are already
+      gone from `main` (08db542), so `main`'s final tree must come out identical.
+    - The AWS account id stays, by the user's choice.
+  - **The user first:** turns on GitHub › Settings › Emails › "Keep my email addresses private"
+    and "Block command line pushes that expose my email", and decides on a LICENSE.
+  - **Backup:** a full mirror clone is at `/Users/jordan/projects/rtfm-backup-2026-10-14.git`
+    (`main` at 92c88c9). Make a fresh one of the `main` of the day before rewriting.
+  - **Rewrite** in a fresh clone of `main` outside the repo, never in the repo: `git
+    filter-branch` with an `--env-filter` for the email and an `--index-filter` running `git rm
+    --cached --ignore-unmatch` on the `docs/inspo` images; then delete `refs/original`, expire the
+    reflog and `gc`.
+  - **Verify:** `git log -p` holds no trace of the work address; no commit names a `docs/inspo` image and no
+    blob of one is left; the commit count is unchanged; `main^{tree}` equals the original's.
+  - **Publish**, with the user's explicit OK in chat: `gh repo create jordanphulet/rtfm
+    --public`, push `main` only; then clone it fresh from GitHub and re-run the checks.
+  - **Switch locally:** keep the current `main` as `pre-rewrite-main`; point `main` at the
+    rewritten history; add GitHub as `origin`. Branches from the old history (`claude/*`,
+    `worktree-agent-*`) are never pushed, and are removed once merged or no longer needed.
+  - **Push from then on:** add to `PROCESS.md` › Review loop › Approved, after the fast-forward,
+    the wording the user approves. The draft: "Then `git push origin main`. Push only `main`:
+    never `--all`, `--mirror`, a force-push, `pre-rewrite-main`, or a branch from before the
+    rewrite." Say in `README.md` where the public repository is.
+- **Done when:** the public repository holds the scrubbed `main`, verified from a fresh clone;
+  the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
 
 ## Waiting on AWS
 

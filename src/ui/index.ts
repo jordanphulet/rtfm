@@ -6,6 +6,7 @@ import "./markdown.css";
 import "./write-head.css";
 
 export { ExternalLink } from "./ExternalLink";
+export { Icon } from "./Icon";
 export { MarkdownLink } from "./MarkdownLink";
 export { ReplyMarkdown, type ReplyMarkdownProps } from "./ReplyMarkdown";
 export { Sheet, type SheetProps } from "./Sheet";

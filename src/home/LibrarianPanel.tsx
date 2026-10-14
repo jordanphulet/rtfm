@@ -1,7 +1,7 @@
 import { useLibrarianActions } from "../librarian";
 import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
-import { LibrarianHead } from "./LibrarianHead";
+import { describeActivity } from "./LibrarianHead";
 import type { LibrarianSideProps } from "./librarianSide";
 import { useStickToBottom } from "./useStickToBottom";
 import "./LibrarianPanel.css";
@@ -17,12 +17,9 @@ export function LibrarianPanel({ librarian, manuals, composer, onJump, onHover, 
 
   return (
     <aside className="panel" aria-labelledby="librarian-title">
-      <LibrarianHead
-        messageCount={librarian.messages.length}
-        status={librarian.status}
-        activity={librarian.activity}
-        edge={stick.scrolledFromTop}
-      />
+      <h2 id="librarian-title" className="visually-hidden">
+        Librarian
+      </h2>
       <Conversation
         messages={librarian.messages}
         status={librarian.status}
@@ -38,6 +35,7 @@ export function LibrarianPanel({ librarian, manuals, composer, onJump, onHover, 
         {...composer}
         onSend={send}
         busy={busy}
+        activity={librarian.status === "idle" ? null : describeActivity(librarian.status, librarian.activity)}
         newest={stick.scrolledUp ? { replying: busy, onJump: stick.scrollToBottom } : null}
       />
     </aside>

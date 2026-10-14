@@ -59,7 +59,9 @@ never between them. On the start page the main track widens to `--start-width`.
 ### 1024–1199px: two columns
 
 TOC 272 | centre. The outline moves **into the TOC**: the current entry expands in place to list
-its H2 and H3 headings over the outline track. "Referenced here" is dropped, because inline
+its H2 and H3 headings over the outline track, without the outline column's title row, because
+the entry itself is the title. A section with no headings doesn't expand; while it is being
+written it shows the hint until its first heading. "Referenced here" is dropped, because inline
 cross-references carry their status anyway.
 
 ### Compact, below 1024px: header and contents sheet
@@ -67,9 +69,10 @@ cross-references carry their status anyway.
 The phone at 375px is the design target.
 
 - **Sticky header**, 48px, `--ground`, 1px `--rule` bottom line:
-  - Left: **`Library`**, a link to `/`, `--text-ui` 400 wdth 85 ink-muted, 44px tall with 8px side
-    padding, so its text lines up with the 16px phone gutter. Hover `--ground-tint` and cue text,
-    like `‹ ›`. No glyph: `‹` already means "previous" here.
+  - Left: **`Library`**, a link to `/`: the `LibraryBig` icon (see The TOC) then `Library`, 8px
+    apart, `--text-ui` 500 wdth 85 ink, 44px tall with 8px side padding, so the icon lines up with
+    the 16px phone gutter. Hover `--ground-tint` and cue text, like `‹ ›`. The icon is books, not an
+    arrow: `‹` already means "previous" here.
   - Then, flexible: the **location button** (40px tall, `data-shot="toc-toggle"`): status ring ·
     `2.4` (tabular, ink-faint) · title (`--text-ui` 500 wdth 85, ellipsis) · a CSS chevron that
     turns when open. On the start page it reads "Contents".
@@ -118,15 +121,16 @@ The head is identical in every state, so nothing in it ever reflows.
 
 ### The TOC
 
-- **Masthead** (padding 20/16/8): first **`Library`**, a link to `/` that takes you back to the
-  library: `--text-ui` 400 ink-muted, the same voice as the eyebrow's chapter link (each goes up a
-  level), with no glyph and no underline; cue text on hover, `--dur-quick`. Its box is padding 4/8
-  with the padding hung outside the text edge, like the title's, so the focus ring sits around
-  the word. It adds 28px to the masthead, and the whole index still fits in 900px. The contents
-  sheet leaves it out, because the compact header already has it. Then the manual title, `--text-ui`
-  600 ink-strong, linking to the manual's start page (it takes the current-row tint there); under
-  it `7 of 18 sections written`, micro mono ink-faint, live; then the status legend (see Section
-  states).
+- **Library bar**, above the masthead: **`Library`**, a link to `/` that takes you back to the
+  library, filling a 48px row (the compact header's height) with 16px side padding and a 1px
+  `--rule` bottom line, so it reads as its own place rather than a caption on the title. The
+  `LibraryBig` icon (see `DESIGN.md` › Icons) then `Library`, 8px apart, `--text-ui` 500 ink.
+  Hover: `--ground-tint` across the row, cue text and icon, `--dur-quick`. Its focus ring sits
+  inside the row. The whole index of an 18-section manual still fits in 900px. The contents sheet
+  leaves it out, because the compact header already has it.
+- **Masthead** (padding 20/16/8): the manual title, `--text-ui` 600 ink-strong, linking to the
+  manual's start page (it takes the current-row tint there); under it `7 of 18 sections written`,
+  micro mono ink-faint, live; then the status legend (see Section states).
 - **Chapter row:** `--text-ui` 600 ink-strong, wdth 85; the label in a 36px tabular column,
   ink-faint. A heading, not a link (chapters have no page). 8px above each chapter group.
 - **Section row:** 24px tall (padding 2/12), so the dense index fits the screen. Grid

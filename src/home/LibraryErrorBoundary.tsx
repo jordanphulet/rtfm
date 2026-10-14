@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import "../ui";
+import { Wordmark } from "./Wordmark";
 import "./tokens.css";
 import "./page.css";
 import "./LibraryHead.css";
@@ -21,7 +22,7 @@ export class LibraryErrorBoundary extends Component<{ children: ReactNode }, { f
           <main className="library">
             <div className="library-inner">
               <header className="library-head">
-                <h1 className="library-title">Library</h1>
+                <Wordmark />
               </header>
               <section className="ledger ledger-empty" aria-labelledby="library-error-title">
                 <h2 id="library-error-title" className="library-error-title">

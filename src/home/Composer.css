@@ -1,5 +1,5 @@
 .home .composer {
-  padding: var(--space-3) var(--panel-pad) var(--space-5);
+  padding: var(--space-3);
   border-top: 1px solid var(--rule);
 }
 
@@ -50,6 +50,16 @@
   font: var(--text-micro) / var(--leading-micro) var(--font-mono);
   letter-spacing: 0.02em;
   color: var(--ink-faint);
+}
+
+.home .readout-live {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+  color: var(--cue);
 }
 
 .home .readout kbd {

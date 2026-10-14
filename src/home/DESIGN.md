@@ -116,14 +116,21 @@ the rows' scroll margin.
 
 ### Head (in the library area, left-aligned)
 
-1. **Title** `Library`, `<h1>`, `--text-title` 600 `--ink-strong`, 12px below.
-2. **Meta**, `--text-micro` mono `--ink-faint`, tabular, live: `7 manuals · 7 of 117 sections
+1. **Wordmark** `rtfm`, the `<h1>` (`Wordmark.tsx`): the app's front door names the app, and the
+   intro below says what it does. `--text-title` Space Mono 700 (`--font-wordmark`), `--ink-strong`,
+   lowercased by CSS: the markup says `RTFM`, and browsers expose the rendered `rtfm` to screen
+   readers. Set like a command, not a heading. 12px below.
+2. **Intro**, what RTFM does, read on from the wordmark, so a first visit knows what the shelf is:
+   `Writes manuals on any subject, in any voice. Tell the librarian what you’d like to read and who
+   you’d like it to sound like, and each section is written the first time you open it.`
+   `--text-body` `--ink-muted`, `pretty`, capped at 56ch. 16px below.
+3. **Meta**, `--text-micro` mono `--ink-faint`, tabular, live: `7 manuals · 7 of 117 sections
    written` (`1 manual · …`; empty: `No manuals`). 24px below.
-3. **Start a new manual ›**, a `<button>` in the plain `.link` style: `--text-body` 400 `--ink`
-   with the 1px `--cue-deep` underline, `--cue` on hover. Deliberately quieter than the reader's
-   green "Begin" link, so it never competes with the librarian's input. Always here, in every
-   state but the unreachable library, so it has one home. What it does is under "Direct
-   controls".
+4. **Start a new manual**, the shelf's main action, so a button, not a link: the `Plus` icon then
+   the words, 8px apart, `--text-ui` 500 `--ink-strong` on `--ground-tint`, `--radius-m`, 40px
+   tall, padding 0 16px 0 12px; `--cue` text and icon on hover. A tint, not the green, so it never
+   competes with the librarian's input. Always here, in every state but the unreachable library,
+   so it has one home. What it does is under "Direct controls".
 
 48px below: the ledger.
 
@@ -146,12 +153,14 @@ console's channel list.
   - **Written cell:** the readout `3 of 14`, `--text-micro` mono, tabular, `--ink-muted`
     (`--ink-faint` at 0), with a visually hidden ` sections written`; 4px below, the **section
     strip**.
-  - **Delete cell:** a `.text-button` `Delete` (`--text-ui`, wdth 85), `--ink-faint`, aligned to
-    the first line of the title, pulled right by `--space-2` so its text, not its padded box, ends
-    on the row's text edge. Accessible name `Delete The Birthday Party Field Manual`.
+  - **Delete cell:** a 32px square `.text-button` holding the `Trash2` icon alone, in
+    `--ink-faint`: a quiet, universal action repeated on every row, so it needs no word (see
+    `DESIGN.md` › Icons). Aligned to the first line of the title, pulled right by `--space-2` so
+    the icon ends near the row's text edge. Accessible name `Delete The Birthday Party Field
+    Manual` (visually hidden), and `title="Delete"` for a pointer's tooltip.
     `data-shot="delete"`. It sits above the stretched link (`position: relative; z-index: 1`).
 - **Hover:** the row takes `--ground-hover`, the title turns `--cue` (`--dur-quick`). Hovering
-  Delete gives the button its own `--ground-tint` and `--ink-strong`, and the title stays
+  Delete gives the button its own `--ground-tint` and an `--ink-strong` icon, and the title stays
   `--ink-strong`.
 - **Focus:** the title link shows the focus ring around the whole row (the `::after` takes the
   outline, `--radius-m`); Delete has its own ring.
@@ -174,7 +183,7 @@ From 768 to 1279 the ledger is the same, in the narrower library area.
   job: the rows have no hover tint to separate them on touch).
 - Title `--text-body` 500 `--ink-strong`; subtitle `--text-ui` `--ink-muted`.
 - 8px below, one meta line: the section strip, `3 of 14` (`--text-micro` mono, tabular), and
-  **Delete** at the right end: `--text-ui`, `--ink-faint`, a 44 × 44 hit area (`--tap`).
+  **Delete** at the right end: the same icon, a 44 × 44 hit area (`--tap`).
 
 ### Named in the conversation (the shelf mark)
 
@@ -196,29 +205,17 @@ From 768 to 1279 the ledger is the same, in the narrower library area.
 
 ## The librarian panel (1024px and up)
 
-`<aside aria-labelledby="librarian-title">`, a grid of three rows: header, conversation (`1fr`,
-scrolls), composer.
-
-### Header
-
-`LibrarianHead`: one line, `--text-ui` wdth 85, padding 20px `--panel-pad` 12px `--panel-gutter`
-(aligned with the conversation's text). `Librarian` (`<h2 id="librarian-title">`, 600
-`--ink-strong`), a `·`, then **what the librarian is doing**, in the same words as the phone dock:
-- empty: `Try asking` (`--ink-muted`);
-- idle: `6 messages` (`--ink-muted`);
-- thinking: `StatusRing status="writing"` + the librarian's activity in `--cue`: `Thinking…`, or
-  the line of the tool it is running (see the thinking line below);
-- streaming: the ring + `Replying…`.
-
-So the corner always says what it's doing, even when the conversation is scrolled away from the
-live reply. The `·` is its own flex item, so the gaps on either side are equal. No avatar, no
-model name, no sparkle. Once the conversation is scrolled away from its top, a 1px `--rule` line
-appears under the header (`--dur-settle`), so text never slides under it unmarked.
+`<aside aria-labelledby="librarian-title">`, a grid of two rows: conversation (`1fr`, scrolls) and
+composer. It has no visible header: the librarian's greeting introduces it, and its name is a
+visually hidden `<h2 id="librarian-title">Librarian</h2>`. What the librarian is doing shows in
+the composer's readout slot (below), so the corner always says it, even when the conversation is
+scrolled away from the live reply.
 
 ### Conversation
 
-The scroll region, padding 0 `--panel-pad` 24px `--panel-gutter`, focusable (`tabIndex=0`) so
-the keyboard can scroll it. Its content is capped at `--measure`. Text width at 1440 is 376px,
+The scroll region, padding 20px `--panel-pad` 24px `--panel-gutter`, focusable (`tabIndex=0`) so
+the keyboard can scroll it. The 20px on top keeps the greeting off the panel's edge once a long
+conversation is scrolled to its top; the phone sheet has `LibrarianHead` above it instead. Its content is capped at `--measure`. Text width at 1440 is 376px,
 about 53 characters of 16px Plex (the line-length floor is 45).
 
 - `role="log"` with `aria-live="off"` and `aria-label="Conversation"` (a log is polite by
@@ -262,8 +259,8 @@ reply arrives the same way a section does. Both use the shared write head
     time), so its line moves on as the plan does: about a second in, once the planned title has
     arrived, `Planning “Restoring a Vintage Pinball Machine”…`; if the first plan fails its
     checks, `Revising the plan…`, then `Revising “…”…`.
-  - The activity is one line, here and in the header: a line too long for the panel ends in an
-    ellipsis (`text-overflow`), and the live region still says it whole.
+  - The activity is one line, here and in the composer's readout: a line too long for the panel
+    ends in an ellipsis (`text-overflow`), and the live region still says it whole.
   - **Words before a tool stand until new words replace them.** The librarian sometimes writes
     before it calls a tool (“Let me check…”). Those words stay while the tool runs: they settle
     (the bar retracts, the lamp goes out) and the thinking line fades in 12px under them with the
@@ -291,7 +288,7 @@ crossed or the kill switch is on, and **this reply failed** for anything else (t
 stalled, the stream broke, or the server couldn't be reached). It is the settle without the finish,
 in the reader's terms:
 
-- The bar retracts and the lamp goes out; the header returns to the message count. No red, no
+- The bar retracts and the lamp goes out; the readout returns to its hint. No red, no
   warning glyph: the words carry it.
 - In the reply's place (under any text that already arrived, 12px below it), one paragraph,
   `--text-reply` `--ink-muted`, starting with a 600 `--ink-strong` title:
@@ -355,7 +352,7 @@ confirmation is open, those actions do nothing.
 
 ### The composer: the most prominent control
 
-At the panel's foot, padding 12px `--panel-pad` 20px, on `--ground-side`, with a 1px `--rule` line
+At the panel's foot, padding 12px, on `--ground-side`, with a 1px `--rule` line
 above it (a job: it separates a scrolling log from a fixed control).
 
 - **Focus on load:** on `(hover: hover) and (pointer: fine)` at 1024px and up, the field takes
@@ -371,10 +368,13 @@ above it (a job: it separates a scrolling log from a fixed control).
   `--radius-m`). It takes at most 4,000 characters (`maxLength`, the librarian's limit for one
   message).
 - **Below it, 8px**, one row:
-  - Left, the **readout slot**, `--text-micro` mono `--ink-faint`: `Press / to ask` while the field
-    isn't focused (hover devices only; the `/` is set like inline code); `Enter sends · Shift+Enter,
-    new line` while it is (`nowrap`; 35 characters, so it fits beside Send in the 384px panel);
-    `Newest ↓` when scrolled up (above).
+  - Left, the **readout slot**, `--text-micro` mono `--ink-faint`, showing the first that applies:
+    `Newest ↓` when scrolled up (above); while a reply is in progress, **what the librarian is
+    doing**: `StatusRing status="writing"` + the activity (`Thinking…`, or the line of the tool it
+    is running; see the thinking line above), or `Replying…` while it streams, in `--text-micro`
+    Sans `--cue`, one line with an ellipsis; `Press / to ask` while the field isn't focused
+    (hover devices only; the `/` is set like inline code); `Enter sends · Shift+Enter, new line`
+    while it is (`nowrap`; 35 characters, so it fits beside Send in the 384px panel).
   - Right, **Send**, which shows readiness: `--text-ui` 600 wdth 85, `--radius-s`, 32px tall.
     - **Ready** (the draft has text and no reply is in progress): `--ink-strong` on
       `--ground-tint`. Hover: `--cue` text on the same fill.
@@ -384,25 +384,23 @@ above it (a job: it separates a scrolling log from a fixed control).
     - So typing, or a cue loading, visibly lights Send. A flat fill, no gradient, no arrow icon.
 - **Enter sends** (not during IME composition); Shift+Enter makes a new line. While a reply is in
   progress Enter does nothing and keeps your draft (`send` would ignore it anyway). After a send
-  the field clears and keeps focus.
+  the field clears and keeps focus. **Escape** leaves the field (it blurs), so `/` brings you back.
 
-### The empty conversation: cues from the shelf
+### The greeting: cues from the shelf
 
-With no messages, the conversation area holds a short intro and suggestions, **bottom-aligned
-against the composer**, so they read as one unit with it (and the first exchange grows from the
-same place):
+The conversation always opens with a message from the librarian, the first item of the log,
+before anything you send. It is the page's own, never sent to the model. With no messages it sits
+**bottom-aligned against the composer**, so it reads as one unit with it, and the first exchange
+grows below it.
 
-- `Ask about your manuals` `--text-h3` 600 `--ink-strong`; 8px; `It can list, find and open your
-  manuals, start a new one, and delete one once you confirm.` `--text-ui` `--ink-muted`, `pretty`.
-- 24px; `Try asking`, `--text-micro` Sans 600 `--ink-muted`; 8px; up to four **cues**, each a
-  `<button>` row: `--text-ui` `--ink`, in curly quotes, padding 8px 12px pulled left by 12px so the
-  text aligns, `--radius-m`, hover `--ground-hover` and `--ink-strong`. Drawn from the library
-  (`cuePrompts.ts`):
-  1. “Let’s start a new manual about…” (loads exactly `Let’s start a new manual about `)
-  2. “What do I have?”
-  3. “Open ‹the first manual’s title›”, the first row of the ledger (omitted when the library is
-     empty)
-  4. “How do I delete a manual?”
+- `Hello, I’m the librarian. I can:`, `--text-reply` `--ink`; 8px; then up to three **cues**, the
+  ways it can help, each a `<button>` row: its icon, then `--text-ui` `--ink` 8px after it,
+  padding 8px 12px pulled left by 12px so the icon aligns with the text above, `--radius-m`, hover
+  `--ground-hover` and `--ink-strong`. Drawn from the library (`cuePrompts.ts`):
+  1. `Plus`, Start a new manual on any subject (loads exactly `Let’s start a new manual about `)
+  2. `LibraryBig`, Tell you what’s in your library (loads `What do I have?`)
+  3. `BookOpen`, Find and open a manual (loads `Open ‹the first manual’s title›`, the first row of the
+     ledger; omitted when the library is empty)
 - **A cue loads, it doesn't send.** It replaces the draft (you chose that line), focuses the
   field with the caret at the end, and flashes the field `--cue-tint` over `--dur-target`. Enter
   is the GO. Because the text is now the draft, cue 3 marks its manual on the shelf at once.
@@ -420,8 +418,9 @@ the library's gutter). Two rows, 4px apart:
 1. **The conversation toggle**, a full-width button, 44px tall (`aria-expanded`,
    `aria-controls`), `--text-ui` wdth 85, `--ground-tint` on hover. Right: `Show ↑` / `Hide ↓` in
    `--ink-muted`. Left: it names the half you'd go to.
-   - Sheet closed: `Librarian` (600 `--ink-strong`) and the same status as the panel header
-     (`· Try asking`, `· 6 messages`, `· ◉ Thinking…`, `· ◉ Replying…`).
+   - Sheet closed: `Librarian` (600 `--ink-strong`) and what it is doing: `· Try asking` before
+     the first message, `· ◉ Thinking…` or `· ◉ Replying…` while it replies, and nothing more
+     when idle.
    - Sheet open: `Library · 7 manuals` (`No manuals`, `1 manual`: the library head's wording,
      from `manualCount.ts`), `aria-hidden`, so the button's accessible name is "Hide ↓" with
      `aria-expanded`. The live status is already in the sheet's own header, so it isn't said twice.
@@ -441,9 +440,12 @@ down to the top of the dock (the dock and sheet share one fixed grid, so the doc
   closes.
 - Its `focusScope` includes the dock, so Tab moves between the conversation, the toggle and the
   composer. Escape closes it and returns focus to the toggle.
-- Contents: at the top, the panel's `LibrarianHead` (padding-top 16px), with its status and its
-  hairline once scrolled, so short conversations hang from a titled top instead of floating under
-  empty ground. Then the same conversation as the panel (intro and cues when empty), padding 16px
+- Contents: at the top, `LibrarianHead` (padding-top 16px): one line, `--text-ui` wdth 85,
+  `Librarian` (`<h2 id="librarian-title">`, 600 `--ink-strong`) and the dock's status words after
+  a `·` (the `·` its own flex item, so the gaps either side are equal), with a 1px `--rule` line
+  under it once the conversation is scrolled from its top (`--dur-settle`), so short
+  conversations hang from a titled top instead of floating under empty ground. Then the same
+  conversation as the panel (the greeting first), padding 16px
   `--panel-pad` 16px `--panel-gutter`, newest at the bottom. When you've scrolled up, `Newest ↓`
   (`Replying ↓` with the lamp while a reply is in progress) appears in a slot at the sheet's foot.
 - **Where focus goes when it opens** (`focusOnOpen`):
@@ -471,7 +473,7 @@ One `Conversation` component renders in the panel at 1024px and up and in the sh
 | --- | --- | --- |
 | Open a manual | The row (its title link, stretched) | Goes to `/read/<its id>` |
 | Delete a manual | The row's **Delete** | Opens the confirmation |
-| Start a new manual | **Start a new manual ›** in the head | Fills the field with exactly `Let’s start a new manual about ` (caret at the end), focuses it and flashes it `--cue-tint`. **An existing draft is kept**: it only focuses and flashes the field. On phone the sheet stays closed: the field is in the dock |
+| Start a new manual | **Start a new manual** in the head | Fills the field with exactly `Let’s start a new manual about ` (caret at the end), focuses it and flashes it `--cue-tint`. **An existing draft is kept**: it only focuses and flashes the field. On phone the sheet stays closed: the field is in the dock |
 | Ask the librarian | The field; `/`; the cues | As above |
 
 Every one is a single click, tap or keystroke, at every width.
@@ -559,7 +561,7 @@ so in place, in its own style (re-measured, so it still clears the row):
 
 How the list is loaded and refreshed is in `src/library/README.md`. On the page:
 
-- **The first load** shows nothing until the list arrives, so the ledger and the cues never
+- **The first load** shows nothing until the list arrives, so the ledger and the greeting never
   appear half-filled.
 - **Coming back** to `/` in the same page load (from the reader, say) shows the list at once, and
   counts written in the meantime appear when the background refresh lands; nothing blanks or
@@ -573,7 +575,7 @@ If the first load fails (the server isn't running, or answers with an error), th
 notice instead of a blank page, like the reader's `Couldn’t open this manual`:
 
 - The library area as usual (same padding and position, left of where the panel would be), with
-  only the `Library` title in the head: no meta line and no **Start a new manual ›**, which would
+  only the wordmark in the head: no meta line and no **Start a new manual**, which would
   point at a librarian that isn't there.
 - In the ledger's place, framed like the empty library (a 1px `--rule-strong` line, padding 24px
   12px, the closing `--rule` line; on phone padding 20px 0): `Couldn’t open your library`
@@ -588,7 +590,7 @@ notice instead of a blank page, like the reader's `Couldn’t open this manual`:
 
 The page keeps its structure; the empty shelf becomes an invitation.
 
-- Head: `Library`, meta `No manuals`, **Start a new manual ›** in its usual place.
+- Head: the wordmark, meta `No manuals`, **Start a new manual** in its usual place.
 - No column header, since there are no rows to label. Between a 1px `--rule-strong` line and the
   closing `--rule` line, one sentence, `--text-lead` `--ink-muted`, capped at `--measure`: `Your
   library is empty. Start a new manual, or ask the librarian.`
@@ -596,8 +598,7 @@ The page keeps its structure; the empty shelf becomes an invitation.
     handler; **ask the librarian** focuses the field and flashes it.
   - On phone, the same.
 - No illustration, no icon, nothing centred.
-- The panel's cues drop the "Open …" cue: “Let’s start a new manual about…”, “What do I have?”,
-  “How do I delete a manual?”.
+- The greeting drops the "Find and open a manual" cue, leaving two.
 
 ## The fallback reply
 
@@ -620,8 +621,9 @@ about.
   Delete) → panel (conversation: named-manual links and cues; then the field, then Send). On
   phone: library → dock (toggle, field, Send); while the sheet is open, the library is hidden and
   Tab moves through the sheet's conversation and the dock.
-- Enter sends, Shift+Enter is a new line. Escape closes the phone sheet (focus returns to its
-  toggle) or the confirmation (focus returns to that row's Delete).
+- Enter sends, Shift+Enter is a new line. Escape in the field leaves it (blur). Escape closes the
+  phone sheet (focus returns to its toggle) or the confirmation (focus returns to that row's
+  Delete).
 - Focus ring everywhere: `--focus-ring` at `--focus-offset`, with the control's own radius; the
   conversation uses the negative offset, where its scroll would clip the ring.
 
@@ -639,7 +641,7 @@ about.
 | Desktop confirmation | `Sheet` fade and 8px drop, `--dur-base` `--ease-out` | Appears (token) |
 | Scrim | Fade, `--dur-base` | Appears |
 | Deleted row | Collapse, `--dur-base` `--ease-in-out` | Removed at once |
-| Panel header line | Fades in, `--dur-settle` | Appears |
+| Sheet header line | Fades in, `--dur-settle` | Appears |
 | Scroll jumps (Newest ↓, after send, named-manual jump) | Always instant, as in the reader | Same |
 
 Nothing moves on first load. Under `prefers-reduced-motion: reduce` every animation above is
@@ -656,20 +658,20 @@ scripted fake model's, so the shots cost nothing and never change between runs.
 
 | State | 1440 × 900 | 375 × 812 |
 | --- | --- | --- |
-| `first-visit` | Full ledger (7 rows, in title order); panel with the intro and four cues above the field, which has focus | Head and rows; dock reading `Librarian · Try asking` |
+| `first-visit` | Full ledger (7 rows, in title order); panel with the greeting and its three cues above the field, which has focus | Head and rows; dock reading `Librarian · Try asking` |
 | `typing` | Draft in the field (focus ring, hint `Enter sends…`); the Birthday Party row marked | Draft in the dock's field; the Birthday Party row marked |
 | `thinking` | Your treehouse line, then the thinking lamp, at the bottom of the panel | Sheet open (conversation loaded), same, above the dock; the sheet's header reads `Thinking…`, the toggle `Library · 7 manuals` |
-| `working` | The same, with the planner's line: `Planning “Building a Treehouse”…` in the thinking line and the header | The same in the sheet |
+| `working` | The same, with the planner's line: `Planning “Building a Treehouse”…` in the thinking line and the readout | The same in the sheet |
 | `streaming` | The reply about the new treehouse manual half-written, bar and lamp on the live paragraph | The same in the sheet; its header reads `Replying…` |
 | `created` | The same reply settled (“*Building a Treehouse* is on your shelf… Shall I open it?”); the library has loaded again, with the new *Building a Treehouse* row in title order (8 manuals) | Sheet open on the reply |
 | `conversation` | Three exchanges (the list of manuals, “Opening *The Haunt That Listens*.”, the fallback), scrolled to the newest; the Sourdough row marked; named-manual lines under turns 2 and 3 | Sheet open at the newest |
 | `delete-confirm` | First row lit above the scrim, confirmation anchored under it on the Written column, focus on Keep it | Confirmation at the bottom edge, first row lit |
 | `fallback` | Your geese line, the fallback reply settled; the Geese row marked | Sheet open on the reply |
 | `proposed-delete` | You asked to delete the birthday party manual: the reply settled (“It stays unless you confirm…”), the Birthday Party row lit above the scrim, the confirmation above it | Sheet closed; the row lit, the confirmation at the bottom edge |
-| `reply-budget` | Your list line, then **Budget reached.** and its sentence; header `2 messages` | Sheet open on the same |
+| `reply-budget` | Your list line, then **Budget reached.** and its sentence | Sheet open on the same |
 | `reply-failed` | The same with **This reply failed.** | The same |
-| `empty` | Head, the empty line; three cues | Head and the empty line; dock |
-| `library-unreachable` | `GET /api/manuals` fails: the `Library` title and the notice in the ledger's place; no panel | The same; no dock |
+| `empty` | Head, the empty line; the greeting with two cues | Head and the empty line; dock |
+| `library-unreachable` | `GET /api/manuals` fails: the wordmark and the notice in the ledger's place; no panel | The same; no dock |
 | `delete-failed` | The delete answered 409: first row lit, the confirmation reading `Couldn’t delete …` with Try again and Keep it | The same at the bottom edge |
 
 Hooks: `librarian-input` on the field (one is visible at every width), `delete` on each Delete,
