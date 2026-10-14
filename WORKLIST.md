@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.2 — Keep each library's manuals apart
-- **Status:** doing (agent a3a01cb82bec10d68; done, in review by a355a773bd722125b)
+- **Status:** doing (agent a3a01cb82bec10d68; done, being committed)
 - **Depends on:** —
 - **Files:** `server/storage/**`, `server/logging/README.md`, `ARCHITECTURE.md`
 - **Do:** bind `ManualStore` and `SectionLeases` to a library, as `research/libraries.md` ›
@@ -151,7 +151,7 @@ user revokes it, and with its activity visible to the user.
   and `npm test` pass.
 
 ### LB.7 — Give library links their AWS reach
-- **Status:** doing (agent a6dafa202d05f2d36; done, being committed; the user approved the diff with the tightening)
+- **Status:** blocked (merged and RtfmApp deployed; the user deploys `RtfmAccess`)
 - **Depends on:** —
 - **Files:** `infra/rtfm.ts`, `infra/app-stack.ts` and its test,
   `infra/access-stack.ts` and its test, `infra/README.md`, `server/storage/README.md`,
