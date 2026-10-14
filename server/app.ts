@@ -19,12 +19,13 @@ import { prices } from "./gateway/prices.ts";
 import { FAKE_MODEL, type Job, type ModelClient } from "./gateway/types.ts";
 import { toLogFile } from "./logging/log-file.ts";
 import { createLogger, type Logger } from "./logging/logger.ts";
-import { createDynamoDbManualStore } from "./storage/dynamodb-manual-store.ts";
+import { createDynamoDbManualStore, createDynamoDbSectionLeases } from "./storage/dynamodb-manual-store.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
+import { createInProcessLeases } from "./storage/in-process-leases.ts";
 import { DataFolderInUse, lockDataFolder, type DataFolderLock } from "./storage/lock.ts";
 import { seedStore } from "./storage/seed.ts";
-import type { ManualStore } from "./storage/types.ts";
+import type { ManualStore, SectionLeases } from "./storage/types.ts";
 import { createBedrockWriter } from "./writer/bedrock.ts";
 import { createFakeWriter } from "./writer/fake.ts";
 import { createRuns } from "./writer/runs.ts";
@@ -133,11 +134,11 @@ async function serve(
   replaced: Replaced,
   logger: Logger,
 ): Promise<{ server: Server; models: Models }> {
-  const store = createManualStore(config, logger);
+  const { store, leases } = createStorage(config, logger);
   const models = await modelsFor(config, store, replaced, logger);
   const { writer, librarian } = models;
   await seedStore(store);
-  const runs = createRuns({ store, writer, maxConcurrentRuns: config.maxConcurrentRuns, logger });
+  const runs = createRuns({ store, leases, writer, maxConcurrentRuns: config.maxConcurrentRuns, logger });
   const routes = [
     libraryRoute(store),
     manualRoute(store, runs),
@@ -157,12 +158,17 @@ async function serve(
   return { server, models };
 }
 
-function createManualStore(config: ServerConfig, logger: Logger): ManualStore {
+/** The manuals, and the section leases that keep one writer per section among the servers sharing them. */
+function createStorage(config: ServerConfig, logger: Logger): { store: ManualStore; leases: SectionLeases } {
   switch (config.manualStorage.kind) {
-    case "files":
-      return createFileManualStore(config.dataDir, logger);
-    case "dynamodb":
-      return createDynamoDbManualStore(config.manualStorage.table);
+    case "files": {
+      const store = createFileManualStore(config.dataDir, logger);
+      return { store, leases: createInProcessLeases(store) };
+    }
+    case "dynamodb": {
+      const { table } = config.manualStorage;
+      return { store: createDynamoDbManualStore(table), leases: createDynamoDbSectionLeases(table) };
+    }
   }
 }
 

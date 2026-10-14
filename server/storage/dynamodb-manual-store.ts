@@ -3,20 +3,24 @@ import {
   CreateTableCommand,
   DynamoDBClient,
   TransactionCanceledException,
+  type AttributeValue,
   type DynamoDBClientConfig,
 } from "@aws-sdk/client-dynamodb";
 import { fromEnv } from "@aws-sdk/credential-provider-env";
 import { fromHttp } from "@aws-sdk/credential-provider-http";
 import {
+  DeleteCommand,
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
   TransactWriteCommand,
+  UpdateCommand,
   paginateQuery,
   type TransactWriteCommandInput,
 } from "@aws-sdk/lib-dynamodb";
+import { randomUUID } from "node:crypto";
 import { ID_PATTERN, isSameManual } from "./manual.ts";
-import type { ManualStore, StoredManual } from "./types.ts";
+import type { ManualStore, SectionLease, SectionLeases, StoredManual } from "./types.ts";
 
 /** A table shaped as `rtfm-app` (`server/storage/README.md` › The table `rtfm-app`), and how to reach it. */
 export interface DynamoDbTable {
@@ -38,9 +42,22 @@ export type TableCredentials =
   | { kind: "environment" };
 
 const CREDENTIAL_CHAIN_REFUSED = "The AWS default credential chain is never used";
-/** One transaction holds at most 100 items: the manual and 99 sections. */
+/** One transaction holds at most 100 items: the manual and 99 section items. */
 export const MOST_SECTIONS_DELETED_AT_ONCE = 99;
 export const TRANSACTION_ATTEMPTS = 8;
+
+/** How long a section's lease lasts, and how often its holder renews it. */
+export interface LeaseTiming {
+  durationMs: number;
+  renewEveryMs: number;
+}
+
+/** Why these lengths: `server/storage/README.md` › Section leases. */
+export const SECTION_LEASE_TIMING: LeaseTiming = { durationMs: 20_000, renewEveryMs: 5_000 };
+/** A holder counts its lease lost at this share of its length after its latest successful renewal was sent. */
+const FENCE_AT = 0.9;
+/** A section's item that still holds the lease of `:owner`, and no body. */
+const LEASED_TO_OWNER = "leaseOwner = :owner AND attribute_not_exists(body)";
 
 const LIBRARY = "LIBRARY";
 const SEEDED = "SEEDED";
@@ -48,8 +65,10 @@ const MANUAL_PREFIX = "MANUAL#";
 const SECTION_PREFIX = "SECTION#";
 
 const manualKey = (manualId: string) => ({ pk: LIBRARY, sk: `${MANUAL_PREFIX}${checkedId(manualId)}` });
+/** The partition of a manual's section items. */
+const sectionsPartition = (manualId: string) => `${MANUAL_PREFIX}${checkedId(manualId)}`;
 const sectionKey = (manualId: string, sectionId: string) => ({
-  pk: `${MANUAL_PREFIX}${checkedId(manualId)}`,
+  pk: sectionsPartition(manualId),
   sk: `${SECTION_PREFIX}${checkedId(sectionId)}`,
 });
 const seededKey = (manualId: string) => ({ pk: SEEDED, sk: `${MANUAL_PREFIX}${checkedId(manualId)}` });
@@ -85,21 +104,6 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
     return items;
   }
 
-  /** Runs a transaction again while another one touching the same items gets in its way. */
-  async function transactWrite(input: TransactWriteCommandInput): Promise<TransactionCanceledException | undefined> {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        await client.send(new TransactWriteCommand(input));
-        return undefined;
-      } catch (error) {
-        if (!(error instanceof TransactionCanceledException)) throw error;
-        const conflicted = error.CancellationReasons?.some(({ Code }) => Code === "TransactionConflict");
-        if (!conflicted || attempt === TRANSACTION_ATTEMPTS) return error;
-        await pause(attempt);
-      }
-    }
-  }
-
   return {
     async listManuals() {
       const items = await queryPartition(LIBRARY, "manual");
@@ -133,11 +137,13 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
         const item = await getManualItem(manualId);
         if (!item) return;
         const written = [...(item.written ?? [])];
-        if (written.length > MOST_SECTIONS_DELETED_AT_ONCE) {
-          throw new Error(`"${manualId}" has ${written.length} written sections, more than one delete can remove`);
+        // The written sections' items, and any unwritten section's item that holds only a lease.
+        const sectionItems = await queryPartition(sectionsPartition(manualId), "pk, sk");
+        if (sectionItems.length > MOST_SECTIONS_DELETED_AT_ONCE) {
+          throw new Error(`"${manualId}" has ${sectionItems.length} section items, more than one delete can remove`);
         }
         const unchanged = written.length === 0 ? "attribute_not_exists(written)" : "written = :written";
-        const cancelled = await transactWrite({
+        const cancelled = await transactWrite(client, {
           TransactItems: [
             {
               Delete: {
@@ -147,7 +153,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
                 ExpressionAttributeValues: written.length === 0 ? undefined : { ":written": new Set(written) },
               },
             },
-            ...written.map((sectionId) => ({ Delete: { TableName, Key: sectionKey(manualId, sectionId) } })),
+            ...sectionItems.map(({ pk, sk }) => ({ Delete: { TableName, Key: { pk, sk } } })),
           ],
         });
         if (!cancelled) return;
@@ -166,33 +172,8 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
     },
 
     async saveBody(manualId, sectionId, body) {
-      const cancelled = await transactWrite({
-        TransactItems: [
-          {
-            Update: {
-              TableName,
-              Key: manualKey(manualId),
-              UpdateExpression: "ADD written :section",
-              ConditionExpression: "attribute_exists(pk)",
-              ExpressionAttributeValues: { ":section": new Set([sectionId]) },
-            },
-          },
-          {
-            Put: {
-              TableName,
-              Item: { ...sectionKey(manualId, sectionId), body },
-              ConditionExpression: "attribute_not_exists(pk)",
-            },
-          },
-        ],
-      });
-      if (!cancelled) return "saved";
-      const [manualCheck, sectionCheck] = cancelled.CancellationReasons ?? [];
-      if (manualCheck?.Code === "ConditionalCheckFailed") {
-        throw new Error(`There is no manual "${manualId}" to save a section into`);
-      }
-      if (sectionCheck?.Code === "ConditionalCheckFailed") return "already-written";
-      throw cancelled;
+      const saved = await saveBodyIf(client, TableName, { manualId, sectionId, body });
+      return saved === "refused" ? "already-written" : saved;
     },
 
     async writtenSectionIds(manualId) {
@@ -208,6 +189,212 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
       await client.send(new PutCommand({ TableName, Item: seededKey(manualId) }));
     },
   };
+}
+
+/**
+ * Section leases on the section's own item, shared by every environment on the table: a writer
+ * takes one with a conditional write, renews it while it writes, and alone may save the body.
+ */
+export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTION_LEASE_TIMING): SectionLeases {
+  const client = documentClient(table);
+  const TableName = table.name;
+  const environment = randomUUID();
+
+  /**
+   * A lease taken with a write sent at `takenAt`. It counts itself lost a tenth of its length before
+   * it would expire unrenewed, so its holder has stopped before another writer can take it.
+   */
+  function heldLease(manualId: string, sectionId: string, owner: string, takenAt: number): SectionLease {
+    const Key = sectionKey(manualId, sectionId);
+    const name = `${manualId}/${sectionId}`;
+    const lost = new AbortController();
+    let renewing: NodeJS.Timeout | undefined = setInterval(renew, timing.renewEveryMs);
+    let latestSentAt = takenAt;
+    let fencing = fenceAfter(takenAt);
+    /** Once the body is saved, it has replaced the lease on the item, and there is nothing to release. */
+    let bodySaved = false;
+
+    /** Loses the lease once the write sent at `sentAt` would let it expire, unless a later one succeeds. */
+    function fenceAfter(sentAt: number): NodeJS.Timeout {
+      const expiring = new Error(`Couldn't renew the lease on ${name} before it expired`);
+      return setTimeout(() => lose(expiring), sentAt + timing.durationMs * FENCE_AT - Date.now());
+    }
+
+    function stopRenewing() {
+      clearInterval(renewing);
+      clearTimeout(fencing);
+      renewing = undefined;
+    }
+
+    /** Whether the item, as a failed condition returned it, still holds this owner's lease and no body. */
+    function stillOwned(item: Record<string, AttributeValue> | undefined): boolean {
+      return item?.leaseOwner?.S === owner && item.body === undefined;
+    }
+
+    function lose(reason: Error) {
+      if (renewing === undefined) return;
+      stopRenewing();
+      lost.abort(reason);
+    }
+
+    /**
+     * Moves the expiry later, never earlier: the SDK resends a renewal's expiry as it was first
+     * sent, so a retry that arrives after a later renewal must not shorten the lease.
+     */
+    async function renew() {
+      const sentAt = Date.now();
+      try {
+        await client.send(
+          new UpdateCommand({
+            TableName,
+            Key,
+            UpdateExpression: "SET leaseExpiresAt = :expiresAt",
+            ConditionExpression: `${LEASED_TO_OWNER} AND leaseExpiresAt < :expiresAt`,
+            ExpressionAttributeValues: { ":owner": owner, ":expiresAt": sentAt + timing.durationMs },
+            ReturnValuesOnConditionCheckFailure: "ALL_OLD",
+          }),
+        );
+      } catch (error) {
+        if (error instanceof ConditionalCheckFailedException && !stillOwned(error.Item)) {
+          lose(new Error(`The lease on ${name} is no longer this writer's`));
+        }
+        // A later expiry under this owner was a stale retry. Any other failure is tried again at
+        // the next renewal, until the fence.
+        return;
+      }
+      if (renewing === undefined || sentAt <= latestSentAt) return;
+      latestSentAt = sentAt;
+      clearTimeout(fencing);
+      fencing = fenceAfter(sentAt);
+    }
+
+    return {
+      lost: lost.signal,
+
+      async saveBody(body) {
+        stopRenewing();
+        if (lost.signal.aborted) throw new Error(`The lease on ${name} was lost before its body was saved`);
+        const saved = await saveBodyIf(client, TableName, { manualId, sectionId, body, leaseOwner: owner });
+        if (saved === "refused" && !(await bodyIsStored(client, TableName, manualId, sectionId))) {
+          throw new Error(`The lease on ${name} was lost before its body was saved`);
+        }
+        bodySaved = true;
+        // Refused with a body stored: one saved without a lease, as the seed saves.
+        return saved === "refused" ? "already-written" : saved;
+      },
+
+      async release() {
+        stopRenewing();
+        if (bodySaved) return;
+        try {
+          await client.send(
+            new DeleteCommand({
+              TableName,
+              Key,
+              ConditionExpression: LEASED_TO_OWNER,
+              ExpressionAttributeValues: { ":owner": owner },
+            }),
+          );
+        } catch (error) {
+          if (!(error instanceof ConditionalCheckFailedException)) throw error;
+        }
+      },
+    };
+  }
+
+  return {
+    async take(manualId, sectionId) {
+      const owner = `${environment}/${randomUUID()}`;
+      const now = Date.now();
+      try {
+        await client.send(
+          new UpdateCommand({
+            TableName,
+            Key: sectionKey(manualId, sectionId),
+            UpdateExpression: "SET leaseOwner = :owner, leaseExpiresAt = :expiresAt",
+            // Its own owner too, in case the SDK retried a take whose answer was lost.
+            ConditionExpression:
+              "attribute_not_exists(body) AND " +
+              "(attribute_not_exists(leaseOwner) OR leaseExpiresAt < :now OR leaseOwner = :owner)",
+            ExpressionAttributeValues: { ":owner": owner, ":expiresAt": now + timing.durationMs, ":now": now },
+          }),
+        );
+      } catch (error) {
+        if (error instanceof ConditionalCheckFailedException) return undefined;
+        throw error;
+      }
+      return heldLease(manualId, sectionId, owner, now);
+    },
+  };
+}
+
+/**
+ * Saves a section's body and adds its id to the manual's `written` set, in one transaction, on the
+ * condition that the section's item has no body and, given an owner, holds that owner's lease:
+ * "refused" if it doesn't. Throws if the manual doesn't exist.
+ */
+async function saveBodyIf(
+  client: DynamoDBDocumentClient,
+  TableName: string,
+  { manualId, sectionId, body, leaseOwner }: { manualId: string; sectionId: string; body: string; leaseOwner?: string },
+): Promise<"saved" | "refused"> {
+  const cancelled = await transactWrite(client, {
+    TransactItems: [
+      {
+        Update: {
+          TableName,
+          Key: manualKey(manualId),
+          UpdateExpression: "ADD written :section",
+          ConditionExpression: "attribute_exists(pk)",
+          ExpressionAttributeValues: { ":section": new Set([sectionId]) },
+        },
+      },
+      {
+        Put: {
+          TableName,
+          Item: { ...sectionKey(manualId, sectionId), body },
+          ...(leaseOwner === undefined
+            ? { ConditionExpression: "attribute_not_exists(body)" }
+            : {
+                ConditionExpression: LEASED_TO_OWNER,
+                ExpressionAttributeValues: { ":owner": leaseOwner },
+              }),
+        },
+      },
+    ],
+  });
+  if (!cancelled) return "saved";
+  const [manualCheck, sectionCheck] = cancelled.CancellationReasons ?? [];
+  if (manualCheck?.Code === "ConditionalCheckFailed") {
+    throw new Error(`There is no manual "${manualId}" to save a section into`);
+  }
+  if (sectionCheck?.Code === "ConditionalCheckFailed") return "refused";
+  throw cancelled;
+}
+
+async function bodyIsStored(client: DynamoDBDocumentClient, TableName: string, manualId: string, sectionId: string) {
+  const { Item } = await client.send(
+    new GetCommand({ TableName, Key: sectionKey(manualId, sectionId), ConsistentRead: true }),
+  );
+  return Item?.body !== undefined;
+}
+
+/** Runs a transaction again while another one touching the same items gets in its way. */
+async function transactWrite(
+  client: DynamoDBDocumentClient,
+  input: TransactWriteCommandInput,
+): Promise<TransactionCanceledException | undefined> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await client.send(new TransactWriteCommand(input));
+      return undefined;
+    } catch (error) {
+      if (!(error instanceof TransactionCanceledException)) throw error;
+      const conflicted = error.CancellationReasons?.some(({ Code }) => Code === "TransactionConflict");
+      if (!conflicted || attempt === TRANSACTION_ATTEMPTS) return error;
+      await pause(attempt);
+    }
+  }
 }
 
 /** Creates an empty table shaped as `rtfm-app`, for DynamoDB Local; `RtfmApp` creates the real one. */

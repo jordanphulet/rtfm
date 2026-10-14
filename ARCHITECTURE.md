@@ -69,8 +69,10 @@ browser (Vite, :5173)                           server (node:http, :8787)
   See `server/api/README.md`.
 - `storage/`: `ManualStore` and `UsageLedger` (`types.ts`) as files in the data folder
   (`file-manual-store.ts`, `file-ledger.ts`), and `ManualStore` in the DynamoDB table `rtfm-app`
-  (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the data
-  folder's lock (`lock.ts`) and seeding (`seed.ts`). See `server/storage/README.md`.
+  (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the section
+  leases (`SectionLeases`) that keep one writer per section across the Web Function's environments,
+  in the process (`in-process-leases.ts`) or in `rtfm-app`; the data folder's lock (`lock.ts`) and
+  seeding (`seed.ts`). See `server/storage/README.md`.
 - `seed/<manualId>/`: `manual.json`, a TOC, a voice, and which sections start written; and
   `sections/*.md`, bodies (only the sample, the-haunt-that-listens, has them: all 18).
 - `writer/`: the `SectionWriter`s (`fake.ts`, `bedrock.ts`), the Bedrock writer's prompt
@@ -223,7 +225,8 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
     (`server/README.md` › Tests).
   - Each such interface has one shared test suite that runs against every implementation, so the
     local one stays as strict as the AWS one: `ManualStore`'s runs against the files and against
-    DynamoDB Local, which the tests start on loopback (`server/storage/README.md`).
+    DynamoDB Local, which the tests start on loopback (`server/storage/README.md`), and the runs'
+    against leases in the process and in DynamoDB Local (`server/writer/README.md` › Tests).
   - An adapter that imports an AWS SDK is added to `gateway/sdk-boundary.test.ts`'s list of SDK
     adapters on purpose, or the test fails.
   - An AWS deployment runs this same server, on a Lambda Web Function behind CloudFront
