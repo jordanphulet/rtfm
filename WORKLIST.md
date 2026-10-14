@@ -59,52 +59,15 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
-### IN.20 — Claude on Bedrock in the deployed app
-- **Status:** doing (agent a7545610be7bdd537; done, being committed)
-- **Depends on:** —
-- **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
-  `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
-  `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
-  `server/gateway/bedrock-client.ts` and its test, `server/gateway/bedrock-testing.ts`,
-  `server/storage/dynamodb-manual-store.ts` and its test, `server/usage.ts`,
-  `scripts/build-web-function.test.ts`, `ARCHITECTURE.md`, `server/storage/README.md`
-- **Do:**
-  - The Web Function runs `RTFM_MODELS=bedrock`: `server/web-function.ts` stops refusing it, and
-    the revision sets it.
-  - The Bedrock client in the Web Function signs with the execution role's credentials, chosen
-    explicitly as IN.11's DynamoDB store does (the container endpoint or the environment, with
-    whatever IN.10 found about their lifetime); on the laptop, `credentials.ts` still reads only
-    `.env.local`.
-  - The web role gets `claudeStatements()` (`infra/bedrock.ts`), which the boundary already
-    allows, so no `RtfmToolkit` change; it already reaches `rtfm-usage`, so every call reserves
-    against the central caps.
-  - The docs stop describing the deployed app as fake-models-only.
-- **Done when:** `npm test` passes; after the orchestrator's deploy, the smoke check writes one real
-  section through `https://rtfm.moonfetus.com` (under $0.01) and `npm run usage` (or the ops tool)
-  shows it in `rtfm-usage`.
-
 ### IN.22 — See the heartbeat through the edge
-- **Status:** todo
-- **Depends on:** IN.20
+- **Status:** doing (agent a94f0f92660183672; done, being committed)
+- **Depends on:** —
 - **Files:** `research/aws-design.md`
 - **Do:** through `https://rtfm.moonfetus.com`, `curl -N` a section stream or a librarian reply
   with each line timestamped, and confirm a `: heartbeat` arrives about 15 s into a silence, and
   that a silence before the first event shows nothing until that first heartbeat (the edge holds
   the headers until the first byte, IN.10).
 - **Done when:** the doc's Measured section records it.
-
-### IN.24 — Record what the keys' expiry does on the deployed app
-- **Status:** todo
-- **Depends on:** IN.20 (so environments see real traffic first)
-- **Files:** `research/aws-design.md`
-- **Do:** IN.21's measurement, read with `npm run ops -- logs` (no other AWS call). Since IN.21's
-  deploy, `server.started` logs `credentialsExpireAt=unset` (first seen 2026-10-14T01:40Z):
-  Lambda doesn't set `AWS_CREDENTIAL_EXPIRATION`, so only a refused key starts a replacement.
-  Record that in `research/aws-design.md` › Measured, and any `server.keys-refused` line since
-  then with its error name, the gap to that environment's `server.stopped`, and the next
-  `server.started`.
-- **Done when:** Measured records whether Lambda sets the expiry and, if any environment was
-  refused its keys, what followed; if none was, it says so with the date range read.
 
 ## Waiting on AWS
 

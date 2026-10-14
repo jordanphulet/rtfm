@@ -325,14 +325,41 @@ in the same millisecond, then `spinDownReport`.
 
 **The credentials.** Every `server.started` logged `credentials: "environment"`: Lambda gives the
 execution role's keys as `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`, and
-no container credentials endpoint. Whether it also sets `AWS_CREDENTIAL_EXPIRATION` isn't known: the
-server logs no expiry, and the Web Function docs neither name the variable nor say how long the
-keys last or how they are renewed. `/rtfm/app` holds no `ExpiredToken`, `UnrecognizedClient` or
+no container credentials endpoint. It doesn't set `AWS_CREDENTIAL_EXPIRATION` (The keys' expiry,
+below), and the Web Function docs neither name the variable nor say how long the keys last or how
+they are renewed. `/rtfm/app` holds no `ExpiredToken`, `UnrecognizedClient` or
 `AccessDenied` error: no environment measured here, the longest living 15m49s, outlived its keys.
 A busy one could: nothing seen bounds an environment's life while a reader keeps opening sections
 a few minutes apart, the docs promise no lifetime either way, and keys in its environment variables
 can't be renewed inside a running process. Once they expire, every DynamoDB call that environment
 makes fails until Lambda removes it.
+
+**The keys' expiry.** Measured 2026-10-14 (UTC), read with `npm run ops -- logs` at 02:54 over the
+whole of `/rtfm/app`, whose first entry is the first deploy's at 2026-10-13T23:50:33. Since IN.21's
+deploy, every `server.started` logs `credentialsExpireAt=unset`: nine starts, from 01:40:34 to
+02:51:23, all with `credentials=environment`, the last one with the Bedrock models. So Lambda
+doesn't set `AWS_CREDENTIAL_EXPIRATION`, the server sets no `server.keys-expiring` timer, and only a
+refused key starts a replacement (`server/README.md` › The Web Function). The log holds no
+`server.keys-refused` or `server.keys-expiring` line, and no warning naming `ExpiredTokenException`,
+`UnrecognizedClientException` or `AccessDenied`: no environment has been refused its keys. The
+server's entries don't say which environment wrote them, so where two overlap, each `server.stopped`
+below is paired with the start it leaves 5–6½ minutes idle after its last request, as above; deploys
+in this range may have stopped some early.
+
+| Started | Stopped | Lived |
+| --- | --- | --- |
+| 01:40:34 | 01:46:32 | 5m57s |
+| 01:43:00 | 01:49:01 | 6m01s |
+| 01:49:49 | 01:55:01 | 5m12s |
+| 01:52:12 | 01:58:55 | 6m43s |
+| 02:07:21 | 02:13:55 | 6m34s |
+| 02:10:46 (a reader, until 02:17:43) | 02:23:44 | 12m57s |
+| 02:27:46 (alone) | 02:43:21 | 15m35s |
+| 02:49:58, 02:51:23 | running at 02:54 | |
+
+The longest was 15m35s, or 16m22s if the 02:07 and 02:10 environments stopped the other way round:
+about IN.10's 15m49s. With no expiry given, the log bounds the keys' lifetime only from below: they
+outlasted every environment's life.
 
 ## Build tasks
 
