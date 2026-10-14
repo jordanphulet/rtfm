@@ -65,7 +65,8 @@ aren't RTFM's.
 - **Status:** doing (agent a6eb3ca69062c8998; review round 3: test headroom under load, renewals only extend the lease)
 - **Depends on:** IN.11
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
-  `server/writer/README.md`
+  `server/writer/README.md`, and for the docs the leases touch: `ARCHITECTURE.md`,
+  `server/logging/README.md`, `server/README.md`
 - **Do:** section leases behind an interface in `runs.ts`, in memory locally and on the section
   item in `rtfm-app`; a reader on another environment waits for the stored body, then gets it as
   one `append` and `written`, or `failed`.
@@ -137,14 +138,15 @@ Small fixes that keep the repo healthy.
 ### UP.4 — Two more tests that flake under load
 - **Status:** todo
 - **Depends on:** —
-- **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`
+- **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
 - **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
   signalled" once failed with `SyntaxError: Unexpected end of JSON input`: the stand-in `aws`
   writes `started.json` with `writeFileSync`, and the test can read the empty file before the
   write finishes. Make that write atomic (a temporary file renamed into place) or wait for content
   that parses. `scripts/hooks/rule-copies.test.ts` › "prints nothing and exits 0 without a saved
   copy, without git, or with bad input" once timed out at the default 5 s under load: give it a
-  timeout that follows `server/README.md` › Tests, or make it lighter.
+  timeout that follows `server/README.md` › Tests, or make it lighter. `scripts/serve-temp.test.ts`
+  › "refuses an unknown option" also hit its 5 s timeout once under load: the same treatment.
 - **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
 
 ### UP.2 — One retry loop, and the kill switch's path with its ledger
