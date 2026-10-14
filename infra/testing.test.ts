@@ -44,6 +44,42 @@ describe("decide, the tests' policy evaluator", () => {
     expect(decide(statements, "lambda:AddPermission", "x")).toBe("deny");
   });
 
+  it("matches StringLike case-sensitively, its * as any characters, # included, and its ? as one, as IAM does", () => {
+    const like = (pattern: string): Statement => ({
+      Effect: "Allow",
+      Action: "dynamodb:Query",
+      Resource: "*",
+      Condition: { "ForAllValues:StringLike": { "dynamodb:LeadingKeys": [pattern] } },
+    });
+    const leadingKeys = (keys: string[]) => ({ "dynamodb:LeadingKeys": keys });
+    const query = (pattern: string, keys: string[]) => decide([like(pattern)], "dynamodb:Query", "x", leadingKeys(keys));
+    expect(query("L#*#LIBRARY", ["L#acme#LIBRARY"])).toBe("allow");
+    expect(query("L#*#LIBRARY", ["L##LIBRARY"])).toBe("allow");
+    expect(query("L#*#LIBRARY", ["L#acme#MANUAL#a-manual#LIBRARY"])).toBe("allow");
+    expect(query("L#*#LIBRARY", ["l#acme#library"])).toBe("no allow");
+    expect(query("L#*#LIBRARY", ["L#acme#LIBRARY#x"])).toBe("no allow");
+    expect(query("L#*#LIBRARY", ["L#acme#SEEDED"])).toBe("no allow");
+    expect(query("L#*#LIBRARY", ["LIBRARY"])).toBe("no allow");
+    expect(query("L#*#LIBRARY", ["L#acme#LIBRARY", "LIBRARY"])).toBe("no allow");
+    expect(query("L#?#LIBRARY", ["L#a#LIBRARY"])).toBe("allow");
+    expect(query("L#?#LIBRARY", ["L#ab#LIBRARY"])).toBe("no allow");
+  });
+
+  it("holds ForAllValues:StringNotLike when no value matches, or none is given, as IAM does", () => {
+    const notDeeper: Statement = {
+      Effect: "Allow",
+      Action: "dynamodb:Query",
+      Resource: "*",
+      Condition: { "ForAllValues:StringNotLike": { "dynamodb:LeadingKeys": ["L#*#*#*"] } },
+    };
+    const query = (keys: string[]) => decide([notDeeper], "dynamodb:Query", "x", { "dynamodb:LeadingKeys": keys });
+    expect(query(["L#acme#LIBRARY"])).toBe("allow");
+    expect(query(["L#acme#LIBRARY", "LINK"])).toBe("allow");
+    expect(query(["L#acme#MANUAL#x"])).toBe("no allow");
+    expect(query(["L#acme#LIBRARY", "L#acme#MANUAL#x#LIBRARY"])).toBe("no allow");
+    expect(query([])).toBe("allow");
+  });
+
   it("holds ForAllValues when every value matches, or none is given, unless Null requires one, as IAM does", () => {
     const forAllValues: Statement = {
       Effect: "Allow",

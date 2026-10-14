@@ -62,8 +62,20 @@ export const KILL_SWITCH_PARTITION = "KILL_SWITCH";
 /** The manuals and their sections (`server/storage/README.md` › The table `rtfm-app`). `RtfmApp` holds it. */
 export const APP_TABLE = "rtfm-app";
 export const APP_TABLE_ARN = `arn:aws:dynamodb:${REGION}:${ACCOUNT}:table/${APP_TABLE}`;
-/** The partition of the passcode's item in `rtfm-app`, the only one `rtfm-ops` may touch there. */
+/** The partition of the passcode's item in `rtfm-app`, which only `rtfm-ops` writes. */
 export const PASSCODE_PARTITION = "PASSCODE";
+/** The partition of the libraries' links in `rtfm-app`, which only `rtfm-ops` writes. */
+export const LINK_PARTITION = "LINK";
+/** The partition of the libraries' activity in `rtfm-app`, which the Web Function writes. */
+export const ACTIVITY_PARTITION = "ACTIVITY";
+/**
+ * The recipients' manual lists in `rtfm-app`, `L#<libraryId>#LIBRARY`, as a `StringLike` pattern.
+ * Its `*` matches any characters, `#` included, so it also matches `L#<libraryId>#MANUAL#x#LIBRARY`
+ * unless `RECIPIENT_DEEPER_PARTITION_PATTERN` is refused beside it.
+ */
+export const RECIPIENT_LIBRARY_PARTITION_PATTERN = "L#*#LIBRARY";
+/** A recipient's partition with three or more `#`, such as `L#<libraryId>#MANUAL#<manualId>`. */
+export const RECIPIENT_DEEPER_PARTITION_PATTERN = "L#*#*#*";
 
 /**
  * The prefix of the stacks that put the app on the web (its certificate, DNS record, CloudFront
