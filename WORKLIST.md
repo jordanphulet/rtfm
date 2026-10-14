@@ -108,7 +108,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.7 — The passcode screen's tests flake under load
-- **Status:** doing (agent a71c5ec5b405c6096)
+- **Status:** doing (agent a71c5ec5b405c6096; done, being committed)
 - **Depends on:** —
 - **Files:** `src/passcode/PasscodeScreen.test.tsx`
 - **Do:** during IN.25's review, a full `npm test` on a loaded machine failed 7 tests in
