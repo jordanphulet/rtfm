@@ -255,10 +255,29 @@ chunk), and the librarian's with its first event at 0.78s. Something on the path
 or CloudFront, holds the headers until the body's first byte, so a silent stream shows nothing
 until its first event or heartbeat, and CloudFront's 60s read timeout runs until then.
 
-**The heartbeat: not seen.** No fake stream lasts 15s: the longest unwritten section plays in
-about 13s, and a librarian reply in about 3s. Since 100-byte `append` writes pass through at once,
-a 13-byte heartbeat should too, but seeing one needs a stream longer than 15s, which only Bedrock
-gives.
+**The heartbeat passes at once.** Measured 2026-10-14 (UTC) with Claude on Bedrock, revision
+`rev-oqjmm`, from `DEN52`, with `curl -N` and each line timestamped as it arrived. A section
+streams steadily and ends in 11.6–12.7s (two that another reader wrote that hour), so it has no
+15s silence; a librarian reply that plans a manual does, while the planner writes everything after
+the title. Asked to create a manual (it made `shared-office-tea-station`, 21 sections, for
+$0.0192: two librarian turns and a 14.9s plan), the reply's headers and its first event,
+`Planning a manual…`, arrived together 1.13s after `curl` started (`time_starttransfer` 1.155s),
+though the server writes its headers when the stream opens; `Planning “<title>”…` came at 2.21s,
+then nothing for 12.95s until `: heartbeat` at 15.17s, then the save's `action` at 16.14s, the
+reply's text from 16.75s and `done` at 17.09s. The server's log puts the request's start at
+02:56:31.81 and the heartbeat reached `curl` at 02:56:46.79: 15.0s later, so the edge passes the
+13-byte comment as soon as it is written. The interval runs from the stream's opening, not from
+its last event (`setInterval` in `server/api/node-adapter.ts`), so a silence gets its first
+heartbeat 15s after the stream opened, here 13s into the silence, and then one every 15s, well
+inside CloudFront's 60s read timeout.
+
+**A silence before the first event: not seen.** No stream's first event comes 15s in: a
+librarian's comes with its first turn, about 1s in, a section's with its opening paragraph, and a
+reader waiting on another environment's section waits at most the 12s or so that section takes. A
+longer wait needs that section's run to end without a body, which takes a second environment and
+an aborted section. From the two findings above, such a stream would show nothing, headers
+included, until its first heartbeat 15s in, which would bring the headers with it; that is
+inferred, not observed.
 
 **A `POST` with a body.** The librarian answered "list my manuals" with 200, its first event at
 0.78s and `done` at 3.0s. A conversation of 80 KB (ten earlier exchanges of 3,990 characters) also
