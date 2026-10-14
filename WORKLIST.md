@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.10 — Measure the deployed app
-- **Status:** doing (agent a7748e10835ba97ca)
+- **Status:** doing (agent a7748e10835ba97ca; done, being committed)
 - **Depends on:** —
 - **Files:** `research/aws-design.md`, `infra/README.md`
 - **Do:** through `https://rtfm.moonfetus.com`, with `npm run aws` and `curl` (this task's work is
@@ -94,7 +94,7 @@ aren't RTFM's.
   can read holds the passcode.
 
 ### IN.19 — Statuses and deletes see every environment's runs
-- **Status:** todo
+- **Status:** doing (agent a7083d6fb1dd46f90; in review)
 - **Depends on:** IN.13
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`
 - **Do:** the manual route's written and writing statuses, and the delete route's refusal while a
@@ -121,12 +121,76 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
+### IN.20 — Claude on Bedrock in the deployed app
+- **Status:** todo
+- **Depends on:** IN.10, IN.14, IN.15, IN.19
+- **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
+  `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
+  `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
+- **Do:**
+  - The Web Function runs `RTFM_MODELS=bedrock`: `server/web-function.ts` stops refusing it, and
+    the revision sets it.
+  - The Bedrock client in the Web Function signs with the execution role's credentials, chosen
+    explicitly as IN.11's DynamoDB store does (the container endpoint or the environment, with
+    whatever IN.10 found about their lifetime); on the laptop, `credentials.ts` still reads only
+    `.env.local`.
+  - The web role gets `claudeStatements()` (`infra/bedrock.ts`), which the boundary already
+    allows, so no `RtfmToolkit` change; it already reaches `rtfm-usage`, so every call reserves
+    against the central caps.
+  - The docs stop describing the deployed app as fake-models-only.
+- **Done when:** `npm test` passes; after the orchestrator's deploy, the smoke check writes one real
+  section through `https://rtfm.moonfetus.com` (under $0.01) and `npm run usage` (or the ops tool)
+  shows it in `rtfm-usage`.
+
+### IN.21 — Replace an environment before its keys run out
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
+  `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
+  `research/aws-design.md`
+- **Do:** Lambda gives the Web Function its role's keys as environment variables, which a running
+  process can't renew, and nothing bounds an environment's life while requests keep coming less
+  than about 5 minutes apart (IN.10).
+  - `server.started` logs when the keys expire, from `AWS_CREDENTIAL_EXPIRATION` when Lambda sets
+    it (a time, never a key), or that it is unset.
+  - When DynamoDB (or, once IN.20 lands, Bedrock) refuses the keys (`ExpiredTokenException`,
+    `UnrecognizedClientException`), the Web Function logs it and exits with code 1 once its open
+    requests end or after a short bound, so Lambda replaces the environment with fresh keys; when
+    the expiry is known, it also exits that way shortly before it.
+- **Done when:** tests show the logged expiry or "unset", and the exit on a refused key and before
+  a known expiry; after the next deploy, `research/aws-design.md` › Measured records whether Lambda
+  sets the expiry and what happens after the exit.
+
+### IN.22 — See the heartbeat through the edge
+- **Status:** todo
+- **Depends on:** IN.20
+- **Files:** `research/aws-design.md`
+- **Do:** through `https://rtfm.moonfetus.com`, `curl -N` a section stream or a librarian reply
+  with each line timestamped, and confirm a `: heartbeat` arrives about 15 s into a silence, and
+  that a silence before the first event shows nothing until that first heartbeat (the edge holds
+  the headers until the first byte, IN.10).
+- **Done when:** the doc's Measured section records it.
+
+### IN.23 — Close the delete race, and the section route's status
+- **Status:** todo
+- **Depends on:** IN.19
+- **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
+- **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
+  - a lease taken between the delete's `409` check and its transaction: condition each section
+    item's `Delete` in `deleteManual`'s transaction on `attribute_exists(body) OR leaseExpiresAt <
+    :now`, and answer `409` when that cancels it; and say what remains (a lease taken after the
+    delete's query, whose run's save then fails after a full paid section);
+  - the section route's `statusOf` sees only this environment's runs: use the lease attributes the
+    section item's strongly consistent read already returns, so a section written elsewhere shows
+    as writing.
+- **Done when:** the runs' shared suite covers both on both implementations, and `npm test` passes.
+
 ## Upkeep
 
 Small fixes that keep the repo healthy.
 
 ### UP.4 — Two more tests that flake under load
-- **Status:** todo
+- **Status:** doing (agent af499d66e98fae880)
 - **Depends on:** —
 - **Files:** `infra/run-aws.test.ts`, `scripts/hooks/rule-copies.test.ts`, `scripts/serve-temp.test.ts`
 - **Do:** `infra/run-aws.test.ts` › "stops the command and removes its HOME when the wrapper is
