@@ -66,12 +66,12 @@ the identity check and the arguments passed through `npm run aws`, without calli
 | `cdk-rtfm-lookup-role-…` | `cdk diff`'s reads | Reading `Rtfm*` stacks and the bootstrap's version |
 | `cdk-rtfm-cfn-exec-role-…` | CloudFormation deploys as it | The execution policy, under the boundary |
 
-`rtfm-bedrock` is the hand-made Bedrock policy, without `aws-marketplace:Unsubscribe` and with
-its inference profiles narrowed to Claude's: `bedrock:InvokeModel` and
+`rtfm-bedrock` is the Bedrock policy (`bedrock.ts`): `bedrock:InvokeModel` and
 `InvokeModelWithResponseStream` on Claude's inference profiles and foundation models in any
 region (a `global.` profile's foundation-model ARN has no region),
 `bedrock-mantle:CreateInference` and `ListModels` on the account's `project/default`, and
-`aws-marketplace:ViewSubscriptions` and `Subscribe`, which a model's first call needs.
+`aws-marketplace:ViewSubscriptions` and `Subscribe`, which a model's first call needs, but not
+`aws-marketplace:Unsubscribe`.
 
 `rtfm-local`'s inline policy `read-write-rtfm-usage` gives it exactly what the server's Bedrock
 spending ledger does to the table `rtfm-usage` (`server/gateway/README.md` › The table
@@ -254,8 +254,8 @@ refused resource and rolls back, leaving the stack as it was.
 Without a terminal, `cdk deploy` stops at a change that widens access, such as a new role or
 policy statement: it prints the IAM changes and exits ("terminal (TTY) is not attached") before
 anything reaches CloudFormation. The orchestrator deploys with `--require-approval never`
-(`PROCESS.md` › Review loop): the boundary limits what such a change can reach, and the review
-reads its IAM changes in the diff.
+(`PROCESS.md` › Review loop › Approved, step 5): the boundary limits what such a change can
+reach, and the review reads its IAM changes in the diff.
 
 The smoke check after a deploy reads what was deployed, one command each. The `lambda-web`
 commands need AWS CLI 2.37.8 or later (Your steps):
@@ -439,15 +439,41 @@ users and roles included. AWS counts a tag only once it is activated as a cost a
 
 ## Your steps
 
+These set RTFM up in an account that holds none of it, up to the app answering at
+`https://rtfm.moonfetus.com`. The whole order:
+
+- **What you need before you start** (below).
+- **The bootstrap, the access stack, the keys and RTFM's AWS files**: steps 1–5 below.
+- **`RtfmApp`**, which the orchestrator deploys from the main checkout once `RtfmToolkit` and
+  `RtfmAccess` exist, then checks with the smoke check (`PROCESS.md` › Rules › Only the
+  orchestrator deploys; Deploying the app stack, above).
+- **Checking `rtfm-local`'s key**: step 6 below, which needs `RtfmApp`'s table `rtfm-usage`.
+- **The edge stacks** (below), which read `RtfmApp`'s output.
+- **The smoke check through the domain**: the requests in Deploying the app stack, above, to
+  `rtfm.moonfetus.com`, and one to the distribution's own `*.cloudfront.net` domain, which must
+  be refused.
+- **The cost allocation tag**, about a day later (below).
+
+**What you need before you start:**
+
+- **An admin sign-in** to the account, `438180219169` (`rtfm.ts`), for the AWS console and
+  CloudShell.
+- **The repo, installed** as `README.md` › Running it says: `npm run cdk` runs the CDK CLI from
+  `node_modules`.
+- **The AWS CLI on the laptop**, 2.37.8 or later (`aws --version`), the first with `lambda-web`,
+  which the smoke check uses (Deploying the app stack, above); `npm run aws` runs the CLI on the
+  `PATH`. The smoke check's `lambda-web` commands were checked with
+  `npm run aws -- lambda-web <command> help` on 2.38.0.
+- **A Route 53 public hosted zone for `moonfetus.com`** in the account. The app's domain,
+  `rtfm.moonfetus.com` (`edge-certificate-stack.ts`), is in it, and the edge stacks write the
+  certificate's validation record and the app's alias records into it.
+- **Amazon Bedrock access to Claude Haiku 4.5**, which step 6 calls (`README.md` › The models,
+  step 1).
+
 You deploy `RtfmToolkit` and `RtfmAccess` with plain CloudFormation, from AWS CloudShell: the
 templates `cdk synth` writes are ordinary CloudFormation, both stacks deploy with your own
 sign-in rather than RTFM's roles, and CloudShell needs neither the CDK CLI nor an admin profile on
 the laptop.
-
-**First, update the AWS CLI on the laptop** to 2.37.8 or later (`aws --version`), the first with
-`lambda-web`, which the smoke check uses (Deploying the app stack, above); `npm run aws` runs the
-CLI on the `PATH`. The smoke check's `lambda-web` commands were checked with
-`npm run aws -- lambda-web <command> help` on 2.38.0.
 
 1. **Write the templates.** On the laptop, with no credentials:
 
@@ -490,10 +516,11 @@ CLI on the `PATH`. The smoke check's `lambda-web` commands were checked with
    aws iam create-access-key --user-name rtfm-agent
    ```
 
-5. **Put them on the laptop.** `rtfm-local`'s goes in `.env.local` at the main checkout's root,
-   as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, keeping `AWS_REGION`. `rtfm-agent`'s goes
-   in RTFM's own files, leaving `~/.aws/config` and `~/.aws/credentials` alone. Open both in an
-   editor, so the secret stays out of the shell's history:
+5. **Put them on the laptop**, writing each in an editor, so its secret stays out of the shell's
+   history. `rtfm-local`'s goes in `.env.local` at the main checkout's root, as
+   `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, with `AWS_REGION=us-west-2` (`README.md` ›
+   The models, step 2). `rtfm-agent`'s goes in RTFM's own files, leaving `~/.aws/config` and
+   `~/.aws/credentials` alone. These make RTFM's two AWS files and open them:
 
    ```sh
    mkdir -p ~/.aws/rtfm
@@ -528,23 +555,19 @@ CLI on the `PATH`. The smoke check's `lambda-web` commands were checked with
    reaches nothing. `npm run aws -- sts get-caller-identity` then answers with
    `assumed-role/rtfm-read/…`.
 
-6. **Check `rtfm-local`'s key, then delete the user you made by hand.** Once `RtfmApp` is
-   deployed, since every Bedrock call is first reserved in its table `rtfm-usage`, write one
-   section with `RTFM_MODELS=bedrock npm run dev`. In the IAM console, under the user
-   `rtfm-local`, its key's "Last used" should then show Bedrock; that is what shows the server
-   used the new key and not the old one. Then delete the hand-made user, with its keys and its
-   policy.
-
-7. **Activate the `project` cost allocation tag**, about a day after the stacks exist (Billing ›
-   Cost allocation tags). It is listed twice: as a user-defined tag, from the tagged resources,
-   and as an IAM principal tag, once `rtfm-local` has called Bedrock. Activate both. Until then the
-   budget counts nothing.
+6. **Check `rtfm-local`'s key works**, once `RtfmApp` is deployed: every Bedrock call is first
+   reserved in its table `rtfm-usage`, so without it the call fails before reaching Bedrock.
+   Start the app with `RTFM_MODELS=bedrock npm run dev` and open an unwritten section, which
+   Claude then writes. In the IAM console, under the user `rtfm-local`, its key's "Last used"
+   should then show Bedrock: the server called Bedrock with this key. If you set up Bedrock access
+   by hand before, delete that user, with its keys, and its policy once `rtfm-local`'s key works.
 
 ### The edge stacks
 
-These put the app at `https://rtfm.moonfetus.com`, from CloudShell as above. Neither needs an IAM
-capability: they make no role or policy. CloudShell keeps the variables below for its session; in
-a new session, run the commands that set them again.
+These put the app at `https://rtfm.moonfetus.com`, from CloudShell as above, once `RtfmApp` is
+deployed: step 4 below reads its output. Neither needs an IAM capability: they make no role or policy.
+CloudShell keeps the variables below for its session; in a new session, run the commands that set
+them again.
 
 1. **Write the templates.** In the main checkout on the laptop, with no credentials:
 
@@ -564,16 +587,19 @@ a new session, run the commands that set them again.
    echo "$ZONE_ID"
    ```
 
-3. **Deploy `RtfmEdgeCertificate`**, in `us-east-1`. It returns once ACM has issued the
-   certificate, which takes up to 30 minutes:
+3. **Deploy `RtfmEdgeCertificate`**, in `us-east-1`, and protect it from deletion. The deploy
+   returns once ACM has issued the certificate, which takes up to 30 minutes:
 
    ```sh
    aws cloudformation deploy --region us-east-1 --stack-name RtfmEdgeCertificate \
      --template-file RtfmEdgeCertificate.template.json --parameter-overrides HostedZoneId=$ZONE_ID
+   aws cloudformation update-termination-protection --region us-east-1 \
+     --stack-name RtfmEdgeCertificate --enable-termination-protection
    ```
 
    If CloudShell's session ends first, the deploy goes on without it. In a new session, set
-   `ZONE_ID` again (step 2), and wait for the stack:
+   `ZONE_ID` again (step 2), wait for the stack, then turn on its termination protection with the
+   second command above:
 
    ```sh
    aws cloudformation wait stack-create-complete --region us-east-1 --stack-name RtfmEdgeCertificate
@@ -591,22 +617,35 @@ a new session, run the commands that set them again.
    echo "$CERTIFICATE_ARN $ENDPOINT_DOMAIN"
    ```
 
-5. **Deploy `RtfmEdge`**, in `us-west-2`. It returns once CloudFront has deployed the
-   distribution, which takes several minutes:
+5. **Deploy `RtfmEdge`**, in `us-west-2`, and protect it from deletion. The deploy returns once
+   CloudFront has deployed the distribution, which takes several minutes:
 
    ```sh
    aws cloudformation deploy --region us-west-2 --stack-name RtfmEdge \
      --template-file RtfmEdge.template.json --parameter-overrides \
        CertificateArn=$CERTIFICATE_ARN HostedZoneId=$ZONE_ID EndpointDomain=$ENDPOINT_DOMAIN
+   aws cloudformation update-termination-protection --region us-west-2 \
+     --stack-name RtfmEdge --enable-termination-protection
    ```
 
    Its resource policy names the Web Function by its ARN (`ResourceArn`), which the live schema
    of `AWS::Lambda::ResourcePolicy` in `us-west-2` accepts as a `WebFunctionResourceArn`,
    `…:web-function/<name>` (read on 2026-10-13).
 
-   If CloudShell's session ends first, wait for it as in step 3, with `--region us-west-2
-   --stack-name RtfmEdge`. Then the smoke check (Deploying the app stack, above) goes through
-   the domain.
+   If CloudShell's session ends first, wait for the stack as in step 3, with
+   `--region us-west-2 --stack-name RtfmEdge`, then turn on its termination protection with the
+   second command above.
+
+Then the smoke check's requests (Deploying the app stack, above) check the whole path to the
+server through `rtfm.moonfetus.com`, and that the distribution's own `*.cloudfront.net` domain is
+refused.
+
+### The cost allocation tag
+
+**Activate the `project` cost allocation tag** about a day after the stacks exist, in Billing ›
+Cost allocation tags. It is listed twice: as a user-defined tag, from the tagged resources, and as
+an IAM principal tag, once `rtfm-local` has called Bedrock (Your steps › 6). Activate both. Until
+then the budget counts nothing.
 
 ### Updating a stack you deploy
 
