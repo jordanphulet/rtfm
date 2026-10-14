@@ -62,11 +62,12 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.12 — One ledger for real spend
-- **Status:** doing (agent a820e5dcd6453a836; in review)
+- **Status:** doing (agent a820e5dcd6453a836; reviewed; on 2026-10-13 the user approved its `access-stack.ts` and `rtfm.ts` changes)
 - **Depends on:** IN.11
-- **Files:** `server/gateway/**`, `server/storage/**`, `server/app.ts`, `server/config.ts`,
+- **Files:** `server/gateway/**`, `server/storage/**`, `server/app.ts` and its test, `server/config.ts`,
   `server/usage.ts`, `server/README.md`, `README.md`, `ARCHITECTURE.md`, `infra/access-stack.ts`
-  and its test, `infra/app-stack.ts` and its test, `infra/README.md`
+  and its test, `infra/app-stack.ts` and its test, `infra/README.md`, `server/testing.ts` (the
+  gateway's new dependencies), `infra/rtfm.ts` (the table's name, ARN and actions; user-approved)
 - **Do:**
   - The ledger, spending totals and kill switch behind interfaces: the data folder's for `fake`,
     the table `rtfm-usage`'s for `bedrock`, from a laptop too; reserving as one conditional
