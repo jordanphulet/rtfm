@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.12 — Render equations in sections
-- **Status:** needs-human (fourth round: the strut check is bypassed by \\smash/\\hphantom and top-level \\\\[-…]; worktree kept)
+- **Status:** doing (agent ae5b33cd876b1e085; the user chose a last round: a blocklist of layout-moving commands on top of the height check)
 - **Depends on:** —
 - **Files:** `src/manual/**`, `src/reader/**`, `src/ui/**`, `server/writer/**`, `package.json`,
   `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `scripts/shot.ts`
