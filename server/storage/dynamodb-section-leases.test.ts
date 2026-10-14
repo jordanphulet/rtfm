@@ -8,6 +8,7 @@ import {
   type LeaseTiming,
 } from "./dynamodb-manual-store.ts";
 import { testAppTable } from "./dynamodb-testing.ts";
+import { ADMIN_LIBRARY_ID } from "./library.ts";
 import { manual } from "./manual-store-suite.ts";
 import type { ManualStore, SectionLeases } from "./types.ts";
 
@@ -27,8 +28,8 @@ describe("the DynamoDB section leases", () => {
   let store: ManualStore;
 
   /** Another environment on the table, whose leases are released when the test ends. */
-  function environment(timing = SHORT): SectionLeases {
-    const leases = createDynamoDbSectionLeases(table, timing);
+  function environment(timing = SHORT, libraryId = ADMIN_LIBRARY_ID): SectionLeases {
+    const leases = createDynamoDbSectionLeases(table, timing, libraryId);
     return {
       heldElsewhere: leases.heldElsewhere,
       readSection: leases.readSection,
@@ -162,5 +163,45 @@ describe("the DynamoDB section leases", () => {
     expect(await here.readSection(manual.id, "none")).toEqual({ body: undefined, heldElsewhere: false });
     await sleep(CRASHED.durationMs + 100);
     expect(await here.readSection(manual.id, "s")).toEqual({ body: undefined, heldElsewhere: false });
+  });
+
+  describe("in two libraries", () => {
+    let recipientStore: ManualStore;
+
+    beforeEach(async () => {
+      recipientStore = createDynamoDbManualStore(table, "acme");
+      await recipientStore.createManual(manual);
+    });
+
+    it("lets each library take one section id's lease at once, and saves each body in its own", async () => {
+      const [inAdmin, inRecipient] = await Promise.all([
+        environment().take(manual.id, "s"),
+        environment(SHORT, "acme").take(manual.id, "s"),
+      ]);
+
+      expect(await inAdmin!.saveBody("the admin's")).toBe("saved");
+      expect(await inRecipient!.saveBody("the recipient's")).toBe("saved");
+      expect(await store.getBody(manual.id, "s")).toBe("the admin's");
+      expect(await recipientStore.getBody(manual.id, "s")).toBe("the recipient's");
+    });
+
+    it("never names another library's leases as held elsewhere", async () => {
+      await environment().take(manual.id, "s");
+      const recipient = environment(SHORT, "acme");
+
+      expect(await recipient.heldElsewhere(manual.id)).toEqual([]);
+      expect(await recipient.readSection(manual.id, "s")).toEqual({ body: undefined, heldElsewhere: false });
+      await environment(SHORT, "acme").take(manual.id, "t");
+      expect(await recipient.heldElsewhere(manual.id)).toEqual(["t"]);
+    });
+
+    it("deletes a manual while another library holds a live lease on a section of its id", async () => {
+      await environment().take(manual.id, "s");
+      await recipientStore.saveBody(manual.id, "s", "body");
+
+      expect(await recipientStore.deleteManual(manual.id)).toBe("deleted");
+      expect(await store.getManual(manual.id)).toEqual(manual);
+      expect(await environment().take(manual.id, "s")).toBeUndefined();
+    });
   });
 });

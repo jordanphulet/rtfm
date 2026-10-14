@@ -19,6 +19,7 @@ import {
   type TransactWriteCommandInput,
 } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
+import { ADMIN_LIBRARY_ID, libraryPartition } from "./library.ts";
 import { ID_PATTERN, isSameManual } from "./manual.ts";
 import type { ManualStore, SectionLease, SectionLeases, StoredManual } from "./types.ts";
 
@@ -78,14 +79,26 @@ const SEEDED = "SEEDED";
 const MANUAL_PREFIX = "MANUAL#";
 const SECTION_PREFIX = "SECTION#";
 
-const manualKey = (manualId: string) => ({ pk: LIBRARY, sk: `${MANUAL_PREFIX}${checkedId(manualId)}` });
-/** The partition of a manual's section items. */
-const sectionsPartition = (manualId: string) => `${MANUAL_PREFIX}${checkedId(manualId)}`;
-const sectionKey = (manualId: string, sectionId: string) => ({
-  pk: sectionsPartition(manualId),
-  sk: `${SECTION_PREFIX}${checkedId(sectionId)}`,
-});
-const seededKey = (manualId: string) => ({ pk: SEEDED, sk: `${MANUAL_PREFIX}${checkedId(manualId)}` });
+/** The keys of one library's items (`server/storage/README.md` › The table `rtfm-app`). */
+function libraryKeys(libraryId: string) {
+  const manualsPartition = libraryPartition(libraryId, LIBRARY);
+  const seededPartition = libraryPartition(libraryId, SEEDED);
+  /** The partition of a manual's section items. */
+  const sectionsPartition = (manualId: string) => libraryPartition(libraryId, `${MANUAL_PREFIX}${checkedId(manualId)}`);
+  return {
+    manualsPartition,
+    seededPartition,
+    sectionsPartition,
+    manual: (manualId: string) => ({ pk: manualsPartition, sk: `${MANUAL_PREFIX}${checkedId(manualId)}` }),
+    section: (manualId: string, sectionId: string) => ({
+      pk: sectionsPartition(manualId),
+      sk: `${SECTION_PREFIX}${checkedId(sectionId)}`,
+    }),
+    seeded: (manualId: string) => ({ pk: seededPartition, sk: `${MANUAL_PREFIX}${checkedId(manualId)}` }),
+  };
+}
+
+type LibraryKeys = ReturnType<typeof libraryKeys>;
 
 interface ManualItem {
   manual: StoredManual;
@@ -100,18 +113,19 @@ interface SectionItem {
   leaseExpiresAt?: number;
 }
 
-export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
+export function createDynamoDbManualStore(table: DynamoDbTable, libraryId = ADMIN_LIBRARY_ID): ManualStore {
+  const keys = libraryKeys(libraryId);
   const client = documentClient(table);
   const TableName = table.name;
 
   async function getManualItem(manualId: string): Promise<ManualItem | undefined> {
-    const { Item } = await client.send(new GetCommand({ TableName, Key: manualKey(manualId), ConsistentRead: true }));
+    const { Item } = await client.send(new GetCommand({ TableName, Key: keys.manual(manualId), ConsistentRead: true }));
     return Item as ManualItem | undefined;
   }
 
   return {
     async listManuals() {
-      const items = await queryPartition(client, TableName, LIBRARY, "manual");
+      const items = await queryPartition(client, TableName, keys.manualsPartition, "manual");
       return items.map((item) => (item as unknown as ManualItem).manual);
     },
 
@@ -125,7 +139,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
         await client.send(
           new PutCommand({
             TableName,
-            Item: { ...manualKey(manual.id), manual },
+            Item: { ...keys.manual(manual.id), manual },
             ConditionExpression: "attribute_not_exists(pk)",
           }),
         );
@@ -143,7 +157,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
         if (!item) return "deleted";
         const written = [...(item.written ?? [])];
         // The written sections' items, and any unwritten section's item that holds only a lease.
-        const sectionItems = await queryPartition(client, TableName, sectionsPartition(manualId), "pk, sk");
+        const sectionItems = await queryPartition(client, TableName, keys.sectionsPartition(manualId), "pk, sk");
         if (sectionItems.length > MOST_SECTIONS_DELETED_AT_ONCE) {
           throw new Error(`"${manualId}" has ${sectionItems.length} section items, more than one delete can remove`);
         }
@@ -154,7 +168,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
             {
               Delete: {
                 TableName,
-                Key: manualKey(manualId),
+                Key: keys.manual(manualId),
                 ConditionExpression: `attribute_exists(pk) AND ${unchanged}`,
                 ExpressionAttributeValues: written.length === 0 ? undefined : { ":written": new Set(written) },
               },
@@ -180,13 +194,13 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
 
     async getBody(manualId, sectionId) {
       const { Item } = await client.send(
-        new GetCommand({ TableName, Key: sectionKey(manualId, sectionId), ConsistentRead: true }),
+        new GetCommand({ TableName, Key: keys.section(manualId, sectionId), ConsistentRead: true }),
       );
       return Item?.body as string | undefined;
     },
 
     async saveBody(manualId, sectionId, body) {
-      const saved = await saveBodyIf(client, TableName, { manualId, sectionId, body });
+      const saved = await saveBodyIf(client, TableName, keys, { manualId, sectionId, body });
       return saved === "refused" ? "already-written" : saved;
     },
 
@@ -195,12 +209,12 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
     },
 
     async seededManualIds() {
-      const items = await queryPartition(client, TableName, SEEDED, "sk");
+      const items = await queryPartition(client, TableName, keys.seededPartition, "sk");
       return items.map(({ sk }) => (sk as string).slice(MANUAL_PREFIX.length));
     },
 
     async markSeeded(manualId) {
-      await client.send(new PutCommand({ TableName, Item: seededKey(manualId) }));
+      await client.send(new PutCommand({ TableName, Item: keys.seeded(manualId) }));
     },
   };
 }
@@ -209,7 +223,12 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
  * Section leases on the section's own item, shared by every environment on the table: a writer
  * takes one with a conditional write, renews it while it writes, and alone may save the body.
  */
-export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTION_LEASE_TIMING): SectionLeases {
+export function createDynamoDbSectionLeases(
+  table: DynamoDbTable,
+  timing = SECTION_LEASE_TIMING,
+  libraryId = ADMIN_LIBRARY_ID,
+): SectionLeases {
+  const keys = libraryKeys(libraryId);
   const client = documentClient(table);
   const TableName = table.name;
   const environment = randomUUID();
@@ -219,7 +238,7 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
    * it would expire unrenewed, so its holder has stopped before another writer can take it.
    */
   function heldLease(manualId: string, sectionId: string, owner: string, takenAt: number): SectionLease {
-    const Key = sectionKey(manualId, sectionId);
+    const Key = keys.section(manualId, sectionId);
     const name = `${manualId}/${sectionId}`;
     const lost = new AbortController();
     let renewing: NodeJS.Timeout | undefined = setInterval(renew, timing.renewEveryMs);
@@ -288,8 +307,8 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
       async saveBody(body) {
         stopRenewing();
         if (lost.signal.aborted) throw new Error(`The lease on ${name} was lost before its body was saved`);
-        const saved = await saveBodyIf(client, TableName, { manualId, sectionId, body, leaseOwner: owner });
-        if (saved === "refused" && !(await bodyIsStored(client, TableName, manualId, sectionId))) {
+        const saved = await saveBodyIf(client, TableName, keys, { manualId, sectionId, body, leaseOwner: owner });
+        if (saved === "refused" && !(await bodyIsStored(client, TableName, Key))) {
           throw new Error(`The lease on ${name} was lost before its body was saved`);
         }
         bodySaved = true;
@@ -324,7 +343,7 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
         await client.send(
           new UpdateCommand({
             TableName,
-            Key: sectionKey(manualId, sectionId),
+            Key: keys.section(manualId, sectionId),
             UpdateExpression: "SET leaseOwner = :owner, leaseExpiresAt = :expiresAt",
             // Its own owner too, in case the SDK retried a take whose answer was lost.
             ConditionExpression:
@@ -342,7 +361,7 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
 
     async readSection(manualId, sectionId) {
       const { Item } = await client.send(
-        new GetCommand({ TableName, Key: sectionKey(manualId, sectionId), ConsistentRead: true }),
+        new GetCommand({ TableName, Key: keys.section(manualId, sectionId), ConsistentRead: true }),
       );
       const { body, leaseOwner, leaseExpiresAt } = (Item ?? {}) as SectionItem;
       // Live as a take reads it, and another environment's: its own runs are in its runs' map.
@@ -355,7 +374,7 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
 
     async heldElsewhere(manualId) {
       // Expired as a take reads it: `leaseExpiresAt < :now`. A written section's item has no lease.
-      const items = await queryPartition(client, TableName, sectionsPartition(manualId), "sk", {
+      const items = await queryPartition(client, TableName, keys.sectionsPartition(manualId), "sk", {
         FilterExpression: "leaseExpiresAt >= :now AND NOT begins_with(leaseOwner, :environment)",
         ExpressionAttributeValues: { ":now": Date.now(), ":environment": `${environment}/` },
       });
@@ -396,6 +415,7 @@ export async function queryPartition(
 async function saveBodyIf(
   client: DynamoDBDocumentClient,
   TableName: string,
+  keys: LibraryKeys,
   { manualId, sectionId, body, leaseOwner }: { manualId: string; sectionId: string; body: string; leaseOwner?: string },
 ): Promise<"saved" | "refused"> {
   const cancelled = await transactWrite(client, {
@@ -403,7 +423,7 @@ async function saveBodyIf(
       {
         Update: {
           TableName,
-          Key: manualKey(manualId),
+          Key: keys.manual(manualId),
           UpdateExpression: "ADD written :section",
           ConditionExpression: "attribute_exists(pk)",
           ExpressionAttributeValues: { ":section": new Set([sectionId]) },
@@ -412,7 +432,7 @@ async function saveBodyIf(
       {
         Put: {
           TableName,
-          Item: { ...sectionKey(manualId, sectionId), body },
+          Item: { ...keys.section(manualId, sectionId), body },
           ...(leaseOwner === undefined
             ? { ConditionExpression: "attribute_not_exists(body)" }
             : {
@@ -432,10 +452,8 @@ async function saveBodyIf(
   throw cancelled;
 }
 
-async function bodyIsStored(client: DynamoDBDocumentClient, TableName: string, manualId: string, sectionId: string) {
-  const { Item } = await client.send(
-    new GetCommand({ TableName, Key: sectionKey(manualId, sectionId), ConsistentRead: true }),
-  );
+async function bodyIsStored(client: DynamoDBDocumentClient, TableName: string, Key: Record<string, string>) {
+  const { Item } = await client.send(new GetCommand({ TableName, Key, ConsistentRead: true }));
   return Item?.body !== undefined;
 }
 

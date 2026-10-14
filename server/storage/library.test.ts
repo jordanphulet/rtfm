@@ -1,12 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  ADMIN_LIBRARY_ID,
-  checkedRecipientLibraryId,
-  isRecipientLibraryId,
-  libraryFolder,
-  libraryPartition,
-} from "./library.ts";
+import { ADMIN_LIBRARY_ID, checkedRecipientLibraryId, libraryFolder, libraryPartition } from "./library.ts";
 
 describe("a library's keys and folder", () => {
   it("gives the admin's library the unprefixed keys and the data folder itself", () => {
@@ -22,18 +16,10 @@ describe("a library's keys and folder", () => {
   });
 
   it("refuses a library id that isn't a slug, so no key or folder can reach another's", () => {
-    for (const libraryId of ["acme#LIBRARY", "../outside", "Acme", ""]) {
-      expect(() => libraryPartition(libraryId, "LIBRARY")).toThrow(`Not a valid library id: "${libraryId}"`);
-      expect(() => libraryFolder("/data", libraryId)).toThrow(`Not a valid library id: "${libraryId}"`);
+    for (const libraryId of ["acme#LIBRARY", "../outside", "Acme", "", "a".repeat(64)]) {
+      expect(() => libraryPartition(libraryId, "LIBRARY")).toThrow("Not a recipient library's id");
+      expect(() => libraryFolder("/data", libraryId)).toThrow("Not a recipient library's id");
     }
-  });
-
-  it("lets no recipient's library take the admin's id", () => {
-    expect(isRecipientLibraryId("acme")).toBe(true);
-    expect(isRecipientLibraryId("acme-2026")).toBe(true);
-    expect(isRecipientLibraryId(ADMIN_LIBRARY_ID)).toBe(false);
-    expect(isRecipientLibraryId("acme#x")).toBe(false);
-    expect(isRecipientLibraryId("")).toBe(false);
   });
 
   it("checks a recipient's library id: a slug of at most 63 characters, never the admin's, never repeated in the error", () => {

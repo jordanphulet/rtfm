@@ -16,11 +16,77 @@ import {
   type DynamoDbTable,
 } from "./dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS, KEYS_REFUSED_BODIES, testAppTable } from "./dynamodb-testing.ts";
+import { ADMIN_LIBRARY_ID } from "./library.ts";
 import { sectionsInReadingOrder } from "./manual.ts";
 import { describeManualStore, manual } from "./manual-store-suite.ts";
 import type { StoredManual } from "./types.ts";
 
-describeManualStore("the DynamoDB manual store", async () => createDynamoDbManualStore(await testAppTable()));
+describeManualStore("the DynamoDB manual store", async () => {
+  const table = await testAppTable();
+  return (libraryId) => createDynamoDbManualStore(table, libraryId);
+});
+
+describe("the DynamoDB manual store's libraries", () => {
+  it("reads and writes the admin's library at the unprefixed keys", async () => {
+    const dynamoDb = await standInDynamoDb((operation, _count, body) =>
+      operation === "GetItem" && JSON.stringify(body.Key) === JSON.stringify({ pk: { S: "LIBRARY" }, sk: { S: `MANUAL#${manual.id}` } })
+        ? manualItem(["s"])
+        : undefined,
+    );
+    for (const admin of [createDynamoDbManualStore(dynamoDb.table()), createDynamoDbManualStore(dynamoDb.table(), ADMIN_LIBRARY_ID)]) {
+      expect(await admin.getManual(manual.id)).toEqual(manual);
+      expect(await admin.writtenSectionIds(manual.id)).toEqual(["s"]);
+    }
+
+    await useEveryKey(dynamoDb.table(), ADMIN_LIBRARY_ID);
+    expect(partitionsSent(dynamoDb.requests)).toEqual(["LIBRARY", `MANUAL#${manual.id}`, "SEEDED"]);
+  });
+
+  it("keeps a recipient's library under L#<libraryId>#, before the admin's keys", async () => {
+    const dynamoDb = await standInDynamoDb();
+    await useEveryKey(dynamoDb.table(), "acme");
+    expect(partitionsSent(dynamoDb.requests)).toEqual(["L#acme#LIBRARY", `L#acme#MANUAL#${manual.id}`, "L#acme#SEEDED"]);
+  });
+
+  it("refuses a library id that isn't a slug", async () => {
+    const table = await testAppTable();
+    expect(() => createDynamoDbManualStore(table, "acme#LIBRARY")).toThrow("Not a recipient library's id");
+    expect(() => createDynamoDbSectionLeases(table, undefined, "Acme")).toThrow("Not a recipient library's id");
+  });
+});
+
+/** Calls every method of a library's store and leases once, on a stand-in that answers each with nothing found. */
+async function useEveryKey(table: DynamoDbTable, libraryId: string) {
+  const store = createDynamoDbManualStore(table, libraryId);
+  const leases = createDynamoDbSectionLeases(table, undefined, libraryId);
+  await store.listManuals();
+  await store.getManual(manual.id);
+  await store.createManual(manual);
+  await store.deleteManual(manual.id);
+  await store.getBody(manual.id, "s");
+  await store.saveBody(manual.id, "s", "body");
+  await store.writtenSectionIds(manual.id);
+  await store.seededManualIds();
+  await store.markSeeded(manual.id);
+  await (await leases.take(manual.id, "s"))!.release();
+  await leases.heldElsewhere(manual.id);
+  await leases.readSection(manual.id, "s");
+}
+
+/** Every partition key the requests named, in a key, an item or a query. */
+function partitionsSent(requests: CapturedRequest[]): string[] {
+  const partitions = new Set<string>();
+  const visit = (value: unknown) => {
+    if (typeof value !== "object" || value === null) return;
+    for (const [name, inner] of Object.entries(value)) {
+      const text = (inner as { S?: unknown }).S;
+      if ((name === "pk" || name === ":pk") && typeof text === "string") partitions.add(text);
+      visit(inner);
+    }
+  };
+  for (const { body } of requests) visit(body);
+  return [...partitions].sort();
+}
 
 describe("the DynamoDB manual store's table", () => {
   it("is shared by every store on it, as by every environment", async () => {

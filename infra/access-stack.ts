@@ -6,6 +6,7 @@ import { bedrockPolicyStatements } from "./bedrock.ts";
 import {
   ACCESS_STACK,
   ACCOUNT,
+  ACTIVITY_PARTITION,
   AGENT_USER,
   APP_TABLE_ARN,
   BEDROCK_POLICY,
@@ -14,11 +15,14 @@ import {
   DEPLOY_ROLE,
   EDGE_STACKS,
   KILL_SWITCH_PARTITION,
+  LINK_PARTITION,
   LOCAL_USER,
   OPS_ROLE,
   PASSCODE_PARTITION,
   PROJECT_TAG,
   READ_ROLE,
+  RECIPIENT_DEEPER_PARTITION_PATTERN,
+  RECIPIENT_LIBRARY_PARTITION_PATTERN,
   REGION,
   RTFM_RESOURCES,
   RTFM_STACKS,
@@ -165,6 +169,11 @@ function readStatements(): PolicyStatement[] {
       actions: ["dynamodb:GetItem", "dynamodb:Query"],
       resources: [USAGE_TABLE_ARN],
     }),
+    onlyPartitions("ReadLinksAndActivity", APP_TABLE_ARN, [LINK_PARTITION, ACTIVITY_PARTITION], [
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+    ]),
+    listRecipientsManuals(),
     new PolicyStatement({
       sid: "DescribeResourceTypes",
       actions: ["cloudformation:DescribeType"],
@@ -189,31 +198,54 @@ function readStatements(): PolicyStatement[] {
 }
 
 /**
- * The items of the `KILL_SWITCH` partition in `rtfm-usage` and of the `PASSCODE` partition in
- * `rtfm-app`, and no other item or table.
+ * The items of the `KILL_SWITCH` partition in `rtfm-usage`, and of the `PASSCODE` and `LINK`
+ * partitions in `rtfm-app`, and no other item or table.
  */
 function opsStatements(): PolicyStatement[] {
   return [
-    onlyPartition("KillSwitch", USAGE_TABLE_ARN, KILL_SWITCH_PARTITION, [
+    onlyPartitions("KillSwitch", USAGE_TABLE_ARN, [KILL_SWITCH_PARTITION], [
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:DeleteItem",
     ]),
-    onlyPartition("Passcode", APP_TABLE_ARN, PASSCODE_PARTITION, ["dynamodb:GetItem", "dynamodb:PutItem"]),
+    onlyPartitions("Passcode", APP_TABLE_ARN, [PASSCODE_PARTITION], ["dynamodb:GetItem", "dynamodb:PutItem"]),
+    onlyPartitions("Links", APP_TABLE_ARN, [LINK_PARTITION], [
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    ]),
   ];
 }
 
 /**
- * Item actions on one partition of a table. `ForAllValues` also holds for a request that names no
+ * Item actions on some partitions of a table. `ForAllValues` also holds for a request that names no
  * partition key, so `Null` requires one.
  */
-function onlyPartition(sid: string, tableArn: string, partition: string, actions: string[]): PolicyStatement {
+function onlyPartitions(sid: string, tableArn: string, partitions: string[], actions: string[]): PolicyStatement {
   return new PolicyStatement({
     sid,
     actions,
     resources: [tableArn],
     conditions: {
-      "ForAllValues:StringEquals": { "dynamodb:LeadingKeys": [partition] },
+      "ForAllValues:StringEquals": { "dynamodb:LeadingKeys": partitions },
+      Null: { "dynamodb:LeadingKeys": "false" },
+    },
+  });
+}
+
+/**
+ * `Query` on the recipients' manual lists, `L#<libraryId>#LIBRARY`, and no other partition: the
+ * `StringLike` pattern's `*` matches `#` too, so `StringNotLike` refuses a key with three or more.
+ */
+function listRecipientsManuals(): PolicyStatement {
+  return new PolicyStatement({
+    sid: "ListRecipientsManuals",
+    actions: ["dynamodb:Query"],
+    resources: [APP_TABLE_ARN],
+    conditions: {
+      "ForAllValues:StringLike": { "dynamodb:LeadingKeys": [RECIPIENT_LIBRARY_PARTITION_PATTERN] },
+      "ForAllValues:StringNotLike": { "dynamodb:LeadingKeys": [RECIPIENT_DEEPER_PARTITION_PATTERN] },
       Null: { "dynamodb:LeadingKeys": "false" },
     },
   });

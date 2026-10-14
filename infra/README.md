@@ -68,9 +68,9 @@ for the AWS CLI.
 | --- | --- | --- |
 | `rtfm-local` (user) | The key in the server's `.env.local` | Claude on Bedrock, through the policy `rtfm-bedrock`, and the items of the table `rtfm-usage`, Bedrock's spending ledger |
 | `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read`, `rtfm-deploy` and `rtfm-ops`, nothing else |
-| `rtfm-read` (role) | `npm run aws`, `npm run cdk` but deploys, and `npm run ops`' reads | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, the items of `rtfm-usage`, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
+| `rtfm-read` (role) | `npm run aws`, `npm run cdk` but deploys, and `npm run ops`' reads | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, the items of `rtfm-usage`, the libraries' links and activity and the recipients' manual lists in `rtfm-app`, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
-| `rtfm-ops` (role) | `npm run ops -- kill-switch` and `passcode` | Reading and writing the items of two partitions: `KILL_SWITCH` in `rtfm-usage` and `PASSCODE` in `rtfm-app`, nothing else |
+| `rtfm-ops` (role) | `npm run ops -- kill-switch` and `passcode` | Reading and writing the items of three partitions: `KILL_SWITCH` in `rtfm-usage`, and `PASSCODE` and `LINK` in `rtfm-app`, nothing else |
 | `cdk-rtfm-deploy-role-…` | The CDK CLI's deploys | CloudFormation on `Rtfm*` stacks, but only reading `RtfmAccess` and `RtfmToolkit`; passing the execution role |
 | `cdk-rtfm-file-publishing-role-…` | Uploading assets | The staging bucket |
 | `cdk-rtfm-lookup-role-…` | `cdk diff`'s reads | Reading `Rtfm*` stacks and the bootstrap's version |
@@ -103,7 +103,32 @@ turn the kill switch on but never off, and it reaches no other table, index or t
   (`dynamodb:DescribeTable` and `DescribeContinuousBackups`), and can't list the account's
   tables;
 - the items of the table `rtfm-usage`, Bedrock's spending ledger (`dynamodb:GetItem` and
-  `Query`), for `npm run ops -- usage` and `status`. It reads no item of `rtfm-app`, and no index.
+  `Query`), for `npm run ops -- usage` and `status`;
+- in `rtfm-app`, the items of two partitions, `LINK` and `ACTIVITY` (`LINK_PARTITION` and
+  `ACTIVITY_PARTITION` in `rtfm.ts`), the libraries' links and their activity
+  (`dynamodb:GetItem` and `Query`), and the recipients' manual lists, the partitions
+  `L#<libraryId>#LIBRARY` (`dynamodb:Query` alone). A link's item holds its secret's digest,
+  which opens nothing. A `Query` of a manual list returns each of the library's manuals as its
+  table of contents (title, subtitle, voice, and its chapters' and sections' titles and
+  summaries, which come from what the recipient asked for) and which of its sections are written,
+  but no section's body or lease, and no conversation, which is kept nowhere. It reads no other
+  item of `rtfm-app`: not the passcode's, the admin's library, a section or a seeding record. It
+  reads no index.
+
+The items of `rtfm-app` it reads are limited as `rtfm-ops`'s are (below), with
+`dynamodb:LeadingKeys`: `ForAllValues:StringEquals` with `LINK` and `ACTIVITY`; and
+`ForAllValues:StringLike` with `L#*#LIBRARY` (`RECIPIENT_LIBRARY_PARTITION_PATTERN`) beside
+`ForAllValues:StringNotLike` with `L#*#*#*` (`RECIPIENT_DEEPER_PARTITION_PATTERN`); each with
+`Null` and `false`. `StringLike` matches case-sensitively, and its `*` matches any characters, `#`
+included: IAM's string operators match without a format, unlike the ARN operators, which check
+each part of an ARN apart (IAM User Guide, "IAM JSON policy elements: Condition operators", read
+2026-10-13). So `L#*#LIBRARY` alone would also match `L#acme#MANUAL#x#LIBRARY`; the
+`StringNotLike` refuses any key with three or more `#`, which leaves exactly
+`L#<libraryId>#LIBRARY` with an id that holds no `#`. No such deeper key exists anyway: a library
+id and a manual id are slugs (`ID_PATTERN` in `server/storage/manual.ts`), with no `#` and no
+capital, so a recipient's other partitions, `L#<libraryId>#SEEDED` and
+`L#<libraryId>#MANUAL#<manualId>`, never end in `#LIBRARY`, and the admin's `LIBRARY` doesn't
+start with `L#`. The policy doesn't depend on that.
 
 It also has actions on `*` that take no narrower resource: listing log groups, reading the results
 of a Logs Insights query by the ID its own `StartQuery` returned, Cost Explorer, which covers the
@@ -115,7 +140,7 @@ project's private extensions among them; CloudFormation's `type` resource
 (`…:type/resource/<type>`) applies only to stack set actions. It can't register, deregister,
 activate or configure a type.
 
-`rtfm-ops` may touch the items of two partitions, and nothing else: no item of another
+`rtfm-ops` may touch the items of three partitions, and nothing else: no item of another
 partition, and no other table, service or role, so it can't reach beyond what the boundary allows.
 
 - **`KILL_SWITCH`** in `rtfm-usage` (`KILL_SWITCH_PARTITION` in `rtfm.ts`), which holds the kill
@@ -125,6 +150,9 @@ partition, and no other table, service or role, so it can't reach beyond what th
   `rtfm-app`), which holds the passcode's item, its digest: `dynamodb:GetItem` and `PutItem`, so
   `npm run ops -- passcode set` stores a new digest and `passcode cookie` reads it. The digest
   opens the app (`README.md` › A passcode).
+- **`LINK`** in `rtfm-app` (`LINK_PARTITION`), which holds the libraries' links, one item each,
+  keyed by its secret's digest: `dynamodb:GetItem`, `Query`, `PutItem` and `UpdateItem`, to make a
+  link, list them, read one and revoke one. It has no `DeleteItem`: a revoked link's item stays.
 
 Each statement names its table's ARN and holds two conditions on `dynamodb:LeadingKeys`, the
 partition keys a request names: `ForAllValues:StringEquals` with the one partition, and `Null`
@@ -133,9 +161,10 @@ when a request names no partition key at all, as a `Scan` does, so `Null` requir
 DynamoDB Developer Guide, "Using IAM policy conditions for fine-grained access control"; IAM User
 Guide, "Single-valued vs. multivalued context keys", both read 2026-10-13). DynamoDB has no
 condition key for the sort key, so the policy can't name the one item each partition holds:
-`rtfm-ops` can put, read or delete an item with any sort key in `KILL_SWITCH`, and put or read one
-with any sort key in `PASSCODE`. The server checks the kill switch by its whole key (`KILL_SWITCH`,
-`KILL_SWITCH`), so another item in that partition doesn't turn it on. The boundary denies
+`rtfm-ops` can put, read or delete an item with any sort key in `KILL_SWITCH`, put or read one
+with any sort key in `PASSCODE`, and put, read or update one with any sort key in `LINK`. The
+server checks the kill switch by its whole key (`KILL_SWITCH`, `KILL_SWITCH`), so another item in
+that partition doesn't turn it on. The boundary denies
 anything on `rtfm-ops`, as on `rtfm-read` and `rtfm-deploy`, so no app stack can widen it.
 
 You deploy `RtfmToolkit`, `RtfmAccess` and the edge stacks, `RtfmEdgeCertificate` and
@@ -188,9 +217,10 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
   - **its role `rtfm-app-web-function`**, which Lambda assumes. It may only write log streams in
     `/rtfm/app` and `/rtfm/app.local`, read and write items in the tables `rtfm-app` and
     `rtfm-usage`, and call Claude. In `rtfm-app` it has `GetItem`, `Query`, `PutItem`, `UpdateItem`
-    and `DeleteItem`, which also cover the store's transactions and reading the passcode's digest.
-    It writes no item of the passcode's partition, `PASSCODE`, which only `rtfm-ops` writes (The
-    Web Function's role and the passcode, below). In `rtfm-usage` it may do what `rtfm-local` may:
+    and `DeleteItem`, which also cover the store's transactions and reading the passcode's digest
+    and the libraries' links. It writes no item of the passcode's partition, `PASSCODE`, or the
+    links', `LINK`, which only `rtfm-ops` writes (The Web Function's role, the passcode and the
+    links, below). In `rtfm-usage` it may do what `rtfm-local` may:
     `GetItem`, `Query`, `PutItem`, `UpdateItem` and `ConditionCheckItem`, so it reserves every
     Bedrock call against the shared caps and kill switch. It calls Claude as `rtfm-bedrock` does,
     less the Marketplace subscription (`claudeStatements()` in `bedrock.ts`, which the boundary
@@ -269,32 +299,35 @@ Both edge stacks carry no asset at all: no CDK custom resource, no `crossRegionR
 which `rtfm-deploy` can write, so it could change what you deploy. The tests fail an edge stack
 with an asset or a custom resource, or a template over the inline limit.
 
-### The Web Function's role and the passcode
+### The Web Function's role, the passcode and the links
 
-The passcode's digest opens the app (`README.md` › A passcode), and only `rtfm-ops` writes its
-item, with `npm run ops -- passcode set`. The Web Function's role reads it with `GetItem`, and
-its policy on `rtfm-app` allows every item, so a statement beside it, `LeaveThePasscodeToOps`,
-denies `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` on the table when
-`dynamodb:LeadingKeys` includes `PASSCODE` (`ForAnyValue:StringEquals`). An explicit deny wins
-over the allow.
+Two partitions of `rtfm-app` decide who opens the app: `PASSCODE`, whose digest opens it
+(`README.md` › A passcode), and `LINK`, whose items say which library each link opens and whether
+it is revoked. Only `rtfm-ops` writes them, so the Web Function can never make, change or reopen a
+link, or change the passcode. The Web Function's role reads both with `GetItem`, and its policy on
+`rtfm-app` allows every item, so a statement beside it, `LeaveAccessToOps`, denies `PutItem`,
+`UpdateItem`, `DeleteItem` and `BatchWriteItem` on the table when `dynamodb:LeadingKeys` includes
+`PASSCODE` or `LINK` (`ForAnyValue:StringEquals`). An explicit deny wins over the allow. It still
+writes every other partition: a library's (`LIBRARY`, `SEEDED`, `MANUAL#…`, and each recipient's
+`L#<libraryId>#…`) and the libraries' activity, `ACTIVITY`.
 
 - **Every write names its partition.** The Service Authorization Reference gives
   `dynamodb:LeadingKeys` (`ArrayOfString`) to `PutItem`, `UpdateItem`, `DeleteItem` and
-  `BatchWriteItem`. `ForAnyValue` holds when any of the request's partition keys is `PASSCODE`.
-  The role isn't granted `BatchWriteItem`; the deny names it as well.
+  `BatchWriteItem`. `ForAnyValue` holds when any of the request's partition keys is `PASSCODE` or
+  `LINK`. The role isn't granted `BatchWriteItem`; the deny names it as well.
 - **Transactions are covered.** DynamoDB authorizes each part of a `TransactWriteItems` as its
   item action, `PutItem`, `UpdateItem`, `DeleteItem` or `ConditionCheckItem`, with that item's
-  partition key, so a transaction that writes the passcode's item is refused too. A
+  partition key, so a transaction that writes the passcode's item or a link's is refused too. A
   `ConditionCheckItem` only reads, and the role isn't granted it on `rtfm-app`.
 - **PartiQL isn't granted.** PartiQL needs its own actions (`dynamodb:PartiQLInsert`,
   `PartiQLUpdate`, `PartiQLDelete`, `PartiQLSelect`), which the role doesn't have, so the deny
   leaves them out.
 - **Reads are untouched.** The deny names no read action, so `GetItem` and `Query` reach the
-  passcode's item and every other as before. A request that names no partition key, such as a
-  `Scan`, never matches `ForAnyValue`; it isn't a write, and the role isn't granted it.
+  passcode's item, the links and every other as before. A request that names no partition key,
+  such as a `Scan`, never matches `ForAnyValue`; it isn't a write, and the role isn't granted it.
 
 DynamoDB's guide says to use `ForAllValues` with `dynamodb:LeadingKeys`, which suits an allow
-limited to some partitions, as `rtfm-ops`'s is. A deny of one partition needs `ForAnyValue`, the
+limited to some partitions, as `rtfm-ops`'s is. A deny of some partitions needs `ForAnyValue`, the
 IAM set operator that holds when at least one value matches. Sources, all read 2026-10-13: the
 Service Authorization Reference, "Actions, resources, and condition keys for Amazon DynamoDB";
 the Amazon DynamoDB Developer Guide, "Using IAM with DynamoDB transactions", "IAM security
@@ -880,8 +913,8 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
 - `app.ts`: `createApp`, the five stacks and the default synthesizer; `cdk.json` runs it.
 - `rtfm.ts`: the account, region and qualifier, the names and ARNs of the bootstrap's and
   `RtfmAccess`'s resources, the table `rtfm-usage`'s name, ARN and actions, which `RtfmAccess`
-  and `RtfmApp` both grant, the table `rtfm-app`'s name and ARN, and the two partitions `rtfm-ops`
-  may touch.
+  and `RtfmApp` both grant, the table `rtfm-app`'s name and ARN, and the partitions the roles'
+  policies name.
 - `toolkit-stack.ts`, `access-stack.ts`, `edge-certificate-stack.ts` and `edge-stack.ts`: the
   stacks you deploy. `edge-certificate-stack.ts` also holds the app's domain, and `edge-stack.ts`
   the host check's code and the Web Function's name, which a test keeps the same as
