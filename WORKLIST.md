@@ -176,6 +176,25 @@ Small fixes that keep the repo healthy.
 - **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
   and `npm test` passes.
 
+### UP.3 — Commit messages with bodies
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `scripts/commit-task.ts` and its test, `scripts/commit-worklist.ts` and its test,
+  `package.json`, `README.md`, `PROCESS.md` (with the user's approval)
+- **Do:**
+  - `npm run commit-task` requires a body, `--body-file <path>`, and refuses an empty one; the
+    body goes between the subject and the trailers.
+  - A new `npm run commit-worklist` commits `WORKLIST.md` alone as "Update work list statuses",
+    with a body generated from its diff: each task added, removed, or whose status changed (with
+    the new status), plus an optional `--reason "<text>"` line. It refuses any other staged or
+    changed file in the commit.
+  - `PROCESS.md` › Review loop › Approved, step 1, and When the orchestrator does work itself: say
+    what the bodies hold (the user approves the wording).
+  - `README.md` › Committing task work describes both commands.
+- **Done when:** both commands' tests cover the body (required, refused when empty, placed before
+  the trailers, generated from a `WORKLIST.md` diff), and the user has approved the `PROCESS.md`
+  change.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
