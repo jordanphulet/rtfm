@@ -123,28 +123,16 @@ aren't RTFM's.
 
 Small fixes that keep the repo healthy.
 
-### UP.5 — Merges after, apart from Depends on
-- **Status:** doing (agent a0a630c561c1a4722; done, being committed)
+### UP.6 — "and its test" across a line break
+- **Status:** doing (agent af2120585fde655f7)
 - **Depends on:** —
-- **Files:** `PROCESS.md`, `scripts/commit-task.ts` and its test,
-  `scripts/task-prompt.ts` and its test, `README.md`
-- **Do:** a task's **Depends on** named both results it needs and merges it must not precede, so
-  IN.20 waited for IN.15 though it needed only to merge after it. The user approved this wording
-  for `PROCESS.md`:
-  - Rules › Scheduling, in place of the sentence beginning "**Depends on** means": "**Depends
-    on** means one task needs another's result: its code, a finding, or something deployed. A task
-    starts once every task it depends on is gone from `WORKLIST.md`. **Merges after** means only
-    the order of merges matters, for example so nothing goes live before a safeguard. The task
-    starts as soon as it is otherwise ready, and the orchestrator merges it only once those tasks
-    are gone. A task's Depends on names only results it needs."
-  - Adding work: "a new ID, **Depends on**, **Merges after** when the order of merges matters,
-    **Files**, **Do** and **Done when**".
-  - `npm run commit-task` refuses, naming them, while a task the committed task's optional
-    **Merges after** line names (task IDs in it) is still in `WORKLIST.md`; `README.md` says so
-    where it describes `commit-task`.
-- **Done when:** `PROCESS.md` carries exactly the approved wording, rewrapped to 100 columns; the
-  tests show `commit-task` refusing while a named task remains and committing once it's gone, and
-  a task with no Merges after line commits as before.
+- **Files:** `scripts/commit-task.ts` and its test
+- **Do:** `commit-task` reads "`x.ts` and its test" as also naming `x.test.*` only when the words
+  sit on one line. When **Files** wraps between "and its" and "test", the test file goes unmatched
+  and the commit is refused (IN.14 and UP.5 both hit it). Read the item's text with its line
+  breaks and indentation collapsed to single spaces before matching.
+- **Done when:** a test shows a **Files** item wrapped inside "and its test" matching the test
+  file, and the existing tests pass.
 
 ## Waiting on AWS
 
