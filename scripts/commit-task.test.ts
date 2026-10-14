@@ -117,7 +117,16 @@ describe("findTask", () => {
       id: "XX.1",
       title: "Build the widget",
       files: { include: ["src/widget/**", "scripts/widget.ts", "scripts/widget.test.*", "README.md"], exclude: [] },
+      mergesAfter: [],
     });
+  });
+
+  it("reads the task IDs in Merges after across continuation lines, skipping notes in parentheses", () => {
+    const worklist = WORKLIST.replace(
+      "- **Depends on:** —\n- **Files:** `src/widget/**`",
+      "- **Depends on:** —\n- **Merges after:** IN.15 and UP.2 (its safeguard, not\n  AW.3, goes live first), RC.10\n- **Files:** `src/widget/**`",
+    );
+    expect(findTask(worklist, "XX.1")?.mergesAfter).toEqual(["IN.15", "UP.2", "RC.10"]);
   });
 
   it("finds nothing for an unknown ID, or a prefix of one", () => {
@@ -340,6 +349,23 @@ describe("in a git repository", () => {
 
     it("refuses an unknown task", () => {
       expect(() => commitTask(repo, "XX.9", { reviewedBy: "a7f3" }, BODY)).toThrow(/no task XX\.9/);
+    });
+
+    it("refuses while a task its Merges after names is in WORKLIST.md, naming it, and commits once it's gone", () => {
+      const mergesAfter = "- **Merges after:** XX.2, XX.3 (a safeguard goes live first)\n- **Files:** `src/widget/**`";
+      const waiting = WORKLIST.replace("- **Files:** `src/widget/**`", mergesAfter);
+      write("WORKLIST.md", waiting);
+      write("src/widget/new.ts", "export const widget = 1;\n");
+
+      expect(() => commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY)).toThrow(
+        "XX.1 merges after XX.2, still in WORKLIST.md: commit it once they are gone.",
+      );
+      expect(git("status", "--porcelain")).toBe(" M WORKLIST.md\n?? src/widget/new.ts\n");
+      expect(git("log", "--format=%s")).toBe("Start\n");
+
+      write("WORKLIST.md", waiting.slice(0, waiting.indexOf("### XX.2")));
+      commitTask(repo, "XX.1", { reviewedBy: "a7f3" }, BODY);
+      expect(lastCommitFiles()).toEqual(["src/widget/new.ts"]);
     });
 
     it("refuses --no-review over 40 changed lines, and stages nothing", () => {
