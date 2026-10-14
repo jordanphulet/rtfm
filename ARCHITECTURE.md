@@ -99,9 +99,12 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `scripts/audit/README.md`.
 - `hooks/`: the Claude Code hooks `.claude/settings.json` runs, which tell a session when its
   rules are out of date (`README.md` › Rule-change notices).
-- `commit-task.ts`: `npm run commit-task`, which commits a task's work with its `Reviewed-by:`
-  trailer. `.githooks/commit-msg` refuses, without one, a task commit or a commit of Claude's
-  that changes more than `WORKLIST.md` (`README.md` › Committing task work).
+- `commit-task.ts`: `npm run commit-task`, which commits a task's work with its body and its
+  `Reviewed-by:` trailer. `.githooks/commit-msg` refuses, without one, a task commit or a commit
+  of Claude's that changes more than `WORKLIST.md` (`README.md` › Committing task work). It holds
+  the parsing of `WORKLIST.md` the other scripts share.
+- `commit-worklist.ts`: `npm run commit-worklist`, which commits `WORKLIST.md` alone with a body
+  generated from its diff, using `commit-task.ts`'s check of where it runs and its parsing.
 - `orchestrator-check.ts`: `npm run orchestrator-check`, which checks the orchestrator runs in the
   main checkout on `main`, clean and with its hooks, and lists the `doing` tasks and task
   worktrees an earlier run left (`README.md` › The orchestrator's preflight). It shares

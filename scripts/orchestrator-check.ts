@@ -1,12 +1,9 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MAIN, blockEnd, git, itemText, mainCheckoutProblem } from "./commit-task.ts";
+import { MAIN, type WorklistTask, git, mainCheckoutProblem, worklistTasks } from "./commit-task.ts";
 
 const TASK_BRANCH_PREFIX = "worktree-agent-";
-const RECORDED_AGENT = /\bagent\s+([0-9a-f]+)\b/;
-
-type WorklistTask = { id: string; title: string; status: string; agent?: string };
 type TaskWorktree = { path: string; branch: string; agent: string; ahead: string[]; uncommitted?: string[] };
 type Leftovers = { tasks: WorklistTask[]; worktrees: TaskWorktree[] };
 
@@ -51,18 +48,6 @@ function hooksPath(top: string): string | undefined {
 /** What an earlier run may have left: the tasks in `top`'s `WORKLIST.md`, and the task worktrees. */
 export function leftovers(top: string): Leftovers {
   return { tasks: worklistTasks(readFileSync(path.join(top, "WORKLIST.md"), "utf8")), worktrees: taskWorktrees(top) };
-}
-
-/** Each task, with its status on one line and the agent the status records as `agent <id>`. */
-export function worklistTasks(worklist: string): WorklistTask[] {
-  const lines = worklist.split("\n");
-  return lines.flatMap((line, start) => {
-    const heading = line.match(/^### (\S+) — (.*)$/);
-    if (!heading) return [];
-    const block = lines.slice(start, blockEnd(lines, start));
-    const status = itemText(block, "- **Status:**").replace(/\s+/g, " ").trim();
-    return [{ id: heading[1], title: heading[2].trim(), status, agent: status.match(RECORDED_AGENT)?.[1] }];
-  });
 }
 
 function isDoing(task: WorklistTask): boolean {

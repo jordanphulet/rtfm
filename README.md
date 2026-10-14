@@ -73,7 +73,8 @@ beside the API (`server/README.md` › The Web Function).
 | `npm run logs`               | The server's recent log entries, filtered or followed. See below.            |
 | `npm run audit`              | Candidate rule breaks from the transcripts. See `scripts/audit/README.md`.   |
 | `npm run orchestrator-check` | Checks the orchestrator can start here, and lists leftovers. See below.      |
-| `npm run commit-task`        | Commits a task's work with its review trailer. See below.                    |
+| `npm run commit-task`        | Commits a task's work with its body and review trailer. See below.           |
+| `npm run commit-worklist`    | Commits `WORKLIST.md` alone, with a body from its diff. See below.           |
 | `npm run task-prompt`        | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
 | `npm run aws`                | The AWS CLI as RTFM's own role, the only way to it. See `infra/README.md`.   |
 | `npm run cdk`                | The CDK CLI in `infra/`, as RTFM's own role. See `infra/README.md`.          |
@@ -114,15 +115,17 @@ its agent".
 The orchestrator commits a task's work with `npm run commit-task` (`PROCESS.md` › Review loop):
 
 ```sh
-npm run commit-task -- RC.1 --reviewed-by <review agent id>
-npm run commit-task -- RC.1 --no-review "<reason>"   # reviewed by the orchestrator alone
-npm run commit-task -- RC.1 --worktree .claude/worktrees/<name> --reviewed-by <review agent id>
+npm run commit-task -- RC.1 --body-file <path> --reviewed-by <review agent id>
+npm run commit-task -- RC.1 --body-file <path> --no-review "<reason>"   # reviewed by the orchestrator alone
+npm run commit-task -- RC.1 --body-file <path> --worktree .claude/worktrees/<name> --reviewed-by <review agent id>
 ```
 
 - It reads the task's block in `WORKLIST.md` and commits only the changed, new and deleted files
-  its **Files** match, one by one, as `<ID>: <the task's title>`, with a `Reviewed-by:` trailer
-  (the agent's id, or `none (<reason>)`) and Claude's co-author line. It lists the changed files
-  it left alone.
+  its **Files** match, one by one, as `<ID>: <the task's title>`, then the body read from
+  `--body-file`, then a `Reviewed-by:` trailer (the agent's id, or `none (<reason>)`) and Claude's
+  co-author line. It lists the changed files it left alone.
+- `--body-file` is required. It refuses a missing file, and a body that is empty or only
+  whitespace. Blank lines around the body are dropped; lines starting with `#` are kept.
 - **Files** are read from their code spans: `**` matches any number of folders and `*` anything
   within one name, notes in parentheses are skipped, "`x.ts` and its test" adds `x.test.*`, and
   "except …" or a note starting with "except" or "not" leaves its paths out.
@@ -134,6 +137,22 @@ npm run commit-task -- RC.1 --worktree .claude/worktrees/<name> --reviewed-by <r
 - It refuses when nothing it matches differs from the last commit, during a merge, cherry-pick or
   revert, or with unmerged files. It refuses `--no-review` for a binary change or more than 40
   changed lines, not counting pure renames. A refusal leaves what is staged as it was.
+
+The orchestrator commits its `WORKLIST.md` changes with `npm run commit-worklist`:
+
+```sh
+npm run commit-worklist
+npm run commit-worklist -- --reason "<text>"
+```
+
+- It commits `WORKLIST.md` alone, as it is in the working tree, as "Update work list statuses"
+  with Claude's co-author line. The body compares it with the last commit's, one line per task:
+  `Added <ID> (<status>)`, `Removed <ID>`, or `<ID>: <old status> → <new status>`, then the
+  `--reason` text if given.
+- It runs only in the main checkout with `main` checked out, like `npm run commit-task`.
+- It refuses when any other file is changed, staged or new, listing them; when `WORKLIST.md` has
+  no change; and when no task was added, removed or changed status and no `--reason` says what
+  changed.
 
 `.githooks/commit-msg` refuses a commit without a `Reviewed-by:` trailer when its subject starts
 with a task ID (`RC.1: …`), or when it has Claude's co-author line and changes any file but

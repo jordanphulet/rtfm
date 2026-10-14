@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { formatLeftovers, leftovers, preflightProblems, worklistTasks } from "./orchestrator-check.ts";
+import { formatLeftovers, leftovers, preflightProblems } from "./orchestrator-check.ts";
 
 const SCRIPT = fileURLToPath(new URL("./orchestrator-check.ts", import.meta.url));
 
@@ -38,23 +38,6 @@ const WORKLIST = `# Work list
 - **Status:** needs-human (the user decides; agent c5)
 - **Files:** \`nowhere/**\`
 `;
-
-describe("worklistTasks", () => {
-  it("lists each task with its status on one line and the agent it records, across continuation lines", () => {
-    expect(worklistTasks(WORKLIST)).toEqual([
-      {
-        id: "XX.1",
-        title: "Build the widget",
-        status: "doing (agent a1, in its own worktree; review round 2)",
-        agent: "a1",
-      },
-      { id: "XX.2", title: "Polish the widget", status: "doing (in its own worktree, agent b2)", agent: "b2" },
-      { id: "XX.3", title: "Wait for the widget", status: "todo", agent: undefined },
-      { id: "XX.4", title: "Start by hand", status: "doing", agent: undefined },
-      { id: "XX.5", title: "Ask the user", status: "needs-human (the user decides; agent c5)", agent: "c5" },
-    ]);
-  });
-});
 
 describe("in a git repository", () => {
   let repo: string;

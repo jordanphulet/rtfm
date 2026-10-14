@@ -80,13 +80,16 @@ The orchestrator **coordinates, reviews and commits**. It does not do the task w
 3. **Changes needed:** send specific, actionable notes to **the same agent** (`SendMessage`, so it
    keeps its context and its worktree), then wait for it to report back and repeat from step 1.
 4. **Approved:** from the main checkout, with the agent's worktree at `<path>` on `<branch>`:
-   1. `npm run commit-task -- <task id> --worktree <path> --reviewed-by <review agent's id>`, or
-      `--no-review "<reason>"` when the orchestrator reviewed the change alone (40 changed lines
-      at most). It reads the task from the main checkout's `WORKLIST.md` and commits on the
-      task's branch the changed files its **Files** match, as `<task id>: <task title>` with a
-      `Reviewed-by:` trailer. It refuses when a changed file in the worktree isn't in **Files**:
-      the orchestrator adds the file to **Files** (an accepted Outside Files case) or sends the
-      change back.
+   1. `npm run commit-task -- <task id> --worktree <path> --reviewed-by <review agent's id>
+      --body-file <path>`, or `--no-review "<reason>"` when the orchestrator reviewed the change
+      alone (40 changed lines at most). It reads the task from the main checkout's `WORKLIST.md`
+      and commits on the task's branch the changed files its **Files** match, as
+      `<task id>: <task title>` with a `Reviewed-by:` trailer. Its body (`--body-file`) is 2–4
+      lines the orchestrator writes from the agent's report and the review: what changed, any
+      decision made, the checks that passed, and anything left for the user, without repeating
+      the task's **Do**. It refuses when a changed file in the worktree isn't in **Files**: the
+      orchestrator adds the file to **Files** (an accepted Outside Files case) or sends the change
+      back.
    2. `git -C <path> merge --no-edit main`. On a conflict, the orchestrator sends the agent the
       conflicted files, and the agent resolves them, editing files only and running no git
       command. `git -C <path> diff --check` must find no conflict marker left, and the
@@ -118,7 +121,8 @@ orchestrator works in the main checkout and commits the change before it fast-fo
 any task's branch. It starts a review subagent on the change and commits only once the review
 passes, with a `Reviewed-by: <review agent's id>` trailer, which the commit hook requires. Keeping
 `WORKLIST.md` up to date, and git operations such as tags, don't count as work. `WORKLIST.md`
-changes are committed on their own, as "Update work list statuses".
+changes are committed on their own with `npm run commit-worklist`, as "Update work list
+statuses", whose body names each task added, removed or whose status changed, and why.
 
 ### Adding work
 
