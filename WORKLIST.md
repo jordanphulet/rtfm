@@ -126,8 +126,8 @@ Small fixes that keep the repo healthy.
 ### UP.5 — Merges after, apart from Depends on
 - **Status:** doing (agent a0a630c561c1a4722; done, being committed)
 - **Depends on:** —
-- **Files:** `PROCESS.md`, `scripts/commit-task.ts` and its test, `scripts/task-prompt.ts` and its
-  test, `README.md`
+- **Files:** `PROCESS.md`, `scripts/commit-task.ts` and its test,
+  `scripts/task-prompt.ts` and its test, `README.md`
 - **Do:** a task's **Depends on** named both results it needs and merges it must not precede, so
   IN.20 waited for IN.15 though it needed only to merge after it. The user approved this wording
   for `PROCESS.md`:
