@@ -232,7 +232,9 @@ export function createRuns({
   async function statusOf(manualId: string, sectionId: string): Promise<SectionStatus> {
     const run = runs.get(runKey(manualId, sectionId));
     if (run !== undefined && run !== WRITTEN) return "writing";
-    return (await store.getBody(manualId, sectionId)) === undefined ? "unwritten" : "written";
+    const { body, heldElsewhere } = await leases.readSection(manualId, sectionId);
+    if (body !== undefined) return "written";
+    return heldElsewhere ? "writing" : "unwritten";
   }
 
   async function writingSectionIds(manualId: string): Promise<Set<string>> {

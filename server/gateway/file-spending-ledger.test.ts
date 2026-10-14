@@ -2,8 +2,7 @@ import { rm, writeFile } from "node:fs/promises";
 import { silentLogger } from "../logging/logger.ts";
 import { createFileLedger } from "../storage/file-ledger.ts";
 import { tempDataDir } from "../testing.ts";
-import { openFileSpendingLedger } from "./file-spending-ledger.ts";
-import { killSwitchPath } from "./gateway.ts";
+import { killSwitchPath, openFileSpendingLedger } from "./file-spending-ledger.ts";
 import { describeSpendingLedger, SUITE_NOW } from "./spending-ledger-suite.ts";
 
 describeSpendingLedger("the data folder's spending ledger", async () => {

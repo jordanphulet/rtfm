@@ -26,7 +26,11 @@ export interface ManualStore {
    * nothing, if this very manual is already stored.
    */
   createManual(manual: StoredManual): Promise<"created" | "exists">;
-  deleteManual(manualId: string): Promise<void>;
+  /**
+   * "writing", changing nothing, if a section of it holds a writer's live lease, which only a
+   * store that keeps leases on its items can see; otherwise "deleted", as for a manual that isn't there.
+   */
+  deleteManual(manualId: string): Promise<"deleted" | "writing">;
   getBody(manualId: string, sectionId: string): Promise<string | undefined>;
   saveBody(manualId: string, sectionId: string, body: string): Promise<"saved" | "already-written">;
   writtenSectionIds(manualId: string): Promise<string[]>;
@@ -46,6 +50,8 @@ export interface SectionLeases {
    * environment's clock: the sections being written elsewhere.
    */
   heldElsewhere(manualId: string): Promise<string[]>;
+  /** A section's stored body, and whether another environment holds its live lease, from one read. */
+  readSection(manualId: string, sectionId: string): Promise<{ body: string | undefined; heldElsewhere: boolean }>;
 }
 
 /** A section's lease, renewed until it is released or its body is saved. */

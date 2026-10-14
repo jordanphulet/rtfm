@@ -7,7 +7,7 @@ import { describe, expect, it, onTestFinished } from "vitest";
 import type { LogEntry } from "./logging/logger.ts";
 import { passcodeDigest } from "./api/passcode.ts";
 import { createDynamoDbManualStore, writePasscodeDigest } from "./storage/dynamodb-manual-store.ts";
-import { DYNAMODB_LOCAL_CREDENTIALS, testAppTable } from "./storage/dynamodb-testing.ts";
+import { DYNAMODB_LOCAL_CREDENTIALS, keyRefusingDynamoDb, testAppTable } from "./storage/dynamodb-testing.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "./testing.ts";
 
 const WEB_FUNCTION = fileURLToPath(new URL("./web-function.ts", import.meta.url));
@@ -120,6 +120,7 @@ describe("web-function.ts", () => {
       models: "fake",
       manualStorage: "dynamodb",
       credentials: "environment",
+      credentialsExpireAt: "unset",
       passcodeGate: true,
     });
     expect(await createDynamoDbManualStore(webFunction.table).getManual(SAMPLE_ID)).toBeDefined();
@@ -213,6 +214,37 @@ describe("web-function.ts", () => {
 
     await waitUntil(() => webFunction.entries().some(({ event }) => event === "section.aborted"), 5000);
     expect(webFunction.entries().map(({ event }) => event)).not.toContain("section.finished");
+  });
+
+  it("logs when its keys expire, when Lambda says, and never a key", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const keysExpireAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+    const webFunction = await startWebFunction({ AWS_CREDENTIAL_EXPIRATION: keysExpireAt });
+    await webFunction.listening();
+
+    const [started] = webFunction.entries();
+    expect(started).toMatchObject({ event: "server.started", credentials: "environment", credentialsExpireAt: keysExpireAt });
+    expect(JSON.stringify(started)).not.toMatch(/stand-in session token|AKIA/);
+  });
+
+  it("exits with 1 once DynamoDB refuses its keys, so Lambda replaces the environment", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const table = await testAppTable();
+    await writePasscodeDigest(table, passcodeDigest(PASSCODE));
+    const dynamoDb = await keyRefusingDynamoDb(table);
+    const webFunction = await startWebFunction({ RTFM_APP_TABLE: table.name, RTFM_DYNAMODB_ENDPOINT: dynamoDb.endpoint });
+    const port = await webFunction.listening();
+    const headers = await enterPasscode(port);
+
+    dynamoDb.refuseKeys();
+    expect((await send(port, "GET", "/api/manuals", headers)).status).toBe(500);
+
+    expect(await webFunction.exited).toBe(1);
+    expect(webFunction.entries().map(({ event }) => event)).toEqual(
+      expect.arrayContaining(["server.keys-refused", "server.stopped"]),
+    );
+    expect(webFunction.entries().find(({ event }) => event === "server.keys-refused")).toMatchObject({
+      level: "WARN",
+      error: expect.objectContaining({ name: "ExpiredTokenException" }),
+    });
   });
 
   it("stops on SIGTERM", { timeout: TEST_TIMEOUT_MS }, async () => {

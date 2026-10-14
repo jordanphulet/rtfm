@@ -15,7 +15,7 @@ import {
   type DynamoDbTable,
   type TableCredentials,
 } from "./dynamodb-manual-store.ts";
-import { DYNAMODB_LOCAL_CREDENTIALS, testAppTable } from "./dynamodb-testing.ts";
+import { DYNAMODB_LOCAL_CREDENTIALS, KEYS_REFUSED_BODIES, testAppTable } from "./dynamodb-testing.ts";
 import { sectionsInReadingOrder } from "./manual.ts";
 import { describeManualStore, manual } from "./manual-store-suite.ts";
 import type { StoredManual } from "./types.ts";
@@ -217,6 +217,17 @@ describe("the DynamoDB section leases' renewals", { timeout: 20_000 }, () => {
     await expect(lease.saveBody("body")).rejects.toThrow(`The lease on ${manual.id}/s was lost before`);
     expect(dynamoDb.operations("TransactWriteItems")).toEqual([]);
   });
+
+  it("count the lease lost when a renewal finds its item gone", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count) =>
+      operation === "UpdateItem" && count === 2 ? conditionFailed : undefined,
+    );
+    const lease = (await createDynamoDbSectionLeases(dynamoDb.table(), timing).take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => lease.lost.aborted);
+    expect(lease.lost.reason).toEqual(new Error(`The lease on ${manual.id}/s is no longer this writer's`));
+  });
 });
 
 describe("the passcode's digest in the table", () => {
@@ -306,6 +317,27 @@ describe("the DynamoDB manual store's transactions", () => {
       { Delete: expect.objectContaining({ ExpressionAttributeValues: { ":written": { SS: ["t"] } } }) },
       { Delete: expect.objectContaining({ Key: { pk: { S: `MANUAL#${manual.id}` }, sk: { S: "SECTION#t" } } }) },
     ]);
+  });
+
+  it("refuses a delete that a section's live lease cancels, without trying again", async () => {
+    const dynamoDb = await standInDynamoDb((operation) => {
+      if (operation === "GetItem") return manualItem(["s"]);
+      if (operation === "Query") return sectionItems(["s", "t"]);
+      // The manual's `written` changed too: a lease still refuses the delete at once.
+      if (operation === "TransactWriteItems") {
+        return cancelled("ConditionalCheckFailed", "None", "ConditionalCheckFailed");
+      }
+      return undefined;
+    });
+    expect(await createDynamoDbManualStore(dynamoDb.table()).deleteManual(manual.id)).toBe("writing");
+
+    const transactions = dynamoDb.operations("TransactWriteItems").map(({ body }) => body.TransactItems as object[]);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0][2]).toEqual({
+      Delete: expect.objectContaining({
+        ConditionExpression: "attribute_not_exists(sk) OR attribute_exists(body) OR leaseExpiresAt < :now",
+      }),
+    });
   });
 
   it("counts a create as its own when a retry finds the very manual it sent", async () => {
@@ -446,7 +478,7 @@ describe("the DynamoDB client's credentials", () => {
 
   it("takes the execution role's from the environment, read whenever the client asks", async () => {
     const dynamoDb = await standInDynamoDb();
-    const store = createDynamoDbManualStore(dynamoDb.table({ kind: "environment" }));
+    const store = createDynamoDbManualStore(dynamoDb.table({ kind: "environment", expiresAt: undefined }));
     onTestFinished(() => void vi.unstubAllEnvs());
     const expiringSoon = () => vi.stubEnv("AWS_CREDENTIAL_EXPIRATION", new Date(Date.now() + 60_000).toISOString());
 
@@ -462,5 +494,41 @@ describe("the DynamoDB client's credentials", () => {
       { accessKeyId: "AKIAENVIRONMENT1", sessionToken: "token-1" },
       { accessKeyId: "AKIAENVIRONMENT2", sessionToken: "token-2" },
     ]);
+  });
+});
+
+describe("the DynamoDB client's refused keys", { timeout: 30_000 }, () => {
+  for (const [name, body] of Object.entries(KEYS_REFUSED_BODIES)) {
+    it(`are reported with the failed call's error, as ${name}`, async () => {
+      const dynamoDb = await standInDynamoDb(() => ({ status: 400, body }));
+      const onKeysRefused = vi.fn();
+      const store = createDynamoDbManualStore({ ...dynamoDb.table(), onKeysRefused });
+
+      await expect(store.getManual(manual.id)).rejects.toMatchObject({ name });
+      expect(onKeysRefused).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name }));
+      expect(dynamoDb.requests).toHaveLength(1);
+    });
+  }
+
+  it("are reported from a lease's renewals too, which go on failing quietly", async () => {
+    const dynamoDb = await standInDynamoDb((operation, count) =>
+      operation === "UpdateItem" && count > 1 ? { status: 400, body: KEYS_REFUSED_BODIES.ExpiredTokenException } : undefined,
+    );
+    const onKeysRefused = vi.fn();
+    const leases = createDynamoDbSectionLeases({ ...dynamoDb.table(), onKeysRefused }, { durationMs: 1_500, renewEveryMs: 50 });
+    const lease = (await leases.take(manual.id, "s"))!;
+    onTestFinished(() => lease.release());
+
+    await waitUntil(() => onKeysRefused.mock.calls.length > 0);
+    expect(onKeysRefused).toHaveBeenCalledWith(expect.objectContaining({ name: "ExpiredTokenException" }));
+  });
+
+  it("are the only failures reported", async () => {
+    const dynamoDb = await standInDynamoDb(() => throttled);
+    const onKeysRefused = vi.fn();
+    const store = createDynamoDbManualStore({ ...dynamoDb.table(), onKeysRefused });
+
+    await expect(store.getManual(manual.id)).rejects.toMatchObject({ name: "ThrottlingException" });
+    expect(onKeysRefused).not.toHaveBeenCalled();
   });
 });

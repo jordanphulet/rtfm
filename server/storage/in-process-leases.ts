@@ -18,5 +18,8 @@ export function createInProcessLeases(store: ManualStore): SectionLeases {
     async heldElsewhere() {
       return [];
     },
+    async readSection(manualId, sectionId) {
+      return { body: await store.getBody(manualId, sectionId), heldElsewhere: false };
+    },
   };
 }

@@ -16,7 +16,7 @@ aren't RTFM's.
 - **RTFM's AWS setup is its own.** RTFM's profiles live in `~/.aws/rtfm/config` and
   `~/.aws/rtfm/credentials`, never in the user's own `~/.aws/config`, which holds work profiles.
   Agents read nothing under `~/.aws` and never `.env.local`, and run AWS only through
-  `npm run aws` and `npm run cdk`.
+  `npm run aws`, `npm run cdk` and `npm run ops`.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.5 — Check the budget counts Bedrock
@@ -43,34 +43,13 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.14 — `rtfm-ops` and the ops tools
-- **Status:** doing (agent ab01bdf3c8304e3d4; review's fixes; the user approved the stacks and `CLAUDE.md` wording)
-- **Depends on:** IN.12
-- **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
-  `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`,
-  `infra/rtfm.ts`, `infra/boundary.ts`, `infra/app-stack.ts` and its test,
-  `infra/testing.ts` and its test, `infra/toolkit-stack.test.ts`,
-  `infra/edge-certificate-stack.test.ts`,
-  `server/storage/dynamodb-manual-store.ts` and its test, `server/gateway/usage-report.ts`,
-  `server/gateway/dynamodb-spending-ledger.ts`, `server/logging/log-reader.ts` and its test,
-  `server/gateway/README.md`, `server/storage/README.md`, `server/logging/README.md`,
-  `ARCHITECTURE.md`, `CLAUDE.md`
-- **Do:**
-  - The role `rtfm-ops` in `RtfmAccess` (the user approves and deploys it, and adds its profile to
-    `~/.aws/rtfm/config`): writes only the passcode item in `rtfm-app` and the kill-switch item in
-    `rtfm-usage` (`dynamodb:LeadingKeys`), and reads the passcode item. `rtfm-read` gains reading
-    `rtfm-usage`.
-  - The tools: kill switch on, off and status; `npm run usage` on the central ledger;
-    `npm run logs` on CloudWatch; status. Non-interactive, plain text with `--json`, a non-zero
-    exit on failure, documented in `README.md`.
-- **Done when:** each tool's tests pass offline (DynamoDB Local, a stubbed CLI), the tests cover
-  the roles' reach, and `README.md` documents every tool.
-
 ### IN.15 — The passcode as a digest
-- **Status:** todo
+- **Status:** doing (agent afd47823474f3e015; done, being committed)
 - **Depends on:** IN.11, IN.14
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts`, `server/app.ts`,
-  `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`
+  `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`,
+  `server/web-function.ts` and its test, `server/README.md`, `server/logging/README.md`,
+  `ARCHITECTURE.md`, `CLAUDE.md`
 - **Do:**
   - The passcode's SHA-256 digest in `rtfm-app`; the cookie holds the digest, compared in constant
     time; `RTFM_PASSCODE` hashed the same way locally. The throwaway passcode of IN.8 goes.
@@ -100,7 +79,7 @@ aren't RTFM's.
 
 ### IN.20 — Claude on Bedrock in the deployed app
 - **Status:** todo
-- **Depends on:** IN.10, IN.14, IN.15, IN.19
+- **Depends on:** IN.15
 - **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
   `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
@@ -119,25 +98,6 @@ aren't RTFM's.
   section through `https://rtfm.moonfetus.com` (under $0.01) and `npm run usage` (or the ops tool)
   shows it in `rtfm-usage`.
 
-### IN.21 — Replace an environment before its keys run out
-- **Status:** doing (agent a93636117612befb0; done, in review by a5fb11b0572d2e4e6)
-- **Depends on:** —
-- **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
-  `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
-  `research/aws-design.md`
-- **Do:** Lambda gives the Web Function its role's keys as environment variables, which a running
-  process can't renew, and nothing bounds an environment's life while requests keep coming less
-  than about 5 minutes apart (IN.10).
-  - `server.started` logs when the keys expire, from `AWS_CREDENTIAL_EXPIRATION` when Lambda sets
-    it (a time, never a key), or that it is unset.
-  - When DynamoDB (or, once IN.20 lands, Bedrock) refuses the keys (`ExpiredTokenException`,
-    `UnrecognizedClientException`), the Web Function logs it and exits with code 1 once its open
-    requests end or after a short bound, so Lambda replaces the environment with fresh keys; when
-    the expiry is known, it also exits that way shortly before it.
-- **Done when:** tests show the logged expiry or "unset", and the exit on a refused key and before
-  a known expiry; after the next deploy, `research/aws-design.md` › Measured records whether Lambda
-  sets the expiry and what happens after the exit.
-
 ### IN.22 — See the heartbeat through the edge
 - **Status:** todo
 - **Depends on:** IN.20
@@ -148,34 +108,34 @@ aren't RTFM's.
   the headers until the first byte, IN.10).
 - **Done when:** the doc's Measured section records it.
 
-### IN.23 — Close the delete race, and the section route's status
-- **Status:** doing (agent a638f795b3a12ff50)
-- **Depends on:** IN.19
-- **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
-- **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
-  - a lease taken between the delete's `409` check and its transaction: condition each section
-    item's `Delete` in `deleteManual`'s transaction on `attribute_exists(body) OR leaseExpiresAt <
-    :now`, and answer `409` when that cancels it; and say what remains (a lease taken after the
-    delete's query, whose run's save then fails after a full paid section);
-  - the section route's `statusOf` sees only this environment's runs: use the lease attributes the
-    section item's strongly consistent read already returns, so a section written elsewhere shows
-    as writing.
-- **Done when:** the runs' shared suite covers both on both implementations, and `npm test` passes.
-
-## Upkeep
-
-Small fixes that keep the repo healthy.
-
-### UP.2 — One retry loop, and the kill switch's path with its ledger
+### IN.24 — Record what the keys' expiry does on the deployed app
 - **Status:** todo
-- **Depends on:** IN.12, IN.13
-- **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
-  `server/api/librarian.test.ts`
-- **Do:** share the `TransactionConflict` retry loop that `storage/dynamodb-manual-store.ts` and
-  `gateway/dynamodb-spending-ledger.ts` each have (about 12 lines), and move `killSwitchPath` from
-  `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
-- **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
-  and `npm test` passes.
+- **Depends on:** IN.20 (so environments see real traffic first)
+- **Files:** `research/aws-design.md`
+- **Do:** IN.21's measurement, read with `npm run ops -- logs` (no other AWS call). Since IN.21's
+  deploy, `server.started` logs `credentialsExpireAt=unset` (first seen 2026-10-14T01:40Z):
+  Lambda doesn't set `AWS_CREDENTIAL_EXPIRATION`, so only a refused key starts a replacement.
+  Record that in `research/aws-design.md` › Measured, and any `server.keys-refused` line since
+  then with its error name, the gap to that environment's `server.stopped`, and the next
+  `server.started`.
+- **Done when:** Measured records whether Lambda sets the expiry and, if any environment was
+  refused its keys, what followed; if none was, it says so with the date range read.
+
+### IN.25 — The Web Function can't write the passcode
+- **Status:** todo
+- **Depends on:** IN.15
+- **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`,
+  `infra/access-stack.ts` (the comment only)
+- **Do:** the Web Function's role may put, update and delete any item of `rtfm-app`, so it could
+  rewrite the passcode's item, which only `rtfm-ops` (the user's `passcode set`) should. Add a
+  `Deny` of `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` on `rtfm-app` where
+  `dynamodb:LeadingKeys` includes `PASSCODE` (`ForAnyValue:StringEquals`), and update what
+  `README.md` › A passcode says can write it. Also correct the comment on `opsStatements` in
+  `infra/access-stack.ts`: `rtfm-ops` may touch the items of the `KILL_SWITCH` partition in
+  `rtfm-usage` and the `PASSCODE` partition in `rtfm-app`, not one item each. The user approved
+  this comment change; the template doesn't change.
+- **Done when:** the policy evaluator's tests show the role reading the passcode's item and every
+  other item as before, and refused each write to the `PASSCODE` partition.
 
 ## Waiting on AWS
 

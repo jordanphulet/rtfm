@@ -76,7 +76,7 @@ describe("the file manual store's files", () => {
     const { logger, entries } = capturingLogger();
 
     try {
-      await expect(createFileManualStore(dataDir, logger).deleteManual(manual.id)).resolves.toBeUndefined();
+      await expect(createFileManualStore(dataDir, logger).deleteManual(manual.id)).resolves.toBe("deleted");
       expect(await store.getManual(manual.id)).toBeUndefined();
       expect(await store.listManuals()).toEqual([]);
       expect(entries).toEqual([

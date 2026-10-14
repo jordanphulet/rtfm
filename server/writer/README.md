@@ -122,6 +122,10 @@ one writer per section, exactly as it would without them.
   being written if it has a run in progress in the map, or another environment holds its lease
   (`SectionLeases.heldElsewhere`: one query of the manual's partition in `rtfm-app`, and none with
   the leases in the process, which have no other environment).
+- **`statusOf(manualId, sectionId)`** gives one section's status, for the section route: `writing`
+  if it has a run in progress in the map; otherwise, from one read of the section
+  (`SectionLeases.readSection`), `written` if its body is stored, `writing` if another
+  environment holds its lease, and `unwritten` if neither.
 - **Statuses come from storage** for any section not being written. If a written section's file
   has been deleted by hand, opening it drops the stale `written` entry and writes it again.
 - **Listeners:** the first request starts the writer with its own `AbortController`. Later
@@ -166,7 +170,7 @@ instead of writing:
   Claude), and only stops a reader waiting forever on a holder that never ends.
 - **When its last listener disconnects**, the waiting stops, as a run is aborted; it holds no lease.
 - **If the run loses its lease** while it writes (its renewals kept failing until just before the
-  lease would expire, or its item went with a deleted manual), the writer is aborted at once,
+  lease would expire, or its item no longer holds its lease), the writer is aborted at once,
   before another environment can take the section, nothing can be stored, and its readers get
   `failed: "error"`.
 
@@ -188,8 +192,11 @@ does, and `runs.test.ts` covers the runs.
 leases in its process, and two environments, each with its own DynamoDB leases, on one table in
 DynamoDB Local. In each, two runs race for one section and one writer writes it for both readers;
 a reader whose run is aborted leaves the section to the other; a placeholder is stored by neither;
-a failure reaches both; and while one place writes a section, the other's manual route shows it
-as `writing` and its delete route refuses the manual with `409`, until the body is stored. It then
+a failure reaches both; while one place writes a section, the other's manual and section routes
+show it as `writing` and its delete route refuses the manual with `409`, until the body is
+stored; and a delete whose check ran just before a section started being written answers `409`
+on the table, whose transaction finds the lease, while with the files, which keep no leases, the
+manual is deleted and the run fails at its save, storing nothing. It then
 covers what only environments do: the waiting reader's one `append`, taking over a crashed
 environment's expired lease, the waiting limit, a run that loses its lease, and a released lease
 freeing the section at once. The leases it waits out are half a

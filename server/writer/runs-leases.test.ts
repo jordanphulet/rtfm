@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { deleteManualRoute } from "../api/delete-manual.ts";
 import { manualRoute } from "../api/manual.ts";
 import type { JsonResponse, Route } from "../api/route.ts";
-import type { Manual, SectionEvent } from "../api/types.ts";
+import { sectionRoute } from "../api/section.ts";
+import type { Manual, SectionEvent, SectionState } from "../api/types.ts";
 import { silentLogger } from "../logging/logger.ts";
 import {
   createDynamoDbManualStore,
@@ -190,21 +191,46 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
     const held = heldWriter();
     const [one, other] = setup.environments(held.writer);
     const reader = recorder();
-    const statusSeenByOther = async () => {
-      const response = await requestManual(manualRoute(setup.store, other));
-      const sections = (response.body as Manual).chapters.flatMap((chapter) => chapter.sections);
-      return sections.find((section) => section.id === UNWRITTEN_ID)?.status;
+    const statusesSeenByOther = async () => {
+      const manualResponse = await request(manualRoute(setup.store, other));
+      const sections = (manualResponse.body as Manual).chapters.flatMap((chapter) => chapter.sections);
+      const sectionResponse = await request(sectionRoute(setup.store, other), UNWRITTEN_ID);
+      return {
+        inManual: sections.find((section) => section.id === UNWRITTEN_ID)?.status,
+        ofSection: (sectionResponse.body as SectionState).status,
+      };
     };
 
     await one.join(manual, UNWRITTEN_ID, reader.listener);
     await waitUntil(() => reader.events.length > 0);
-    expect(await statusSeenByOther()).toBe("writing");
-    expect((await requestManual(deleteManualRoute(setup.store, other))).status).toBe(409);
+    expect(await statusesSeenByOther()).toEqual({ inManual: "writing", ofSection: "writing" });
+    expect((await request(deleteManualRoute(setup.store, other))).status).toBe(409);
 
     held.finish();
     await waitUntil(() => reader.last() === "written", RUN_ENDS_WITHIN_MS);
-    expect(await statusSeenByOther()).toBe("written");
-    expect((await requestManual(deleteManualRoute(setup.store, other))).status).toBe(204);
+    expect(await statusesSeenByOther()).toEqual({ inManual: "written", ofSection: "written" });
+    expect((await request(deleteManualRoute(setup.store, other))).status).toBe(204);
+  });
+
+  it("refuses a delete whose check ran just before a section of the manual started being written", async () => {
+    const held = heldWriter();
+    const [one, other] = setup.environments(held.writer);
+    const reader = recorder();
+    const checkedJustBefore: Runs = { ...other, isWriting: async () => false };
+
+    await one.join(manual, UNWRITTEN_ID, reader.listener);
+    await waitUntil(() => reader.events.length > 0);
+    const { status } = await request(deleteManualRoute(setup.store, checkedJustBefore));
+    held.finish();
+    await waitUntil(() => reader.last() === "written" || reader.last() === "failed", RUN_ENDS_WITHIN_MS);
+
+    // The table's transaction finds the section's lease. The files keep no leases, so there the
+    // delete goes ahead, and the run's save fails, storing nothing (`server/api/README.md`).
+    expect({ status, ending: reader.last(), body: await setup.store.getBody(SAMPLE_ID, UNWRITTEN_ID) }).toEqual(
+      setup.oneProcess
+        ? { status: 204, ending: "failed", body: undefined }
+        : { status: 409, ending: "written", body: "One two." },
+    );
   });
 
   it("fails both readers when the writer fails, storing nothing", async () => {
@@ -301,7 +327,8 @@ describe("runs in two environments", () => {
     await waitUntil(() => reader.last() === "failed", RUN_ENDS_WITHIN_MS);
 
     expect(reader.events).toEqual([{ event: "failed", data: { reason: "error" } }]);
-    expect(await runs.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("unwritten");
+    // The section is still held elsewhere, by the crashed environment's unexpired lease.
+    expect(await runs.statusOf(SAMPLE_ID, UNWRITTEN_ID)).toBe("writing");
   });
 
   it("fails the run whose lease it couldn't renew in time, and stores nothing from it", async () => {
@@ -335,10 +362,12 @@ describe("runs in two environments", () => {
   });
 });
 
-/** The sample manual's route answer. */
-async function requestManual(route: Route) {
-  const request = { params: { manualId: SAMPLE_ID }, query: new URLSearchParams(), body: undefined };
-  return (await route.handle({ ...request, signal: new AbortController().signal })) as JsonResponse;
+/** The route's answer for the sample manual, or for one of its sections. */
+async function request(route: Route, sectionId?: string) {
+  const params: Record<string, string> = { manualId: SAMPLE_ID };
+  if (sectionId !== undefined) params.sectionId = sectionId;
+  const signal = new AbortController().signal;
+  return (await route.handle({ params, query: new URLSearchParams(), body: undefined, signal })) as JsonResponse;
 }
 
 /** A lease on the section from another environment, taken as soon as it is free, within `timeoutMs`. */

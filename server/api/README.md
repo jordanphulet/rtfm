@@ -24,7 +24,7 @@ contract it shares with the browser (`ARCHITECTURE.md` › Boundaries).
 | `GET /api/manuals` | `200 ManualSummary[]`, every manual in storage, sorted by title |
 | `GET /api/manuals/:manualId` | `200 Manual` (`writing` while a run is active, in any environment), or `404` |
 | `DELETE /api/manuals/:manualId` | `204` (no body), `404`, or `409 { error }` while a section of it is being written |
-| `GET /api/manuals/:manualId/sections/:sectionId` | `200 { status, body? }`, with the body only when written, or `404` |
+| `GET /api/manuals/:manualId/sections/:sectionId` | `200 { status, body? }` (`writing` while a run is active, in any environment), with the body only when written, or `404` |
 | `GET /api/manuals/:manualId/sections/:sectionId/stream` | `text/event-stream` (below), or `404` |
 | `POST /api/librarian` with `{ messages: LibrarianMessage[] }` | `text/event-stream` of `LibrarianEvent`s (`server/agent/README.md` › The librarian), or `400` |
 | `POST /api/client-errors` with a `ClientErrorReport` | `204`, `400`, or `429` past the hourly limit (`server/logging/README.md` › Browser errors) |
@@ -184,6 +184,12 @@ manual's partition finds (`SectionLeases.heldElsewhere`, `server/storage/README.
 leases). A section saved between the two reads shows as `writing`, never as `unwritten`: its body
 replaces its lease in one transaction.
 
+**A section** (`api/section.ts`). Its status is `runs.statusOf`: `writing` if a run in the
+environment that answers is writing it; otherwise, from one strongly consistent read of the
+section's item (`SectionLeases.readSection`), `written` if it has a body, `writing` if another
+environment holds its live lease, and `unwritten` if neither. A written section's body is then
+read for the answer.
+
 **Deleting a manual** (`api/delete-manual.ts`) removes its table of contents and every written
 section. Nothing else is touched: not the ledger, not the seeding record (`server/storage/README.md`
 › Seeding), so a deleted seed manual stays deleted.
@@ -194,13 +200,19 @@ section. Nothing else is touched: not the ledger, not the seeding record (`serve
   written" }` and nothing changes. The reader keeps streaming, and the caller can try again once
   the section is written. Stopping the runs instead would mean sending their readers a failure and
   paying for calls cut short, for a delete that can simply wait a few seconds.
-- **A lease taken just after the check** doesn't stop the delete. If the delete's query of the
-  section items finds it, the transaction deletes the lease's item with the others, so the run's
-  next renewal, within 5 seconds, finds the lease gone, and the run is aborted mid-write and ends
-  with `failed: "error"`, storing nothing. If the lease comes after that query, the run's save
-  fails, since its manual is gone, and its lease is released or expires.
-- **A run that starts while the delete is under way** can't bring the manual back. The store
-  removes the manual's folder in one `rename`, and `saveBody` refuses a manual that doesn't exist.
+- **On the Web Function, a lease taken just after the check** still stops the delete when the
+  delete's query of the section items finds it: the transaction deletes each section's item only
+  if it holds a body or a lease expired by this environment's clock (`ManualStore.deleteManual`,
+  `server/storage/README.md` › The table `rtfm-app`), so a live lease cancels it, nothing
+  changes, and the answer is the same `409`.
+- **A lease taken after the delete's query** isn't in its transaction, so the manual is deleted.
+  That run writes its whole section, possibly a paid Bedrock call, and then its save fails, since
+  its manual is gone: it ends with `failed: "error"`, storing nothing, and its lease is released
+  or expires. The window is a run's few milliseconds between its route finding the manual and its
+  lease, overlapping the delete.
+- **On this machine, a run that starts while the delete is under way** can't bring the manual
+  back. The files keep no leases for the delete to find. The store removes the manual's folder in
+  one `rename`, and `saveBody` refuses a manual that doesn't exist.
   Such a run either saved before the rename, and its body is deleted with the rest, or ends with
   `failed: "error"` and stores nothing. A run that starts in the narrow window between the check
   and the rename may still call the writer, possibly a paid Bedrock call, before it fails at

@@ -6,8 +6,8 @@ import { silentLogger, type Logger } from "../logging/logger.ts";
 import { createFileLedger } from "../storage/file-ledger.ts";
 import type { LedgerEntry, SettleEntry, UsageLedger } from "../storage/types.ts";
 import { capturingLogger, collect, tempDataDir, TEST_MODEL, TEST_PRICES, testGatewayConfig, waitUntil } from "../testing.ts";
-import { openFileSpendingLedger } from "./file-spending-ledger.ts";
-import { createGateway, killSwitchPath, type RunningGateway } from "./gateway.ts";
+import { killSwitchPath, openFileSpendingLedger } from "./file-spending-ledger.ts";
+import { createGateway, type RunningGateway } from "./gateway.ts";
 import {
   GatewayBusy,
   ModelNotPriced,

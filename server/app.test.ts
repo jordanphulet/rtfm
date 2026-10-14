@@ -8,7 +8,7 @@ import { config } from "./config.ts";
 import { CredentialsMissing } from "./gateway/credentials.ts";
 import { createDynamoDbSpendingLedger, setKillSwitch } from "./gateway/dynamodb-spending-ledger.ts";
 import { testUsageTable } from "./gateway/dynamodb-testing.ts";
-import { killSwitchPath } from "./gateway/gateway.ts";
+import { killSwitchPath } from "./gateway/file-spending-ledger.ts";
 import {
   FAKE_MODEL,
   ModelNotPriced,

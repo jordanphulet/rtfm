@@ -58,13 +58,14 @@ export function createFileManualStore(dataDir: string, logger: Logger): ManualSt
       try {
         await rename(manualDir(manualId), deleting);
       } catch (error) {
-        if (isErrorCode(error, "ENOENT")) return;
+        if (isErrorCode(error, "ENOENT")) return "deleted";
         throw error;
       }
       await rm(deleting, { recursive: true, force: true }).catch((error: unknown) => {
         const fields = { manualId, folder: deleting };
         logger.error("manual.cleanup-failed", "The manual is deleted, but removing its folder failed", fields, error);
       });
+      return "deleted";
     },
 
     async getBody(manualId, sectionId) {

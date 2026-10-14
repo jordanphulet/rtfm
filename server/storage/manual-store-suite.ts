@@ -127,7 +127,7 @@ export function describeManualStore(name: string, newStore: () => Promise<Manual
       await store.saveBody("kept", "s", "kept body");
       await store.markSeeded(manual.id);
 
-      await store.deleteManual(manual.id);
+      expect(await store.deleteManual(manual.id)).toBe("deleted");
 
       expect(await store.getManual(manual.id)).toBeUndefined();
       expect(await store.getBody(manual.id, "s")).toBeUndefined();
@@ -137,7 +137,7 @@ export function describeManualStore(name: string, newStore: () => Promise<Manual
     });
 
     it("deletes a manual that isn't there without complaint", async () => {
-      await expect(store.deleteManual("not-there")).resolves.toBeUndefined();
+      await expect(store.deleteManual("not-there")).resolves.toBe("deleted");
     });
 
     it("can't save a section into a deleted manual", async () => {

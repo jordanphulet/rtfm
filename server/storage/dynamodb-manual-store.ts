@@ -28,6 +28,8 @@ export interface DynamoDbTable {
   region: string;
   endpoint: string;
   credentials: TableCredentials;
+  /** Called with a call's error each time DynamoDB refuses the keys (`KEYS_REFUSED`). */
+  onKeysRefused?: (error: Error) => void;
 }
 
 /**
@@ -35,14 +37,17 @@ export interface DynamoDbTable {
  * the ops tools), or the Web Function's execution role, through Lambda's
  * container credentials endpoint, which hands out new ones whenever the client asks as they near
  * expiry, or the variables Lambda sets, which a running process can't see change, so those are
- * never renewed (`server/README.md` › The Web Function).
+ * never renewed and last until `expiresAt`, when Lambda gives it (`server/README.md` › The Web
+ * Function).
  */
 export type TableCredentials =
   | { kind: "keys"; accessKeyId: string; secretAccessKey: string; sessionToken?: string }
   | { kind: "container-endpoint"; fullUri: string; authorizationToken: string | undefined }
-  | { kind: "environment" };
+  | { kind: "environment"; expiresAt: Date | undefined };
 
 const CREDENTIAL_CHAIN_REFUSED = "The AWS default credential chain is never used";
+/** What DynamoDB answers when the keys have expired, or when it doesn't know them at all. */
+const KEYS_REFUSED = ["ExpiredTokenException", "UnrecognizedClientException"];
 /** One transaction holds at most 100 items: the manual and 99 section items. */
 export const MOST_SECTIONS_DELETED_AT_ONCE = 99;
 export const TRANSACTION_ATTEMPTS = 8;
@@ -59,6 +64,8 @@ export const SECTION_LEASE_TIMING: LeaseTiming = { durationMs: 20_000, renewEver
 const FENCE_AT = 0.9;
 /** A section's item that still holds the lease of `:owner`, and no body. */
 const LEASED_TO_OWNER = "leaseOwner = :owner AND attribute_not_exists(body)";
+/** A section's item that is gone, holds a body, or holds a lease expired by `:now`: one no writer holds. */
+const NOT_BEING_WRITTEN = "attribute_not_exists(sk) OR attribute_exists(body) OR leaseExpiresAt < :now";
 
 const LIBRARY = "LIBRARY";
 const SEEDED = "SEEDED";
@@ -78,6 +85,13 @@ interface ManualItem {
   manual: StoredManual;
   /** The ids of the manual's written sections; absent until the first is saved. */
   written?: Set<string>;
+}
+
+/** A section's item: its body once written, its lease while being written. */
+interface SectionItem {
+  body?: string;
+  leaseOwner?: string;
+  leaseExpiresAt?: number;
 }
 
 export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
@@ -120,7 +134,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
     async deleteManual(manualId) {
       for (let attempt = 1; attempt <= TRANSACTION_ATTEMPTS; attempt++) {
         const item = await getManualItem(manualId);
-        if (!item) return;
+        if (!item) return "deleted";
         const written = [...(item.written ?? [])];
         // The written sections' items, and any unwritten section's item that holds only a lease.
         const sectionItems = await queryPartition(client, TableName, sectionsPartition(manualId), "pk, sk");
@@ -128,6 +142,7 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
           throw new Error(`"${manualId}" has ${sectionItems.length} section items, more than one delete can remove`);
         }
         const unchanged = written.length === 0 ? "attribute_not_exists(written)" : "written = :written";
+        const now = Date.now();
         const cancelled = await transactWrite(client, {
           TransactItems: [
             {
@@ -138,11 +153,19 @@ export function createDynamoDbManualStore(table: DynamoDbTable): ManualStore {
                 ExpressionAttributeValues: written.length === 0 ? undefined : { ":written": new Set(written) },
               },
             },
-            ...sectionItems.map(({ pk, sk }) => ({ Delete: { TableName, Key: { pk, sk } } })),
+            ...sectionItems.map(({ pk, sk }) => ({
+              Delete: {
+                TableName,
+                Key: { pk, sk },
+                ConditionExpression: NOT_BEING_WRITTEN,
+                ExpressionAttributeValues: { ":now": now },
+              },
+            })),
           ],
         });
-        if (!cancelled) return;
-        const [manualCheck] = cancelled.CancellationReasons ?? [];
+        if (!cancelled) return "deleted";
+        const [manualCheck, ...sectionChecks] = cancelled.CancellationReasons ?? [];
+        if (sectionChecks.some(({ Code }) => Code === "ConditionalCheckFailed")) return "writing";
         if (manualCheck?.Code !== "ConditionalCheckFailed") throw cancelled;
         await pause(attempt);
       }
@@ -311,6 +334,19 @@ export function createDynamoDbSectionLeases(table: DynamoDbTable, timing = SECTI
       return heldLease(manualId, sectionId, owner, now);
     },
 
+    async readSection(manualId, sectionId) {
+      const { Item } = await client.send(
+        new GetCommand({ TableName, Key: sectionKey(manualId, sectionId), ConsistentRead: true }),
+      );
+      const { body, leaseOwner, leaseExpiresAt } = (Item ?? {}) as SectionItem;
+      // Live as a take reads it, and another environment's: its own runs are in its runs' map.
+      const heldElsewhere =
+        leaseOwner !== undefined &&
+        (leaseExpiresAt ?? 0) >= Date.now() &&
+        !leaseOwner.startsWith(`${environment}/`);
+      return { body, heldElsewhere };
+    },
+
     async heldElsewhere(manualId) {
       // Expired as a take reads it: `leaseExpiresAt < :now`. A written section's item has no lease.
       const items = await queryPartition(client, TableName, sectionsPartition(manualId), "sk", {
@@ -398,7 +434,7 @@ async function bodyIsStored(client: DynamoDBDocumentClient, TableName: string, m
 }
 
 /** Runs a transaction again while another one touching the same items gets in its way. */
-async function transactWrite(
+export async function transactWrite(
   client: DynamoDBDocumentClient,
   input: TransactWriteCommandInput,
 ): Promise<TransactionCanceledException | undefined> {
@@ -464,8 +500,8 @@ export function documentClient(table: DynamoDbTable): DynamoDBDocumentClient {
  * The client with every setting the SDK would otherwise look up in the environment or `~/.aws`
  * given here: the table's own credentials, region and endpoint, and a credential chain that throws.
  */
-function dynamoDbClient({ region, endpoint, credentials }: DynamoDbTable): DynamoDBClient {
-  return new DynamoDBClient({
+function dynamoDbClient({ region, endpoint, credentials, onKeysRefused }: DynamoDbTable): DynamoDBClient {
+  const client = new DynamoDBClient({
     region,
     endpoint,
     credentials: credentialsFor(credentials),
@@ -483,6 +519,25 @@ function dynamoDbClient({ region, endpoint, credentials }: DynamoDbTable): Dynam
     userAgentAppId: "rtfm",
     requestHandler: { connectionTimeout: 3_000, requestTimeout: 10_000 },
   });
+  if (onKeysRefused) {
+    // Around the whole call, retries included, so it sees the call's final error.
+    client.middlewareStack.add(
+      (next) => async (args) => {
+        try {
+          return await next(args);
+        } catch (error) {
+          if (keysRefused(error)) onKeysRefused(error);
+          throw error;
+        }
+      },
+      { step: "initialize", name: "reportKeysRefused" },
+    );
+  }
+  return client;
+}
+
+function keysRefused(error: unknown): error is Error {
+  return error instanceof Error && KEYS_REFUSED.includes(error.name);
 }
 
 /**
@@ -514,7 +569,7 @@ function credentialsFor(credentials: TableCredentials): DynamoDBClientConfig["cr
 }
 
 /** A short, growing, jittered pause before trying a transaction again. */
-export function pause(attempt: number): Promise<void> {
+function pause(attempt: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, Math.random() * 20 * attempt));
 }
 

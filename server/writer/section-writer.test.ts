@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fakeModel } from "../agent/fake-model.ts";
 import { scriptedClient, textTurn } from "../agent/scripted-client.ts";
 import type { SectionEvent } from "../api/types.ts";
-import { killSwitchPath } from "../gateway/gateway.ts";
+import { killSwitchPath } from "../gateway/file-spending-ledger.ts";
 import { silentLogger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { seedStore } from "../storage/seed.ts";

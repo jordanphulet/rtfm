@@ -65,6 +65,9 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `API_PORT`, `exit.ts` the `exitOnceWritten` that `app.ts` and `scripts/serve-temp.ts` share;
   `dev.ts`, `usage.ts` and `logs.ts` are the `npm run` commands; `escape-tags.ts` escapes text
   for the prompts, and `testing.ts` holds the tests' helpers. See `server/README.md`.
+- `replacement.ts`: the Web Function's exit, with code 1, once a service refuses its keys or
+  shortly before they expire, so Lambda replaces its environment (`server/README.md` › The Web
+  Function).
 - `api/`: the routes (`Route`, `ApiRequest`, `EventSink` in `route.ts`), the Node adapter with the
   `Host` and `Origin` checks, the passcode gate and the built app's files (`node-adapter.ts`, with
   `passcode.ts` and `app-files.ts`), the previews (`preview.ts`) and the wire types (`types.ts`).
