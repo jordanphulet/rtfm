@@ -60,11 +60,14 @@ aren't RTFM's.
   evidence, and `npm test` passes.
 
 ### IN.20 — Claude on Bedrock in the deployed app
-- **Status:** doing (agent a7545610be7bdd537; review's fixes)
+- **Status:** doing (agent a7545610be7bdd537; done, being committed)
 - **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
   `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
+  `server/gateway/bedrock-client.ts` and its test, `server/gateway/bedrock-testing.ts`,
+  `server/storage/dynamodb-manual-store.ts` and its test, `server/usage.ts`,
+  `scripts/build-web-function.test.ts`, `ARCHITECTURE.md`, `server/storage/README.md`
 - **Do:**
   - The Web Function runs `RTFM_MODELS=bedrock`: `server/web-function.ts` stops refusing it, and
     the revision sets it.
