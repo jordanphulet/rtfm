@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.3 — Key the runs by library
-- **Status:** doing (agent a2567743a6f7534f6)
+- **Status:** doing (agent a2567743a6f7534f6; done, in review)
 - **Depends on:** —
 - **Files:** `server/writer/**`, `server/logging/README.md`
 - **Do:** as `research/libraries.md` › How the server carries the library describes: one `Runs`
@@ -114,22 +114,6 @@ user revokes it, and with its activity visible to the user.
 - **Done when:** the suite shows a library refused at its cap while another library and the admin
   still reserve, the central caps and kill switch refuse every library, and `npm run build` and
   `npm test` pass.
-
-### LB.6 — Keep library links and activity
-- **Status:** doing (agent ad5dcc9675bc68f19; done, being committed)
-- **Depends on:** —
-- **Files:** `server/storage/**`, `server/gateway/sdk-boundary.test.ts`, `ARCHITECTURE.md`,
-  `server/gateway/README.md`
-- **Do:** the store of links and activity, as `research/libraries.md` › The key scheme and What is
-  recorded, and where describe: a link by its secret's digest (create on `attribute_not_exists`,
-  find, list, revoke, keeping the item), and a library's activity (first and last use, opens and
-  the counters, each an `ADD` or an `if_not_exists`, and reading one or all), in `rtfm-app`'s
-  `LINK` and `ACTIVITY` partitions and in `.data/links/` and `.data/activity/`, both held to one
-  suite, the DynamoDB one against DynamoDB Local. A find that fails throws, never answering "no
-  link". The secret's form, its making and its digest live here too. The server doesn't use it in
-  this task. Document it in `server/storage/README.md`.
-- **Done when:** the suite passes against both, no item or file holds a secret, and `npm run build`
-  and `npm test` pass.
 
 ### LB.7 — Give library links their AWS reach
 - **Status:** blocked (merged and RtfmApp deployed; the user deploys `RtfmAccess`)
