@@ -136,19 +136,37 @@ aren't RTFM's.
   shows as writing and its manual can't be deleted mid-run.
 - **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
 
+### AW.1 — Check the ledger against the AWS bill
+- **Status:** todo
+- **Depends on:** IN.12
+- **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
+- **Do:** with `npm run aws -- ce get-cost-and-usage` (as `rtfm-read`), compare what AWS charged
+  for Claude Haiku 4.5 with the ledger's totals for the same days (`npm run usage`, central and the
+  data folder's), and find from the bill's usage types whether a call that doesn't complete is
+  charged its full `max_tokens` or only what it used. Correct `prices.ts` or the gateway's charge
+  for an incomplete call if they differ. Read-only in AWS.
+- **Done when:** the price table and the charge for an incomplete call match AWS's, and
+  `server/README.md` says what was checked and when.
+
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.1 — The flaky repair test
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `src/manual/repair.test.tsx`, `src/manual/**`
+- **Do:** `src/manual/repair.test.tsx` failed once in a full `npm test` run during IN.17 (the
+  streaming test for `giving-the-dead-a-voice.md`) and passed on its own. Find why (a timer race,
+  shared state, load from other test files) by running it repeatedly alone and in the full suite,
+  and fix the cause, in the test or the code.
+- **Done when:** the cause is named in the report, and the test passes 50 runs in a row alone and
+  10 full `npm test` runs in a row.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
 user says its step is done.
-
-### AW.1 — Check the ledger against the AWS bill
-- **Status:** blocked (the user compares Bedrock charges in Cost Explorer with `npm run usage`)
-- **Depends on:** —
-- **Files:** `server/gateway/prices.ts`, `server/README.md`, `server/gateway/README.md`
-- **Do:** with the user's figures, correct the Haiku 4.5 prices if they differ, and decide from
-  the bill whether a call that doesn't complete should still be charged its full `max_tokens`.
-- **Done when:** the price table matches AWS's charges and `server/README.md` says what was
-  checked.
 
 ### AW.2 — Claude Platform on AWS
 - **Status:** blocked (the user signs up, following `research/aws-hosting.md` › "Your steps")
