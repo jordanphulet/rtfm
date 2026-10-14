@@ -118,6 +118,11 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `commit-task.ts`'s check of where it runs, and its parsing of `WORKLIST.md`.
 - `task-prompt.ts`: `npm run task-prompt`, which prints the prompt that starts a task's agent or
   its reviewer, from the task's block in `WORKLIST.md`, using `commit-task.ts`'s parsing.
+- `ops/`: `npm run ops` (`ops.ts`), the ops tools for the deployed app: the kill switch
+  (`kill-switch.ts`), the spend (`usage.ts`), the logs (`logs.ts`) and the status (`status.ts`),
+  each acting as an RTFM role through `infra/run-aws.ts`'s session (`context.ts`), and the
+  deployed names they read (`deployed.ts`). `testing.ts` holds the tests' stand-in for the AWS CLI
+  (`README.md` › The ops tools).
 - `build-web-function.ts`: the Web Function's package: the built app, the server bundled into one
   file with Rolldown, and the seed. `RtfmApp` runs it when it synthesizes (`infra/README.md` ›
   The Web Function's package).
@@ -139,7 +144,7 @@ aren't RTFM's. See `infra/README.md`.
   groups, the tables `rtfm-app` (the library) and `rtfm-usage` (Bedrock's spending), and the
   bucket. The orchestrator deploys it.
 - `run-aws.ts`: `npm run aws` and `npm run cdk`, which run the AWS and CDK CLIs as RTFM's own
-  roles from `~/.aws/rtfm/`.
+  roles from `~/.aws/rtfm/`, and the session `npm run ops` reaches AWS through.
 - `edge-certificate-stack.ts` and `edge-stack.ts`: `RtfmEdgeCertificate` and `RtfmEdge`, which
   put the app at `https://rtfm.moonfetus.com`: its certificate, the CloudFront distribution in
   front of the Web Function, the domain's records, and the resource policy that lets only that
@@ -225,11 +230,13 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
 - **One logger**, passed to whatever logs, never logs a manual's text, a prompt, a conversation
   or the passcode (`server/logging/README.md`).
 - **Tests never call Bedrock** (`server/README.md` › Tests).
-- **AWS only as RTFM.** Commands reach AWS only through `npm run aws` and `npm run cdk`, as the
-  roles `rtfm-read` and `rtfm-deploy`, which reach only resources named for RTFM; every role an
-  RTFM stack creates carries the permissions boundary (`infra/README.md`). The CDK packages are
-  imported only in `infra/` (`infra/cdk-imports.test.ts`), so they reach neither the browser
-  bundle nor the server.
+- **AWS only as RTFM.** Commands reach AWS only through `npm run aws`, `npm run cdk` and
+  `npm run ops`, as the roles `rtfm-read`, `rtfm-deploy` and `rtfm-ops`, which reach only
+  resources named for RTFM, never by running `aws` or `cdk` directly; every role an RTFM stack
+  creates carries the permissions boundary (`infra/README.md`). `npm run ops -- kill-switch on|off`
+  changes the live app, so agents run it only when the user asks (`CLAUDE.md` › Shell). The CDK
+  packages are imported only in `infra/` (`infra/cdk-imports.test.ts`), so they reach neither the
+  browser bundle nor the server.
 - **Everything runs on one machine.** An agent can run, test and check the whole app on one
   machine:
   - Every AWS service the app uses, whether Bedrock, DynamoDB, an IAM role, SSM, a Lambda handler

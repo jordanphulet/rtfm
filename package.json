@@ -22,6 +22,7 @@
     "commit-worklist": "node scripts/commit-worklist.ts",
     "orchestrator-check": "node scripts/orchestrator-check.ts",
     "task-prompt": "node scripts/task-prompt.ts",
+    "ops": "node scripts/ops/ops.ts",
     "aws": "set -f; command set +o braceexpand 2>/dev/null; exec node infra/run-aws.ts aws",
     "cdk": "set -f; command set +o braceexpand 2>/dev/null; exec node infra/run-aws.ts cdk"
   },

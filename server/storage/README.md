@@ -148,7 +148,8 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
 
 The client (`createDynamoDbManualStore(table)`) takes everything from the `DynamoDbTable` it is
 given: the table's name, region, endpoint and credentials. The credentials are fixed keys
-(DynamoDB Local's, in the tests), or the Web Function's execution role: a provider on Lambda's
+(DynamoDB Local's, in the tests; a role's temporary keys with their session token, for the ops
+tools in `scripts/ops/`), or the Web Function's execution role: a provider on Lambda's
 container credentials endpoint (`fromHttp`, given its URI and token, with the environment's
 relative URI and token file set aside) or on the environment's key variables (`fromEnv`, which
 reads them at call time and honours `AWS_CREDENTIAL_EXPIRATION`). The client holds what a provider
@@ -166,8 +167,9 @@ credentials against a stand-in. It refuses fixed keys that are empty. Who gives 
 credentials is `server/README.md` › The Web Function.
 
 **Room for what comes next.** Each kind of item has its own partition key, so later items fit
-beside these: the passcode's digest as one item of its own partition, which `rtfm-ops` can be
-limited to with `dynamodb:LeadingKeys`.
+beside these: the passcode's digest as one item of the partition `PASSCODE` (`PASSCODE_PARTITION`
+in `infra/rtfm.ts`), the one partition of `rtfm-app` that `rtfm-ops` may read and write, limited
+to it with `dynamodb:LeadingKeys` (`infra/README.md` › The identities).
 
 **Changing the stored form.** The table is deployed data: a change to these items carries its
 migration, or reads the old form too (`ARCHITECTURE.md` › Everything runs on one machine).

@@ -31,13 +31,14 @@ export interface DynamoDbTable {
 }
 
 /**
- * Fixed keys (DynamoDB Local's, in tests), or the Web Function's execution role, through Lambda's
+ * Fixed keys (DynamoDB Local's, in tests; a role's temporary ones, with their session token, for
+ * the ops tools), or the Web Function's execution role, through Lambda's
  * container credentials endpoint, which hands out new ones whenever the client asks as they near
  * expiry, or the variables Lambda sets, which a running process can't see change, so those are
  * never renewed (`server/README.md` › The Web Function).
  */
 export type TableCredentials =
-  | { kind: "keys"; accessKeyId: string; secretAccessKey: string }
+  | { kind: "keys"; accessKeyId: string; secretAccessKey: string; sessionToken?: string }
   | { kind: "container-endpoint"; fullUri: string; authorizationToken: string | undefined }
   | { kind: "environment" };
 
@@ -454,7 +455,11 @@ function credentialsFor(credentials: TableCredentials): DynamoDBClientConfig["cr
       if (!credentials.accessKeyId || !credentials.secretAccessKey) {
         throw new Error("A DynamoDB table needs an access key ID and a secret access key");
       }
-      return { accessKeyId: credentials.accessKeyId, secretAccessKey: credentials.secretAccessKey };
+      return {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken,
+      };
     case "container-endpoint":
       // Empty, not absent, so the environment's relative URI and token file can't take their place.
       return fromHttp({

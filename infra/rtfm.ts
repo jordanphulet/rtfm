@@ -9,6 +9,7 @@ export const TOOLKIT_STACK = "RtfmToolkit";
 
 export const READ_ROLE = "rtfm-read";
 export const DEPLOY_ROLE = "rtfm-deploy";
+export const OPS_ROLE = "rtfm-ops";
 export const LOCAL_USER = "rtfm-local";
 export const AGENT_USER = "rtfm-agent";
 export const BEDROCK_POLICY = "rtfm-bedrock";
@@ -54,6 +55,15 @@ export const USAGE_TABLE_ACTIONS = [
   "dynamodb:UpdateItem",
   "dynamodb:ConditionCheckItem",
 ];
+
+/** The partition of the kill-switch item in `rtfm-usage`, the only one `rtfm-ops` may touch there. */
+export const KILL_SWITCH_PARTITION = "KILL_SWITCH";
+
+/** The manuals and their sections (`server/storage/README.md` › The table `rtfm-app`). `RtfmApp` holds it. */
+export const APP_TABLE = "rtfm-app";
+export const APP_TABLE_ARN = `arn:aws:dynamodb:${REGION}:${ACCOUNT}:table/${APP_TABLE}`;
+/** The partition of the passcode's item in `rtfm-app`, the only one `rtfm-ops` may touch there. */
+export const PASSCODE_PARTITION = "PASSCODE";
 
 /**
  * The prefix of the stacks that put the app on the web (its certificate, DNS record, CloudFront

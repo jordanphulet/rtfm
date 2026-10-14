@@ -76,6 +76,7 @@ beside the API (`server/README.md` › The Web Function).
 | `npm run commit-task`        | Commits a task's work with its body and review trailer. See below.           |
 | `npm run commit-worklist`    | Commits `WORKLIST.md` alone, with a body from its diff. See below.           |
 | `npm run task-prompt`        | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
+| `npm run ops`                | The deployed app's kill switch, spend, logs and status. See below.           |
 | `npm run aws`                | The AWS CLI as RTFM's own role, the only way to it. See `infra/README.md`.   |
 | `npm run cdk`                | The CDK CLI in `infra/`, as RTFM's own role. See `infra/README.md`.          |
 
@@ -403,8 +404,16 @@ them all. The fake model's calls never reach it. On this machine the server reac
 
 **The kill switch** is the item `KILL_SWITCH` in `rtfm-usage`: while it exists, every server
 refuses every new Bedrock call, from its very next one, with no restart. A call already running
-finishes. You turn it on and off from CloudShell, with your own sign-in (`rtfm-local` may turn it
-on, but not off, and `rtfm-read` reads no item):
+finishes. `npm run ops` turns it on and off, as the role `rtfm-ops` (The ops tools, below):
+
+```sh
+npm run ops -- kill-switch on       # stop all Bedrock calls
+npm run ops -- kill-switch off      # allow them again
+npm run ops -- kill-switch status
+```
+
+`rtfm-local` may turn it on, but not off, and `rtfm-read` may read it. Without RTFM's AWS files,
+you turn it on and off from CloudShell, with your own sign-in:
 
 ```sh
 aws dynamodb put-item --region us-west-2 --table-name rtfm-usage \
@@ -427,6 +436,8 @@ estimated; what it is charged is in `server/gateway/README.md` › Each call.
 
 - It reads the ledger `RTFM_MODELS` chooses: `npm run usage` reads the data folder's, and
   `RTFM_MODELS=bedrock npm run usage` reads `rtfm-usage`, with `rtfm-local`'s keys.
+  `npm run ops -- usage` prints the same report of `rtfm-usage` as `rtfm-read`, with no
+  `.env.local` (The ops tools, below).
 - The fake model's calls are counted on a line of their own, in none of the totals.
 - An unsettled reservation is a call whose server stopped before it settled (a crash, a kill). It
   stays counted at its worst case, in the table as in the data folder, and is listed under
@@ -469,7 +480,49 @@ npm run logs -- /tmp/rtfm-try -e request  # another data folder's requests
 - `--lines` (`-n`) is how many entries to show first (50 unless given); `--follow` (`-f`) then
   keeps printing new ones until it is stopped with Ctrl-C.
 
-The files are JSON lines, so `grep` and `jq` read them as they are.
+The files are JSON lines, so `grep` and `jq` read them as they are. The deployed app's log is in
+CloudWatch, which `npm run ops -- logs` reads (below).
+
+## The ops tools
+
+`npm run ops -- <command>` reads and runs the deployed app in AWS. Each command acts as one of
+RTFM's roles, through the same environment as `npm run aws` (`infra/README.md` › Reaching AWS):
+RTFM's own files under `~/.aws/rtfm/`, none of the caller's AWS settings, and the identity check.
+It chooses the role itself, and takes no `--profile`. They are built for agents:
+
+- **Non-interactive**: nothing asks a question or waits for input.
+- **Plain text**, or the same as JSON with `--json`, on standard output.
+- **Exit code 1 on failure**, with the reason on standard error: a command line it doesn't take
+  (with the usage), a refused identity, or a read or write that failed. `status` exits 1 when any
+  of its reads failed, and still prints the rest.
+
+`kill-switch on` and `off` change the live app, so agents run them only when the user asks in chat
+(`CLAUDE.md` › Shell); the other commands only read.
+
+| Command | Role | What it does |
+| --- | --- | --- |
+| `kill-switch on`, `off`, `status` | `rtfm-ops` | Puts or deletes the kill switch's item in `rtfm-usage` (Bedrock's spending, above), then reads it back: `Kill switch: off.`, or `ON`; `--json` gives `{ "killSwitchOn": false }` |
+| `usage` | `rtfm-read` | `npm run usage`'s report of `rtfm-usage`: today's and this month's Bedrock spend against the caps, by model and by job, the unsettled reservations and the kill switch; `--json` gives the same figures |
+| `logs` | `rtfm-read` | The Web Function's log entries in CloudWatch (`/rtfm/app`), one line each as `npm run logs` prints them; `--json` gives the entries |
+| `status` | `rtfm-read` | Each stack's status and termination protection (`RtfmToolkit`, `RtfmAccess`, `RtfmApp`, `RtfmEdgeCertificate` in `us-east-1`, `RtfmEdge`), the Web Function's state and its endpoint's auth type and state, each table's status, deletion protection and point-in-time recovery, today's and this month's Bedrock spend, and the kill switch; anything not deployed shows as `missing` |
+
+```sh
+npm run ops -- kill-switch on
+npm run ops -- usage --json
+npm run ops -- logs --level warn --since 6h       # warnings and errors of the last 6 hours
+npm run ops -- logs -e section -n 200             # the last 200 section events of the last day
+npm run ops -- status
+```
+
+`logs` takes `npm run logs`'s filters, `--level` (`-l`), `--event` (`-e`) and `--lines` (`-n`, 50
+unless given), and `--since`, how far back to read: minutes, hours or days, such as `90m`, `6h` or
+`2d` (`1d` unless given; CloudWatch keeps 30 days). It has no `--follow`. Lines in the log group
+that aren't the server's entries, such as Lambda's own, are left out.
+
+`kill-switch`, `usage` and `status` reach `rtfm-usage` with the AWS SDK, as the role: the AWS CLI
+gives the role's temporary keys (`aws configure export-credentials`), so the SDK never reads
+`~/.aws` itself. The rest goes through the AWS CLI. The code is in `scripts/ops/`, and its tests
+run offline: the items in DynamoDB Local, and a stand-in for the AWS CLI.
 
 ## Screenshots
 

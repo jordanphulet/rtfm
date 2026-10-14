@@ -25,6 +25,8 @@ import { Asset } from "aws-cdk-lib/aws-s3-assets";
 import type { Construct } from "constructs";
 import {
   ACCOUNT,
+  APP_TABLE,
+  APP_TABLE_ARN,
   BOUNDARY_POLICY,
   REGION,
   USAGE_TABLE,
@@ -40,9 +42,6 @@ export const APP_LOG_GROUP = "/rtfm/app";
 export const APP_LOCAL_LOG_GROUP = `${APP_LOG_GROUP}.local`;
 /** Bucket names are global, so the account and region keep it RTFM's own. */
 export const APP_BUCKET = `rtfm-app-${ACCOUNT}-${REGION}`;
-/** The manuals and their sections (`server/storage/README.md` › The table `rtfm-app`). */
-export const APP_TABLE = "rtfm-app";
-export const APP_TABLE_ARN = `arn:aws:dynamodb:${REGION}:${ACCOUNT}:table/${APP_TABLE}`;
 /** What `server/storage/dynamodb-manual-store.ts` does to the table, its transactions included. */
 const APP_TABLE_ACTIONS = [
   "dynamodb:GetItem",

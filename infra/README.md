@@ -53,14 +53,24 @@ Before any other command, it runs `aws sts get-caller-identity` and refuses unle
 the chosen role, assumed in account `438180219169`. The tests cover the environment it builds,
 the identity check and the arguments passed through `npm run aws`, without calling AWS.
 
+`npm run ops` (`README.md` › The ops tools) reaches AWS through the same environment and identity
+check, as `rtfm-ops` or `rtfm-read`, with `openAwsSession` in `run-aws.ts`. A session runs the
+AWS CLI with no shell, its arguments chosen by the tool, never passed on from the caller; it gives
+an AWS SDK client the role's temporary keys from `aws configure export-credentials`, so the SDK
+never reads `~/.aws` itself; and it removes its `HOME` when it closes. On `SIGINT`, `SIGTERM` or
+`SIGHUP` it passes the signal on to its running commands and exits with code 1 at once, without
+waiting for them, and exiting removes its `HOME`. The ops tools' tests cover it, with a stand-in
+for the AWS CLI.
+
 ## The identities
 
 | Identity | What it is for | What it reaches |
 | --- | --- | --- |
 | `rtfm-local` (user) | The key in the server's `.env.local` | Claude on Bedrock, through the policy `rtfm-bedrock`, and the items of the table `rtfm-usage`, Bedrock's spending ledger |
-| `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read` and `rtfm-deploy`, nothing else |
-| `rtfm-read` (role) | `npm run aws`, and `npm run cdk` but deploys | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
+| `rtfm-agent` (user) | The key in `~/.aws/rtfm/credentials` | Assuming `rtfm-read`, `rtfm-deploy` and `rtfm-ops`, nothing else |
+| `rtfm-read` (role) | `npm run aws`, `npm run cdk` but deploys, and `npm run ops`' reads | Reading RTFM's logs, stacks, buckets, Web Functions and tables' settings, the items of `rtfm-usage`, CloudFormation's resource types, assuming the lookup role (`cdk diff`), and Cost Explorer |
 | `rtfm-deploy` (role) | `npm run cdk -- deploy` | Assuming the `rtfm` bootstrap's deploy, file publishing and lookup roles, nothing else |
+| `rtfm-ops` (role) | `npm run ops -- kill-switch` | Reading and writing the items of two partitions: `KILL_SWITCH` in `rtfm-usage` and `PASSCODE` in `rtfm-app`, nothing else |
 | `cdk-rtfm-deploy-role-…` | The CDK CLI's deploys | CloudFormation on `Rtfm*` stacks, but only reading `RtfmAccess` and `RtfmToolkit`; passing the execution role |
 | `cdk-rtfm-file-publishing-role-…` | Uploading assets | The staging bucket |
 | `cdk-rtfm-lookup-role-…` | `cdk diff`'s reads | Reading `Rtfm*` stacks and the bootstrap's version |
@@ -89,9 +99,11 @@ turn the kill switch on but never off, and it reaches no other table, index or t
   (`lambda:GetWebFunction`, `GetWebFunctionRevision`, `GetWebFunctionEndpoint`,
   `ListWebFunctionRevisions`, `ListWebFunctionEndpoints` and `GetResourcePolicy`). It can't list
   the account's Web Functions (`ListWebFunctions` takes only `*`), and can't invoke an endpoint;
-- the tables `rtfm-*`, their settings and their point-in-time recovery only
-  (`dynamodb:DescribeTable` and `DescribeContinuousBackups`): it reads no item, and can't list
-  the account's tables.
+- the tables `rtfm-*`, their settings and their point-in-time recovery
+  (`dynamodb:DescribeTable` and `DescribeContinuousBackups`), and can't list the account's
+  tables;
+- the items of the table `rtfm-usage`, Bedrock's spending ledger (`dynamodb:GetItem` and
+  `Query`), for `npm run ops -- usage` and `status`. It reads no item of `rtfm-app`, and no index.
 
 It also has actions on `*` that take no narrower resource: listing log groups, reading the results
 of a Logs Insights query by the ID its own `StartQuery` returned, Cost Explorer, which covers the
@@ -102,6 +114,27 @@ whole account, and reading a CloudFormation resource type's live schema, such as
 project's private extensions among them; CloudFormation's `type` resource
 (`…:type/resource/<type>`) applies only to stack set actions. It can't register, deregister,
 activate or configure a type.
+
+`rtfm-ops` may touch the items of two partitions, and nothing else: no item of another
+partition, and no other table, service or role, so it can't reach beyond what the boundary allows.
+
+- **`KILL_SWITCH`** in `rtfm-usage` (`KILL_SWITCH_PARTITION` in `rtfm.ts`), which holds the kill
+  switch's item: `dynamodb:GetItem`, `PutItem` and `DeleteItem`, so it turns the kill switch on and
+  off, and reads it.
+- **`PASSCODE`** in `rtfm-app` (`PASSCODE_PARTITION`; `server/storage/README.md` › The table
+  `rtfm-app`), which holds the passcode's item: `dynamodb:GetItem` and `PutItem`.
+
+Each statement names its table's ARN and holds two conditions on `dynamodb:LeadingKeys`, the
+partition keys a request names: `ForAllValues:StringEquals` with the one partition, and `Null`
+with `false`. DynamoDB requires `ForAllValues` with this key, and IAM's `ForAllValues` also holds
+when a request names no partition key at all, as a `Scan` does, so `Null` requires one (Amazon
+DynamoDB Developer Guide, "Using IAM policy conditions for fine-grained access control"; IAM User
+Guide, "Single-valued vs. multivalued context keys", both read 2026-10-13). DynamoDB has no
+condition key for the sort key, so the policy can't name the one item each partition holds:
+`rtfm-ops` can put, read or delete an item with any sort key in `KILL_SWITCH`, and put or read one
+with any sort key in `PASSCODE`. The server checks the kill switch by its whole key (`KILL_SWITCH`,
+`KILL_SWITCH`), so another item in that partition doesn't turn it on. The boundary denies
+anything on `rtfm-ops`, as on `rtfm-read` and `rtfm-deploy`, so no app stack can widen it.
 
 You deploy `RtfmToolkit`, `RtfmAccess` and the edge stacks, `RtfmEdgeCertificate` and
 `RtfmEdge`, yourself, with your own admin sign-in. Every stack named `RtfmEdge*` is yours, and
@@ -133,7 +166,7 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
   - The staging bucket's policy lets `lambda.amazonaws.com` read objects and their versions for a
     revision of a Web Function `rtfm-*` in this account: Lambda reads a revision's code as its
     own service principal.
-- **`RtfmAccess`** (`access-stack.ts`): the users, the two roles, `rtfm-bedrock`, `rtfm-local`'s
+- **`RtfmAccess`** (`access-stack.ts`): the users, the three roles, `rtfm-bedrock`, `rtfm-local`'s
   policy on `rtfm-usage`, and the budget alarm. It has termination protection.
 - **`RtfmApp`** (`app-stack.ts`): the app, deployed through the bootstrap with
   `npm run cdk -- deploy RtfmApp` (Deploying the app stack, below). Every role in it carries the
@@ -350,9 +383,9 @@ It denies, whatever any other policy allows:
 
 - creating a role, or setting a role's boundary, with any boundary but `rtfm-boundary`, and
   removing a boundary;
-- anything on the boundary, the execution policy, `rtfm-bedrock`, `rtfm-read`, `rtfm-deploy`, the
-  bootstrap's roles, the stacks you deploy (`RtfmAccess`, `RtfmToolkit`, `RtfmEdge*`), and the
-  budget;
+- anything on the boundary, the execution policy, `rtfm-bedrock`, `rtfm-read`, `rtfm-deploy`,
+  `rtfm-ops`, the bootstrap's roles, the stacks you deploy (`RtfmAccess`, `RtfmToolkit`,
+  `RtfmEdge*`), and the budget;
 - anything on an IAM user: no stack creates one, or a key;
 - anything but reading on the staging bucket and the version parameter;
 - a public endpoint: a Lambda Function URL whose auth type isn't `AWS_IAM` (a request without
@@ -541,6 +574,11 @@ the laptop.
    role_arn = arn:aws:iam::438180219169:role/rtfm-deploy
    source_profile = rtfm-agent
    region = us-west-2
+
+   [profile rtfm-ops]
+   role_arn = arn:aws:iam::438180219169:role/rtfm-ops
+   source_profile = rtfm-agent
+   region = us-west-2
    ```
 
    `~/.aws/rtfm/credentials`:
@@ -654,6 +692,10 @@ CloudShell, as your own admin sign-in. These steps update `RtfmAccess`; for anot
 the stack name and the template, and for `RtfmEdgeCertificate` the region too (`us-east-1`). The
 edge stacks need no `--capabilities`.
 
+When a change adds a role to `RtfmAccess` that the boundary protects (`PROTECTED` in
+`boundary.ts`), update `RtfmToolkit`, which holds the boundary, first, then `RtfmAccess`, so the
+role never exists unprotected. Each new profile goes in `~/.aws/rtfm/config`, as in Your steps › 5.
+
 1. **Write the template** with `npm run cdk -- synth --quiet`, and upload
    `infra/cdk.out/RtfmAccess.template.json` to CloudShell in `us-west-2`, as in Your steps › 1.
    `npm run cdk -- diff RtfmAccess --method=template` shows the change on the laptop beforehand.
@@ -746,8 +788,9 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
 
 - `app.ts`: `createApp`, the five stacks and the default synthesizer; `cdk.json` runs it.
 - `rtfm.ts`: the account, region and qualifier, the names and ARNs of the bootstrap's and
-  `RtfmAccess`'s resources, and the table `rtfm-usage`'s name, ARN and actions, which `RtfmAccess`
-  and `RtfmApp` both grant.
+  `RtfmAccess`'s resources, the table `rtfm-usage`'s name, ARN and actions, which `RtfmAccess`
+  and `RtfmApp` both grant, the table `rtfm-app`'s name and ARN, and the two partitions `rtfm-ops`
+  may touch.
 - `toolkit-stack.ts`, `access-stack.ts`, `edge-certificate-stack.ts` and `edge-stack.ts`: the
   stacks you deploy. `edge-certificate-stack.ts` also holds the app's domain, and `edge-stack.ts`
   the host check's code and the Web Function's name, which a test keeps the same as
@@ -756,10 +799,11 @@ attribution"), a different kind from the user-defined tag `user:project` the bud
   `RtfmApp`, with its resources' names, the throwaway passcode, and the asset that builds the Web
   Function's package (`scripts/build-web-function.ts`).
 - `boundary.ts`: the boundary's statements. `bedrock.ts`: Claude's.
-- `run-aws.ts`: `npm run aws` and `npm run cdk`.
+- `run-aws.ts`: `npm run aws` and `npm run cdk`, and `openAwsSession`, the ops tools' way to AWS.
 - `testing.ts`: the tests' policy evaluator: whether a role's or user's policies, and its
   boundary, allow an action on a resource. It reads `Allow`, `Deny`, `NotAction` and the
-  condition operators the stacks use.
+  condition operators the stacks use, `ForAllValues` on a multivalued key such as
+  `dynamodb:LeadingKeys` among them.
 - `cdk-imports.test.ts`: only `infra/` imports the CDK packages, so they never reach the browser
   bundle or the server.
 
