@@ -124,7 +124,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.5 — Merges after, apart from Depends on
-- **Status:** doing (agent a0a630c561c1a4722)
+- **Status:** doing (agent a0a630c561c1a4722; done, being committed)
 - **Depends on:** —
 - **Files:** `PROCESS.md`, `scripts/commit-task.ts` and its test, `scripts/task-prompt.ts` and its
   test, `README.md`
