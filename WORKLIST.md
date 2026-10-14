@@ -59,34 +59,6 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
-## A library per recipient
-
-The user shares RTFM with each job application as its own library: one secret link per library,
-each library isolated from the others, starting from the same starter manuals, living until the
-user revokes it, and with its activity visible to the user.
-
-### LB.10 — Make, list and revoke libraries with the ops tools
-- **Status:** doing (agent aa5395c0f371031a1; done, being committed; the user approved its `CLAUDE.md` line)
-- **Depends on:** —
-- **Merges after:** LB.7, LB.8, LB.9
-- **Files:** `scripts/ops/**`, `server/logging/log-reader.ts` and its test, `server/logs.ts`,
-  `README.md`, `CLAUDE.md`, `server/storage/dynamodb-manual-store.ts`,
-  `server/gateway/dynamodb-spending-ledger.ts`, `server/storage/README.md`,
-  `server/gateway/README.md`, `infra/README.md`
-- **Do:** `npm run ops -- library create <libraryId> [--label <text>]`, `list`, `show <libraryId>`
-  and `revoke <libraryId>`, as `research/libraries.md` › What `npm run ops` gains describes, under
-  `README.md` › The ops tools' rules, with `--json`; `create` prints the link once on standard
-  output and nowhere else, and keeps no secret; `show` lists the library's manuals with their titles
-  and written sections, read as `rtfm-read`. `logs` and `npm run logs` gain `--library <libraryId>`.
-  Add to `CLAUDE.md` › Shell that `library create` and `library revoke` are the user's, run in
-  their own terminal outside the Claude app, and agents never run them, as for `passcode set`, and
-  give its diff in the report. The tests run offline; no agent runs `create` or `revoke` against
-  the deployed app.
-- **Done when:** the ops tests (DynamoDB Local and the stand-in for the AWS CLI) cover each
-  command's text and JSON, a refused id, a revoked library's activity and manuals, and that no
-  output but `create`'s holds the link; `npm test` passes; and the user has approved the
-  `CLAUDE.md` line.
-
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
