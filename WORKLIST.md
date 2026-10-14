@@ -77,6 +77,44 @@ Small fixes that keep the repo healthy.
   the viewport with a too-wide inline formula, ordinary inline formulas unchanged, and `npm run
   build` and `npm test` pass.
 
+## A public repository
+
+RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
+
+### GH.1 — Scrub the history and publish it
+- **Status:** blocked (the user gives the go-ahead; until then, planning only)
+- **Depends on:** —
+- **Files:** `PROCESS.md`, `README.md`
+- **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
+  while no task is running, every task branch is merged, and no worktree is mid-task.
+  - **What the user decided to scrub:**
+    - Every commit's author and committer email, the user's work address, becomes
+      `1161666+jordanphulet@users.noreply.github.com`. It appears in no file or message.
+    - The 16 images under `docs/inspo/` (`*.png`, `*.jpg`) leave every commit. They are already
+      gone from `main` (08db542), so `main`'s final tree must come out identical.
+    - The AWS account id stays, by the user's choice.
+  - **The user first:** turns on GitHub › Settings › Emails › "Keep my email addresses private"
+    and "Block command line pushes that expose my email", and decides on a LICENSE.
+  - **Backup:** a full mirror clone is at `/Users/jordan/projects/rtfm-backup-2026-10-14.git`
+    (`main` at 92c88c9). Make a fresh one of the `main` of the day before rewriting.
+  - **Rewrite** in a fresh clone of `main` outside the repo, never in the repo: `git
+    filter-branch` with an `--env-filter` for the email and an `--index-filter` running `git rm
+    --cached --ignore-unmatch` on the `docs/inspo` images; then delete `refs/original`, expire the
+    reflog and `gc`.
+  - **Verify:** `git log -p` holds no trace of the work address; no commit names a `docs/inspo` image and no
+    blob of one is left; the commit count is unchanged; `main^{tree}` equals the original's.
+  - **Publish**, with the user's explicit OK in chat: `gh repo create jordanphulet/rtfm
+    --public`, push `main` only; then clone it fresh from GitHub and re-run the checks.
+  - **Switch locally:** keep the current `main` as `pre-rewrite-main`; point `main` at the
+    rewritten history; add GitHub as `origin`. Branches from the old history (`claude/*`,
+    `worktree-agent-*`) are never pushed, and are removed once merged or no longer needed.
+  - **Push from then on:** add to `PROCESS.md` › Review loop › Approved, after the fast-forward,
+    the wording the user approves. The draft: "Then `git push origin main`. Push only `main`:
+    never `--all`, `--mirror`, a force-push, `pre-rewrite-main`, or a branch from before the
+    rewrite." Say in `README.md` where the public repository is.
+- **Done when:** the public repository holds the scrubbed `main`, verified from a fresh clone;
+  the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
