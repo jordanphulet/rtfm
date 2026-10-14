@@ -2,13 +2,14 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { config } from "../config.ts";
 import { silentLogger } from "../logging/logger.ts";
 import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, WRITTEN_ID } from "../testing.ts";
 import { createDynamoDbManualStore } from "./dynamodb-manual-store.ts";
 import { testAppTable } from "./dynamodb-testing.ts";
 import { createFileManualStore } from "./file-manual-store.ts";
 import { sectionsInReadingOrder } from "./manual.ts";
-import { readSeedBody, seedStore } from "./seed.ts";
+import { readSeedBody, readSeedManual, seedStarters, seedStore } from "./seed.ts";
 import type { StoredManual } from "./types.ts";
 
 function fixtureManual(id: string): StoredManual {
@@ -135,6 +136,37 @@ describe("seedStore", () => {
     expect(await store.writtenSectionIds("alpha")).toEqual(["second"]);
     expect(await store.writtenSectionIds("beta")).toEqual(["first"]);
     expect((await store.seededManualIds()).sort()).toEqual(["alpha", "beta"]);
+  });
+});
+
+describe("seedStarters", () => {
+  it("seeds only the starters named, as tables of contents with no section written, giving the ids it seeded", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    await addSeedManual(seedDir, "beta");
+    const store = createFileManualStore(await tempDataDir(), silentLogger, "acme");
+
+    expect(await seedStarters(store, ["beta"], seedDir)).toEqual(["beta"]);
+
+    expect(await store.listManuals()).toEqual([fixtureManual("beta")]);
+    expect(await store.writtenSectionIds("beta")).toEqual([]);
+    expect(await store.seededManualIds()).toEqual(["beta"]);
+    expect(await seedStarters(store, ["beta"], seedDir)).toEqual([]);
+  });
+
+  it("keeps a deleted starter deleted", async () => {
+    const seedDir = await tempSeedDir();
+    await addSeedManual(seedDir, "alpha");
+    const store = createFileManualStore(await tempDataDir(), silentLogger, "acme");
+    await seedStarters(store, ["alpha"], seedDir);
+    await store.deleteManual("alpha");
+
+    expect(await seedStarters(store, ["alpha"], seedDir)).toEqual([]);
+    expect(await store.listManuals()).toEqual([]);
+  });
+
+  it("are committed seed manuals: the configured starters each have a seed", async () => {
+    for (const manualId of config.starterManualIds) expect((await readSeedManual(manualId)).id).toBe(manualId);
   });
 });
 

@@ -208,13 +208,16 @@ describe("with a passcode set", () => {
     expect((await enter(42)).status).toBe(400);
   });
 
-  it("sets the cookie to the passcode's digest, and every route answers with it", async () => {
+  it("sets the cookie to the passcode's digest, clearing the library cookie, and every route answers with it", async () => {
     const { enter, send, writer, manualIds } = await start({ passcode: fixedPasscode(PASSCODE) });
 
     const entered = await enter(PASSCODE);
     expect(entered.status).toBe(204);
-    expect(entered.headers.get("set-cookie")).toBe(`${PASSCODE_COOKIE}; HttpOnly; SameSite=Strict; Path=/api`);
-    const cookie = entered.headers.get("set-cookie")!.split(";")[0];
+    expect(entered.headers.getSetCookie()).toEqual([
+      `${PASSCODE_COOKIE}; HttpOnly; SameSite=Strict; Path=/api`,
+      "rtfm_library=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0",
+    ]);
+    const cookie = PASSCODE_COOKIE;
 
     expect((await send({ method: "GET", path: "/api/manuals" }, cookie)).status).toBe(200);
     expect((await send({ method: "GET", path: SAMPLE_PATH }, cookie)).status).toBe(200);

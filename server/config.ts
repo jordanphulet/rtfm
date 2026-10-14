@@ -64,6 +64,8 @@ export interface ServerConfig extends GatewayConfig, AdapterConfig {
   maxConcurrentRuns: number;
   sectionWordsRequested: number;
   sectionExpectedCharacters: number;
+  /** The seed manuals a recipient's library starts with, as tables of contents alone. */
+  starterManualIds: string[];
 }
 
 const MAX_CONCURRENT_RUNS = 3;
@@ -88,6 +90,7 @@ export const config: ServerConfig = {
   maxConcurrentRuns: MAX_CONCURRENT_RUNS,
   sectionWordsRequested: 650,
   sectionExpectedCharacters: 4800,
+  starterManualIds: ["the-haunt-that-listens", "negotiating-with-geese"],
   caps: { dailyUsd: 2, monthlyUsd: 20 },
   maxConcurrentCalls: MAX_CONCURRENT_RUNS + CALLS_BESIDE_RUNS,
   idleTimeoutMs: 30_000,

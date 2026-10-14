@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "../logging/logger.ts";
 import { readAppFile, type AppFile } from "./app-files.ts";
-import { hasDigestForm, isDigest, PASSCODE_COOKIE, PASSCODE_PATH, passcodeRequired, type CurrentDigest } from "./passcode.ts";
-import { badRequest, notFound, type EventStream, type JsonResponse, type Library, type Route } from "./route.ts";
+import type { Gate } from "./gate.ts";
+import { badRequest, notFound, type Cookie, type EventStream, type JsonResponse, type Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
 const MAX_LOGGED_CHARACTERS = 300;
@@ -23,16 +23,6 @@ export interface AdapterConfig {
   eventStreamHeartbeatMs: number;
 }
 
-/**
- * What lets a request in, and the library it is in: with a `currentDigest`, every API request but
- * `POST /api/passcode` must carry the passcode's digest in its cookie, and without one there is no
- * passcode gate; then `libraryOf` gives the request its library.
- */
-export interface Gate {
-  currentDigest?: CurrentDigest;
-  libraryOf(request: IncomingMessage): Promise<Library>;
-}
-
 type RequestFields = { requestId: string; method: string | undefined; path: string; libraryId?: string };
 
 const hostNotAllowed: JsonResponse = { status: 403, body: { error: "Host not allowed" } };
@@ -48,7 +38,10 @@ class Refused extends Error {
   }
 }
 
-/** Checks each request, lets it through the gate into its library, and answers it with the route it matches. */
+/**
+ * Checks each request, and answers it with the route it matches: one of the gate's own, or, once
+ * the gate has let it into its library, one of `routes`.
+ */
 export function createRequestHandler(routes: Route[], logger: Logger, config: AdapterConfig, gate: Gate) {
   return async (request: IncomingMessage, response: ServerResponse) => {
     const startedAt = performance.now();
@@ -64,9 +57,17 @@ export function createRequestHandler(routes: Route[], logger: Logger, config: Ad
       if (config.appDir !== undefined && !isApiPath(url.pathname)) {
         return writeAppFile(response, request.method, await readAppFile(config.appDir, url.pathname));
       }
-      if (gate.currentDigest) await refuseWithoutPasscode(request, url.pathname, gate.currentDigest);
-      const library = await gate.libraryOf(request);
+      const ungated = matchRoute(gate.routes, request.method, url.pathname);
+      if (ungated) {
+        const answer = await ungated.route.handle({ body: await readJsonBody(request) });
+        return writeJson(response, answer, request.headers.host);
+      }
+
+      const admission = await gate.admit(request);
+      if ("refusal" in admission) throw new Refused(admission.refusal);
+      const { library, renewal } = admission;
       logged.libraryId = library.libraryId;
+      if (renewal) setCookies(response, [renewal], request.headers.host);
       const body = await readJsonBody(request);
       const match = matchRoute(routes, request.method, url.pathname);
       if (!match) return writeJson(response, notFound);
@@ -130,31 +131,19 @@ function isApiPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/");
 }
 
-/** Refuses a request whose cookie isn't the current digest, and every request while no passcode is set. */
-async function refuseWithoutPasscode(request: IncomingMessage, pathname: string, currentDigest: CurrentDigest) {
-  if (request.method === "POST" && pathname === PASSCODE_PATH) return;
-  const given = cookieValue(request.headers.cookie, PASSCODE_COOKIE);
-  if (given === undefined || !hasDigestForm(given)) throw new Refused(passcodeRequired);
-  const digest = await currentDigest();
-  if (digest === undefined || !isDigest(given, digest)) throw new Refused(passcodeRequired);
-}
-
-/** The value of the first cookie with this name in a `Cookie` header, decoded. */
-function cookieValue(header: string | undefined, name: string): string | undefined {
-  for (const pair of header?.split(";") ?? []) {
-    const [key, ...value] = pair.trim().split("=");
-    if (key === name) return decodedOrUndefined(value.join("="));
-  }
-  return undefined;
-}
-
-/** The API's one cookie: script can't read it, other sites never send it, and only `/api` gets it. */
-export function setCookieHeader({ name, value }: { name: string; value: string }, host: string | undefined): string {
+/** An API cookie: script can't read it, other sites never send it, only `/api` gets it, and off this machine only HTTPS. */
+export function setCookieHeader({ name, value, maxAgeSeconds }: Cookie, host: string | undefined): string {
+  const maxAge = maxAgeSeconds === undefined ? "" : `; Max-Age=${maxAgeSeconds}`;
   const secure = LOOPBACK_HOSTS.test(host ?? "") ? "" : "; Secure";
-  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/api${secure}`;
+  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/api${maxAge}${secure}`;
 }
 
-function matchRoute(routes: Route[], method: string | undefined, pathname: string) {
+/** Each cookie as its own `Set-Cookie` header. */
+function setCookies(response: ServerResponse, cookies: Cookie[], host: string | undefined) {
+  response.setHeader("set-cookie", cookies.map((cookie) => setCookieHeader(cookie, host)));
+}
+
+function matchRoute<R extends { method: string; pattern: string }>(routes: R[], method: string | undefined, pathname: string) {
   const pathParts = pathname.split("/");
   for (const route of routes) {
     if (route.method !== method) continue;
@@ -204,8 +193,8 @@ function decodedOrUndefined(pathPart: string): string | undefined {
   }
 }
 
-function writeJson(response: ServerResponse, { status, body, cookie }: JsonResponse, host?: string) {
-  if (cookie) response.setHeader("set-cookie", setCookieHeader(cookie, host));
+function writeJson(response: ServerResponse, { status, body, cookies }: JsonResponse, host?: string) {
+  if (cookies) setCookies(response, cookies, host);
   if (body === undefined) {
     response.writeHead(status);
     response.end();
