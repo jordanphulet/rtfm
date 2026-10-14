@@ -61,20 +61,6 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998; reviewed and committed on its branch; resolving merge conflicts in two docs)
-- **Depends on:** IN.11
-- **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
-  `server/writer/README.md`, and for the docs the leases touch: `ARCHITECTURE.md`,
-  `server/logging/README.md`, `server/README.md`
-- **Do:** section leases behind an interface in `runs.ts`, in memory locally and on the section
-  item in `rtfm-app`; a reader on another environment waits for the stored body, then gets it as
-  one `append` and `written`, or `failed`.
-  - `deleteManual` deletes only the ids in the manual's `written` set, so a section item holding only
-    a lease would be left behind and block a recreated manual's section: delete those too (for
-    example by querying `pk = MANUAL#<id>`).
-- **Done when:** the shared suite covers two runs racing for one section on both implementations.
-
 ### IN.14 — `rtfm-ops` and the ops tools
 - **Status:** todo
 - **Depends on:** IN.12
