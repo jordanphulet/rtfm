@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.4 — Carry the library through each request
-- **Status:** doing (agent acdd99f166601e4d9; done, in review by a5da158ee8cc38bf7)
+- **Status:** doing (agent acdd99f166601e4d9; approved, small fixes)
 - **Depends on:** —
 - **Files:** `server/api/**`, `server/agent/**`, `server/app.ts` and its test, `server/testing.ts`,
   `server/replacement.test.ts`, `server/web-function.test.ts`, `scripts/shot.ts`,
