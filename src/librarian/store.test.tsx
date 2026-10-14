@@ -188,14 +188,32 @@ describe("useLibrarian", () => {
   it.each([
     ["budget", [{ event: "failed", data: { reason: "budget" } }] as LibrarianEvent[]],
     ["error", [{ event: "failed", data: { reason: "error" } }] as LibrarianEvent[]],
-    ["error", [] as LibrarianEvent[]],
-  ])("marks the reply failed (%s) when the server says so or the stream ends early", async (reason, events) => {
+  ])("marks the reply failed (%s) when the server says so", async (reason, events) => {
     const { readLibrarian, requests } = await loadLibrarian();
     readLibrarian().send("What do I have?");
     await flush();
     await reply(requests[0]!, text("You have"), ...events);
     expect(readLibrarian().status).toBe("idle");
     expect(readLibrarian().messages[1]).toMatchObject({ role: "agent", text: "You have", failure: reason });
+  });
+
+  it.each([
+    ["text", [text("You have")], "You have"],
+    ["none", [], ""],
+  ])("marks the reply failed when its stream ends early, and reports the last event (%s) once", async (lastEvent, events, shown) => {
+    const { readLibrarian, requests } = await loadLibrarian();
+    const reportError = vi.fn();
+    vi.stubGlobal("window", { location: { search: "" }, reportError });
+    readLibrarian().send("What do I have?");
+    await flush();
+    await reply(requests[0]!, ...events);
+    expect(readLibrarian().status).toBe("idle");
+    expect(readLibrarian().messages[1]).toMatchObject({ role: "agent", text: shown, failure: "error" });
+    expect(reportError).toHaveBeenCalledTimes(1);
+    const { message } = reportError.mock.calls[0]![0] as Error;
+    expect(message).toContain(`last event: ${lastEvent}`);
+    expect(message).not.toContain("You have");
+    expect(message).not.toContain("What do I have?");
   });
 
   it.each([

@@ -97,9 +97,10 @@ function reportDeleteOutcome(deleteOutcome: DeleteOutcome) {
  * Sends the finished exchanges and the new message, and shows the reply as it streams. Withdrawn
  * text stays on screen until the text that follows it replaces it, and a reply with no text shows
  * no message. A page action is handed to the page once the reply is done, except `created`, which
- * reports a manual already saved and is handed over as it arrives. A reply that throws is
- * reported, unless its request failed, which is already logged. `freeze` asks for the scripted
- * reply, cut at that fraction, which then stays as it is.
+ * reports a manual already saved and is handed over as it arrives. A reply that throws, or whose
+ * stream ends before `done`, `frozen` or `failed`, is reported, unless its request failed, which is
+ * already logged. `freeze` asks for the scripted reply, cut at that fraction, which then stays as
+ * it is.
  */
 async function reply(text: string, freeze?: number) {
   const conversation: LibrarianMessage[] = [...recentExchanges(state.messages), { role: "user", text }];
@@ -108,6 +109,7 @@ async function reply(text: string, freeze?: number) {
   const replyId = newMessageId();
   let raw = "";
   let action: LibrarianAction | null = null;
+  let lastEvent = "none";
 
   function showReply(changes: Partial<ConversationMessage>, status: LibrarianStatus) {
     const others = state.messages.filter((message) => message.id !== replyId);
@@ -118,6 +120,7 @@ async function reply(text: string, freeze?: number) {
 
   try {
     for await (const event of streamReply(conversation, freeze)) {
+      lastEvent = event.event;
       switch (event.event) {
         case "status":
           setState({ status: "thinking", activity: event.data.text });
@@ -144,7 +147,7 @@ async function reply(text: string, freeze?: number) {
           return;
       }
     }
-    showReply({ failure: "error" }, "idle");
+    throw new Error(`The librarian's reply stream ended without done, frozen or failed (last event: ${lastEvent})`);
   } catch (error) {
     if (!(error instanceof RequestFailedError)) window.reportError(error);
     showReply({ failure: "error" }, "idle");

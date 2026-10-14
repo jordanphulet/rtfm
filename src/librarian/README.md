@@ -71,9 +71,12 @@ Every component that calls `useLibrarian()` sees the same conversation.
    - `"error"`: anything else, including a stream that ends early and a server that can't be
      reached.
 
-   A reply that throws while its stream is read is reported with `window.reportError`. One whose
-   request got no answer or an error status isn't: `apiFetch` or the server's request log already
-   has it.
+   A reply that throws while its stream is read is reported with `window.reportError`, and so is
+   one whose stream ends without the server's last word (`done`, `frozen` or `failed`): something
+   between the server and the browser cut it, so the server may have logged it as done. That report
+   names the last event that arrived ("none" if there wasn't one) and no conversation text. A reply
+   whose request got no answer or an error status isn't reported: `apiFetch` or the server's
+   request log already has it.
 
 ### Rendering a reply mid-stream
 
