@@ -126,7 +126,7 @@ aren't RTFM's.
 - **Done when:** the doc's Measured section records it.
 
 ### IN.23 — Close the delete race, and the section route's status
-- **Status:** doing (agent a638f795b3a12ff50; done, in review by a71c90a3c30adf0c2)
+- **Status:** doing (agent a638f795b3a12ff50; approved, wording fixes)
 - **Depends on:** IN.19
 - **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
 - **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
