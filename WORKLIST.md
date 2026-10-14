@@ -62,7 +62,7 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.13 — One writer per section across environments
-- **Status:** doing (agent a6eb3ca69062c8998; review round 3: test headroom under load, renewals only extend the lease)
+- **Status:** doing (agent a6eb3ca69062c8998; reviewed and committed on its branch; resolving merge conflicts in two docs)
 - **Depends on:** IN.11
 - **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`, `server/app.ts`,
   `server/writer/README.md`, and for the docs the leases touch: `ARCHITECTURE.md`,
@@ -164,7 +164,8 @@ Small fixes that keep the repo healthy.
 - **Status:** doing (agent ac56b8f2bfbf9814f; on 2026-10-13 the user approved the `PROCESS.md` wording the orchestrator sent: step 1's body sentence, and `npm run commit-worklist` in When the orchestrator does work itself)
 - **Depends on:** —
 - **Files:** `scripts/commit-task.ts` and its test, `scripts/commit-worklist.ts` and its test,
-  `package.json`, `README.md`, `PROCESS.md` (with the user's approval)
+  `package.json`, `README.md`, `PROCESS.md` and `.githooks/commit-msg` (with the user's approval),
+  `scripts/orchestrator-check.ts` and its test (the shared parser), `ARCHITECTURE.md`
 - **Do:**
   - `npm run commit-task` requires a body, `--body-file <path>`, and refuses an empty one; the
     body goes between the subject and the trailers.
@@ -181,6 +182,12 @@ Small fixes that keep the repo healthy.
     work list statuses", whose body names each task added, removed or whose status changed, and
     why."
   - `README.md` › Committing task work describes both commands.
+  - With the user's approval (2026-10-14), `--body-file <path>` added to the command as shown: in
+    `.githooks/commit-msg`, lines 14, 15 and 23 become `npm run commit-task -- <ID> --reviewed-by
+    <agent id> --body-file <path>` and `npm run commit-task -- <ID> --no-review "<reason>"
+    --body-file <path>`; in `PROCESS.md` › Review loop › Approved, step 1, the command becomes
+    `npm run commit-task -- <task id> --worktree <path> --reviewed-by <review agent's id>
+    --body-file <path>`.
 - **Done when:** both commands' tests cover the body (required, refused when empty, placed before
   the trailers, generated from a `WORKLIST.md` diff), and the user has approved the `PROCESS.md`
   change.
