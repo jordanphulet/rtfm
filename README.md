@@ -668,8 +668,9 @@ beside `npm run dev`. It writes to `shots/`, or to the folder given as `npm run 
 clearing that folder first and nothing else:
 
 - `reader/<state>-<desktop|phone|desktop-reduced>.png`, for the states `start`, `toc`,
-  `written`, `dense`, `waiting`, `streaming`, `streaming-full`, `budget`, `error` and `appendix`
-  (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
+  `written`, `dense`, `waiting`, `streaming`, `streaming-full`, `budget`, `error`, `appendix` and
+  `math`, a written section whose body the script serves, with inline and display formulas and
+  dollar amounts (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
 - `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in
   `src/home/DESIGN.md`, under "States");
 - `link/<state>-<desktop|phone>.png`, for the link page's `opening`, `failed` and `closed` (the

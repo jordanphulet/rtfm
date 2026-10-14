@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { describe, expect, it } from "vitest";
+import { separateFormulaFences } from "./formula-fences";
+import { Markdown } from "./Markdown";
 import { repairPartialMarkdown } from "./repair";
 
 const SEED_BODIES = import.meta.glob<string>("../../server/seed/the-haunt-that-listens/sections/*.md", {
@@ -58,8 +60,30 @@ describe("repairPartialMarkdown", () => {
     ["holds back a half-typed rule", "Text\n\n--", "Text\n\n"],
     ["holds back a checklist marker without its text", "- [ ] one\n- [x", "- [ ] one\n"],
     ["holds back a footnote definition before its colon", "Text\n\n[^1", "Text\n\n"],
+    ["holds back unfinished inline math", "So $$f = \\frac{c", "So "],
+    ["holds back inline math until its closer is whole", "So $$f$", "So "],
+    ["keeps finished inline math", "So $$f_1$$ is", "So $$f_1$$ is"],
+    ["ignores emphasis inside inline math", "So $$a_1 * b", "So "],
+    ["leaves a single dollar alone", "A $5 part and **more", "A $5 part and **more**"],
+    ["holds back an unfinished math block", "Text\n\n$$\nf = \\frac{c", "Text\n"],
+    ["holds back a math block until its closing line ends", "Text\n\n$$\nx\n$$", "Text\n"],
+    ["keeps a closed math block", "$$\nx\n$$\nNext", "$$\nx\n$$\nNext"],
+    ["holds back a math block inside a blockquote", "> Formula:\n> $$\n> x", "> Formula:"],
+    ["holds back a math block with LaTeX on its opening line", "Text\n\n$$ f = \\frac{c", "Text\n"],
+    ["separates a finished block's LaTeX from its fences", "$$ f\n= ma $$\nNext", "$$\nf\n= ma\n$$\nNext"],
+    ["holds back an unfinished math code fence", "Text\n\n```math\nx^2", "Text\n"],
+    ["leaves dollars inside a code fence alone", "```tex\n$$\nx", "```tex\n$$\nx\n```"],
   ])("%s", (_name, partial, expected) => {
     expect(repairPartialMarkdown(partial)).toBe(expected);
+  });
+
+  it.each([
+    ["a $$ restaurant, and **more", "a $$ restaurant, and **more**"],
+    ["Text\n\n$$ f = \\frac{c", "Text\n\n$$ f = \\frac{c"],
+    ["Text\n\n$$\nx = 1", "Text\n\n$$\nx = 1"],
+    ["Text\n\n```math\nx", "Text\n\n```math\nx\n```"],
+  ])("leaves dollars and math fences to plain markdown without formulas: %j", (partial, expected) => {
+    expect(repairPartialMarkdown(partial, { formulas: false })).toBe(expected);
   });
 
   it("adds an empty definition for a footnote that is referenced but not yet written", () => {
@@ -86,6 +110,24 @@ describe("repairPartialMarkdown", () => {
     () => {
       const everyCut = Array.from({ length: denseDocument.length + 1 }, (_, end) => end);
       expectNoRawSyntaxAtCuts(denseDocument, everyCut);
+    },
+    RENDER_SWEEP_TIMEOUT_MS,
+  );
+
+  it(
+    "never shows raw or broken math, cut at any character",
+    () => {
+      const whole = renderWithMath(separateFormulaFences(mathDocument));
+      expect(whole.match(/class="katex-display"/g)).toHaveLength(6);
+      for (const heading of ["After the opening line", "After the closing line", "After the aligned block"]) {
+        expect(whole).toContain(`<p>${heading}.</p>\n<h2>${heading}</h2>`);
+      }
+      expect(whole).toContain("<p>Done.</p>");
+      for (let end = 0; end <= mathDocument.length; end++) {
+        const partial = mathDocument.slice(0, end);
+        const html = renderWithMath(repairPartialMarkdown(partial));
+        expect(html, `after ${JSON.stringify(partial.slice(-40))}`).not.toMatch(/\$\$|katex-error/);
+      }
     },
     RENDER_SWEEP_TIMEOUT_MS,
   );
@@ -151,6 +193,45 @@ function visibleProse(markdown: string): string {
     .replace(/↩/g, "")
     .replace(/&gt;/g, ">");
 }
+
+function renderWithMath(markdown: string): string {
+  return renderToStaticMarkup(<Markdown manualId="fixture" source={markdown} SectionLink={() => null} />);
+}
+
+const mathDocument = String.raw`A pipe of length $$L$$ and diameter $$d$$ sings at one pitch, for $5 or $10 of tubing:
+
+$$
+f = \frac{c}{4(L + 0.61d)}
+$$
+
+> $$\sum_{n=1}^{3} n^2 = 14$$
+
+$$ F = ma
+$$
+After the opening line.
+
+## After the opening line
+
+$$
+E = mc^2 $$
+After the closing line.
+
+## After the closing line
+
+$$\begin{aligned}
+a &= b \\
+c &= d
+\end{aligned}$$
+After the aligned block.
+
+## After the aligned block
+
+${"```"}math
+x^2 + y^2 = r^2
+${"```"}
+
+Done.
+`;
 
 const denseDocument = `## The control loop
 

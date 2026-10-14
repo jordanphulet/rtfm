@@ -105,6 +105,16 @@ describe("the manual store", () => {
     expect(streamFor("b").closed).toBe(true);
   });
 
+  it("puts a formula block's $$ on lines of their own, while it streams and once it is written", async () => {
+    const store = await loadStore();
+    await open(store, "a");
+
+    streamFor("a").send(append(0, "Mass:\n\n$$ F = ma\n$$\n\nThat's all.\n"));
+    expect(read(store, "a")?.text).toBe("Mass:\n\n$$\nF = ma\n$$\n\nThat's all.\n");
+    streamFor("a").send({ event: "written", data: {} });
+    expect(read(store, "a")).toMatchObject({ status: "written", text: "Mass:\n\n$$\nF = ma\n$$\n\nThat's all.\n" });
+  });
+
   it("retries a failed section in place", async () => {
     const store = await loadStore();
     await open(store, "a");

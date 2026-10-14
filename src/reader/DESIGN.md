@@ -303,7 +303,9 @@ manager says plainly what happened. It is the settle without the finish.
   section opened meanwhile waits in the waiting state (`Waiting for the first words…`) and starts
   when one of the three ends.
 - Text renders with `<Markdown>` in the final layout from the first chunk. Chunks just appear,
-  with no fade; the live edge is marked by the write head.
+  with no fade; the live edge is marked by the write head. A formula is held back from its
+  opening `$$` until its closing `$$` arrives, then appears whole, so the write head stays on the
+  block before it meanwhile.
 - **Nothing above the reading position moves:** the head is a fixed height; the progress fill and
   write head use `transform` only; the code blocks' Copy button keeps its space with
   `visibility: hidden` until the section is written; outline and TOC changes happen in their own
@@ -434,6 +436,16 @@ reader's own, in `Prose.css`.
   prompts) uses `pre-wrap` so prose prompts read on a phone; other languages scroll sideways in a
   `.scroll-x` region, whose scrollbar always shows.
 - **Inline code:** Plex Mono 0.88em, `--ground-tint`, padding 1px 4px, radius 2.
+- **Formulas** (LaTeX between double dollars, rendered by KaTeX; `src/manual/README.md` ›
+  `<Markdown>`), in the ink of the text around them, in KaTeX's fonts (`DESIGN.md` › Typefaces).
+  Inline (`$$v = f\lambda$$` within a sentence) they sit on the line. Display (a `$$` block, a
+  ```` ```math ```` fence, or a paragraph that is only a formula) they are set **flush left** at
+  the text edge, never centred, 24px above and below, each in a focusable, labelled `.scroll-x`
+  region, so a formula wider than the measure scrolls sideways (the cut-off edge and the
+  scrollbar show it scrolls, as a table's do), with 4px of padding above and below so tall
+  glyphs aren't clipped. A single `$` is always money, never math. A formula KaTeX can't
+  read shows its source in Plex Mono at 0.88em, ink-muted: no red. While writing, a formula
+  appears only once it is closed (see Streaming), so half-written LaTeX never shows.
 - **Horizontal rule:** 1px `--rule-strong` across the measure, 40px above and below.
 - **Footnote references:** `sup` at 12px, 600, cue, tabular, `line-height: 0` with a relative
   offset (no line-gap bump), underline on hover.
@@ -516,6 +528,12 @@ The reader lives in `src/reader/`. It is built on `src/ui/` (the design system, 
   compact bar, "Referenced here", the cross-references and the arrow keys.
 - Heading ids come from one scan of the text (`markdownScan.ts`): `Prose` looks each heading's id
   up by its source line, so the outline and the page always agree, and duplicates get `-2`, `-3`.
+- `Prose`, which brings the renderer and KaTeX, is a chunk of its own (`proseChunk.ts`). The
+  reader starts loading it each time it renders (`preloadProse`, which asks once), so on a direct
+  link to a section it loads alongside the manual and the section. The section page waits for it
+  (`useProse`) in the same suspense as the section's own first request, so the start page never
+  waits for KaTeX and a section page never shows a half-built layout. A load that fails is
+  forgotten, so the next section page asks for the chunk again.
 - The contents sheet locks page scroll with CSS only (`html:has(.reader .sheet[data-open])`, below
   1024px, in `CompactBar.css`), so widening the window releases it.
 - Only the section page opens a section (`useSection`); the TOC, outline, previews and pager read

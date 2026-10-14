@@ -113,7 +113,8 @@ async function reply(text: string, freeze?: number) {
 
   function showReply(changes: Partial<ConversationMessage>, status: LibrarianStatus) {
     const others = state.messages.filter((message) => message.id !== replyId);
-    const message: ConversationMessage = { id: replyId, role: "agent", text: repairPartialMarkdown(raw), ...changes };
+    const text = repairPartialMarkdown(raw, { formulas: false });
+    const message: ConversationMessage = { id: replyId, role: "agent", text, ...changes };
     const shown = message.text === "" && !message.failure ? others : [...others, message];
     setState({ messages: shown, status });
   }

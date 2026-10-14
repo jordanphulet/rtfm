@@ -145,7 +145,8 @@ recipient clicks once and is in their library, with no button and nothing to rea
 - All colors, type sizes, spacing, radii and timings are tokens defined in **one place**
   (`src/ui/tokens.css`). Each page's own layout sizes are in its `tokens.css`.
 - A modular type scale and a **4px** spacing grid.
-- At most **two font families**, plus a monospace font for code.
+- At most **two font families**, plus a monospace font for code and KaTeX's math fonts for
+  formulas.
 - The background is not pure black (`#000`), and text is not pure white (`#fff`).
 
 **Typographic detail**
@@ -210,6 +211,12 @@ or timing.
 | --- | --- | --- | --- |
 | Text and interface | **IBM Plex Sans Variable**, `--font-sans` | wght 400 / 500 / 600; wdth 100 for reading, **85** (`--wdth-tight`) for dense UI: the TOC, outline, tables, pager, previews and the librarian's header and lines | Engineering-manual lineage, and it has every glyph the content needs (`I²C`, `1½`, `N·m`, `‹ ›`, `↑ ↓`). wdth 85 packs dense UI about 6% tighter without a second family. |
 | Code and readouts | **IBM Plex Mono**, `--font-mono` | 400 and 700, roman and italic, are loaded; readouts use 400 | Same superfamily, so metrics and texture match. It is the "machine voice" for status readouts, language tags, percentages and counts. |
+
+**Formulas** are set in KaTeX's own fonts (its Computer Modern), at KaTeX's size of 1.21em, which
+matches its x-height to the text's. They are self-hosted with KaTeX's stylesheet, which only the
+section page's chunk loads (`src/manual/README.md` › `<Markdown>`), and a browser fetches each
+font file only when a formula on the page uses it. Plex has no math italics or stretchy
+delimiters, and a formula set in the text face reads as a typo.
 
 Body italics are Plex's true italic. No `font-optical-sizing` (Plex has no opsz axis). Measured on
 the sample text: Plex Sans 17px is about 7.58px per character, 16px about 7.13px.

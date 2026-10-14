@@ -1,4 +1,4 @@
-export { Markdown, type MarkdownProps, type SectionLinkProps } from "./Markdown";
+export type { MarkdownProps, SectionLinkProps } from "./Markdown";
 export {
   chapterOf,
   chaptersInReadingOrder,

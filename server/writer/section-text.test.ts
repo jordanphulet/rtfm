@@ -103,9 +103,17 @@ describe("the section text", () => {
       `See <https://example.com/it's>, https://example.com/'a' and <b title="x">"bold"</b>.`,
       "",
       `[Bob's]: https://example.com "Bob's"`,
+      "",
+      String.raw`It's $$f' = \frac{c}{4(L + 0.61d)}$$ for a $5 pipe, and 'that's' it:`,
+      "",
+      "$$",
+      String.raw`t_{\text{"scare"}} = t'' \le 500`,
+      "$$",
     ].join("\n");
     const typeset = withTypographicQuotes(modelText);
     expect(typeset).toContain(`“He keeps saying ‘it’s all fake’,” she said, in the ’90s, at 5′ 10″.`);
+    expect(typeset).toContain(String.raw`It’s $$f' = \frac{c}{4(L + 0.61d)}$$ for a $5 pipe, and ‘that’s’ it:`);
+    expect(typeset).toContain(["$$", String.raw`t_{\text{"scare"}} = t'' \le 500`, "$$"].join("\n"));
 
     const splits = [[...modelText], ...[...modelText].map((_, at) => [modelText.slice(0, at), modelText.slice(at)])];
     for (const pieces of splits) {

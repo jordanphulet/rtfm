@@ -40,9 +40,12 @@ browser (Vite, :5173)                           server (node:http, :8787)
   librarian's panel (`LibrarianPanel.tsx`, `Conversation.tsx`, `Composer.tsx`), and the delete
   confirmation (`DeleteConfirmation.tsx`, `useDeleteFlow.ts`).
 - `reader/`: the reader at `/read/<manual>` (`index.tsx`): the contents (`Toc.tsx`), the start
-  page (`StartPage.tsx`) and a section (`SectionPage.tsx`, `Prose.tsx`, `Pager.tsx`).
+  page (`StartPage.tsx`) and a section (`SectionPage.tsx`, `Prose.tsx`, `Pager.tsx`). `Prose`,
+  with the renderer and KaTeX, is a chunk of its own (`proseChunk.ts`), which starts loading as
+  soon as the reader renders, so the start page never waits for it.
 - `manual/`: the reader's store (`useManual`, `useSection`, `retrySection`), which reads a manual
-  and streams its sections; the `Manual` types; and `<Markdown>`. See `src/manual/README.md`.
+  and streams its sections; the `Manual` types; and `<Markdown>`, which typesets formulas with
+  KaTeX. See `src/manual/README.md`.
 - `library/`: the landing page's store of `ManualSummary`s (`useLibrary`, `deleteManual`,
   `refreshLibrary`), which loads the library from the API and deletes through it. See
   `src/library/README.md`.
@@ -182,7 +185,7 @@ other page:
 | `App.tsx` | `home/`, `reader/` (lazily), `link/`, `passcode/` |
 | `link/` | `passcode/`, `reportErrors.ts`, `ui/` |
 | `home/` | `library/`, `librarian/`, `ui/` |
-| `reader/` | `manual/`, `ui/` |
+| `reader/` | `manual/`, `ui/`, and `manual/Markdown.tsx` straight from the file, in its lazily loaded `Prose` chunk, since it brings KaTeX |
 | `manual/`, `library/` | `reportErrors.ts` |
 | `librarian/` | `reportErrors.ts`, and `manual/repair.ts` straight from the file |
 | `passcode/` | `ui/` |

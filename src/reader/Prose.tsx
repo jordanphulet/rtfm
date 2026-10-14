@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, type ComponentProps, type CSSProperties } from "react";
 import type { Components, ExtraProps } from "react-markdown";
-import { Markdown } from "../manual";
+import { Markdown } from "../manual/Markdown";
 import { MarkdownLink } from "../ui";
 import { CodeBlock } from "./CodeBlock";
 import type { Heading } from "./markdownScan";

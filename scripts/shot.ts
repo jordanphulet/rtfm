@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import type { BrowserContextOptions, Locator, Page } from "playwright";
 import { FAKE_REPLIES } from "../server/agent/fake-model.ts";
 import { fakePlan } from "../server/agent/planner/fake-planner.ts";
-import type { FailureReason, ManualSummary } from "../server/api/types.ts";
+import type { FailureReason, ManualSummary, SectionState } from "../server/api/types.ts";
 import { sectionsInReadingOrder } from "../server/storage/manual.ts";
 import { startServer } from "../server/app.ts";
 import { config, fixedPasscode, type ServerConfig } from "../server/config.ts";
@@ -38,6 +38,30 @@ const SHOT_SECTIONS = {
   unwritten: "the-room-controller",
   appendix: "servos-steppers-and-pneumatics",
 } as const;
+
+/** A written section's body with formulas, served in place of `SHOT_SECTIONS.written`'s for the `math` state. */
+const MATH_BODY = String.raw`An ultrasonic sensor never measures distance. It measures time — the round trip of a chirp from the sensor to the guest and back — and the controller does the arithmetic. Sound crosses a hall at about $$v = 1{,}125\ \text{ft/s}$$, so the guest stands at
+
+$$
+d = \frac{v\,t}{2}
+$$
+
+where $$t$$ is the echo’s round trip. A $4 sensor and a $40 one share this formula; what the extra $36 buys is a cleaner echo.
+
+## Warm halls read short
+
+Sound speeds up as the hall warms, by about 1.1 ft/s for every degree Fahrenheit:
+
+$$v(T) \approx 1{,}052 + 1.1\,(T - 32)\quad\text{ft/s, with } T \text{ in °F}$$
+
+| Hall | Speed of sound | Error at 10 ft, uncorrected |
+| --- | ---: | ---: |
+| Cold cellar, 50 °F | 1,072 ft/s | 4.7 in |
+| Parlor, 70 °F | 1,094 ft/s | 2.5 in |
+| Attic in August, 95 °F | 1,121 ft/s | 0.4 in |
+
+> $$t_{\text{scare}} = t_{\text{sense}} + t_{\text{decide}} + t_{\text{act}} \le 500\ \text{ms}$$
+`;
 
 const DESKTOP: BrowserContextOptions = { viewport: { width: 1440, height: 900 } };
 const PHONE: BrowserContextOptions = {
@@ -147,6 +171,7 @@ function readerShots(): Shot[] {
     { state: "budget", path: `${unwrittenPath}?fail=budget` },
     { state: "error", path: `${unwrittenPath}?fail=error` },
     { state: "appendix", path: sectionPath(SHOT_SECTIONS.appendix), fullPage: true },
+    { state: "math", path: sectionPath(SHOT_SECTIONS.written), fullPage: true, beforeLoad: serveMathBody },
   ];
 }
 
@@ -222,6 +247,13 @@ function captureGroups(dir: string, sizes: Size[], shots: Shot[]): CaptureGroup[
 
 function withoutEmphasis(markdown: string): string {
   return markdown.replaceAll(/[*_`]/g, "");
+}
+
+async function serveMathBody(page: Page) {
+  const section: SectionState = { status: "written", body: MATH_BODY };
+  await page.route(`**/api/manuals/${SHOT_MANUAL}/sections/${SHOT_SECTIONS.written}`, (route) =>
+    route.fulfill({ json: section }),
+  );
 }
 
 async function openTocIfCollapsed(page: Page, size: Size) {

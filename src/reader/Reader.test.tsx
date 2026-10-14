@@ -58,6 +58,11 @@ vi.mock("../manual/store", async () => {
   };
 });
 
+vi.mock("./proseChunk", async () => {
+  const { Prose } = await import("./Prose");
+  return { preloadProse() {}, useProse: () => Prose };
+});
+
 function setStatus(id: string, status: Section["status"]) {
   const withStatus = (chapter: Manual["chapters"][number]) => ({
     ...chapter,

@@ -1,5 +1,10 @@
+import { separateFormulaFences } from "./formula-fences";
+
 const TABLE_ROW = /^\s*\|/;
 const TABLE_DELIMITER_ROW = /^\s*\|?[\s:|-]*-[\s:|-]*$/;
+const CODE_FENCE = /^([\s>]*)(`{3,}|~{3,})(.*)/;
+const CODE_OR_FORMULA_FENCE = /^([\s>]*)(`{3,}|~{3,}|\${2,}(?!.*\$\$))(.*)/;
+const MATH_INFO = /^\s*math(\s|$)/;
 
 const HELD_BACK_LINES = {
   noLettersYet: /^[^\p{L}]*$/u,
@@ -10,13 +15,19 @@ const HELD_BACK_LINES = {
 };
 
 type OpenSpan =
-  | { kind: "code"; start: number; marker: string }
+  | { kind: "code" | "math"; start: number; marker: string }
   | { kind: "emphasis"; start: number; marker: string }
   | { kind: "link"; start: number; textEnd?: number }
   | { kind: "footnote"; start: number };
 
-export function repairPartialMarkdown(partial: string): string {
-  return addMissingFootnotes(closeOpenSyntax(holdBackUnfinishedLine(partial)));
+/** `formulas: false` leaves dollars alone, for text whose renderer has no math, such as the librarian's replies. */
+interface RepairOptions {
+  formulas: boolean;
+}
+
+export function repairPartialMarkdown(partial: string, options: RepairOptions = { formulas: true }): string {
+  const text = options.formulas ? separateFormulaFences(partial) : partial;
+  return addMissingFootnotes(closeOpenSyntax(holdBackUnfinishedLine(text), options));
 }
 
 function holdBackUnfinishedLine(text: string): string {
@@ -26,22 +37,25 @@ function holdBackUnfinishedLine(text: string): string {
   return heldBack ? text.slice(0, lastLineStart) : text;
 }
 
-function closeOpenSyntax(text: string): string {
+function closeOpenSyntax(text: string, options: RepairOptions): string {
   const lines = text.split("\n");
-  const { openFence, lastBlockStart } = scanBlocks(lines);
+  const { openFence, lastBlockStart } = scanBlocks(lines, options);
+  if (openFence?.holdsFormula) {
+    return closeOpenSyntax(lines.slice(0, openFence.line).join("\n"), options);
+  }
   if (openFence) {
     return `${text}${text.endsWith("\n") ? "" : "\n"}${openFence.prefix}${openFence.marker}`;
   }
 
-  const lastBlock = repairLastBlock(lines.slice(lastBlockStart).join("\n"));
+  const lastBlock = repairLastBlock(lines.slice(lastBlockStart).join("\n"), options);
   return [...lines.slice(0, lastBlockStart), lastBlock].join("\n");
 }
 
-function scanBlocks(lines: string[]) {
-  let openFence: { prefix: string; marker: string } | undefined;
+function scanBlocks(lines: string[], { formulas }: RepairOptions) {
+  let openFence: { prefix: string; marker: string; line: number; holdsFormula: boolean } | undefined;
   let lastBlockStart = 0;
   lines.forEach((line, index) => {
-    const [, prefix = "", fence] = line.match(/^([\s>]*)(`{3,}|~{3,})/) ?? [];
+    const [, prefix = "", fence, info = ""] = line.match(formulas ? CODE_OR_FORMULA_FENCE : CODE_FENCE) ?? [];
     if (openFence) {
       const closesFence =
         fence?.[0] === openFence.marker[0] &&
@@ -52,7 +66,8 @@ function scanBlocks(lines: string[]) {
         lastBlockStart = index + 1;
       }
     } else if (fence) {
-      openFence = { prefix, marker: fence };
+      const holdsFormula = formulas && (fence[0] === "$" || MATH_INFO.test(info));
+      openFence = { prefix, marker: fence, line: index, holdsFormula };
     } else if (line.trim() === "" && index < lines.length - 1) {
       lastBlockStart = index + 1;
     }
@@ -60,9 +75,9 @@ function scanBlocks(lines: string[]) {
   return { openFence, lastBlockStart };
 }
 
-function repairLastBlock(block: string): string {
+function repairLastBlock(block: string, options: RepairOptions): string {
   let repaired = holdBackTableWithoutDelimiterRow(block);
-  for (let open = findOpenSpan(repaired); open; open = findOpenSpan(repaired)) {
+  for (let open = findOpenSpan(repaired, options); open; open = findOpenSpan(repaired, options)) {
     repaired = closeSpan(repaired, open);
   }
   return repaired;
@@ -75,7 +90,7 @@ function holdBackTableWithoutDelimiterRow(block: string): string {
   return rows.slice(0, headerIndex).join("\n");
 }
 
-function findOpenSpan(text: string): OpenSpan | undefined {
+function findOpenSpan(text: string, { formulas }: RepairOptions): OpenSpan | undefined {
   const open: OpenSpan[] = [];
   let index = 0;
 
@@ -83,8 +98,8 @@ function findOpenSpan(text: string): OpenSpan | undefined {
     const char = text[index];
     const innermost = open.at(-1);
 
-    if (innermost?.kind === "code") {
-      const run = runAt(text, index, "`");
+    if (innermost?.kind === "code" || innermost?.kind === "math") {
+      const run = runAt(text, index, innermost.marker[0]!);
       if (run === innermost.marker) open.pop();
       index += Math.max(run.length, 1);
     } else if (innermost?.kind === "link" && innermost.textEnd !== undefined) {
@@ -95,6 +110,10 @@ function findOpenSpan(text: string): OpenSpan | undefined {
     } else if (char === "`") {
       const marker = runAt(text, index, "`");
       open.push({ kind: "code", start: index, marker });
+      index += marker.length;
+    } else if (formulas && char === "$" && text[index + 1] === "$") {
+      const marker = runAt(text, index, "$");
+      open.push({ kind: "math", start: index, marker });
       index += marker.length;
     } else if (char === "[") {
       open.push({ kind: text[index + 1] === "^" ? "footnote" : "link", start: index });
@@ -162,6 +181,7 @@ function closeSpan(text: string, open: OpenSpan): string {
       return wrapContent(text, open.start, open.marker, (content) =>
         content.trimEnd().replace(/\\+$/, ""),
       );
+    case "math":
     case "link":
     case "footnote":
       return text.slice(0, open.start);
