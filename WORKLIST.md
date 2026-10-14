@@ -97,11 +97,12 @@ aren't RTFM's.
   shows it in `rtfm-usage`.
 
 ### IN.21 — Replace an environment before its keys run out
-- **Status:** doing (agent a93636117612befb0; review's fixes)
+- **Status:** doing (agent a93636117612befb0; done, being committed)
 - **Depends on:** —
 - **Files:** `server/web-function.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `server/storage/dynamodb-manual-store.ts` and its test, `server/README.md`,
-  `research/aws-design.md`
+  `research/aws-design.md`, `server/replacement.ts` and its test,
+  `server/storage/dynamodb-testing.ts`, `server/storage/README.md`, `ARCHITECTURE.md`
 - **Do:** Lambda gives the Web Function its role's keys as environment variables, which a running
   process can't renew, and nothing bounds an environment's life while requests keep coming less
   than about 5 minutes apart (IN.10).
