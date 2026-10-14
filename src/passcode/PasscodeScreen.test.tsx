@@ -10,6 +10,9 @@ let answer: Answer;
 let router: ReturnType<typeof createMemoryRouter> | undefined;
 let reload: MockInstance<() => void>;
 
+/** Loading the app takes about 20 ms on an idle machine and up to a second when test runs share it. */
+const APP_LOAD_TIMEOUT_MS = 10_000;
+
 const refuseEverything: Answer = async () => Response.json({ error: "Passcode required" }, { status: 401 });
 
 beforeEach(() => {
@@ -35,7 +38,7 @@ async function openApp(path: string) {
   await vi.waitFor(async () => {
     await settle();
     expect(document.querySelector(".ui.passcode")).not.toBeNull();
-  });
+  }, APP_LOAD_TIMEOUT_MS);
 }
 
 async function settle() {
@@ -73,7 +76,7 @@ function passcodeRequests() {
   return vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/passcode");
 }
 
-describe("the passcode screen", () => {
+describe("the passcode screen", { timeout: 3 * APP_LOAD_TIMEOUT_MS }, () => {
   it("takes the landing page's place when the library answers 401", async () => {
     await openApp("/");
 
