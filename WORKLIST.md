@@ -16,7 +16,7 @@ aren't RTFM's.
 - **RTFM's AWS setup is its own.** RTFM's profiles live in `~/.aws/rtfm/config` and
   `~/.aws/rtfm/credentials`, never in the user's own `~/.aws/config`, which holds work profiles.
   Agents read nothing under `~/.aws` and never `.env.local`, and run AWS only through
-  `npm run aws` and `npm run cdk`.
+  `npm run aws`, `npm run cdk` and `npm run ops`.
 - **The user deploys the `RtfmAccess` stack**; the deployer role can't change it.
 
 ### IN.5 — Check the budget counts Bedrock
@@ -43,31 +43,8 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.14 — `rtfm-ops` and the ops tools
-- **Status:** doing (agent ab01bdf3c8304e3d4; review's fixes; the user approved the stacks and `CLAUDE.md` wording)
-- **Depends on:** IN.12
-- **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
-  `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`,
-  `infra/rtfm.ts`, `infra/boundary.ts`, `infra/app-stack.ts` and its test,
-  `infra/testing.ts` and its test, `infra/toolkit-stack.test.ts`,
-  `infra/edge-certificate-stack.test.ts`,
-  `server/storage/dynamodb-manual-store.ts` and its test, `server/gateway/usage-report.ts`,
-  `server/gateway/dynamodb-spending-ledger.ts`, `server/logging/log-reader.ts` and its test,
-  `server/gateway/README.md`, `server/storage/README.md`, `server/logging/README.md`,
-  `ARCHITECTURE.md`, `CLAUDE.md`
-- **Do:**
-  - The role `rtfm-ops` in `RtfmAccess` (the user approves and deploys it, and adds its profile to
-    `~/.aws/rtfm/config`): writes only the passcode item in `rtfm-app` and the kill-switch item in
-    `rtfm-usage` (`dynamodb:LeadingKeys`), and reads the passcode item. `rtfm-read` gains reading
-    `rtfm-usage`.
-  - The tools: kill switch on, off and status; `npm run usage` on the central ledger;
-    `npm run logs` on CloudWatch; status. Non-interactive, plain text with `--json`, a non-zero
-    exit on failure, documented in `README.md`.
-- **Done when:** each tool's tests pass offline (DynamoDB Local, a stubbed CLI), the tests cover
-  the roles' reach, and `README.md` documents every tool.
-
 ### IN.15 — The passcode as a digest
-- **Status:** todo
+- **Status:** doing (agent afd47823474f3e015)
 - **Depends on:** IN.11, IN.14
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts`, `server/app.ts`,
   `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`
@@ -149,7 +126,7 @@ aren't RTFM's.
 - **Done when:** the doc's Measured section records it.
 
 ### IN.23 — Close the delete race, and the section route's status
-- **Status:** doing (agent a638f795b3a12ff50)
+- **Status:** doing (agent a638f795b3a12ff50; done, in review by a71c90a3c30adf0c2)
 - **Depends on:** IN.19
 - **Files:** `server/storage/**`, `server/writer/**`, `server/api/**`
 - **Do:** two small gaps IN.19's review found, both documented in `server/api/README.md`:
