@@ -43,24 +43,6 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.15 — The passcode as a digest
-- **Status:** doing (agent afd47823474f3e015; done, being committed)
-- **Depends on:** IN.11, IN.14
-- **Files:** `server/api/**`, `server/storage/**`, `server/config.ts`, `server/app.ts`,
-  `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`,
-  `server/web-function.ts` and its test, `server/README.md`, `server/logging/README.md`,
-  `ARCHITECTURE.md`, `CLAUDE.md`
-- **Do:**
-  - The passcode's SHA-256 digest in `rtfm-app`; the cookie holds the digest, compared in constant
-    time; `RTFM_PASSCODE` hashed the same way locally. The throwaway passcode of IN.8 goes.
-  - The user's `ops` command to set it, which needs a terminal and doesn't echo; agents' smoke
-    checks build the cookie from the digest, read with `rtfm-ops`.
-  - `README.md` says the digest opens the app: whatever can read the passcode item (`rtfm-ops`,
-    the Web Function's role, any role an app stack creates) can.
-- **Done when:** the tests show the digest compared in constant time, a rotated digest refusing
-  the old cookie, and the set command refusing to run without a terminal; no file or log an agent
-  can read holds the passcode.
-
 ### AW.4 — Charge an aborted call as AWS does
 - **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
 - **Depends on:** AW.1
@@ -78,8 +60,8 @@ aren't RTFM's.
   evidence, and `npm test` passes.
 
 ### IN.20 — Claude on Bedrock in the deployed app
-- **Status:** todo
-- **Depends on:** IN.15
+- **Status:** doing (agent a7545610be7bdd537)
+- **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
   `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
   `infra/README.md`, `README.md`, `server/README.md`, `server/gateway/README.md`
@@ -122,8 +104,8 @@ aren't RTFM's.
   refused its keys, what followed; if none was, it says so with the date range read.
 
 ### IN.25 — The Web Function can't write the passcode
-- **Status:** todo
-- **Depends on:** IN.15
+- **Status:** doing (agent a987d7eec36be8f48)
+- **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`,
   `infra/access-stack.ts` (the comment only)
 - **Do:** the Web Function's role may put, update and delete any item of `rtfm-app`, so it could
@@ -136,6 +118,33 @@ aren't RTFM's.
   this comment change; the template doesn't change.
 - **Done when:** the policy evaluator's tests show the role reading the passcode's item and every
   other item as before, and refused each write to the `PASSCODE` partition.
+
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.5 — Merges after, apart from Depends on
+- **Status:** doing (agent a0a630c561c1a4722)
+- **Depends on:** —
+- **Files:** `PROCESS.md`, `scripts/commit-task.ts` and its test, `scripts/task-prompt.ts` and its
+  test, `README.md`
+- **Do:** a task's **Depends on** named both results it needs and merges it must not precede, so
+  IN.20 waited for IN.15 though it needed only to merge after it. The user approved this wording
+  for `PROCESS.md`:
+  - Rules › Scheduling, in place of the sentence beginning "**Depends on** means": "**Depends
+    on** means one task needs another's result: its code, a finding, or something deployed. A task
+    starts once every task it depends on is gone from `WORKLIST.md`. **Merges after** means only
+    the order of merges matters, for example so nothing goes live before a safeguard. The task
+    starts as soon as it is otherwise ready, and the orchestrator merges it only once those tasks
+    are gone. A task's Depends on names only results it needs."
+  - Adding work: "a new ID, **Depends on**, **Merges after** when the order of merges matters,
+    **Files**, **Do** and **Done when**".
+  - `npm run commit-task` refuses, naming them, while a task the committed task's optional
+    **Merges after** line names (task IDs in it) is still in `WORKLIST.md`; `README.md` says so
+    where it describes `commit-task`.
+- **Done when:** `PROCESS.md` carries exactly the approved wording, rewrapped to 100 columns; the
+  tests show `commit-task` refusing while a named task remains and committing once it's gone, and
+  a task with no Merges after line commits as before.
 
 ## Waiting on AWS
 
