@@ -62,7 +62,7 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.12 — One ledger for real spend
-- **Status:** doing (agent a820e5dcd6453a836)
+- **Status:** doing (agent a820e5dcd6453a836; in review)
 - **Depends on:** IN.11
 - **Files:** `server/gateway/**`, `server/storage/**`, `server/app.ts`, `server/config.ts`,
   `server/usage.ts`, `server/README.md`, `README.md`, `ARCHITECTURE.md`, `infra/access-stack.ts`
@@ -164,6 +164,17 @@ Small fixes that keep the repo healthy.
   and fix the cause, in the test or the code.
 - **Done when:** the cause is named in the report, and the test passes 50 runs in a row alone and
   10 full `npm test` runs in a row.
+
+### UP.2 — One retry loop, and the kill switch's path with its ledger
+- **Status:** todo
+- **Depends on:** IN.12, IN.13
+- **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
+  `server/api/librarian.test.ts`
+- **Do:** share the `TransactionConflict` retry loop that `storage/dynamodb-manual-store.ts` and
+  `gateway/dynamodb-spending-ledger.ts` each have (about 12 lines), and move `killSwitchPath` from
+  `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
+- **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
+  and `npm test` passes.
 
 ## Waiting on AWS
 
