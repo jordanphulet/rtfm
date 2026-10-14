@@ -66,7 +66,7 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.5 — Cap each library's daily spend
-- **Status:** doing (agent afb560339a1138200; done, in review by a275b94482998cdc3)
+- **Status:** doing (agent afb560339a1138200; approved, small fixes)
 - **Depends on:** —
 - **Files:** `server/gateway/**`, `server/config.ts` and its test, `server/storage/types.ts`,
   `server/storage/file-ledger.ts` and its test, `server/app.ts` and its test, `server/usage.ts`,
