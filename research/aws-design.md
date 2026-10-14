@@ -83,8 +83,8 @@ an idle one lives. Each environment has 2 GB.
   month** per environment that never goes away.
 - If environments do go away when idle, it is far less.
 
-The task that measures the deployed app (`WORKLIST.md` › Into AWS) settles it. **If it passes $10
-a month, RTFM moves to B.**
+Measured, they do go away: Lambda removes an idle environment within minutes (Measured, below).
+**If the cost passes $10 a month, RTFM moves to B.**
 
 ### The fallback: B, through the Lambda Web Adapter
 
@@ -229,11 +229,91 @@ Permanent, in `infra/boundary.ts`, `infra/rtfm.ts` and `infra/toolkit-stack.ts`
 ## Cost
 
 **At idle:** DynamoDB storage under 1 MB (free tier), log storage, CloudFront at no requests, and
-the Web Function's environments while they live: about $0 if they go away, up to the figures in
-"The idle-cost risk" if they don't.
+the Web Function's environments while they live, which is only minutes after the last request
+(Measured, below): about $0.
 
 **Around the $20 cap** (about 2,000–2,800 sections of Haiku 4.5): Web Function requests and CPU
 about $0.01, DynamoDB about $0.06, logs about $0.05, CloudFront $0 (free tier), plus memory.
+
+## Measured
+
+Measured 2026-10-13 and 2026-10-14 (UTC) on the deployed app with the fake models, revision
+`rev-rxago` (and, for the later lifetimes, the revisions deployed after it), through
+`https://rtfm.moonfetus.com` from CloudFront's Denver edge (`DEN52`), with `curl` and the throwaway
+passcode's cookie; the server's side from `/rtfm/app`. Each response's `lambda-web-logstream`
+header names the environment that served it, and Lambda's own events in the log
+(`platform.initStart`, `invokeSummary` once a minute, `spinDownStart`) show each environment's
+life.
+
+**Events arrive one by one.** A section stream (`anatomy-of-a-scare`) sent 132 `append` events,
+then `written`, over 12.7s. They arrived 84ms apart on average, at most 118ms, which is the fake
+model's 85ms pace: neither CloudFront nor Lambda batches small writes.
+
+**The headers wait for the first byte.** Locally the stream's headers arrive in 6ms; through the
+edge they arrive with the first event, 1.4–1.6s later (the fake writer waits 1.2s before its first
+chunk), and the librarian's with its first event at 0.78s. Something on the path, Lambda's endpoint
+or CloudFront, holds the headers until the body's first byte, so a silent stream shows nothing
+until its first event or heartbeat, and CloudFront's 60s read timeout runs until then.
+
+**The heartbeat: not seen.** No fake stream lasts 15s: the longest unwritten section plays in
+about 13s, and a librarian reply in about 3s. Since 100-byte `append` writes pass through at once,
+a 13-byte heartbeat should too, but seeing one needs a stream longer than 15s, which only Bedrock
+gives.
+
+**A `POST` with a body.** The librarian answered "list my manuals" with 200, its first event at
+0.78s and `done` at 3.0s. A conversation of 80 KB (ten earlier exchanges of 3,990 characters) also
+got 200 and its reply: the Web Function needs no body hash behind the origin access control.
+
+**A disconnect aborts the run.** `curl --max-time 3` on `bodies-that-move` left after 3.0s; the log
+shows `model.call` `outcome: "aborted"` and `section.aborted` ("every reader left") 3.08s after
+`section.started`, and the section stayed unwritten.
+
+**The cold start.** With no environment running, a section stream's first byte took 2.27s, against
+1.37–1.60s warm, and a section's JSON 1.07s, against 0.29s warm: a cold start adds about 0.8s.
+Lambda's `initStart` came 0.85s after `curl` started, and `platform.initReport` gives 447–678ms
+from the start of the runtime to the server listening.
+
+**How long an environment lives.** Lambda scales to zero, and removes an idle environment within
+minutes, with `SIGTERM`: each removal logs `spinDownStart`, then the server's own `server.stopped`
+in the same millisecond, then `spinDownReport`.
+
+| Environment | Started | Last request ended | `SIGTERM` | Idle | Lived | Requests |
+| --- | --- | --- | --- | --- | --- | --- |
+| `172cf338` (first, by the smoke check) | 23:50:32 | 23:59:50 | 00:06:21 | 6m31s | 15m49s | 31 |
+| `3b67cd24` (a second, while the first was busy) | 23:54:10 | 23:55:39 | 23:57:21 | 1m41s | 3m11s | 4 |
+| `0bf0c596` (cold, for one section) | 00:10:24 | 00:10:36 | 00:16:21 | 5m44s | 5m57s | 1 |
+| `7e8d93ca` (cold, for a section's JSON) | 00:24:05 | 00:28:40 | 00:34:06 | 5m26s | 10m01s | 3 |
+| `d1ad3611` (`rev-spqhj`) | 00:37:03 | 00:39:51 | 00:44:53 | 5m02s | 7m50s | 3 |
+| `e98a30a9` (`rev-up5bx`, a deploy's smoke check) | 00:49:42 | 00:49:44 | 00:56:15 | 6m31s | 6m33s | 4 |
+| `c3d6abcf` (`rev-o98kt`, a reader) | 00:53:00 | 00:58:06 | 01:04:42 | 6m36s | 11m42s | 29 |
+
+- Three deploys changed the endpoint's revision meanwhile (`RtfmApp`'s stack events): to
+  `rev-spqhj` at 00:30:06, `rev-up5bx` at 00:49:14 and `rev-o98kt` at 00:52:34, each deleting the
+  revision before. `7e8d93ca`'s revision left the endpoint at 00:30:06, 4 minutes before it
+  stopped, and `e98a30a9`'s at 00:52:34, so those two stops may be the deploys', and the lifetimes
+  below leave them out. `d1ad3611` stopped at 00:44:53, before the next deploy began at 00:49.
+- The last environment running goes 5–6½ minutes after its last request (`172cf338`, `0bf0c596`,
+  `d1ad3611`, `c3d6abcf`); a second one, beside a busy first, went after under 2 minutes. An
+  environment idle for 2m10s was kept.
+- The longest life was 15m49s, for 31 requests in 9 minutes. An environment lives as long as
+  requests keep coming less than about 5 minutes apart, and no upper bound showed.
+- An idle environment uses 70–93ms of CPU a minute (`invokeSummary`), and up to 201 MB of its
+  2 GB.
+- So the idle-cost risk above doesn't arise: memory is billed until about 6 minutes after the last
+  request, not around the clock. A 16-minute environment's memory is about $0.007 (2 GB for 949s).
+- Visitors other than RTFM's reader start environments too: a `GET /robots.txt` at 00:37, likely a
+  crawler's, started `d1ad3611`.
+
+**The credentials.** Every `server.started` logged `credentials: "environment"`: Lambda gives the
+execution role's keys as `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`, and
+no container credentials endpoint. Whether it also sets `AWS_CREDENTIAL_EXPIRATION` isn't known: the
+server logs no expiry, and the Web Function docs neither name the variable nor say how long the
+keys last or how they are renewed. `/rtfm/app` holds no `ExpiredToken`, `UnrecognizedClient` or
+`AccessDenied` error: no environment measured here, the longest living 15m49s, outlived its keys.
+A busy one could: nothing seen bounds an environment's life while a reader keeps opening sections
+a few minutes apart, the docs promise no lifetime either way, and keys in its environment variables
+can't be renewed inside a running process. Once they expire, every DynamoDB call that environment
+makes fails until Lambda removes it.
 
 ## Build tasks
 
