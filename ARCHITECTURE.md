@@ -50,12 +50,15 @@ browser (Vite, :5173)                           server (node:http, :8787)
   `POST /api/librarian` and streamed back. See `src/librarian/README.md`, which also has its URL
   options.
 - `passcode/`: the passcode screen (`PasscodeScreen`), which `App.tsx` shows in either page's
-  place once an API request answers `401` (`usePasscodeRequired`). See
-  `src/passcode/README.md`.
+  place once an API request answers `401` (`usePasscodeReason`), saying so when a library's link
+  is closed. See `src/passcode/README.md`.
+- `link/`: the page routes `/l` (`LinkPage`), which opens a library by its link's secret, and
+  `/admin` (`AdminPage`), which leaves it. See `src/link/README.md`.
 - `ui/`: the shared design system: tokens, fonts, base styles, the write head, `StatusRing`,
   `Sheet`, `ReplyMarkdown`. See `src/ui/README.md`.
 - `reportErrors.ts`: `startReportingErrors` and `apiFetch`, which report the page's errors and
-  failed API requests to the server's log; `apiFetch` also shows the passcode screen on a `401`.
+  failed API requests to the server's log, with the page's path but never its query or fragment;
+  `apiFetch` also shows the passcode screen on a `401`.
 
 ### The server: `server/`
 
@@ -70,10 +73,12 @@ browser (Vite, :5173)                           server (node:http, :8787)
   shortly before they expire, so Lambda replaces its environment (`server/README.md` › The Web
   Function).
 - `api/`: the routes (`Route`, `ApiRequest`, `EventSink` in `route.ts`, and the `Library` each
-  request is in, which holds the only store, runs and gateway a route reaches), the Node adapter
-  with the `Host` and `Origin` checks, the gate (the passcode, and the request's library) and the
-  built app's files (`node-adapter.ts`, with `passcode.ts` and `app-files.ts`), the previews
-  (`preview.ts`) and the wire types (`types.ts`). See `server/api/README.md`.
+  request is in, which holds the only store, runs, gateway and activity a route reaches), the Node
+  adapter with the `Host` and `Origin` checks and the built app's files (`node-adapter.ts`, with
+  `app-files.ts`), the gate, which gives each request its library from its cookies (`gate.ts`,
+  with the passcode in `passcode.ts`, a library's link in `link.ts` and the cookies in
+  `cookies.ts`), each library's activity (`activity.ts`), the previews (`preview.ts`) and the wire
+  types (`types.ts`). See `server/api/README.md`.
 - `storage/`: `ManualStore` and `UsageLedger` (`types.ts`) as files in the data folder
   (`file-manual-store.ts`, `file-ledger.ts`), and `ManualStore` in the DynamoDB table `rtfm-app`
   (`dynamodb-manual-store.ts`), both held to one suite (`manual-store-suite.ts`); the section
@@ -174,7 +179,8 @@ other page:
 
 | Folder | Imports from `src/` |
 | --- | --- |
-| `App.tsx` | `home/`, `reader/` (lazily), `passcode/` |
+| `App.tsx` | `home/`, `reader/` (lazily), `link/`, `passcode/` |
+| `link/` | `passcode/`, `reportErrors.ts`, `ui/` |
 | `home/` | `library/`, `librarian/`, `ui/` |
 | `reader/` | `manual/`, `ui/` |
 | `manual/`, `library/` | `reportErrors.ts` |
@@ -234,15 +240,18 @@ Route handlers import only `api/route.ts`, never `node:http` or the Node adapter
   origin `https://rtfm.moonfetus.com`. The Node adapter refuses any other `Host` or `Origin`, and
   any body that isn't JSON, before a route runs (`server/api/README.md` › Only the app's own
   pages).
-- **The passcode gate.** With a passcode set (`RTFM_PASSCODE` on this machine, the digest in
-  `rtfm-app` on the Web Function), the Node adapter answers every API request but
-  `POST /api/passcode` with `401` unless its `rtfm_passcode` cookie holds the passcode's SHA-256
-  digest, so a public URL can't spend the model caps for anyone who finds it; the browser shows
-  the passcode screen on any `401` (`server/api/README.md` › The passcode,
-  `src/passcode/README.md`). The server keeps only the digest, and the Web Function refuses every
-  API request while none is stored.
-- **One logger**, passed to whatever logs, never logs a manual's text, a prompt, a conversation
-  or the passcode or its digest (`server/logging/README.md`).
+- **The gate.** Every API request's library comes from its cookies alone, never its path, query
+  or body (`server/api/README.md` › The gate): an open link's library from its `rtfm_library`
+  cookie, else, with a passcode set (`RTFM_PASSCODE` on this machine, the digest in `rtfm-app` on
+  the Web Function), the admin's library from an `rtfm_passcode` cookie holding the passcode's
+  SHA-256 digest, else `401`, so a public URL can't spend the model caps for anyone who finds it;
+  the browser shows the passcode screen on any `401` (`src/passcode/README.md`). Without a
+  passcode, on loopback, a request with no link's cookie is the admin's. The server keeps only the
+  passcode's digest and each link's secret's digest, and the Web Function refuses every request
+  without a link's cookie while no passcode is stored.
+- **One logger**, passed to whatever logs, never logs a manual's text, a prompt, a conversation,
+  the passcode or its digest, or a library link's secret or its digest
+  (`server/logging/README.md`).
 - **Tests never call Bedrock** (`server/README.md` › Tests).
 - **AWS only as RTFM.** Commands reach AWS only through `npm run aws`, `npm run cdk` and
   `npm run ops`, as the roles `rtfm-read`, `rtfm-deploy` and `rtfm-ops`, which reach only

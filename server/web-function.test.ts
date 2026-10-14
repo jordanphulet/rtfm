@@ -17,10 +17,12 @@ import { passcodeDigest } from "./api/passcode.ts";
 import { answerKeysRefused, startEventStream } from "./gateway/bedrock-testing.ts";
 import { createDynamoDbSpendingLedger } from "./gateway/dynamodb-spending-ledger.ts";
 import { testUsageTable } from "./gateway/dynamodb-testing.ts";
+import { createDynamoDbLinkStore } from "./storage/dynamodb-link-store.ts";
 import { createDynamoDbManualStore, writePasscodeDigest } from "./storage/dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS, keyRefusingDynamoDb, testAppTable } from "./storage/dynamodb-testing.ts";
 import { monthOf } from "./storage/file-ledger.ts";
-import { SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "./testing.ts";
+import { librarySecretDigest } from "./storage/library-links.ts";
+import { createTestLink, SAMPLE_ID, tempDataDir, UNWRITTEN_ID, waitUntil } from "./testing.ts";
 
 const WEB_FUNCTION = fileURLToPath(new URL("./web-function.ts", import.meta.url));
 const TEST_TIMEOUT_MS = 30_000;
@@ -195,6 +197,44 @@ describe("web-function.ts", () => {
     expect(JSON.stringify(webFunction.entries())).not.toContain(passcodeDigest(PASSCODE));
   });
 
+  it("opens two libraries by their links, each with its own manuals in the table, without the passcode", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const webFunction = await startWebFunction();
+    const links = createDynamoDbLinkStore(webFunction.table);
+    const secrets = { acme: await createTestLink(links, "acme"), globex: await createTestLink(links, "globex") };
+    const port = await webFunction.listening();
+    const page = { host: ENDPOINT_HOST, origin: APP_ORIGIN };
+    const openLink = async (secret: string) => {
+      const opened = await send(port, "POST", "/api/link", page, { secret });
+      expect(opened.status).toBe(204);
+      const [libraryCookie, passcodeCleared] = opened.headers["set-cookie"]!;
+      expect(libraryCookie).toMatch(/^rtfm_library=.*; Max-Age=31536000; Secure$/);
+      expect(passcodeCleared).toMatch(/^rtfm_passcode=; .*; Max-Age=0; Secure$/);
+      return { ...page, cookie: libraryCookie!.split(";")[0] };
+    };
+    const manualIds = async (headers: OutgoingHttpHeaders) =>
+      (JSON.parse((await send(port, "GET", "/api/manuals", headers)).text) as { id: string }[]).map(({ id }) => id).toSorted();
+    const acme = await openLink(secrets.acme);
+    const globex = await openLink(secrets.globex);
+
+    expect(await manualIds(acme)).toEqual(["negotiating-with-geese", "the-haunt-that-listens"]);
+    expect((await send(port, "DELETE", `/api/manuals/${SAMPLE_ID}`, acme)).status).toBe(204);
+    expect(await manualIds(acme)).toEqual(["negotiating-with-geese"]);
+    expect(await manualIds(globex)).toEqual(["negotiating-with-geese", "the-haunt-that-listens"]);
+    expect(await manualIds(await enterPasscode(port))).toHaveLength(7);
+    expect(await createDynamoDbManualStore(webFunction.table, "acme").getManual(SAMPLE_ID)).toBeUndefined();
+    expect(await links.getActivity("globex")).toMatchObject({ opens: 1 });
+
+    const logged = JSON.stringify(webFunction.entries());
+    expect(webFunction.entries().filter(({ event }) => event === "link.accepted").map(({ libraryId }) => libraryId)).toEqual([
+      "acme",
+      "globex",
+    ]);
+    for (const secret of Object.values(secrets)) {
+      expect(logged).not.toContain(secret);
+      expect(logged).not.toContain(librarySecretDigest(secret));
+    }
+  });
+
   it("refuses every API request, and every passcode, while no digest is stored", { timeout: TEST_TIMEOUT_MS }, async () => {
     const webFunction = await startWebFunction({}, { passcodeStored: false });
     const port = await webFunction.listening();
@@ -301,6 +341,26 @@ describe("web-function.ts", () => {
       level: "WARN",
       error: expect.objectContaining({ name: "ExpiredTokenException" }),
     });
+  });
+
+  it("answers 500 when a link can't be read, logging neither its secret nor its digest", { timeout: TEST_TIMEOUT_MS }, async () => {
+    const table = await testAppTable();
+    await writePasscodeDigest(table, passcodeDigest(PASSCODE));
+    const secret = await createTestLink(createDynamoDbLinkStore(table), "acme");
+    const dynamoDb = await keyRefusingDynamoDb(table);
+    const webFunction = await startWebFunction({ RTFM_APP_TABLE: table.name, RTFM_DYNAMODB_ENDPOINT: dynamoDb.endpoint });
+    const port = await webFunction.listening();
+
+    dynamoDb.refuseKeys();
+    const page = { host: ENDPOINT_HOST, origin: APP_ORIGIN };
+    expect((await send(port, "GET", "/api/manuals", { ...page, cookie: `rtfm_library=${secret}` })).status).toBe(500);
+
+    expect(await webFunction.exited).toBe(1);
+    expect(webFunction.entries().find(({ event }) => event === "request.failed")).toMatchObject({
+      error: expect.objectContaining({ message: "Couldn't look up a library link (ExpiredTokenException)" }),
+    });
+    const logged = JSON.stringify(webFunction.entries());
+    for (const kept of [secret, librarySecretDigest(secret)]) expect(logged).not.toContain(kept);
   });
 
   it("stops on SIGTERM", { timeout: TEST_TIMEOUT_MS }, async () => {

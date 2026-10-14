@@ -366,7 +366,8 @@ leases (`server/writer/README.md` › Tests).
 ## Library links and activity
 
 A recipient's library is opened by a secret link, and its activity is counted
-(`research/libraries.md`). `LinkStore` (`library-links.ts`) keeps both; `link-store-suite.ts`
+(`server/api/README.md` › The gate). The server only finds links and writes activity; links are
+made and revoked outside it. `LinkStore` (`library-links.ts`) keeps both; `link-store-suite.ts`
 checks these rules against the files and the table, the table's on DynamoDB Local:
 
 - **The secret** is 16 bytes from `randomBytes`, as base64url: 22 characters, 128 bits
@@ -477,6 +478,13 @@ is put but before every seed body is saved leaves that manual with fewer section
 are written on demand like any other. Resetting the manuals to the seed is in `README.md`; never
 delete `.data/ledger/`, because the caps are computed from it.
 
+**A recipient's starters.** `seedStarters` seeds only the seed manuals it is given, as tables of
+contents with no section written, by the same rules and the same record, and gives the ids it
+seeded then. `POST /api/link` seeds a recipient's library this way, with `starterManualIds` in
+`server/config.ts` (*The Haunt That Listens* and *Negotiating With Geese*), on its link's first use
+(`server/api/README.md` › A library's link). So a starter the recipient deletes stays deleted, and
+a library already seeded costs one read of its record.
+
 ## Files
 
 - `types.ts`: `ManualStore`, `SectionLeases`, `UsageLedger`.
@@ -502,4 +510,4 @@ delete `.data/ledger/`, because the caps are computed from it.
   replaces a file's content through a temp file and a `rename`.
 - `lock.ts`: the data folder's lock: one server per folder.
 - `manual.ts`: a manual's chapters and sections in reading order; the id pattern.
-- `seed.ts`: seeds each manual in `server/seed/` once.
+- `seed.ts`: seeds each manual in `server/seed/` once, and a recipient's starters.

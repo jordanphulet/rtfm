@@ -9,13 +9,29 @@ interface SeedManual {
   writtenAtStart: string[];
 }
 
+/** Seeds every seed manual, each with the sections it starts with, as the admin's library is seeded. */
 export async function seedStore(store: ManualStore, seedDir: URL = SEED_DIR): Promise<void> {
+  await seedManuals(store, seedDir, await seedManualIds(seedDir), { withBodies: true });
+}
+
+/**
+ * Seeds these seed manuals as tables of contents alone, as a recipient's library gets its starters,
+ * giving the ids it seeded now.
+ */
+export function seedStarters(store: ManualStore, manualIds: string[], seedDir: URL = SEED_DIR): Promise<string[]> {
+  return seedManuals(store, seedDir, manualIds, { withBodies: false });
+}
+
+async function seedManuals(store: ManualStore, seedDir: URL, manualIds: string[], { withBodies }: { withBodies: boolean }) {
   const seeded = new Set(await store.seededManualIds());
-  for (const manualId of await seedManualIds(seedDir)) {
+  const seededNow: string[] = [];
+  for (const manualId of manualIds) {
     if (seeded.has(manualId)) continue;
-    if (!(await store.getManual(manualId))) await createSeedManual(store, seedDir, manualId);
+    if (!(await store.getManual(manualId))) await createSeedManual(store, seedDir, manualId, withBodies);
     await store.markSeeded(manualId);
+    seededNow.push(manualId);
   }
+  return seededNow;
 }
 
 export function readSeedBody(manualId: string, sectionId: string, seedDir: URL = SEED_DIR): Promise<string | undefined> {
@@ -26,10 +42,10 @@ export async function readSeedManual(manualId: string, seedDir: URL = SEED_DIR):
   return (await readSeed(seedDir, manualId)).manual;
 }
 
-/** Creates the seed manual and its written sections, unless a different manual has its id. */
-async function createSeedManual(store: ManualStore, seedDir: URL, manualId: string) {
+/** Creates the seed manual, and its written sections if asked, unless a different manual has its id. */
+async function createSeedManual(store: ManualStore, seedDir: URL, manualId: string, withBodies: boolean) {
   const seed = await readSeed(seedDir, manualId);
-  if ((await store.createManual(seed.manual)) === "exists") return;
+  if ((await store.createManual(seed.manual)) === "exists" || !withBodies) return;
   for (const sectionId of seed.writtenAtStart) {
     const body = await readSeedBody(manualId, sectionId, seedDir);
     if (body === undefined) throw new Error(`The seed has no body for "${sectionId}"`);

@@ -1,2 +1,2 @@
 export { PasscodeScreen } from "./PasscodeScreen";
-export { usePasscodeRequired } from "./required";
+export { requirePasscode, usePasscodeReason } from "./required";

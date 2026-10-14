@@ -2,7 +2,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import { PASSCODE_DIGEST_PATTERN } from "../storage/dynamodb-manual-store.ts";
-import { badRequest, type JsonResponse, type Route } from "./route.ts";
+import { clearedCookie, LIBRARY_COOKIE } from "./cookies.ts";
+import { badRequest, noContent, type JsonResponse, type UngatedRoute } from "./route.ts";
 
 export const PASSCODE_COOKIE = "rtfm_passcode";
 export const PASSCODE_PATH = "/api/passcode";
@@ -44,8 +45,11 @@ export function cachedDigest(read: CurrentDigest, now: () => number, maxAgeMs = 
   };
 }
 
-/** POST /api/passcode: sets the cookie to the passcode's digest when it is the current one. */
-export function passcodeRoute(currentDigest: CurrentDigest, logger: Logger): Route {
+/**
+ * POST /api/passcode: sets the cookie to the passcode's digest when it is the current one, and
+ * clears the library cookie, so a browser holds one of the two.
+ */
+export function passcodeRoute(currentDigest: CurrentDigest, logger: Logger): UngatedRoute {
   return {
     method: "POST",
     pattern: PASSCODE_PATH,
@@ -63,7 +67,7 @@ export function passcodeRoute(currentDigest: CurrentDigest, logger: Logger): Rou
         return wrongPasscode;
       }
       logger.info("passcode.accepted", "A browser entered the passcode");
-      return { status: 204, body: undefined, cookie: { name: PASSCODE_COOKIE, value: given } };
+      return { ...noContent, cookies: [{ name: PASSCODE_COOKIE, value: given }, clearedCookie(LIBRARY_COOKIE)] };
     },
   };
 }

@@ -43,8 +43,9 @@ the same lines unchanged:
 ## What is logged
 
 Ids, sizes, counts and durations, never a manual's text, a prompt, a conversation or a reply, a
-request's query or headers (other than a refused request's `Host` and `Origin`), credentials, or
-the passcode or its digest, whether entered, carried in a cookie or stored. A browser error's
+request's query or headers (other than a refused request's `Host` and `Origin`), credentials,
+the passcode or its digest, whether entered, carried in a cookie or stored, or a library link's
+secret or its digest. A browser error's
 message and stack are logged as the browser reports them. The Bedrock client writes the AWS keys
 out of a thrown error's message and stack, since a signature error from AWS quotes the access key
 ID.
@@ -52,8 +53,9 @@ ID.
 Every line about a request in a library has the library's `libraryId` (`admin` for the admin's
 library; `server/api/README.md` › The library of a request): `request` once the gate has given the
 request its library, `request.failed`, `librarian.reply`, `agent.tool-failed`, `model.call`,
-`model.refused`, `client.error`, `client.limited` and every `section.*` line, which also has the
-section's `manualId` and `sectionId`.
+`model.refused`, `client.error`, `client.limited`, `link.accepted`, `library.seeded`,
+`library.activity-failed`, a revoked link's `link.refused`, and every `section.*` line, which also
+has the section's `manualId` and `sectionId`.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
@@ -61,9 +63,12 @@ section's `manualId` and `sectionId`.
 | `server.refused` | WARN | The data folder's lock is held by another server (`pid`, `dataDir`) |
 | `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use; on the Web Function, Bedrock models or no `AWS_LAMBDA_HTTP_ENDPOINT`); an uncaught exception or unhandled rejection in `runServerProcess` |
 | `request` | INFO, WARN for 5xx | Each request, the built app's files included, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `libraryId` once the gate has given one (never on a refused request or a file of the built app), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
-| `request.refused` | WARN | The `Host` and `Origin` checks refused it, it didn't carry the passcode (`401`), or its body was too long or not JSON (`status`, `host`, `origin`) |
+| `request.refused` | WARN | The `Host` and `Origin` checks refused it, it carried neither an open link's cookie nor the passcode (`401`, `Passcode required`), its link is revoked (`401`, `Link closed`), or its body was too long or not JSON (`status`, `host`, `origin`) |
 | `passcode.wrong`, `passcode.accepted`, `passcode.unset` | WARN, INFO, WARN | `POST /api/passcode` with a wrong passcode, the right one, or any while no passcode is set (no fields: never the passcode or its digest) |
-| `request.failed` | ERROR | A handler threw (the 500 in `server/api/README.md` › Routes): the `request` line's ids, with `libraryId` once the gate has given one |
+| `link.accepted`, `link.refused` | INFO, WARN | `POST /api/link` opened a library (`libraryId`), or refused a link (`reason`: `unknown`, or `revoked` with its `libraryId`); never the secret, its digest or the cookie |
+| `library.seeded` | INFO | A link's first use seeded its library's starters (`libraryId`, `manualIds`, comma-separated) |
+| `library.activity-failed` | WARN | A library's activity couldn't be written, and the request went on (`libraryId`, `activity`: the counter, `opens` or `lastUsedAt`), with the error |
+| `request.failed` | ERROR | A handler threw, or the gate couldn't read a link or the passcode's digest (the 500 in `server/api/README.md` › Routes): the `request` line's ids, with `libraryId` once the gate has given one |
 | `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `libraryId`, `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
 | `model.refused` | WARN | The gateway refused a call: `libraryId`, `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap`, `library-cap` or `busy`) |
 | `ledger.line-skipped` | WARN | A ledger line that isn't JSON (`file`, `line`) |
@@ -137,12 +142,14 @@ daily budget, and a failed write and the recovery after it; reading, filtering, 
 control characters escaped, and reading whole lines from an offset (the follow loop itself is
 not tested); the request, refusal, model-call, run and reply entries; the client-error route
 (its fields, the `Host` and `Origin` checks, truncation and the hourly limit); the `libraryId` on
-each line about a request in a library (`api/libraries.test.ts`, with two libraries); `main.ts`
-writing the same lines to standard output and the file, and `web-function.ts` writing them to
-standard output; and that no cookie, query, conversation or section text reaches the log file
-(`api/logging.test.ts`), nor the passcode or its digest, entered, in a cookie or stored
-(`api/passcode.test.ts`), nor an AWS key from a Bedrock error (`gateway/bedrock-client.test.ts`,
-since only `server/gateway/` may use the Bedrock client).
+each line about a request in a library (`api/libraries.test.ts`, with libraries opened by their
+links); the `link.*`, `library.seeded` and `library.activity-failed` lines (`api/link.test.ts`);
+`main.ts` writing the same lines to standard output and the file, and `web-function.ts` writing
+them to standard output; and that no cookie, query, conversation or section text reaches the log
+file (`api/logging.test.ts`), nor the passcode or its digest, entered, in a cookie or stored
+(`api/passcode.test.ts`), nor a library link's secret or its digest, a failed lookup's included
+(`api/link.test.ts`, `server/web-function.test.ts`), nor an AWS key from a Bedrock error
+(`gateway/bedrock-client.test.ts`, since only `server/gateway/` may use the Bedrock client).
 
 ## Files
 

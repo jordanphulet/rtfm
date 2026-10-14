@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { silentLogger, type Logger } from "../logging/logger.ts";
 import { createFileManualStore } from "../storage/file-manual-store.ts";
 import { capturingLogger, tempDataDir, testLibrary } from "../testing.ts";
+import { admitByCookies } from "./gate.ts";
 import { createRequestHandler, LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./node-adapter.ts";
 import { cachedDigest, passcodeDigest, type CurrentDigest } from "./passcode.ts";
 import type { ApiRequest, Route } from "./route.ts";
@@ -34,7 +35,7 @@ async function serve(
   currentDigest?: CurrentDigest,
 ): Promise<string> {
   const library = testLibrary({ store: createFileManualStore(await tempDataDir(), silentLogger) });
-  const gate = { currentDigest, libraryOf: async () => library };
+  const gate = { routes: [], admit: admitByCookies({ findLink: async () => undefined, currentDigest, libraryFor: () => library }) };
   const server = createServer(createRequestHandler([route], logger, { ...LOOPBACK_ONLY, ...config }, gate));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

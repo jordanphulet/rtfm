@@ -65,60 +65,14 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.8 — Open a library by its link
-- **Status:** doing (agent a07b2e7ab3bb8665c; review's fixes: a failed lookup logged the digest)
-- **Depends on:** —
-- **Merges after:** LB.5
-- **Files:** `server/api/**`, `server/storage/**`, `server/config.ts` and its test,
-  `server/app.ts` and its test, `server/web-function.test.ts`, `server/testing.ts`,
-  `server/logging/**`, `scripts/serve-temp.ts`, `README.md`, `ARCHITECTURE.md`
-- **Do:** as `research/libraries.md` › Access describes:
-  - the gate, generalized, gives each request its library from an `rtfm_library` cookie (the
-    secret, hashed, its link looked up; found links kept a minute, misses never; a failed lookup
-    `500`), then the passcode's, then the admin's library without a gate; a revoked link gets
-    `401 { error: "Link closed" }`;
-  - `POST /api/link { secret }` seeds the library's starters (`starterManualIds` in
-    `server/config.ts`: *The Haunt That Listens* and *Negotiating With Geese*, tables of contents
-    only), one seeding at a time per library in the environment, records the use, and sets the
-    cookie (a year) while clearing the passcode cookie, as two `Set-Cookie` headers;
-    `DELETE /api/link` clears the library cookie, with or without a gate; `POST /api/passcode`
-    clears it too;
-  - every response to a request the library cookie opened renews the cookie;
-  - count the activity in the gate and adapter (opens, `firstUsedAt`, `lastUsedAt`, `sectionsRead`,
-    `librarianMessages`) and in a wrapper of the library's store and leases (`manualsCreated`,
-    `sectionsWritten`), with seeding on the bare store; log `link.accepted`, `link.refused`,
-    `library.seeded` and `library.activity-failed`;
-  - give `npm run serve-temp` `--library <libraryId>`, which prints one link once;
-  - say in `README.md`, as plainly as for the passcode, that the link is a bearer token, that a
-    scanner that runs scripts opens it, and that `create` and `revoke` are the user's.
-- **Done when:** tests open two libraries by their links on one server and in `web-function.test.ts`
-  (DynamoDB Local), and show each sees only its own manuals, a new library starts with the two
-  starters and no section written, a revoked link is refused within the minute, a failed lookup
-  answers `500`, each counter counts as defined, the loopback path with no passcode is unchanged
-  and `DELETE /api/link` leaves a library there, no log line or file holds the secret or its digest,
-  and `npm run build` and `npm test` pass.
-
-### LB.9 — Open a link in the browser
-- **Status:** todo
-- **Depends on:** LB.8
-- **Files:** `src/App.tsx`, `src/link/**`, `src/passcode/**`, `src/reportErrors.ts` and its test,
-  `DESIGN.md`, `README.md`, `scripts/shot.ts`, `scripts/screenshots.ts`, `ARCHITECTURE.md`
-- **Do:** the page route `/l` reads the secret from the fragment as it loads, with no button, posts
-  it to `/api/link`, and on `204` replaces the address with `/`; on `401` it shows the passcode
-  screen with "This link is closed." above the form, as does any API request answered
-  `401 { error: "Link closed" }`. The page route `/admin` calls `DELETE /api/link` and opens `/`.
-  Design the link page and the closed line in `DESIGN.md`, add their shots to `npm run shot`, and
-  name both routes in `README.md` › Where things live.
-- **Done when:** component tests cover opening, a closed link, a closed library mid-visit and
-  `/admin` from a library, the address keeps no secret after opening, `npm run shot` takes the new
-  states, and `npm run build` and `npm test` pass.
-
 ### LB.10 — Make, list and revoke libraries with the ops tools
-- **Status:** todo (its `CLAUDE.md` line is the user's to approve)
-- **Depends on:** LB.2, LB.5, LB.6
+- **Status:** doing (agent aa5395c0f371031a1; done, being committed; the user approved its `CLAUDE.md` line)
+- **Depends on:** —
 - **Merges after:** LB.7, LB.8, LB.9
 - **Files:** `scripts/ops/**`, `server/logging/log-reader.ts` and its test, `server/logs.ts`,
-  `README.md`, `CLAUDE.md`
+  `README.md`, `CLAUDE.md`, `server/storage/dynamodb-manual-store.ts`,
+  `server/gateway/dynamodb-spending-ledger.ts`, `server/storage/README.md`,
+  `server/gateway/README.md`, `infra/README.md`
 - **Do:** `npm run ops -- library create <libraryId> [--label <text>]`, `list`, `show <libraryId>`
   and `revoke <libraryId>`, as `research/libraries.md` › What `npm run ops` gains describes, under
   `README.md` › The ops tools' rules, with `--json`; `create` prints the link once on standard

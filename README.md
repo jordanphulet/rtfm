@@ -213,12 +213,16 @@ zero. It never touches `.data/` and runs beside `npm run dev`, so it is how an a
 for a check:
 
 ```sh
-npm run serve-temp              # deletes its data folder once stopped
-npm run serve-temp -- --keep    # keeps it
+npm run serve-temp                      # deletes its data folder once stopped
+npm run serve-temp -- --keep            # keeps it
+npm run serve-temp -- --library acme    # and prints a link to the library acme
 ```
 
 - It prints the page's URL, the API's URL, the data folder and its own PID, then runs until it is
   stopped.
+- With `--library <libraryId>`, it makes a link to that recipient's library in its data folder
+  and prints it once, as `Link: <page>/l#<secret>`. The link opens only that throwaway library, on
+  this machine, with the fake models (A library's link, below).
 - On `SIGINT` (Ctrl-C), `SIGTERM` (`kill <pid>`) or `SIGHUP` (its terminal closing) it stops
   both servers and deletes the data folder, unless `--keep` is given. A crash deletes it too.
 - Run it in the background, and stop it with the handle you got or the PID it printed.
@@ -311,9 +315,11 @@ A passcode puts the whole app behind a passcode screen, so that once it is on a 
 who finds it can spend the Bedrock budget. The server keeps only the passcode's SHA-256 digest,
 and a browser that enters the passcode gets a cookie holding that digest.
 
-- With one set, every API request but entering the passcode answers `401` until the browser has
-  entered it, and the page shows a passcode screen in its place. Once it is entered, the page
-  reloads where it was, and the browser keeps the cookie for the rest of its session.
+- With one set, every API request but entering the passcode, and opening or leaving a library
+  (`POST` and `DELETE /api/link`), answers `401` until the browser has entered it, and the page
+  shows a passcode screen in its place. A library's link opens its own library without it (A
+  library's link, below). Once it is entered, the page reloads where it was, and the browser keeps
+  the cookie for the rest of its session.
 - Nothing slows guessing (no attempt limit, no lockout), so the passcode's length is what keeps
   it safe: a few random words, never one word or a short code.
 - Neither the passcode nor its digest is ever logged: refused requests and wrong passcodes are,
@@ -357,6 +363,41 @@ links). The passcode itself is in no file, log or table: only you see it, once.
 How the server checks it is in `server/api/README.md` › The passcode, and the screen's design in
 `DESIGN.md` › The passcode screen.
 
+## A library's link
+
+Each recipient gets a library of their own, opened by a secret link, with no passcode:
+`https://rtfm.moonfetus.com/l#<secret>`. A new library starts with two manuals, *The Haunt That
+Listens* and *Negotiating With Geese*, as tables of contents with no section written, and holds
+only its own manuals: it can't see, change or spend from any other library.
+
+- Opening the link posts its secret to `POST /api/link`, which sets a cookie holding the secret
+  for a year, renewed on every use, and clears the passcode cookie. A link works whether or not a
+  passcode is set. The page takes the secret out of the address before it posts it, then opens
+  the library at `/`; a closed link, and any request once a library's link is closed, shows the
+  passcode screen with "This link is closed." (`DESIGN.md` › The link page).
+- The server keeps only the secret's SHA-256 digest, and never logs the secret or its digest.
+- A revoked link is refused within a minute, by its cookie and its secret alike; the library's
+  manuals and activity stay.
+- The server counts each library's activity: links opened, the first and last use, sections read
+  and written, librarian messages and manuals made.
+- `DELETE /api/link` clears the library cookie, so the browser is back in the admin's library on
+  this machine with no passcode, or at the passcode screen. The page `/admin` calls it, then opens
+  `/`: that is how you leave a library you opened in your own browser.
+
+**The link is a bearer token.** Whoever has the link, or the cookie it sets, opens that library
+until it is revoked: the person it was sent to, anyone they forward it to, and any mail scanner
+that opens links in a browser that runs the page's script. Such a scanner's visit counts as the
+link's first use, before the recipient has clicked. Send each link only to the person it is for,
+and revoke it once the application is over.
+
+**Making and revoking a link are yours**, as setting the passcode is, and are done outside the
+server, which only reads links: a new link opens a library, and revoking one changes who can open
+the live app, so you do both in your own terminal outside the Claude app, and agents never do
+either.
+
+How the server opens a library is in `server/api/README.md` › The gate, and a throwaway link for a
+check is `npm run serve-temp -- --library <libraryId>` (A throwaway server, above).
+
 ## Configuration
 
 Everything but the credentials and the passcode is committed:
@@ -367,9 +408,10 @@ Everything but the credentials and the passcode is committed:
   sections may be written and how many model calls may run at once, the 30s stall timeout (60s
   for planning a manual), each job's model and `max_tokens`, the most model turns one librarian
   reply may take (8), the length in words the prompt asks Claude for (`sectionWordsRequested`),
-  and the length in characters a section's progress counts to while Claude writes
-  (`sectionExpectedCharacters`), and the table Bedrock's spending is kept in (`rtfm-usage`). The
-  default API port is `API_PORT` in `server/ports.ts`.
+  the length in characters a section's progress counts to while Claude writes
+  (`sectionExpectedCharacters`), the table Bedrock's spending is kept in (`rtfm-usage`), and the
+  manuals a recipient's library starts with (`starterManualIds`). The default API port is
+  `API_PORT` in `server/ports.ts`.
 - `server/gateway/prices.ts`: the dated price table, with the fake model at $0. The server refuses
   to start with a model that isn't in it.
 
@@ -405,6 +447,9 @@ as it is.
   server, delete its file, and start the server again.
 - `.data/seeded.json`: the ids of the seed manuals already seeded. To reset every manual to the
   seed, stop the server, delete `.data/manuals/` and `.data/seeded.json`, and start it again.
+- `.data/libraries/<libraryId>/`, `.data/links/` and `.data/activity/`: each recipient's library,
+  laid out as the admin's is, its link under its secret's digest, and its activity (A library's
+  link, above).
 - `.data/ledger/<yyyy-mm>.jsonl`: the fake models' usage ledger, one line per model call reserved
   and settled, under `fake-model` at $0. Bedrock calls made before the table `rtfm-usage` existed
   are in it too. The fake models' caps are computed from it, so **never delete or edit it**.
@@ -627,9 +672,11 @@ clearing that folder first and nothing else:
   (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
 - `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in
   `src/home/DESIGN.md`, under "States");
+- `link/<state>-<desktop|phone>.png`, for the link page's `opening`, `failed` and `closed` (the
+  passcode screen with its closed line), opened with a secret no link has;
 - `passcode/<state>-<desktop|phone>.png`, for the passcode screen's `start` and `wrong`, taken
-  through a second API server and Vite server, with a passcode set. The pages' shots are taken
-  with none, whatever `RTFM_PASSCODE` is.
+  through a second API server and Vite server, with a passcode set. The pages' and the link's
+  shots are taken with none, whatever `RTFM_PASSCODE` is.
 
 `--compare <baseline>` checks a run against an earlier one, such as a copy of `shots/` taken
 before a change:
@@ -653,7 +700,8 @@ npm run shot -- /tmp/shots-after --compare /tmp/shots-before
 ## Where things live
 
 The routes are in `src/App.tsx`, which loads both pages lazily: `/` is the landing page,
-`/read/:manualId` (a manual's contents) and `/read/:manualId/:sectionId` are the reader, and
+`/read/:manualId` (a manual's contents) and `/read/:manualId/:sectionId` are the reader, `/l`
+opens a library by its link (`/l#<secret>`) and `/admin` leaves it again (`src/link/`), and
 anything else, bare `/read` included, redirects to `/`. The settings are in `server/config.ts`
 (Configuration, above), and everything the server keeps is in its data folder (above).
 

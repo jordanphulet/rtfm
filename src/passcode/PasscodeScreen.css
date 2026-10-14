@@ -6,6 +6,13 @@
   max-width: var(--measure);
 }
 
+.passcode .passcode-closed {
+  margin: 0 0 var(--space-4);
+  font: 600 var(--text-ui) / var(--leading-ui) var(--font-sans);
+  color: var(--ink-strong);
+  text-wrap: pretty;
+}
+
 .passcode .passcode-title {
   margin: 0 0 var(--space-1);
   font: 600 var(--text-h3) / var(--leading-h3) var(--font-sans);

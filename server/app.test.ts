@@ -20,12 +20,13 @@ import {
 import { silentLogger } from "./logging/logger.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS } from "./storage/dynamodb-testing.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
+import { createFileLinkStore } from "./storage/file-link-store.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { ADMIN_LIBRARY_ID } from "./storage/library.ts";
 import { DataFolderInUse, LOCK_FILE_NAME } from "./storage/lock.ts";
 import { seedStore } from "./storage/seed.ts";
 import type { UsageLedger } from "./storage/types.ts";
-import { collect, tempDataDir, testGateway, waitUntil } from "./testing.ts";
+import { collect, cookiesSet, createTestLink, tempDataDir, testGateway, waitUntil } from "./testing.ts";
 import { WriteFailed } from "./writer/types.ts";
 
 const RECIPIENT_ID = "acme";
@@ -117,18 +118,20 @@ describe("starting with the fake models", () => {
 describe("each library's gateway", () => {
   it("reserves every call a request makes in the name of the request's library", async () => {
     const dataDir = await tempDataDir();
-    const server = await startServer(
-      { ...config, port: 0, dataDir, models: "fake", passcode: undefined },
-      { libraryIdOf: (request) => String(request.headers["x-test-library"]) },
-    );
-    const ask = (libraryId: string) =>
-      fetch(`http://127.0.0.1:${server.port}/api/librarian`, {
+    const secret = await createTestLink(createFileLinkStore(dataDir), RECIPIENT_ID);
+    const server = await startServer({ ...config, port: 0, dataDir, models: "fake", passcode: undefined });
+    const base = `http://127.0.0.1:${server.port}/api`;
+    const post = (path: string, body: unknown, cookie?: string) =>
+      fetch(`${base}${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-test-library": libraryId },
-        body: JSON.stringify({ messages: [{ role: "user", text: "Good morning" }] }),
-      }).then((response) => response.text());
+        headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+        body: JSON.stringify(body),
+      });
+    const recipientCookie = cookiesSet(await post("/link", { secret })).rtfm_library;
+    const ask = (cookie?: string) =>
+      post("/librarian", { messages: [{ role: "user", text: "Good morning" }] }, cookie).then((response) => response.text());
 
-    await Promise.all([ask(RECIPIENT_ID), ask(ADMIN_LIBRARY_ID)]);
+    await Promise.all([ask(recipientCookie), ask()]);
     await server.close();
     const entries = await createFileLedger(dataDir, silentLogger).entriesForMonth(monthOf(new Date().toISOString()));
     const reserved = entries.filter((entry) => entry.kind === "reserve");

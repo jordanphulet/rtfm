@@ -10,6 +10,8 @@ type Capture = {
   path: string;
   file: string;
   fullPage?: boolean;
+  /** When the page counts as loaded: `networkidle` unless a request is held on purpose. */
+  waitUntil?: "load" | "networkidle";
   beforeLoad?: (page: Page) => Promise<void>;
   prepare?: (page: Page) => Promise<void>;
   expectedErrors?: RegExp[];
@@ -42,7 +44,7 @@ export async function captureAll(baseURL: string, groups: CaptureGroup[]): Promi
 
 async function capture(
   context: BrowserContext,
-  { path, file, fullPage, beforeLoad, prepare, expectedErrors = [] }: Capture,
+  { path, file, fullPage, waitUntil = "networkidle", beforeLoad, prepare, expectedErrors = [] }: Capture,
 ): Promise<ShotResult> {
   const errors = new Set<string>();
   const addError = (error: string) => {
@@ -58,7 +60,7 @@ async function capture(
 
   try {
     await beforeLoad?.(page);
-    await page.goto(path, { waitUntil: "networkidle" });
+    await page.goto(path, { waitUntil });
     await settle(page);
     await prepare?.(page);
     await page.screenshot({ path: file, fullPage, animations: "disabled" });

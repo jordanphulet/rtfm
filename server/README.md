@@ -148,6 +148,9 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
   ```sh
   curl -b "$(npm run -s ops -- passcode cookie)" https://rtfm.moonfetus.com/api/manuals
   ```
+- **Library links from the table**: it finds each link in `rtfm-app`'s `LINK` partition, which it
+  only reads, and writes each library's activity in `ACTIVITY` (`server/api/README.md` › The
+  gate). A link opens its library whether or not a passcode is stored.
 - On SIGTERM, which Lambda sends when it removes an environment, with 1 second to exit, it closes
   the server as `main.ts` does, cutting any request still open, during the exit above too.
 
@@ -211,16 +214,15 @@ section writer and the librarian's model, which also plans new manuals (`createM
 - `createModels` also returns `idle`, the gateway's `idle()`.
 - Tests replace either model with `startServer(config, { writer, librarian })`, each then
   serving every library. A test that passes its own gateway passes its `idle` too, and `close()`
-  waits for it and for the configured gateway, if one was built. A test puts each request in a
-  library of its choosing with `libraryIdOf(request)`, in place of the gate, which puts every
-  request in the admin's.
+  waits for it and for the configured gateway, if one was built. A test opens a recipient's
+  library as a page does, by its link (`createTestLink` in `testing.ts`, then `POST /api/link`).
 
 ## Configuration
 
 | Setting | Where | Secret |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the IAM user `rtfm-local`'s, `infra/README.md`), `AWS_REGION` | `.env.local`, read only by `gateway/credentials.ts` | yes |
-| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat, Bedrock's spending table (`usageTable`: `rtfm-usage`, in the region `.env.local` names), how the Bedrock models reach AWS (`modelAccess`) | `server/config.ts` | no |
+| Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat, Bedrock's spending table (`usageTable`: `rtfm-usage`, in the region `.env.local` names), how the Bedrock models reach AWS (`modelAccess`), a recipient library's starters (`starterManualIds`) | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
 | The passcode on this machine: `RTFM_PASSCODE` | the environment, read by `server/config.ts`, which keeps only its digest | yes |
@@ -234,9 +236,10 @@ section writer and the librarian's model, which also plans new manuals (`createM
   `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) and the Node adapter's
   `AdapterConfig` (`allowedHosts`, `allowedOrigins`, `appDir`, `eventStreamHeartbeatMs`, in
   `api/node-adapter.ts`) with the address it listens on (`host`, `127.0.0.1`), the port, data
-  dir, manual storage, models, `passcode`, `maxConcurrentRuns`, `sectionWordsRequested` and
-  `sectionExpectedCharacters`. `startServer`, the gateway and the Node adapter take it as it is, so
-  tests, the shot script and `web-function.ts` spread `config` and override what they need.
+  dir, manual storage, models, `passcode`, `maxConcurrentRuns`, `sectionWordsRequested`,
+  `sectionExpectedCharacters` and `starterManualIds`. `startServer`, the gateway and the Node
+  adapter take it as it is, so tests, the shot script and `web-function.ts` spread `config` and
+  override what they need.
 - **`allowedHosts` and `allowedOrigins`** are this machine's own names and pages
   (`LOOPBACK_HOSTS`, `LOOPBACK_ORIGINS`); `appDir` is unset, since Vite serves the app; and
   `eventStreamHeartbeatMs` is 15s (`server/api/README.md` › Handlers).
@@ -390,18 +393,20 @@ the machine.
   (`httpEndpointFromEnv`, `builtAppDirFromEnv`, `webFunctionAwsFromEnv`), and `tableWith`, a
   table by name reached with given credentials.
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
-- `app.ts`: `startServer(config, replaced?)`: locks the data folder; the passcode's digest,
-  models, gateway, each library's `Library` (its storage, writer and runs), routes;
-  `close(graceMs?)` waits for model calls to settle.
+- `app.ts`: `startServer(config, replaced?)`: locks the data folder; the passcode's digest, the
+  links and activity, models, gateway, each library's `Library` (its storage, writer, runs and
+  activity), the gate, routes; `close(graceMs?)` waits for model calls and activity writes to
+  settle.
   `runServerProcess(config, logger)`: the server as the whole process, for `main.ts` and
   `web-function.ts`, giving back the started server.
 - `testing.ts`: helpers shared by the tests: temp folders, the fake model's `FAST_PACE` and a
   fast fake writer that calls it directly, the price table with the test model (`TEST_PRICES`)
   and its gateway config (`testGatewayConfig`, with any caps given in place of the committed
   ones), the real gateway over any `ModelClient`, bound to the admin's library (`testGateway`,
-  with a config and a ledger of the test's own if it gives them), a `Library` on
-  a given store for a test that hands a route its request (`testLibrary`), `inPieces`, `collect`,
-  and `readEvents` for server-sent events.
+  with a config and a ledger of the test's own if it gives them), a `Library` on a given store for
+  a test that hands a route its request (`testLibrary`), a link to a recipient's library
+  (`createTestLink`) and the cookies a response sets (`cookiesSet`), `inPieces`, `collect`, and
+  `readEvents` for server-sent events.
 - `usage.ts`: `npm run usage`, and its `--import` of the data folder's Bedrock calls into
   `rtfm-usage`.
 - `logs.ts`: `npm run logs` (`server/logging/README.md`).

@@ -12,7 +12,7 @@ const STOP_TIMEOUT_MS = 10_000;
 const TEST_TIMEOUT_MS = 60_000;
 const DEV_PORTS = [5173, 8787];
 
-type Started = { child: ChildProcess; pageUrl: string; apiUrl: string; dataDir: string; pid: number };
+type Started = { child: ChildProcess; output: string; pageUrl: string; apiUrl: string; dataDir: string; pid: number };
 
 const running = new Set<ChildProcess>();
 const keptFolders: string[] = [];
@@ -37,7 +37,7 @@ function serveTemp(...args: string[]): Promise<Started> {
       const started = parseStarted(output);
       if (!started) return;
       clearTimeout(timer);
-      resolve({ child, ...started });
+      resolve({ child, output, ...started });
     });
     child.on("exit", () => reject(new Error(`serve-temp exited:\n${output}`)));
   });
@@ -138,6 +138,40 @@ describe("serve-temp", () => {
       expect(await answers(`${first.apiUrl}/api/manuals`)).toBe(false);
       expect(await answers(second.pageUrl)).toBe(true);
       expect(await answers(`${second.apiUrl}/api/manuals`)).toBe(true);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "prints one link to a library with --library, which opens it on the API",
+    async () => {
+      const server = await serveTemp("--library", "acme");
+      const link = new URL(server.output.match(/^Link:\s+(.+)$/m)![1]!);
+
+      expect(server.output.match(/^Link:/gm)).toHaveLength(1);
+      expect(`${link.origin}/`).toBe(server.pageUrl);
+      expect(link.pathname).toBe("/l");
+      const opened = await fetch(`${server.apiUrl}/api/link`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ secret: link.hash.slice(1) }),
+      });
+      expect(opened.status).toBe(204);
+      const cookie = opened.headers.getSetCookie()[0]!.split(";")[0]!;
+      const manuals = (await (await fetch(`${server.apiUrl}/api/manuals`, { headers: { cookie } })).json()) as { id: string }[];
+      expect(manuals.map(({ id }) => id).toSorted()).toEqual(["negotiating-with-geese", "the-haunt-that-listens"]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "refuses a library id that isn't a recipient's",
+    async () => {
+      for (const libraryId of ["admin", "Not A Slug"]) {
+        const child = spawn(process.execPath, [SCRIPT, "--library", libraryId], { cwd: ROOT, stdio: "ignore" });
+        running.add(child);
+        expect(await new Promise((resolve) => child.once("exit", resolve)), libraryId).toBe(2);
+      }
     },
     TEST_TIMEOUT_MS,
   );

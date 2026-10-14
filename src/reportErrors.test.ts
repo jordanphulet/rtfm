@@ -115,8 +115,35 @@ describe("reporting errors", () => {
     void apiFetch("/api/manuals").then(settled, settled);
     await new Promise((resolve) => setTimeout(resolve, 10));
 
+    expect(required).toHaveBeenCalledWith("passcode-required");
     expect(required).toHaveBeenCalledTimes(1);
     expect(settled).not.toHaveBeenCalled();
     expect(reports()).toEqual([]);
+  });
+
+  it("answers a 401 for a closed link by saying the link is closed", async () => {
+    const { apiFetch, startReportingErrors } = await freshModule();
+    const passcode = await import("./passcode/required");
+    startReportingErrors();
+    fetch = stubFetch(async () => Response.json({ error: "Link closed" }, { status: 401 }));
+    const required = vi.spyOn(passcode, "requirePasscode");
+
+    void apiFetch("/api/manuals");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(required).toHaveBeenCalledWith("link-closed");
+    expect(reports()).toEqual([]);
+  });
+
+  it("never reports a link's secret from the page's address", async () => {
+    const secret = "Qk3vX9_tLmN2pRs7Yw-AbC";
+    window.history.replaceState({}, "", `/l#${secret}`);
+    const { apiFetch, startReportingErrors } = await freshModule();
+    startReportingErrors();
+    fetch = stubFetch(async () => new Response(null, { status: 502 }));
+
+    await apiFetch("/api/manuals");
+
+    expect(reports()).toEqual([{ kind: "request", page: "/l", method: "GET", path: "/api/manuals", status: 502 }]);
   });
 });

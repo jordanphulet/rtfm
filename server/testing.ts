@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, onTestFinished } from "vitest";
 import { INSTANT_PACE, unrecordedFakeModel, type FakeModelPace } from "./agent/fake-model.ts";
+import { recordsNothing } from "./api/activity.ts";
 import type { Library } from "./api/route.ts";
 import { openFileSpendingLedger } from "./gateway/file-spending-ledger.ts";
 import { createGateway } from "./gateway/gateway.ts";
@@ -11,6 +12,7 @@ import type { GatewayConfig, ModelClient } from "./gateway/types.ts";
 import { createLogger, silentLogger, type LogEntry } from "./logging/logger.ts";
 import { createFileLedger, monthOf } from "./storage/file-ledger.ts";
 import { createInProcessLeases } from "./storage/in-process-leases.ts";
+import { librarySecretDigest, makeLibrarySecret, type LinkStore } from "./storage/library-links.ts";
 import { ADMIN_LIBRARY_ID } from "./storage/library.ts";
 import type { ManualStore, StoredManual, UsageLedger } from "./storage/types.ts";
 import { createFakeWriter } from "./writer/fake.ts";
@@ -93,9 +95,10 @@ export async function tempDataDir(): Promise<string> {
 
 /**
  * A library for a test that hands a route its request, or gives the adapter its gate: these
- * manuals, runs of their own unless given, and the unrecorded fake model. Routes use only the
- * store, the runs and the gateway. Its `leases` and `writer` (in-process leases and the fake
- * writer) are used by nothing but its own runs, so given runs may have been built with others.
+ * manuals, runs of their own unless given, the unrecorded fake model, and no activity recorded.
+ * Routes use only the store, the runs, the gateway and the activity. Its `leases` and `writer`
+ * (in-process leases and the fake writer) are used by nothing but its own runs, so given runs may
+ * have been built with others.
  */
 export function testLibrary({ store, runs, libraryId = ADMIN_LIBRARY_ID }: {
   store: ManualStore;
@@ -104,7 +107,20 @@ export function testLibrary({ store, runs, libraryId = ADMIN_LIBRARY_ID }: {
 }): Library {
   const scope = { libraryId, store, leases: createInProcessLeases(store), writer: fastFakeWriter() };
   const ownRuns = () => createRuns({ ...scope, maxConcurrentRuns: 3, logger: silentLogger }).forLibrary(scope);
-  return { ...scope, runs: runs ?? ownRuns(), gateway: unrecordedFakeModel(FAST_PACE) };
+  return { ...scope, runs: runs ?? ownRuns(), gateway: unrecordedFakeModel(FAST_PACE), activity: recordsNothing };
+}
+
+/** A link to a recipient's library, made in the link store as the ops tools make one; gives its secret. */
+export async function createTestLink(links: LinkStore, libraryId: string): Promise<string> {
+  const secret = makeLibrarySecret();
+  await links.createLink({ digest: librarySecretDigest(secret), libraryId, createdAt: new Date().toISOString() });
+  return secret;
+}
+
+/** The `name=value` of each cookie a response sets, by name. */
+export function cookiesSet(response: Response): Record<string, string> {
+  const pairs = response.headers.getSetCookie().map((header) => header.split(";")[0]);
+  return Object.fromEntries(pairs.map((pair) => [pair.split("=")[0], pair]));
 }
 
 /** The fake writer at `FAST_PACE`, calling the fake model directly rather than through a gateway. */

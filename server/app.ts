@@ -1,14 +1,17 @@
-import { createServer, type IncomingMessage, type Server } from "node:http";
+import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fakeModel } from "./agent/fake-model.ts";
+import { countingLeases, countingStore, createActivities, recordsNothing } from "./api/activity.ts";
 import { clientErrorsRoute } from "./api/client-errors.ts";
 import { deleteManualRoute } from "./api/delete-manual.ts";
+import { admitByCookies, type Gate } from "./api/gate.ts";
 import { librarianRoute } from "./api/librarian.ts";
 import { libraryRoute } from "./api/library.ts";
+import { cachedLinks, leaveLibraryRoute, openLinkRoute } from "./api/link.ts";
 import { manualRoute } from "./api/manual.ts";
 import { createRequestHandler } from "./api/node-adapter.ts";
 import { cachedDigest, passcodeRoute, type CurrentDigest } from "./api/passcode.ts";
-import type { Library } from "./api/route.ts";
+import type { Activity, Library } from "./api/route.ts";
 import { sectionStreamRoute } from "./api/section-stream.ts";
 import { sectionRoute } from "./api/section.ts";
 import { tableWith, type ManualStorage, type ModelAccess, type ServerConfig } from "./config.ts";
@@ -29,12 +32,15 @@ import {
   readPasscodeDigest,
   SECTION_LEASE_TIMING,
 } from "./storage/dynamodb-manual-store.ts";
+import { createDynamoDbLinkStore } from "./storage/dynamodb-link-store.ts";
 import { createFileLedger } from "./storage/file-ledger.ts";
+import { createFileLinkStore } from "./storage/file-link-store.ts";
 import { createFileManualStore } from "./storage/file-manual-store.ts";
 import { createInProcessLeases } from "./storage/in-process-leases.ts";
+import type { LinkStore } from "./storage/library-links.ts";
 import { ADMIN_LIBRARY_ID } from "./storage/library.ts";
 import { DataFolderInUse, lockDataFolder, type DataFolderLock } from "./storage/lock.ts";
-import { seedStore } from "./storage/seed.ts";
+import { seedStarters, seedStore } from "./storage/seed.ts";
 import type { ManualStore, SectionLeases } from "./storage/types.ts";
 import { createBedrockWriter } from "./writer/bedrock.ts";
 import { createFakeWriter } from "./writer/fake.ts";
@@ -69,9 +75,8 @@ interface LibraryModels {
 
 /**
  * Parts of the server a caller may supply in place of the configured ones: a section writer for
- * every library, the librarian's gateway and its `idle`, the logger, `now`, the clock the stored
- * passcode's digest is kept by, in milliseconds, and `libraryIdOf`, which library a request is in,
- * where the gate gives every request the admin's.
+ * every library, the librarian's gateway and its `idle`, the logger, and `now`, in milliseconds,
+ * the clock the stored passcode's digest and the links found are kept by and the activity is timed by.
  */
 export interface Replaced {
   writer?: SectionWriter;
@@ -79,7 +84,6 @@ export interface Replaced {
   idle?: () => Promise<void>;
   logger?: Logger;
   now?: () => number;
-  libraryIdOf?: (request: IncomingMessage) => string;
 }
 
 const nothingToSettle = async () => {};
@@ -122,7 +126,7 @@ function crash(logger: Logger, message: string, error: unknown) {
 export async function startServer(config: ServerConfig, replaced: Replaced = {}): Promise<RunningServer> {
   const logger = replaced.logger ?? createLogger([toLogFile(config.dataDir)]);
   const lock = await lockOrLogRefusal(config.dataDir, logger);
-  let served: { server: Server; models: Models };
+  let served: Served;
   try {
     served = await serve(config, replaced, logger);
   } catch (error) {
@@ -130,7 +134,7 @@ export async function startServer(config: ServerConfig, replaced: Replaced = {})
     await lock.release();
     throw error;
   }
-  const { server, models } = served;
+  const { server, models, activitySettled } = served;
   const port = (server.address() as AddressInfo).port;
   logger.info("server.started", `API server on http://${config.host}:${port} (${config.models} models)`, {
     host: config.host,
@@ -158,6 +162,7 @@ export async function startServer(config: ServerConfig, replaced: Replaced = {})
       void closed.then(() => clearTimeout(cuttingOff));
       stopped ??= closed.then(async () => {
         await models.idle();
+        await activitySettled();
         await lock.release();
         logger.info("server.stopped", "API server stopped", { port });
       });
@@ -184,15 +189,21 @@ async function lockOrLogRefusal(dataDir: string, logger: Logger): Promise<DataFo
   }
 }
 
-async function serve(
-  config: ServerConfig,
-  replaced: Replaced,
-  logger: Logger,
-): Promise<{ server: Server; models: Models }> {
-  const currentDigest = passcodeDigestSource(config, replaced.now ?? Date.now);
+/** The listening server, its models, and what resolves once every activity write has settled. */
+interface Served {
+  server: Server;
+  models: Models;
+  activitySettled: () => Promise<void>;
+}
+
+async function serve(config: ServerConfig, replaced: Replaced, logger: Logger): Promise<Served> {
+  const now = replaced.now ?? Date.now;
+  const currentDigest = passcodeDigestSource(config, now);
   const models = await modelsFor(config, replaced, logger);
-  const libraryFor = await createLibraries(config, models, logger);
-  const libraryIdOf = replaced.libraryIdOf ?? (() => ADMIN_LIBRARY_ID);
+  const links = createLinkStore(config);
+  const activities = createActivities({ links, logger, now });
+  const libraries = await createLibraries(config, models, logger, activities.activityOf);
+  const findLink = cachedLinks(links.findLink, now);
   const routes = [
     libraryRoute,
     manualRoute,
@@ -202,45 +213,76 @@ async function serve(
     librarianRoute(logger),
     clientErrorsRoute(logger),
   ];
-  if (currentDigest) routes.push(passcodeRoute(currentDigest, logger));
+  const gate: Gate = {
+    routes: [openLinkRoute({ ...libraries, findLink }, logger), leaveLibraryRoute],
+    admit: admitByCookies({ findLink, currentDigest, libraryFor: libraries.libraryFor }),
+  };
+  if (currentDigest) gate.routes.push(passcodeRoute(currentDigest, logger));
 
-  const libraryOf = async (request: IncomingMessage) => libraryFor(libraryIdOf(request));
-  const server = createServer(createRequestHandler(routes, logger, config, { currentDigest, libraryOf }));
+  const server = createServer(createRequestHandler(routes, logger, config, gate));
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);
   });
-  return { server, models };
+  return { server, models, activitySettled: activities.settled };
 }
 
 /**
  * The `Library` of each library id, built the first time it is asked for and kept, so each has one
- * store, one set of leases, one gateway and one writer, the shared runs and gateway bound to it. The
- * admin's is built and seeded at once.
+ * store, one set of leases, one gateway and one writer, the shared runs bound to it. The admin's is
+ * built and seeded at once. A recipient's store and leases count its activity; its starters are
+ * seeded through its bare store, so they never count as made.
  */
-async function createLibraries(config: ServerConfig, models: Models, logger: Logger): Promise<(libraryId: string) => Library> {
-  const scopeOf = (libraryId: string): Omit<Library, "runs"> => {
-    const { store, leases } = createStorage(config, logger, libraryId);
-    return { libraryId, store, leases, ...models.forLibrary(libraryId, store) };
-  };
-  const admin = scopeOf(ADMIN_LIBRARY_ID);
+async function createLibraries(
+  config: ServerConfig,
+  models: Models,
+  logger: Logger,
+  activityOf: (libraryId: string) => Activity,
+): Promise<{ libraryFor(libraryId: string): Library; seedStarters(libraryId: string): Promise<string[]> }> {
+  const scopeOf = (libraryId: string, { store, leases }: Storage, activity: Activity): Omit<Library, "runs"> => ({
+    libraryId,
+    store,
+    leases,
+    activity,
+    ...models.forLibrary(libraryId, store),
+  });
+  const admin = scopeOf(ADMIN_LIBRARY_ID, createStorage(config, logger, ADMIN_LIBRARY_ID), recordsNothing);
   await seedStore(admin.store);
   const runs = createRuns({ ...admin, maxConcurrentRuns: config.maxConcurrentRuns, logger });
   const libraryOn = (scope: Omit<Library, "runs">): Library => ({ ...scope, runs: runs.forLibrary(scope) });
 
-  const libraries = new Map([[ADMIN_LIBRARY_ID, libraryOn(admin)]]);
-  return (libraryId) => {
-    let library = libraries.get(libraryId);
-    if (!library) {
-      library = libraryOn(scopeOf(libraryId));
-      libraries.set(libraryId, library);
+  const libraries = new Map([[ADMIN_LIBRARY_ID, { library: libraryOn(admin), bareStore: admin.store }]]);
+  const builtLibrary = (libraryId: string) => {
+    let built = libraries.get(libraryId);
+    if (!built) {
+      const bare = createStorage(config, logger, libraryId);
+      const activity = activityOf(libraryId);
+      const counted = { store: countingStore(bare.store, activity), leases: countingLeases(bare.leases, activity) };
+      built = { library: libraryOn(scopeOf(libraryId, counted, activity)), bareStore: bare.store };
+      libraries.set(libraryId, built);
     }
-    return library;
+    return built;
+  };
+  return {
+    libraryFor: (libraryId) => builtLibrary(libraryId).library,
+    seedStarters: (libraryId) => seedStarters(builtLibrary(libraryId).bareStore, config.starterManualIds),
   };
 }
 
+/** Where the recipient libraries' links and activity are kept: beside the manuals. */
+function createLinkStore(config: ServerConfig): LinkStore {
+  switch (config.manualStorage.kind) {
+    case "files":
+      return createFileLinkStore(config.dataDir);
+    case "dynamodb":
+      return createDynamoDbLinkStore(config.manualStorage.table);
+  }
+}
+
+type Storage = { store: ManualStore; leases: SectionLeases };
+
 /** A library's manuals, and the section leases that keep one writer per section among the servers sharing them. */
-function createStorage(config: ServerConfig, logger: Logger, libraryId: string): { store: ManualStore; leases: SectionLeases } {
+function createStorage(config: ServerConfig, logger: Logger, libraryId: string): Storage {
   switch (config.manualStorage.kind) {
     case "files": {
       const store = createFileManualStore(config.dataDir, logger, libraryId);

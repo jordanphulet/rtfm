@@ -29,11 +29,14 @@ contract it shares with the browser (`ARCHITECTURE.md` › Boundaries).
 | `POST /api/librarian` with `{ messages: LibrarianMessage[] }` | `text/event-stream` of `LibrarianEvent`s (`server/agent/README.md` › The librarian), or `400` |
 | `POST /api/client-errors` with a `ClientErrorReport` | `204`, `400`, or `429` past the hourly limit (`server/logging/README.md` › Browser errors) |
 | `POST /api/passcode` with `{ passcode }`, only with a passcode gate | `204` with the passcode cookie, `401 { error: "Wrong passcode" }`, or `400` (The passcode, below) |
+| `POST /api/link` with `{ secret }` | `204` with the library cookie, `401 { error: "Link closed" }`, or `400` (A library's link, below) |
+| `DELETE /api/link` | `204`, clearing the library cookie (A library's link, below) |
 
 Any other path or method gets `404 { error: "Not found" }`, and a handler that throws gets
-`500 { error: "Internal error" }` (or, once a stream has started, the stream just ends). With a
-passcode gate, a request without the passcode's cookie gets `401` before any of these (The
-passcode, below).
+`500 { error: "Internal error" }` (or, once a stream has started, the stream just ends). Before
+any of these but the last three, the gate gives the request its library or refuses it (The gate,
+below): with a passcode gate, a request with neither an open link's cookie nor the passcode's
+gets `401`.
 
 Every route acts on the request's library alone (The library of a request, below):
 `/api/manuals/:manualId` is the manual of that id in that library, and `404` in any other, and the
@@ -113,15 +116,15 @@ comes from (`server/README.md` › Configuration):
 
 The rules:
 
-- **The gate.** After the `Host` and `Origin` checks and before the body is read or any route is
-  matched, the Node adapter refuses every API request but `POST /api/passcode` with
+- **The gate.** A request that the library cookie doesn't let in (The gate, below) gets
   `401 { error: "Passcode required" }` unless its `Cookie` header has `rtfm_passcode` equal to the
   digest. Unknown paths get `401` too, so nothing about the API shows before the passcode. A
   request with no such cookie, or one without a digest's form (`hasDigestForm`: 64 lowercase hex
   characters), is refused without reading the digest.
 - **Entering it.** `POST /api/passcode { passcode }` (`api/passcode.ts`) hashes the passcode
-  given and answers the right one with `204` and the cookie, and a wrong one with
-  `401 { error: "Wrong passcode" }` and no cookie.
+  given and answers the right one with `204`, the cookie, and the library cookie cleared, so a
+  browser holds one of the two; and a wrong one with `401 { error: "Wrong passcode" }` and no
+  cookie.
 - **Failing closed.** While no digest is stored, every request the gate guards gets `401`, and
   every passcode entered gets `401 { error: "Wrong passcode" }`, logged as `passcode.unset`.
 - **The cookie** is `rtfm_passcode=<the digest>; HttpOnly; SameSite=Strict; Path=/api`, plus
@@ -144,24 +147,108 @@ The rules:
   `request.refused` (`401`, `Passcode required`), and each passcode entered as `passcode.wrong`,
   `passcode.accepted` or `passcode.unset` (`server/logging/README.md`).
 
+## The gate
+
+The gate (`api/gate.ts`) gives every API request its library, or refuses it, after the `Host` and
+`Origin` checks and before the body is read or a route is matched, by the request's cookies alone
+(`admitByCookies`):
+
+1. **Its own routes pass**: `POST /api/link`, `DELETE /api/link` and, only with a passcode gate,
+   `POST /api/passcode` (`UngatedRoute` in `route.ts`), which see only the body and are in no
+   library.
+2. **An `rtfm_library` cookie** is the secret of a library's link: if it has the secret's form
+   (`LIBRARY_SECRET_PATTERN`), the gate hashes it and looks its link up by digest (one strongly
+   consistent `GetItem`, or a file read; `server/storage/README.md` › Library links and activity).
+   - An open link gives its library, and the response renews the cookie. A revoked link gets
+     `401 { error: "Link closed" }`, logged as `request.refused`.
+   - A cookie of another form, or one whose lookup finds no link, is no cookie.
+   - A lookup that fails answers `500 { error: "Internal error" }`, logged as `request.failed`,
+     and never counts as no link: an outage never drops a recipient to the passcode screen, or to
+     the admin's library on loopback. So does a link whose `libraryId` isn't a recipient's
+     (`checkedRecipientLibraryId`), so no link item can open the admin's library. The error
+     logged is `Couldn't look up a library link (<code>)`, since a store's own error may name
+     the key, the digest.
+   - Each environment keeps a link it found, open or revoked, for a minute
+     (`FOUND_LINK_MAX_AGE_MS`) by the server's clock, which tests replace (`startServer`'s `now`),
+     so a revoked link is refused within a minute. It never keeps a miss, so a new link opens at
+     once and made-up cookies can't fill it (`cachedLinks` in `api/link.ts`).
+3. **An `rtfm_passcode` cookie** holding the passcode's digest gives the admin's library (The
+   passcode, above).
+4. **Otherwise**, with a passcode gate, `401 { error: "Passcode required" }`; without one
+   (loopback with no `RTFM_PASSCODE`), the admin's library.
+
+So no path, query or body names a library, and no request reaches another's. The library cookie
+comes first, so a browser holding both cookies gets the library's reach, never the admin's; a
+revoked link's cookie is refused even beside the passcode's.
+
+**Renewed on use.** Every response to a request the library cookie let in, a `404`, a `500` and an
+event stream's included, sets the cookie again with a fresh year.
+
+## A library's link
+
+A recipient's library is opened by a secret link, `/l#<secret>`, whose page posts the secret
+(`research/libraries.md` › Access). `api/link.ts` holds both routes:
+
+- **`POST /api/link { secret }`** looks the secret's link up as the gate does, through the same
+  cache. An open one answers `204` once the library's starters are seeded (`starterManualIds` in
+  `server/config.ts`, tables of contents only: `server/storage/README.md` › Seeding) and the open
+  is counted (Activity, below), with two `Set-Cookie` headers: the library cookie and the passcode
+  cookie cleared (`Max-Age=0`). Within an environment a library seeds one at a time:
+  a second open waits for the seeding already running, kept in a map by library id. An unknown or
+  revoked link, or a secret of another form, answers `401 { error: "Link closed" }` and sets
+  nothing; a lookup that fails answers `500`. It keeps the adapter's `Host`, `Origin` and
+  content-type checks.
+- **`DELETE /api/link`** answers `204` with the library cookie cleared, with or without a passcode
+  gate, so the browser leaves the library: on loopback with no passcode it is then in the admin's,
+  and with a passcode gate at the passcode screen.
+- **The cookie** is `rtfm_library=<the secret>; HttpOnly; SameSite=Strict; Path=/api;
+  Max-Age=31536000`, plus `Secure` off loopback, as the passcode's (`libraryCookie` in
+  `api/cookies.ts`). It holds the secret, never the digest, so reading the link items opens no
+  library.
+- **The link is a bearer token**: whoever has it, or its cookie, opens the library until it is
+  revoked (`README.md` › A library's link).
+- **Logged** as `link.accepted` with the `libraryId`, `link.refused` with `reason`, `unknown` or
+  `revoked` (and the `libraryId` of a revoked one), and `library.seeded` with the `manualIds`
+  seeded, never with the secret, its digest or the cookie (`server/logging/README.md`).
+
+## Activity
+
+Each recipient's library counts its use in its `ACTIVITY` item, or `activity/<libraryId>.json`
+(`server/storage/README.md` › Library links and activity), through its `Library`'s `activity`
+(`api/activity.ts`); the admin's counts nothing (`recordsNothing`).
+
+| Activity | Counted by | When |
+| --- | --- | --- |
+| `opens`, and `firstUsedAt` if absent | `POST /api/link` | Each link opened |
+| `lastUsedAt` | The gate, and `POST /api/link` | Any request the library cookie lets in, written at most once a minute per environment (`LAST_USE_EVERY_MS`) |
+| `sectionsRead` | `GET /api/manuals/:manualId/sections/:sectionId` | Each `200`, whatever the section's status; a `404` or a stream counts nothing |
+| `librarianMessages` | `POST /api/librarian` | Each reply streamed; a `?freeze` preview counts nothing |
+| `manualsCreated` | The library's store | `createManual` answers `"created"` |
+| `sectionsWritten` | The library's store and leases | `saveBody`, the store's or a lease's, answers `"saved"` |
+
+- **The store and leases count.** A recipient's `Library` holds its store and leases wrapped
+  (`countingStore`, `countingLeases`), so the routes, the runs and the librarian count through
+  them; its starters are seeded through the bare store, so they never count as created.
+- **Never holding a request up.** Each count is one write beside what it counts, not awaited,
+  but the open, which `POST /api/link` awaits. A write that fails is logged as
+  `library.activity-failed` with the `libraryId` and the `activity`, and never fails the request.
+  `close()` waits for every write to settle.
+
 ## The library of a request
 
 Each library is its own manuals, kept apart in storage (`server/storage/README.md`). The server
 holds a `Library` (`route.ts`) for each library id it has seen: its id, its `ManualStore` and
 `SectionLeases`, bound to that library, its section writer (the Bedrock writer reads its example
 sections through that store), the server's one `Runs` bound to it (`runs.forLibrary`,
-`server/writer/README.md` › One writer per section), and the server's one gateway bound to it
+`server/writer/README.md` › One writer per section), the server's one gateway bound to it
 (`forLibrary`, `server/gateway/README.md`), which its librarian, planner and writer call, so every
-call is reserved in the library's name.
-`startServer` builds the admin's, and seeds it, before it listens, and any other the first time a
-request is in it, then keeps each for the server's life, so a library has one store, one set of
-leases and one bound runs in each environment.
+call is reserved in the library's name, and its activity (above). `startServer` builds the
+admin's, and seeds it, before it listens, and any other the first time a request is in it, then
+keeps each for the server's life, so a library has one store, one set of leases and one bound runs
+in each environment.
 
-- **The gate gives each request its library.** Once a request is past the passcode gate, the Node
-  adapter's `Gate.libraryOf` names its library, and the adapter puts it on the request as
-  `ApiRequest.library`. Every request is in the admin's library (`admin`). Tests put a request in
-  another with `startServer`'s `libraryIdOf` (`server/README.md` › Choosing the models). No path,
-  query or body names a library.
+- **The gate gives each request its library** (The gate, above), and the adapter puts it on the
+  request as `ApiRequest.library`.
 - **Handlers reach manuals only through it.** The routes hold no store, runs or gateway of their
   own: each takes the store, runs and gateway from `request.library`, and the librarian and its
   previews take that library's store and gateway (`server/agent/README.md` › The route). The
@@ -170,9 +257,10 @@ leases and one bound runs in each environment.
 - **Logged** with its `libraryId`: the `request` line once the gate has given one,
   `request.failed`, the `section.*` lines, `librarian.reply`, `agent.tool-failed`, `client.error`
   and `client.limited` (`server/logging/README.md`).
-- **Tested** in `api/libraries.test.ts`, with two libraries on one server, each request put in one
-  by a header the test's `libraryIdOf` reads: neither reaches the other's manuals, sections, runs
-  or librarian, and the lines say which library.
+- **Tested** in `api/libraries.test.ts`, with two recipients' libraries opened by their links on
+  one server beside the admin's: none reaches another's manuals, sections, runs or librarian, and
+  the lines say which library. `api/link.test.ts` tests the links, the cookies and the activity,
+  and `server/web-function.test.ts` opens two libraries by their links on DynamoDB Local.
 
 ## Handlers
 
@@ -184,10 +272,10 @@ with a JSON response or an event stream, a function given an `EventSink` that en
 it resolves; the choice is made inside `handle`, so a stream route can still answer `404`.
 
 Before any route is matched, the Node adapter refuses a request from anywhere but the app's own
-pages (above), serves the built app when it has one (The built app, above), then refuses one
-without the passcode when one is set (The passcode, above), then gives it its library (The library
-of a request, above), then reads the body, up to 262,144 characters: one that is too long or isn't
-JSON gets `400 { error: "Bad request" }`. Then it:
+pages (above), serves the built app when it has one (The built app, above), answers the gate's own
+routes, then has the gate give the request its library or refuse it (The gate, above), then reads
+the body, up to 262,144 characters: one that is too long or isn't JSON gets
+`400 { error: "Bad request" }`. Then it:
 
 - matches `method` exactly, and `pattern` by splitting the path on `/`;
 - turns `res.on("close")` into the `AbortSignal`, and logs the request then
@@ -199,7 +287,9 @@ JSON gets `400 { error: "Bad request" }`. Then it:
   librarian's `streamReply` (`src/librarian/api.ts`) and the tests' `readEvents`, which skip any
   block without an `event:` line;
 - writes a response whose `body` is `undefined` with no body and no content type (`noContent`, 204);
-- sets a response's `cookie` with the attributes in The passcode, above (`setCookieHeader`).
+- sets a response's `cookies`, and the library cookie's renewal, each as its own `Set-Cookie`
+  header with `HttpOnly; SameSite=Strict; Path=/api`, its `Max-Age` if it has one, and `Secure` off
+  loopback (`setCookieHeader`).
 
 **The library** (`api/library.ts`). A summary's counts come from storage, never from the seed:
 
@@ -314,10 +404,18 @@ data: {}
 ## Files
 
 - `types.ts`: the API contract shared with the browser (Types, above).
-- `route.ts`: `Route`, `ApiRequest`, `Library`, `EventSink`: what handlers see.
+- `route.ts`: `Route`, `UngatedRoute`, `ApiRequest`, `Library` and its `Activity`, `Cookie`,
+  `EventSink`: what handlers see.
 - `node-adapter.ts`: `node:http` ⇄ `ApiRequest`, the `Host` and `Origin` checks (with
-  `LOOPBACK_HOSTS` and `LOOPBACK_ORIGINS`), the `Gate` (the passcode, and the request's library),
-  JSON responses and their cookie, the event stream and its heartbeat, and the built app's files.
+  `LOOPBACK_HOSTS` and `LOOPBACK_ORIGINS`), the gate's routes and admission, JSON responses and
+  their cookies, the event stream and its heartbeat, and the built app's files.
+- `gate.ts`: the `Gate`, and `admitByCookies`, which gives a request its library (The gate, above).
+- `link.ts`: `POST /api/link` and `DELETE /api/link`, and `cachedLinks`, the links found's cache
+  (A library's link, above).
+- `cookies.ts`: the library cookie's name and making, a cleared cookie, and reading a cookie from
+  a `Cookie` header.
+- `activity.ts`: each library's `Activity`, written to the link store, and the store and leases
+  that count into it (Activity, above).
 - `app-files.ts`: `readAppFile`, a file of the built app for a path (The built app, above).
 - `lookup.ts`: finds a manual that has a given section.
 - `library.ts`: `GET /api/manuals`.
@@ -330,5 +428,5 @@ data: {}
 - `preview.ts`: `?freeze`, `?fail` and `?library=empty`: canned, never stored, never billed.
 - `client-errors.ts`: `POST /api/client-errors`: logs what the browser reports
   (`server/logging/README.md` › Browser errors).
-- `passcode.ts`: `POST /api/passcode`, the cookie's name, `passcodeDigest`, `hasDigestForm`,
-  `isDigest`, and `cachedDigest`, the stored digest's cache (The passcode, above).
+- `passcode.ts`: `POST /api/passcode`, the passcode cookie's name, `passcodeDigest`,
+  `hasDigestForm`, `isDigest`, and `cachedDigest`, the stored digest's cache (The passcode, above).

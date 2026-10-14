@@ -21,7 +21,8 @@ const requestSchema = z.object({
 
 /**
  * POST /api/librarian: the conversation so far, ending with the user's message; the reply streams
- * back, from the librarian and planner acting on the request's library alone.
+ * back, from the librarian and planner acting on the request's library alone. Each reply counts
+ * one message from the library's reader; a preview counts none.
  */
 export function librarianRoute(logger: Logger): Route {
   return {
@@ -33,6 +34,7 @@ export function librarianRoute(logger: Logger): Route {
       const freeze = previewFraction(query);
       if (Number.isNaN(freeze)) return badRequest;
       if (freeze !== undefined) return librarianPreview(library.store, conversation, freeze);
+      library.activity.count("librarianMessages");
       return (sink) =>
         sendReply({
           gateway: library.gateway,

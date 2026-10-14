@@ -7,8 +7,11 @@ type Status = "ready" | "checking" | "wrong" | "unanswered";
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 
-/** One field for the server's passcode; once it is accepted, the page reloads where it was. */
-export function PasscodeScreen() {
+/**
+ * One field for the server's passcode; once it is accepted, the page reloads where it was. With
+ * `linkClosed`, a line above it says why a library's link no longer opens it.
+ */
+export function PasscodeScreen({ linkClosed = false }: { linkClosed?: boolean }) {
   const [passcode, setPasscode] = useState("");
   const [status, setStatus] = useState<Status>("ready");
   const field = useRef<HTMLInputElement>(null);
@@ -36,6 +39,11 @@ export function PasscodeScreen() {
     <div className="ui passcode">
       <main className="passcode-page">
         <div className="passcode-inner">
+          {linkClosed && (
+            <p id="passcode-closed" className="passcode-closed">
+              This link is closed.
+            </p>
+          )}
           <h1 className="passcode-title">This library is private</h1>
           <p className="passcode-lead">Enter its passcode to open it.</p>
           <form onSubmit={open}>
@@ -50,7 +58,7 @@ export function PasscodeScreen() {
                 type="password"
                 name="passcode"
                 autoComplete="current-password"
-                aria-describedby="passcode-status"
+                aria-describedby={linkClosed ? "passcode-closed passcode-status" : "passcode-status"}
                 data-shot="passcode-input"
                 value={passcode}
                 onChange={(event) => setPasscode(event.target.value)}
