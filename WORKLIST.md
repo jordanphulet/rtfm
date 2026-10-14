@@ -65,30 +65,8 @@ The user shares RTFM with each job application as its own library: one secret li
 each library isolated from the others, starting from the same starter manuals, living until the
 user revokes it, and with its activity visible to the user.
 
-### LB.5 — Cap each library's daily spend
-- **Status:** doing (agent afb560339a1138200; done, being committed)
-- **Depends on:** —
-- **Files:** `server/gateway/**`, `server/config.ts` and its test, `server/storage/types.ts`,
-  `server/storage/file-ledger.ts` and its test, `server/app.ts` and its test, `server/usage.ts`,
-  `README.md`, `server/README.md`, `server/logging/README.md`, `server/testing.ts`,
-  `scripts/ops/status.test.ts`, `scripts/ops/usage.test.ts`, `server/api/README.md`,
-  `ARCHITECTURE.md`
-- **Do:** as `research/libraries.md` › Spend describes: the gateway is bound to each `Library`
-  (`server/gateway/gateway.ts`), and every reserve entry carries `libraryId` (an entry without one
-  is the admin's); a recipient library's reservation also adds its worst case to its day's total
-  (`TOTAL` / `LIBRARY#<libraryId>#<day>` in `rtfm-usage`, `<day>#<libraryId>` in the data folder's
-  totals) within `caps.libraryDailyUsd`, $0.50, in the same atomic step, and its settle adds
-  `usd − worst case` there; past it, `SpendingRefused("library-cap")`, after the kill switch and
-  the central caps. The admin's calls have no library cap. `model.call` and `model.refused` carry
-  `libraryId`, and `npm run usage` groups spend by library. Extend `spending-ledger-suite.ts` to the
-  library cap on both ledgers, racing reservations included. Say the monthly exposure in
-  `README.md` as that section does.
-- **Done when:** the suite shows a library refused at its cap while another library and the admin
-  still reserve, the central caps and kill switch refuse every library, and `npm run build` and
-  `npm test` pass.
-
 ### LB.8 — Open a library by its link
-- **Status:** doing (agent a07b2e7ab3bb8665c; done, in review by a4e289fba5cba527e)
+- **Status:** doing (agent a07b2e7ab3bb8665c; review's fixes: a failed lookup logged the digest)
 - **Depends on:** —
 - **Merges after:** LB.5
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts` and its test,
