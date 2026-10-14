@@ -66,11 +66,13 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.5 — Cap each library's daily spend
-- **Status:** doing (agent afb560339a1138200; approved, small fixes)
+- **Status:** doing (agent afb560339a1138200; done, being committed)
 - **Depends on:** —
 - **Files:** `server/gateway/**`, `server/config.ts` and its test, `server/storage/types.ts`,
   `server/storage/file-ledger.ts` and its test, `server/app.ts` and its test, `server/usage.ts`,
-  `README.md`, `server/README.md`, `server/logging/README.md`
+  `README.md`, `server/README.md`, `server/logging/README.md`, `server/testing.ts`,
+  `scripts/ops/status.test.ts`, `scripts/ops/usage.test.ts`, `server/api/README.md`,
+  `ARCHITECTURE.md`
 - **Do:** as `research/libraries.md` › Spend describes: the gateway is bound to each `Library`
   (`server/gateway/gateway.ts`), and every reserve entry carries `libraryId` (an entry without one
   is the admin's); a recipient library's reservation also adds its worst case to its day's total
