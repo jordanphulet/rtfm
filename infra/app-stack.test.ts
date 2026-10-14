@@ -7,7 +7,6 @@ import {
   APP_LOCAL_LOG_GROUP,
   APP_LOG_GROUP,
   APP_STACK,
-  THROWAWAY_PASSCODE,
   WEB_FUNCTION,
   WEB_FUNCTION_ENDPOINT,
   WEB_FUNCTION_ENTRYPOINT,
@@ -19,6 +18,7 @@ import {
   APP_TABLE_ARN,
   BOOTSTRAP_ROLES,
   BOUNDARY_POLICY,
+  PASSCODE_PARTITION,
   PROJECT_TAG,
   STAGING_BUCKET,
   TOOLKIT_STACK,
@@ -29,7 +29,7 @@ import {
   roleArn,
   webFunctionArn,
 } from "./rtfm.ts";
-import { decide, managedPolicyStatements, reachOf, resourcesOf, type Statement } from "./testing.ts";
+import { decide, managedPolicyStatements, reachOf, resourcesOf, type RequestContext, type Statement } from "./testing.ts";
 
 const app = createApp();
 const appStack = app.node.findChild(APP_STACK) as Stack;
@@ -63,11 +63,11 @@ const TABLE_HANDLER_ACTIONS = [
 const UNTAGGABLE = ["AWS::Lambda::WebFunctionRevision", "AWS::Lambda::WebFunctionEndpoint"];
 
 /** Whether the Web Function's role may make a request: its own policy and the boundary both allow it. */
-function webFunctionCan(action: string, resource: string): boolean {
+function webFunctionCan(action: string, resource: string, context: RequestContext = {}): boolean {
   const statements = (role!.Policies as { PolicyDocument: { Statement: Statement[] } }[]).flatMap(
     ({ PolicyDocument }) => PolicyDocument.Statement,
   );
-  return decide(statements, action, resource) === "allow" && decide(boundary, action, resource) === "allow";
+  return decide(statements, action, resource, context) === "allow" && decide(boundary, action, resource, context) === "allow";
 }
 
 describe("the RtfmApp stack", () => {
@@ -182,19 +182,11 @@ describe("the Web Function", () => {
     expect(canExecute("s3:GetObjectVersion", stagedCode)).toBe(true);
   });
 
-  it("puts nothing secret in its environment, which rtfm-read can read: the entry, the throwaway passcode and the table", () => {
-    expect(revision!.ServiceConfig).toMatchObject({
-      EnvironmentVariables: {
-        AWS_LAMBDA_NODEJS_ENTRYPOINT: BUILT_ENTRYPOINT,
-        RTFM_PASSCODE: THROWAWAY_PASSCODE,
-        RTFM_APP_TABLE: APP_TABLE,
-      },
+  it("puts nothing secret in its environment, which rtfm-read can read: the entry and the table, and no passcode", () => {
+    expect((revision!.ServiceConfig as { EnvironmentVariables: object }).EnvironmentVariables).toEqual({
+      AWS_LAMBDA_NODEJS_ENTRYPOINT: BUILT_ENTRYPOINT,
+      RTFM_APP_TABLE: APP_TABLE,
     });
-    expect(Object.keys((revision!.ServiceConfig as { EnvironmentVariables: object }).EnvironmentVariables)).toEqual([
-      "AWS_LAMBDA_NODEJS_ENTRYPOINT",
-      "RTFM_PASSCODE",
-      "RTFM_APP_TABLE",
-    ]);
     expect(WEB_FUNCTION_ENTRYPOINT).toBe(BUILT_ENTRYPOINT);
   });
 
@@ -243,6 +235,10 @@ describe("the Web Function's role", () => {
     expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN.replace(APP_TABLE, "rtfm-other"))).toBe(false);
     expect(webFunctionCan("dynamodb:Query", `${APP_TABLE_ARN}/index/any`)).toBe(false);
     expect(webFunctionCan("dynamodb:Query", `${USAGE_TABLE_ARN}/index/any`)).toBe(false);
+  });
+
+  it("reads the passcode's digest, in its partition of rtfm-app", () => {
+    expect(webFunctionCan("dynamodb:GetItem", APP_TABLE_ARN, { "dynamodb:LeadingKeys": [PASSCODE_PARTITION] })).toBe(true);
   });
 
   it("can't call Bedrock: the Web Function runs only the fake models", () => {

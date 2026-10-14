@@ -13,8 +13,9 @@ const APP_ORIGIN = /^https:\/\/rtfm\.moonfetus\.com$/;
 /**
  * The deployed app on a Lambda Web Function (`server/README.md` › The Web Function): the server
  * with the fake models, keeping the manuals in the table `RTFM_APP_TABLE` names and the rest in a
- * new data folder in this environment's `/tmp`, answering only the app's own origin, and serving
- * the built app (`dist/`, or the folder `RTFM_APP_DIR` names) beside the API.
+ * new data folder in this environment's `/tmp`, behind the passcode whose digest that table holds
+ * (never `RTFM_PASSCODE`), answering only the app's own origin, and serving the built app
+ * (`dist/`, or the folder `RTFM_APP_DIR` names) beside the API.
  */
 function webFunctionConfig(): ServerConfig {
   if (config.models !== "fake") {
@@ -25,6 +26,7 @@ function webFunctionConfig(): ServerConfig {
     ...httpEndpointFromEnv(process.env.AWS_LAMBDA_HTTP_ENDPOINT),
     dataDir: mkdtempSync(path.join(tmpdir(), "rtfm-data-")),
     manualStorage: { kind: "dynamodb", table: webFunctionTableFromEnv() },
+    passcode: { kind: "stored" },
     allowedHosts: ENDPOINT_HOSTS,
     allowedOrigins: APP_ORIGIN,
     appDir: builtAppDirFromEnv(),

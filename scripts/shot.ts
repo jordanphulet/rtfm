@@ -8,7 +8,7 @@ import { fakePlan } from "../server/agent/planner/fake-planner.ts";
 import type { FailureReason, ManualSummary } from "../server/api/types.ts";
 import { sectionsInReadingOrder } from "../server/storage/manual.ts";
 import { startServer } from "../server/app.ts";
-import { config, type ServerConfig } from "../server/config.ts";
+import { config, fixedPasscode, type ServerConfig } from "../server/config.ts";
 import { baselineProblem, compareShots } from "./compare.ts";
 import { captureAll, printSummary, settle, type CaptureGroup } from "./screenshots.ts";
 import { localUrl, startViteServer } from "./vite-server.ts";
@@ -98,7 +98,7 @@ async function captureWithServers(dataDir: string): Promise<boolean> {
     ...captureGroups(HOME_DIR, HOME_SIZES, homeShots()),
   ]);
   const passcode = await captureOnServer(
-    { dataDir: path.join(dataDir, "gated"), passcode: SHOT_PASSCODE },
+    { dataDir: path.join(dataDir, "gated"), passcode: fixedPasscode(SHOT_PASSCODE) },
     captureGroups(PASSCODE_DIR, HOME_SIZES, passcodeShots()),
   );
   return printSummary([...pages, ...passcode]);

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { silentLogger, type Logger } from "../logging/logger.ts";
 import { capturingLogger, tempDataDir } from "../testing.ts";
 import { createRequestHandler, LOOPBACK_HOSTS, LOOPBACK_ORIGINS, type AdapterConfig } from "./node-adapter.ts";
+import { cachedDigest, passcodeDigest, type CurrentDigest } from "./passcode.ts";
 import type { ApiRequest, Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
@@ -14,7 +15,6 @@ const EMPTY_JSON_BODY = JSON.stringify({ text: "" });
 const LOOPBACK_ONLY: AdapterConfig = {
   allowedHosts: LOOPBACK_HOSTS,
   allowedOrigins: LOOPBACK_ORIGINS,
-  passcode: undefined,
   appDir: undefined,
   eventStreamHeartbeatMs: 15_000,
 };
@@ -26,8 +26,13 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function serve(route: Route, logger: Logger = silentLogger, config: Partial<AdapterConfig> = {}): Promise<string> {
-  const server = createServer(createRequestHandler([route], logger, { ...LOOPBACK_ONLY, ...config }));
+async function serve(
+  route: Route,
+  logger: Logger = silentLogger,
+  config: Partial<AdapterConfig> = {},
+  currentDigest?: CurrentDigest,
+): Promise<string> {
+  const server = createServer(createRequestHandler([route], logger, { ...LOOPBACK_ONLY, ...config }, currentDigest));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -128,14 +133,14 @@ describe("the built app, when the adapter serves one", () => {
   const SCRIPT = "console.log('rtfm');";
   const listsManuals: Route = { method: "GET", pattern: "/api/manuals", handle: async () => ({ status: 200, body: [] }) };
 
-  async function serveApp(config: Partial<AdapterConfig> = {}) {
+  async function serveApp(currentDigest?: CurrentDigest) {
     const parent = await tempDataDir();
     const appDir = path.join(parent, "dist");
     await mkdir(path.join(appDir, "assets"), { recursive: true });
     await writeFile(path.join(appDir, "index.html"), INDEX);
     await writeFile(path.join(appDir, "assets", "index-a1b2.js"), SCRIPT);
     await writeFile(path.join(parent, "secret.txt"), "not the app's");
-    return serve(listsManuals, silentLogger, { appDir, ...config });
+    return serve(listsManuals, silentLogger, { appDir }, currentDigest);
   }
 
   it("serves index.html for the root and every page route, never cached", async () => {
@@ -185,7 +190,7 @@ describe("the built app, when the adapter serves one", () => {
   });
 
   it("leaves /api to the routes, and the passcode to /api alone", async () => {
-    const base = await serveApp({ passcode: "copper lantern tidal owl" });
+    const base = await serveApp(async () => passcodeDigest("copper lantern tidal owl"));
     expect((await fetch(`${base}/`)).status).toBe(200);
     expect((await fetch(`${base}/api/manuals`)).status).toBe(401);
     expect((await fetch(`${base}/api/elsewhere`)).status).toBe(401);
@@ -194,5 +199,44 @@ describe("the built app, when the adapter serves one", () => {
   it("refuses another site's Origin, as the API does", async () => {
     const base = await serveApp();
     expect((await fetch(`${base}/`, { headers: { origin: "https://evil.example" } })).status).toBe(403);
+  });
+});
+
+describe("the passcode gate", () => {
+  const DIGEST = passcodeDigest("copper lantern tidal owl");
+
+  function countedRoute() {
+    const handle = vi.fn(async () => ({ status: 200, body: [] }));
+    return { route: { method: "GET", pattern: "/api/manuals", handle } satisfies Route, handle };
+  }
+
+  it("answers 500 when the digest can't be read, never runs the route, and reads again for the next request", async () => {
+    const { route, handle } = countedRoute();
+    const read = vi.fn<CurrentDigest>().mockRejectedValueOnce(new Error("DynamoDB is down")).mockResolvedValue(DIGEST);
+    const { logger, entries } = capturingLogger();
+    const base = await serve(route, logger, {}, cachedDigest(read, () => 0));
+    const withCookie = { headers: { cookie: `rtfm_passcode=${DIGEST}` } };
+
+    const failed = await fetch(`${base}/api/manuals`, withCookie);
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({ error: "Internal error" });
+    expect(handle).not.toHaveBeenCalled();
+    expect(entries.map(({ event }) => event)).toContain("request.failed");
+
+    expect((await fetch(`${base}/api/manuals`, withCookie)).status).toBe(200);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(handle).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a cookie without a digest's form with 401, without reading the digest", async () => {
+    const { route, handle } = countedRoute();
+    const read = vi.fn<CurrentDigest>(async () => DIGEST);
+    const base = await serve(route, silentLogger, {}, read);
+
+    for (const cookie of ["rtfm_passcode=copper", `rtfm_passcode=${DIGEST.toUpperCase()}`, `rtfm_passcode=${DIGEST}0`, "other=1"]) {
+      expect((await fetch(`${base}/api/manuals`, { headers: { cookie } })).status, cookie).toBe(401);
+    }
+    expect(read).not.toHaveBeenCalled();
+    expect(handle).not.toHaveBeenCalled();
   });
 });

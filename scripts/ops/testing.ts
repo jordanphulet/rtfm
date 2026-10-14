@@ -6,7 +6,7 @@ import { openAwsSession } from "../../infra/run-aws.ts";
 import { ACCOUNT } from "../../infra/rtfm.ts";
 import type { DynamoDbTable } from "../../server/storage/dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS } from "../../server/storage/dynamodb-testing.ts";
-import type { OpsContext } from "./context.ts";
+import type { OpsContext, OpsTerminal } from "./context.ts";
 
 /** What the stand-in answers to a command whose arguments start with `args`. */
 export interface StandInAnswer {
@@ -72,15 +72,28 @@ export interface StandIn {
   env: NodeJS.ProcessEnv;
   /** The file a hung command records itself in. */
   hung: string;
+  /** What the stand-in terminal was given, in order: text written to it, and each Enter it waited for. */
+  terminalEvents: TerminalEvent[];
+}
+
+/** The stand-in terminal presses Enter as soon as it is waited for. */
+export type TerminalEvent = { wrote: string } | "enter";
+
+interface StandInSettings {
+  usageTable?: DynamoDbTable;
+  appTable?: DynamoDbTable;
+  terminal?: boolean;
+  now?: Date;
 }
 
 /**
  * An ops context whose sessions run the stand-in for the AWS CLI, with a caller's own AWS key set
- * as a decoy, and whose `rtfm-usage` is the given table in DynamoDB Local.
+ * as a decoy, whose `rtfm-usage` and `rtfm-app` are the given tables in DynamoDB Local, and which
+ * has no terminal unless told otherwise.
  */
 export function standInAws(
   answers: StandInAnswer[] = [],
-  { usageTable, now = new Date("2026-10-13T12:00:00.000Z") }: { usageTable?: DynamoDbTable; now?: Date } = {},
+  { usageTable, appTable, terminal = false, now = new Date("2026-10-13T12:00:00.000Z") }: StandInSettings = {},
 ): StandIn {
   const folder = mkdtempSync(path.join(os.tmpdir(), "rtfm-ops-test-"));
   onTestFinished(() => rmSync(folder, { recursive: true, force: true }));
@@ -100,14 +113,27 @@ export function standInAws(
     STAND_IN_CALLS: callsFile,
     STAND_IN_HUNG: hung,
   };
+  const terminalEvents: TerminalEvent[] = [];
+  const standInTerminal: OpsTerminal = {
+    write: (text) => terminalEvents.push({ wrote: text }),
+    waitForEnter: async () => {
+      terminalEvents.push("enter");
+    },
+  };
   return {
     hung,
+    terminalEvents,
     context: {
       openSession: (role) => openAwsSession(role, env),
       usageTable: (credentials) => {
         if (!usageTable) throw new Error("This test gave no rtfm-usage table");
         return { ...usageTable, credentials: { kind: "keys", ...credentials } };
       },
+      appTable: (credentials) => {
+        if (!appTable) throw new Error("This test gave no rtfm-app table");
+        return { ...appTable, credentials: { kind: "keys", ...credentials } };
+      },
+      terminal: () => (terminal ? standInTerminal : undefined),
       now: () => now,
     },
     calls: () =>

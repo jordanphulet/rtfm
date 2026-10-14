@@ -106,6 +106,7 @@ of item, told apart by its keys, two strings:
 | A written section | `MANUAL#<manualId>` | `SECTION#<sectionId>` | `body`: the Markdown |
 | A section being written | `MANUAL#<manualId>` | `SECTION#<sectionId>` | `leaseOwner`: `<environment>/<run>`, two random UUIDs; `leaseExpiresAt`: epoch milliseconds (Section leases, below) |
 | A seed manual already seeded | `SEEDED` | `MANUAL#<manualId>` | none |
+| The passcode | `PASSCODE` | `PASSCODE` | `digest`: the passcode's SHA-256 digest, 64 lowercase hex characters (`server/api/README.md` › The passcode) |
 
 Every manual is in the one partition `LIBRARY`, apart from the bodies, so listing the library
 reads no body, and each manual's `written` set gives its written sections without reading them.
@@ -136,6 +137,16 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   manual with more than 99 section items can't be deleted; a planned manual has at most 32
   sections.
 - **`seededManualIds`** queries the partition `SEEDED`; **`markSeeded`** puts its item.
+- **`readPasscodeDigest(table)`** gets the passcode's item (`PASSCODE_KEY`), strongly consistent,
+  and gives its digest, or undefined when there is no item; **`writePasscodeDigest(table,
+  digest)`** puts it, replacing the one before. Both hold the digest to its form,
+  `PASSCODE_DIGEST_PATTERN` (64 lowercase hex characters): a write refuses anything else, and a
+  read of an item holding anything else throws, naming the form. They aren't part of
+  `ManualStore`: the Web Function's passcode gate reads the digest (`server/app.ts`), and
+  `npm run ops -- passcode` reads and writes it as `rtfm-ops` (`README.md` › The ops tools). Its
+  partition, `PASSCODE` (`PASSCODE_PARTITION` in `infra/rtfm.ts`), is the one partition of
+  `rtfm-app` that `rtfm-ops` may read and write, limited to it with `dynamodb:LeadingKeys`
+  (`infra/README.md` › The identities). The item never holds the passcode itself.
 - **Transactions that collide.** Two transactions on one item at once can cancel one of them with
   `TransactionConflict`, as two saves into one manual do, since both update its item. The SDK
   doesn't retry a cancelled transaction, so the store does, up to 8 attempts in all, after a
@@ -144,7 +155,8 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   stand-in on loopback.
 - **What the Web Function's role may do** on the table is exactly what the store and the leases
   do: `GetItem`, `Query`, `PutItem`, `UpdateItem` and `DeleteItem`, which also cover the
-  transactions' parts (`infra/app-stack.ts`).
+  transactions' parts and the read of the passcode's digest (`infra/app-stack.ts`). They cover
+  every item of the table, so the role could also read or write the passcode's.
 
 The client (`createDynamoDbManualStore(table)`) takes everything from the `DynamoDbTable` it is
 given: the table's name, region, endpoint and credentials. The credentials are fixed keys
@@ -165,11 +177,6 @@ alone asks for, reads the environment. `dynamodb-manual-store.test.ts` checks th
 in the environment and in config and credentials files, and each source of the role's
 credentials against a stand-in. It refuses fixed keys that are empty. Who gives it which
 credentials is `server/README.md` › The Web Function.
-
-**Room for what comes next.** Each kind of item has its own partition key, so later items fit
-beside these: the passcode's digest as one item of the partition `PASSCODE` (`PASSCODE_PARTITION`
-in `infra/rtfm.ts`), the one partition of `rtfm-app` that `rtfm-ops` may read and write, limited
-to it with `dynamodb:LeadingKeys` (`infra/README.md` › The identities).
 
 **Changing the stored form.** The table is deployed data: a change to these items carries its
 migration, or reads the old form too (`ARCHITECTURE.md` › Everything runs on one machine).
@@ -329,10 +336,10 @@ delete `.data/ledger/`, because the caps are computed from it.
 - `types.ts`: `ManualStore`, `SectionLeases`, `UsageLedger`.
 - `file-manual-store.ts`: manuals and sections as files.
 - `in-process-leases.ts`: section leases for a server alone on its store.
-- `dynamodb-manual-store.ts`: manuals, sections and section leases in a table shaped as
-  `rtfm-app`, and `createAppTable` for DynamoDB Local. The one file here that imports the AWS SDK.
-  Its client builder (`documentClient`) and transaction pause (`pause`) also serve the gateway's
-  table `rtfm-usage`.
+- `dynamodb-manual-store.ts`: manuals, sections, section leases and the passcode's digest in a
+  table shaped as `rtfm-app`, and `createAppTable` for DynamoDB Local. The one file here that
+  imports the AWS SDK. Its client builder (`documentClient`) and transaction pause (`pause`) also
+  serve the gateway's table `rtfm-usage`.
 - `manual-store-suite.ts`: the tests every `ManualStore` passes.
 - `dynamodb-testing.ts`: the tests' tables in DynamoDB Local.
 - `file-ledger.ts`: the usage ledger as JSON lines.

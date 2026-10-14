@@ -108,14 +108,14 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
   app), or from the folder `RTFM_APP_DIR` names, as its test does.
 - **It answers only the app's origin**, `https://rtfm.moonfetus.com`, and an endpoint's domain as
   the `Host` (`server/api/README.md` › Only the app's own pages).
-- **`RTFM_PASSCODE`** is set in the revision's environment, which `rtfm-read` can read, so it is a
-  throwaway, `THROWAWAY_PASSCODE` in `infra/app-stack.ts`, never the user's own. Through the
-  edge, an agent keeps the cookie with `curl -c` and sends it with `-b`:
+- **The passcode's digest from the table**, never from `RTFM_PASSCODE`, which it ignores: the
+  passcode's item in `rtfm-app`, read again at most once a minute, and every API request refused
+  while there is none (`server/api/README.md` › The passcode). The revision's environment, which
+  `rtfm-read` can read, holds no passcode. Through the edge, an agent sends the cookie
+  `npm run ops -- passcode cookie` prints:
 
   ```sh
-  curl -c /tmp/rtfm-cookies -H 'content-type: application/json' \
-    -d '{"passcode":"<THROWAWAY_PASSCODE>"}' https://rtfm.moonfetus.com/api/passcode
-  curl -b /tmp/rtfm-cookies https://rtfm.moonfetus.com/api/manuals
+  curl -b "$(npm run -s ops -- passcode cookie)" https://rtfm.moonfetus.com/api/manuals
   ```
 - On SIGTERM, which Lambda sends when it removes an environment, with 1 second to exit, it closes
   the server as `main.ts` does.
@@ -124,13 +124,14 @@ The stacks), started by `web-function.ts`. It differs from `main.ts` only in its
 package). To run it on this machine as Lambda would, on any free port:
 
 ```sh
-AWS_LAMBDA_HTTP_ENDPOINT=127.0.0.1:0 RTFM_PASSCODE=try RTFM_APP_TABLE=<table> \
+AWS_LAMBDA_HTTP_ENDPOINT=127.0.0.1:0 RTFM_APP_TABLE=<table> \
   RTFM_DYNAMODB_ENDPOINT=<DynamoDB Local> AWS_REGION=us-west-2 AWS_ACCESS_KEY_ID=<dummy> \
   AWS_SECRET_ACCESS_KEY=<dummy> AWS_SESSION_TOKEN=<dummy> node server/web-function.ts
 ```
 
 It needs DynamoDB Local running with a table shaped as `rtfm-app`, as its test sets up
-(`server/storage/README.md` › DynamoDB Local, for the tests). It answers only a request whose
+(`server/storage/README.md` › DynamoDB Local, for the tests), and refuses every API request until
+the table holds a passcode's digest (`writePasscodeDigest`). It answers only a request whose
 `Host` is an endpoint's domain, so `curl` must send one:
 `curl -H 'Host: x.lambda-web.us-west-2.on.aws' http://127.0.0.1:<port>/`. `npm run build` first
 puts the app in `dist/`.
@@ -175,7 +176,8 @@ section writer and the librarian's model, which also plans new manuals (`createM
 | Models, data dir, caps, concurrency, jobs, section length, the librarian's turn limit, the allowed `Host`s and `Origin`s, the event streams' heartbeat, Bedrock's spending table (`usageTable`: `rtfm-usage`, in the region `.env.local` names) | `server/config.ts` | no |
 | API port | `server/ports.ts` | no |
 | Another data folder or port for one run: `RTFM_DATA_DIR`, `RTFM_PORT` | the environment, read by `server/config.ts` | no |
-| The passcode: `RTFM_PASSCODE` | the environment, read by `server/config.ts` | yes |
+| The passcode on this machine: `RTFM_PASSCODE` | the environment, read by `server/config.ts`, which keeps only its digest | yes |
+| The passcode on the Web Function: its digest | the passcode's item in `rtfm-app`, set with `npm run ops -- passcode set` | yes: it opens the app |
 | The Web Function's address and built app: `AWS_LAMBDA_HTTP_ENDPOINT`, `RTFM_APP_DIR` | the environment, read by `server/config.ts` for `server/web-function.ts` (The Web Function, above) | no |
 | The Web Function's table: `RTFM_APP_TABLE`, `AWS_REGION`, where the execution role's credentials come from (`AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN`, or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`), and, in tests, `RTFM_DYNAMODB_ENDPOINT` | the environment Lambda and `RtfmApp` set, read by `server/config.ts` and the DynamoDB store for `server/web-function.ts` alone (The Web Function, above) | the credentials |
 | The Web Function's own `Host`s and `Origin` | `server/web-function.ts` | no |
@@ -183,9 +185,9 @@ section writer and the librarian's model, which also plans new manuals (`createM
 
 - **Types.** `config` is a `ServerConfig`, which extends `GatewayConfig` (`caps`,
   `maxConcurrentCalls`, `idleTimeoutMs`, `jobs`, in `gateway/types.ts`) and the Node adapter's
-  `AdapterConfig` (`allowedHosts`, `allowedOrigins`, `passcode`, `appDir`,
-  `eventStreamHeartbeatMs`, in `api/node-adapter.ts`) with the address it listens on (`host`,
-  `127.0.0.1`), the port, data dir, models, `maxConcurrentRuns`, `sectionWordsRequested` and
+  `AdapterConfig` (`allowedHosts`, `allowedOrigins`, `appDir`, `eventStreamHeartbeatMs`, in
+  `api/node-adapter.ts`) with the address it listens on (`host`, `127.0.0.1`), the port, data
+  dir, manual storage, models, `passcode`, `maxConcurrentRuns`, `sectionWordsRequested` and
   `sectionExpectedCharacters`. `startServer`, the gateway and the Node adapter take it as it is, so
   tests, the shot script and `web-function.ts` spread `config` and override what they need.
 - **`allowedHosts` and `allowedOrigins`** are this machine's own names and pages
@@ -197,10 +199,13 @@ section writer and the librarian's model, which also plans new manuals (`createM
   working directory; a `RTFM_PORT` that isn't a whole number from 0 to 65535 stops the server from
   starting, and 0 takes any free port. Vite's proxy always points at `API_PORT`, so `RTFM_PORT`
   is for `npm run server` alone.
-- **`RTFM_PASSCODE`** is `config.passcode`: set, every API request must carry it in a cookie;
-  unset or empty, there is no gate (`server/api/README.md` › The passcode). It is a secret, so it
-  is never logged, and `server.started` says only whether it is set (`passcodeGate`). Change it
-  and restart the server to rotate it.
+- **`config.passcode`** is where the passcode's digest comes from (`PasscodeSource`): on this
+  machine `RTFM_PASSCODE`, hashed as `config.ts` loads (`fixedPasscode`), so the server keeps only
+  the digest, and every API request must carry it in a cookie; unset or empty, `undefined`, and
+  there is no gate. The Web Function sets `{ kind: "stored" }`, the digest in `rtfm-app`
+  (`server/api/README.md` › The passcode). Neither the passcode nor the digest is ever logged, and
+  `server.started` says only whether there is a gate (`passcodeGate`). Change `RTFM_PASSCODE` and
+  restart the server to rotate it.
 - **`maxConcurrentCalls` is `maxConcurrentRuns + 2`**, both from one constant. The section runs
   can use at most 3 calls between them, so 2 are always left for the librarian's turns and the
   planner's plans, one each or two of either. Three sections being written can therefore never
@@ -335,9 +340,10 @@ the machine.
 - `config.ts`: committed settings (Configuration, above), and the Web Function's
   (`httpEndpointFromEnv`, `builtAppDirFromEnv`, `webFunctionTableFromEnv`).
 - `ports.ts`: `API_PORT`, alone, so Vite's config can import it.
-- `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, models, gateway,
-  routes; `close()` waits for model calls to settle. `runServerProcess(config, logger)`: the
-  server as the whole process, for `main.ts` and `web-function.ts`.
+- `app.ts`: `startServer(config, replaced?)`: locks the data folder; storage, the passcode's
+  digest, models, gateway, routes; `close()` waits for model calls to settle.
+  `runServerProcess(config, logger)`: the server as the whole process, for `main.ts` and
+  `web-function.ts`.
 - `testing.ts`: helpers shared by the tests: temp folders, the fake model's `FAST_PACE` and a
   fast fake writer that calls it directly, the price table with the test model (`TEST_PRICES`)
   and its gateway config (`testGatewayConfig`), the real gateway over any `ModelClient`

@@ -32,6 +32,7 @@ Never read, print, copy or edit anything under `~/.aws`: it holds the user's wor
 RTFM's keys. Reach AWS only through `npm run aws`, `npm run cdk` and `npm run ops`
 (`infra/README.md`, `README.md` › The ops tools), never by running `aws` or `cdk` directly.
 `npm run ops -- kill-switch on|off` changes the live app: run it only when the user asks in chat.
+`npm run ops -- passcode set` is the user's: agents never run it.
 
 To run the app for a check, start `npm run serve-temp` in the background and stop it with its handle
 or the PID it prints (`README.md` › A throwaway server). Only stop processes you started yourself,

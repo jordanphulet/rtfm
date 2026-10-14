@@ -9,7 +9,9 @@ import {
   createDynamoDbManualStore,
   createDynamoDbSectionLeases,
   MOST_SECTIONS_DELETED_AT_ONCE,
+  readPasscodeDigest,
   TRANSACTION_ATTEMPTS,
+  writePasscodeDigest,
   type DynamoDbTable,
   type TableCredentials,
 } from "./dynamodb-manual-store.ts";
@@ -214,6 +216,38 @@ describe("the DynamoDB section leases' renewals", { timeout: 20_000 }, () => {
     expect(lease.lost.reason).toEqual(new Error(`The lease on ${manual.id}/s is no longer this writer's`));
     await expect(lease.saveBody("body")).rejects.toThrow(`The lease on ${manual.id}/s was lost before`);
     expect(dynamoDb.operations("TransactWriteItems")).toEqual([]);
+  });
+});
+
+describe("the passcode's digest in the table", () => {
+  const DIGEST = "a".repeat(64);
+
+  it("is read back as written, replacing the one before, and is undefined while none is set", async () => {
+    const table = await testAppTable();
+    expect(await readPasscodeDigest(table)).toBeUndefined();
+    await writePasscodeDigest(table, DIGEST);
+    await writePasscodeDigest(table, "b".repeat(64));
+    expect(await readPasscodeDigest(table)).toBe("b".repeat(64));
+  });
+
+  it("is refused when it isn't SHA-256 in lowercase hex, and nothing is written", async () => {
+    const table = await testAppTable();
+    for (const digest of ["", "copper lantern tidal owl", DIGEST.toUpperCase(), DIGEST.slice(1), `${DIGEST}a`]) {
+      await expect(writePasscodeDigest(table, digest), digest).rejects.toThrow("A passcode's digest is SHA-256 in lowercase hex");
+    }
+    expect(await readPasscodeDigest(table)).toBeUndefined();
+  });
+
+  it("throws, naming the form it expects, when the stored item holds anything else", async () => {
+    for (const digest of [{ S: "copper lantern tidal owl" }, { S: DIGEST.toUpperCase() }, { N: "42" }]) {
+      const item = { pk: { S: "PASSCODE" }, sk: { S: "PASSCODE" }, digest };
+      const dynamoDb = await standInDynamoDb((operation) =>
+        operation === "GetItem" ? { status: 200, body: { Item: item } } : undefined,
+      );
+      await expect(readPasscodeDigest(dynamoDb.table()), JSON.stringify(digest)).rejects.toThrow(
+        "The passcode's item in the table holds no SHA-256 digest in lowercase hex",
+      );
+    }
   });
 });
 

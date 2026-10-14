@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, onTestFinished } from "vitest";
+import { passcodeDigest } from "../server/api/passcode.ts";
+import { writePasscodeDigest } from "../server/storage/dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS, testAppTable } from "../server/storage/dynamodb-testing.ts";
 import { WEB_FUNCTION_ENTRYPOINT } from "./build-web-function.ts";
 
@@ -25,16 +27,16 @@ function build(outDir: string) {
 
 /**
  * Runs the package as Lambda does: its entry, from the package's root, on a stand-in endpoint,
- * with a table of its own in DynamoDB Local.
+ * with a table of its own in DynamoDB Local, holding the passcode's digest.
  */
 async function runPackage(packageDir: string, tmp: string) {
   const table = await testAppTable();
+  await writePasscodeDigest(table, passcodeDigest(PASSCODE));
   const child = spawn(process.execPath, [WEB_FUNCTION_ENTRYPOINT], {
     cwd: packageDir,
     env: {
       ...process.env,
       AWS_LAMBDA_HTTP_ENDPOINT: "127.0.0.1:0",
-      RTFM_PASSCODE: PASSCODE,
       RTFM_MODELS: undefined,
       RTFM_APP_TABLE: table.name,
       RTFM_DYNAMODB_ENDPOINT: table.endpoint,
@@ -89,7 +91,7 @@ describe("build-web-function.ts", () => {
     const page = await get(port, "/read/the-haunt-that-listens");
     expect(page.status).toBe(200);
     expect(page.text).toContain('<div id="root">');
-    const manuals = await get(port, "/api/manuals", `rtfm_passcode=${encodeURIComponent(PASSCODE)}`);
+    const manuals = await get(port, "/api/manuals", `rtfm_passcode=${passcodeDigest(PASSCODE)}`);
     expect(JSON.parse(manuals.text)).toContainEqual(expect.objectContaining({ id: "the-haunt-that-listens", writtenCount: 7 }));
   });
 

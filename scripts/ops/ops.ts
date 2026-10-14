@@ -5,12 +5,15 @@ import { LOG_OPTIONS, logOptionsFrom } from "../../server/logging/log-reader.ts"
 import { awsContext, type CommandResult, type OpsContext } from "./context.ts";
 import { KILL_SWITCH_ACTIONS, killSwitch, type KillSwitchAction } from "./kill-switch.ts";
 import { logs, sinceMs } from "./logs.ts";
+import { PASSCODE_ACTIONS, passcode, type PasscodeAction } from "./passcode.ts";
 import { status } from "./status.ts";
 import { usage } from "./usage.ts";
 
 const USAGE = `Usage: npm run ops -- <command> [--json]
 
   kill-switch on|off|status   Bedrock's kill switch in rtfm-usage, as rtfm-ops
+  passcode set                A new passcode, shown once in a terminal; stores its digest, as rtfm-ops
+  passcode cookie             The cookie that opens the app, the passcode's digest, as rtfm-ops
   usage                       Today's and this month's Bedrock spend in rtfm-usage, as rtfm-read
   logs [--level <level>] [--event <event>] [--lines <n>] [--since <90m|6h|2d>]
                               The Web Function's log entries in /rtfm/app, as rtfm-read
@@ -43,6 +46,13 @@ function commandResult(
         throw new OpsUsageError("kill-switch takes one of on, off or status");
       }
       return killSwitch(action as KillSwitchAction, context);
+    }
+    case "passcode": {
+      const [action, ...extra] = positionals;
+      if (!PASSCODE_ACTIONS.includes(action as PasscodeAction) || extra.length > 0) {
+        throw new OpsUsageError("passcode takes one of set or cookie");
+      }
+      return passcode(action as PasscodeAction, context);
     }
     case "usage":
       noPositionals(command, positionals);

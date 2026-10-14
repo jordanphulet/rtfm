@@ -44,18 +44,19 @@ the same lines unchanged:
 
 Ids, sizes, counts and durations, never a manual's text, a prompt, a conversation or a reply, a
 request's query or headers (other than a refused request's `Host` and `Origin`), credentials, or
-the passcode, whether entered or carried in a cookie. A browser error's message and stack are
-logged as the browser reports them. The Bedrock client writes the AWS keys out of a thrown error's
-message and stack, since a signature error from AWS quotes the access key ID.
+the passcode or its digest, whether entered, carried in a cookie or stored. A browser error's
+message and stack are logged as the browser reports them. The Bedrock client writes the AWS keys
+out of a thrown error's message and stack, since a signature error from AWS quotes the access key
+ID.
 
 | Event | Level | When, and its fields |
 | --- | --- | --- |
-| `server.started`, `server.stopped` | INFO | `startServer` listening (`host`, `port`, `models`, `dataDir`, `manualStorage`: `files` or `dynamodb`, with DynamoDB `credentials`: where its keys come from, by name only, and `passcodeGate`: whether a passcode is set), and `close()` done |
+| `server.started`, `server.stopped` | INFO | `startServer` listening (`host`, `port`, `models`, `dataDir`, `manualStorage`: `files` or `dynamodb`, with DynamoDB `credentials`: where its keys come from, by name only, and `passcodeGate`: whether there is a passcode gate), and `close()` done |
 | `server.refused` | WARN | The data folder's lock is held by another server (`pid`, `dataDir`) |
 | `server.start-failed`, `server.crashed` | ERROR | The server couldn't start (an unpriced model, missing credentials, a port in use; on the Web Function, Bedrock models or no `AWS_LAMBDA_HTTP_ENDPOINT`); an uncaught exception or unhandled rejection in `runServerProcess` |
 | `request` | INFO, WARN for 5xx | Each request, the built app's files included, once its response closes: `requestId` (a UUID), `method`, `path` (without the query), `status`, `durationMs`, and `clientClosed` when the client left before the response ended |
 | `request.refused` | WARN | The `Host` and `Origin` checks refused it, it didn't carry the passcode (`401`), or its body was too long or not JSON (`status`, `host`, `origin`) |
-| `passcode.wrong`, `passcode.accepted` | WARN, INFO | `POST /api/passcode` with a wrong passcode, or the right one (no fields: never the passcode) |
+| `passcode.wrong`, `passcode.accepted`, `passcode.unset` | WARN, INFO, WARN | `POST /api/passcode` with a wrong passcode, the right one, or any while no passcode is set (no fields: never the passcode or its digest) |
 | `request.failed` | ERROR | A handler threw (the 500 in `server/api/README.md` › Routes) |
 | `model.call` | INFO, WARN when failed | Each gateway call once it settles: `callId` (the ledger's), `job`, `model`, `outcome`, the four token counts, `usd`, `estimated`, `durationMs`; a failed call's error |
 | `model.refused` | WARN | The gateway refused a call: `job`, `model`, `reason` (`kill-switch`, `daily-cap`, `monthly-cap` or `busy`) |
@@ -132,8 +133,8 @@ not tested); the request, refusal, model-call, run and reply entries; the client
 (its fields, the `Host` and `Origin` checks, truncation and the hourly limit); `main.ts` writing
 the same lines to standard output and the file, and `web-function.ts` writing them to standard
 output; and that no cookie, query, conversation or section text
-reaches the log file (`api/logging.test.ts`), nor the passcode, entered or in a cookie
-(`api/passcode.test.ts`), nor an AWS key from a Bedrock error
+reaches the log file (`api/logging.test.ts`), nor the passcode or its digest, entered, in a
+cookie or stored (`api/passcode.test.ts`), nor an AWS key from a Bedrock error
 (`gateway/bedrock-client.test.ts`, since only `server/gateway/` may use the Bedrock client).
 
 ## Files

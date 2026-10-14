@@ -54,9 +54,10 @@ Both ports are fixed (`vite.config.ts` and `API_PORT` in `server/ports.ts`):
 The API server listens on `127.0.0.1` only; `server/api/README.md` › Only the app's own pages has
 the checks it makes.
 
-The same server runs in AWS on a Lambda Web Function, `rtfm-app`, with the fake models and a
-throwaway passcode, keeping the manuals in the DynamoDB table `rtfm-app` and serving the built app
-beside the API (`server/README.md` › The Web Function).
+The same server runs in AWS on a Lambda Web Function, `rtfm-app`, with the fake models, behind
+the passcode whose digest the DynamoDB table `rtfm-app` holds (A passcode, below), keeping the
+manuals in that table and serving the built app beside the API (`server/README.md` › The Web
+Function).
 `npm run cdk -- deploy RtfmApp` builds and deploys it (`infra/README.md`).
 
 | Script                       | What it does                                                                 |
@@ -76,7 +77,7 @@ beside the API (`server/README.md` › The Web Function).
 | `npm run commit-task`        | Commits a task's work with its body and review trailer. See below.           |
 | `npm run commit-worklist`    | Commits `WORKLIST.md` alone, with a body from its diff. See below.           |
 | `npm run task-prompt`        | A task's agent prompt (`--review`: its reviewer's). `-s` drops npm's banner. |
-| `npm run ops`                | The deployed app's kill switch, spend, logs and status. See below.           |
+| `npm run ops`                | The deployed app's kill switch, passcode, spend, logs and status. See below. |
 | `npm run aws`                | The AWS CLI as RTFM's own role, the only way to it. See `infra/README.md`.   |
 | `npm run cdk`                | The CDK CLI in `infra/`, as RTFM's own role. See `infra/README.md`.          |
 
@@ -303,22 +304,50 @@ Any value of `RTFM_MODELS` other than `fake` or `bedrock` stops the server from 
 
 ## A passcode
 
-`RTFM_PASSCODE` puts the whole app behind a passcode, so that once it is on a public URL nobody
-who finds it can spend the Bedrock budget:
+A passcode puts the whole app behind a passcode screen, so that once it is on a public URL nobody
+who finds it can spend the Bedrock budget. The server keeps only the passcode's SHA-256 digest,
+and a browser that enters the passcode gets a cookie holding that digest.
+
+- With one set, every API request but entering the passcode answers `401` until the browser has
+  entered it, and the page shows a passcode screen in its place. Once it is entered, the page
+  reloads where it was, and the browser keeps the cookie for the rest of its session.
+- Nothing slows guessing (no attempt limit, no lockout), so the passcode's length is what keeps
+  it safe: a few random words, never one word or a short code.
+- Neither the passcode nor its digest is ever logged: refused requests and wrong passcodes are,
+  without them.
+
+**On this machine**, `RTFM_PASSCODE` sets it. The server hashes it when it starts and keeps only
+the digest. Unset or empty, there is no passcode. To change it, set a new one and restart the
+server: every browser then has the old digest and is asked again.
 
 ```sh
 RTFM_PASSCODE='<four or more random words>' npm run dev
 ```
 
-- **Pick a few random words**, four or more, rather than one word or a short code. Nothing slows
-  guessing (no attempt limit, no lockout), so the passcode's length is what keeps it safe.
-- With it set, every API request but entering the passcode answers `401` until the browser has
-  entered it, and the page shows a passcode screen in its place. Once it is entered, the page
-  reloads where it was, and the browser keeps a cookie for the rest of its session.
-- **To change it**, set a new one and restart the server. Every browser then has the old one and
-  is asked again.
-- Unset or empty, there is no passcode.
-- It is never logged: refused requests and wrong passcodes are, without it.
+**The deployed app** reads the digest from the passcode's item in the table `rtfm-app`, never from
+its environment. You set it, in a terminal outside the Claude app, never in its Terminal panel,
+whose screen a session can read:
+
+```sh
+npm run ops -- passcode set
+```
+
+- It makes a passcode of four random words and stores only its digest, as `rtfm-ops`. It shows
+  the words once, in the terminal alone, and waits for Enter; then it clears the screen and its
+  scrollback. Keep the words: nothing can show them again.
+- It runs only when its standard input and output are a terminal, so the words never go to a
+  pipe, a file or a program's output. Agents never run it (`CLAUDE.md` › Shell).
+- Running it again sets a new passcode. The Web Function reads the digest again at most a minute
+  after it last did, so within a minute every browser has the old cookie and is asked again, with
+  no deploy.
+- While no passcode is set, the deployed app refuses every API request, and every passcode.
+
+**The digest opens the app.** The cookie holds the digest itself, so whatever can read the
+passcode's item can open the app without the passcode: `rtfm-ops` (`npm run ops -- passcode
+cookie` prints the cookie, which is how an agent's smoke check gets in, `infra/README.md` ›
+Deploying the app stack), the Web Function's role `rtfm-app-web-function`, which reads and writes
+every item of `rtfm-app`, and any role an app stack creates with access to that table. The
+passcode itself is in no file, log or table: only you see it, once.
 
 How the server checks it is in `server/api/README.md` › The passcode, and the screen's design in
 `DESIGN.md` › The passcode screen.
@@ -490,18 +519,23 @@ RTFM's roles, through the same environment as `npm run aws` (`infra/README.md` �
 RTFM's own files under `~/.aws/rtfm/`, none of the caller's AWS settings, and the identity check.
 It chooses the role itself, and takes no `--profile`. They are built for agents:
 
-- **Non-interactive**: nothing asks a question or waits for input.
+- **Non-interactive**: nothing asks a question or waits for input, but `passcode set`, which is
+  yours alone.
 - **Plain text**, or the same as JSON with `--json`, on standard output.
 - **Exit code 1 on failure**, with the reason on standard error: a command line it doesn't take
   (with the usage), a refused identity, or a read or write that failed. `status` exits 1 when any
   of its reads failed, and still prints the rest.
 
 `kill-switch on` and `off` change the live app, so agents run them only when the user asks in chat
-(`CLAUDE.md` › Shell); the other commands only read.
+(`CLAUDE.md` › Shell). `passcode set` is yours, and agents never run it: it runs only in a
+terminal, which should be one outside the Claude app (A passcode, above). The other commands only
+read.
 
 | Command | Role | What it does |
 | --- | --- | --- |
 | `kill-switch on`, `off`, `status` | `rtfm-ops` | Puts or deletes the kill switch's item in `rtfm-usage` (Bedrock's spending, above), then reads it back: `Kill switch: off.`, or `ON`; `--json` gives `{ "killSwitchOn": false }` |
+| `passcode set` | `rtfm-ops` | Makes a passcode of four random words, from the more than a thousand in `scripts/ops/passcode-words.ts`, and puts its digest in the passcode's item in `rtfm-app`; then shows the words on the terminal, waits for Enter, and clears the screen and its scrollback (`\x1b[2J\x1b[3J\x1b[H`). Its output says only that the passcode is set. With no terminal on standard input and output it exits 1 before reaching AWS |
+| `passcode cookie` | `rtfm-ops` | The passcode cookie, `rtfm_passcode=<digest>`, read from the passcode's item in `rtfm-app`, for `curl -b`; `--json` gives `{ "cookie": "…" }`. It exits 1 when no passcode is set. The cookie opens the app, so pass it straight to `curl` rather than printing it |
 | `usage` | `rtfm-read` | `npm run usage`'s report of `rtfm-usage`: today's and this month's Bedrock spend against the caps, by model and by job, the unsettled reservations and the kill switch; `--json` gives the same figures |
 | `logs` | `rtfm-read` | The Web Function's log entries in CloudWatch (`/rtfm/app`), one line each as `npm run logs` prints them; `--json` gives the entries |
 | `status` | `rtfm-read` | Each stack's status and termination protection (`RtfmToolkit`, `RtfmAccess`, `RtfmApp`, `RtfmEdgeCertificate` in `us-east-1`, `RtfmEdge`), the Web Function's state and its endpoint's auth type and state, each table's status, deletion protection and point-in-time recovery, today's and this month's Bedrock spend, and the kill switch; anything not deployed shows as `missing` |
@@ -509,6 +543,7 @@ It chooses the role itself, and takes no `--profile`. They are built for agents:
 ```sh
 npm run ops -- kill-switch on
 npm run ops -- usage --json
+curl -b "$(npm run -s ops -- passcode cookie)" https://rtfm.moonfetus.com/api/manuals
 npm run ops -- logs --level warn --since 6h       # warnings and errors of the last 6 hours
 npm run ops -- logs -e section -n 200             # the last 200 section events of the last day
 npm run ops -- status
@@ -519,9 +554,9 @@ unless given), and `--since`, how far back to read: minutes, hours or days, such
 `2d` (`1d` unless given; CloudWatch keeps 30 days). It has no `--follow`. Lines in the log group
 that aren't the server's entries, such as Lambda's own, are left out.
 
-`kill-switch`, `usage` and `status` reach `rtfm-usage` with the AWS SDK, as the role: the AWS CLI
-gives the role's temporary keys (`aws configure export-credentials`), so the SDK never reads
-`~/.aws` itself. The rest goes through the AWS CLI. The code is in `scripts/ops/`, and its tests
+`kill-switch`, `usage` and `status` reach `rtfm-usage`, and `passcode` reaches `rtfm-app`, with
+the AWS SDK, as the role: the AWS CLI gives the role's temporary keys
+(`aws configure export-credentials`), so the SDK never reads `~/.aws` itself. The rest goes through the AWS CLI. The code is in `scripts/ops/`, and its tests
 run offline: the items in DynamoDB Local, and a stand-in for the AWS CLI.
 
 ## Screenshots

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "../logging/logger.ts";
 import { readAppFile, type AppFile } from "./app-files.ts";
-import { isPasscode, PASSCODE_COOKIE, PASSCODE_PATH, passcodeRequired } from "./passcode.ts";
+import { hasDigestForm, isDigest, PASSCODE_COOKIE, PASSCODE_PATH, passcodeRequired, type CurrentDigest } from "./passcode.ts";
 import { badRequest, notFound, type EventStream, type JsonResponse, type Route } from "./route.ts";
 
 const MAX_BODY_CHARACTERS = 256 * 1024;
@@ -17,8 +17,6 @@ export interface AdapterConfig {
   allowedHosts: RegExp;
   /** The `Origin`s the server answers when a request sends one: the app's own pages. */
   allowedOrigins: RegExp;
-  /** What every API request must carry in its `rtfm_passcode` cookie; undefined means no gate. */
-  passcode: string | undefined;
   /** The built app (`dist/`) to serve beside the API; undefined when Vite serves it. */
   appDir: string | undefined;
   /** How often an event stream sends a comment, so no proxy in front of the server sees it fall silent. */
@@ -40,8 +38,11 @@ class Refused extends Error {
   }
 }
 
-/** With a `passcode`, every API request but `POST /api/passcode` must carry it in its cookie. */
-export function createRequestHandler(routes: Route[], logger: Logger, config: AdapterConfig) {
+/**
+ * With a `currentDigest`, every API request but `POST /api/passcode` must carry the passcode's
+ * digest in its cookie; without one, there is no gate.
+ */
+export function createRequestHandler(routes: Route[], logger: Logger, config: AdapterConfig, currentDigest?: CurrentDigest) {
   return async (request: IncomingMessage, response: ServerResponse) => {
     const startedAt = performance.now();
     const logged: RequestFields = { requestId: randomUUID(), method: request.method, path: pathOf(request) };
@@ -56,7 +57,7 @@ export function createRequestHandler(routes: Route[], logger: Logger, config: Ad
       if (config.appDir !== undefined && !isApiPath(url.pathname)) {
         return writeAppFile(response, request.method, await readAppFile(config.appDir, url.pathname));
       }
-      if (config.passcode !== undefined) refuseWithoutPasscode(request, url.pathname, config.passcode);
+      if (currentDigest) await refuseWithoutPasscode(request, url.pathname, currentDigest);
       const body = await readJsonBody(request);
       const match = matchRoute(routes, request.method, url.pathname);
       if (!match) return writeJson(response, notFound);
@@ -119,10 +120,13 @@ function isApiPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/");
 }
 
-function refuseWithoutPasscode(request: IncomingMessage, pathname: string, passcode: string) {
+/** Refuses a request whose cookie isn't the current digest, and every request while no passcode is set. */
+async function refuseWithoutPasscode(request: IncomingMessage, pathname: string, currentDigest: CurrentDigest) {
   if (request.method === "POST" && pathname === PASSCODE_PATH) return;
   const given = cookieValue(request.headers.cookie, PASSCODE_COOKIE);
-  if (given === undefined || !isPasscode(given, passcode)) throw new Refused(passcodeRequired);
+  if (given === undefined || !hasDigestForm(given)) throw new Refused(passcodeRequired);
+  const digest = await currentDigest();
+  if (digest === undefined || !isDigest(given, digest)) throw new Refused(passcodeRequired);
 }
 
 /** The value of the first cookie with this name in a `Cookie` header, decoded. */
