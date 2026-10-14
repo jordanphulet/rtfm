@@ -60,7 +60,7 @@ aren't RTFM's.
   evidence, and `npm test` passes.
 
 ### IN.22 — See the heartbeat through the edge
-- **Status:** doing (agent a94f0f92660183672)
+- **Status:** doing (agent a94f0f92660183672; done, being committed)
 - **Depends on:** —
 - **Files:** `research/aws-design.md`
 - **Do:** through `https://rtfm.moonfetus.com`, `curl -N` a section stream or a librarian reply
