@@ -93,18 +93,6 @@ aren't RTFM's.
   the old cookie, and the set command refusing to run without a terminal; no file or log an agent
   can read holds the passcode.
 
-### IN.19 — Statuses and deletes see every environment's runs
-- **Status:** doing (agent a7083d6fb1dd46f90; in review)
-- **Depends on:** IN.13
-- **Files:** `server/writer/**`, `server/storage/**`, `server/api/**`
-- **Do:** the manual route's written and writing statuses, and the delete route's refusal while a
-  section is being written (`409`), see only the answering environment's runs. Make them also see
-  other environments' live leases in the manual's partition, so a section being written elsewhere
-  shows as writing and its manual can't be deleted mid-run.
-  This comes before the deployed app uses Bedrock: until then a delete answered on one
-  environment can abort a paid run on the other.
-- **Done when:** the runs' shared suite covers a status and a delete seen from another environment.
-
 ### AW.4 — Charge an aborted call as AWS does
 - **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
 - **Depends on:** AW.1
