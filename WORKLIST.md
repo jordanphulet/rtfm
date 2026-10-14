@@ -60,7 +60,7 @@ aren't RTFM's.
   evidence, and `npm test` passes.
 
 ### IN.20 — Claude on Bedrock in the deployed app
-- **Status:** doing (agent a7545610be7bdd537)
+- **Status:** doing (agent a7545610be7bdd537; done, in review by afd06646ab9327ee9)
 - **Depends on:** —
 - **Files:** `infra/app-stack.ts` and its test, `server/web-function.ts` and its test,
   `server/gateway/credentials.ts` and its test, `server/config.ts` and its test, `server/app.ts`,
