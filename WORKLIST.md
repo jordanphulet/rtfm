@@ -48,8 +48,9 @@ aren't RTFM's.
 - **Depends on:** IN.12
 - **Files:** `infra/access-stack.ts` and its test, `infra/run-aws.ts` and its test,
   `infra/README.md`, `scripts/**`, `server/usage.ts`, `server/logs.ts`, `package.json`, `README.md`,
-  `infra/rtfm.ts`, `infra/boundary.ts`, `infra/app-stack.ts` and its test, `infra/testing.ts` and
-  its test, `infra/toolkit-stack.test.ts`, `infra/edge-certificate-stack.test.ts`,
+  `infra/rtfm.ts`, `infra/boundary.ts`, `infra/app-stack.ts` and its test,
+  `infra/testing.ts` and its test, `infra/toolkit-stack.test.ts`,
+  `infra/edge-certificate-stack.test.ts`,
   `server/storage/dynamodb-manual-store.ts` and its test, `server/gateway/usage-report.ts`,
   `server/gateway/dynamodb-spending-ledger.ts`, `server/logging/log-reader.ts` and its test,
   `server/gateway/README.md`, `server/storage/README.md`, `server/logging/README.md`,
