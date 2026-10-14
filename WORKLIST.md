@@ -177,7 +177,7 @@ Small fixes that keep the repo healthy.
   and `npm test` passes.
 
 ### UP.3 — Commit messages with bodies
-- **Status:** todo
+- **Status:** todo (on 2026-10-13 the user approved the `PROCESS.md` wording the orchestrator sent: step 1's body sentence, and `npm run commit-worklist` in When the orchestrator does work itself)
 - **Depends on:** —
 - **Files:** `scripts/commit-task.ts` and its test, `scripts/commit-worklist.ts` and its test,
   `package.json`, `README.md`, `PROCESS.md` (with the user's approval)
