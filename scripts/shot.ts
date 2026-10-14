@@ -39,7 +39,11 @@ const SHOT_SECTIONS = {
   appendix: "servos-steppers-and-pneumatics",
 } as const;
 
-/** A written section's body with formulas, served in place of `SHOT_SECTIONS.written`'s for the `math` state. */
+/**
+ * A written section's body with formulas, served in place of `SHOT_SECTIONS.written`'s for the
+ * `math` state. The humidity correction can't break inside its parentheses, so at phone width it is
+ * wider than the measure.
+ */
 const MATH_BODY = String.raw`An ultrasonic sensor never measures distance. It measures time — the round trip of a chirp from the sensor to the guest and back — and the controller does the arithmetic. Sound crosses a hall at about $$v = 1{,}125\ \text{ft/s}$$, so the guest stands at
 
 $$
@@ -59,6 +63,8 @@ $$v(T) \approx 1{,}052 + 1.1\,(T - 32)\quad\text{ft/s, with } T \text{ in °F}$$
 | Cold cellar, 50 °F | 1,072 ft/s | 4.7 in |
 | Parlor, 70 °F | 1,094 ft/s | 2.5 in |
 | Attic in August, 95 °F | 1,121 ft/s | 0.4 in |
+
+Damp air carries sound a little faster again, so the controller corrects for both at once: $$d = \tfrac{t}{2}\left(1{,}052 + 1.1\,(T - 32) + 0.0011\,h\,(1 + 0.0037\,T)\right)$$, with $$h$$ the relative humidity in percent.
 
 > $$t_{\text{scare}} = t_{\text{sense}} + t_{\text{decide}} + t_{\text{act}} \le 500\ \text{ms}$$
 `;

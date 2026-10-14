@@ -1,5 +1,7 @@
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { useRef, type ReactNode } from "react";
+import { useWiderThanLine } from "./useWiderThanLine";
 
 const KATEX_OPTIONS = {
   throwOnError: false,
@@ -82,17 +84,30 @@ interface FormulaProps {
   display: boolean;
 }
 
+type FormulaContent =
+  | { children: ReactNode }
+  | { dangerouslySetInnerHTML: { __html: string } };
+
 export function Formula({ tex, display }: FormulaProps) {
   if (tex.trim() === "") return null;
   const html = typeset(tex, display);
-  const content =
+  const content: FormulaContent =
     html === null
       ? { children: <span className="katex-error">{tex}</span> }
       : { dangerouslySetInnerHTML: { __html: html } };
-  if (!display) return <span className="formula" {...content} />;
+  if (!display) return <InlineFormula html={html} content={content} />;
   return (
     <div className="formula-display">
       <div className="scroll-x" tabIndex={0} role="region" aria-label="Formula" {...content} />
     </div>
   );
+}
+
+/** On the line, unless a piece of it is wider than the line: then it scrolls sideways on a line of its own. */
+function InlineFormula({ html, content }: { html: string | null; content: FormulaContent }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const wider = useWiderThanLine(ref, html);
+  const region = wider && ({ tabIndex: 0, role: "region", "aria-label": "Formula" } as const);
+  const className = wider ? "formula formula-wide scroll-x" : "formula";
+  return <span ref={ref} className={className} {...region} {...content} />;
 }

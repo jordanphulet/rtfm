@@ -217,6 +217,13 @@
   overflow-y: hidden;
 }
 
+.reader .prose-root .formula-wide {
+  display: block;
+  padding-block: var(--space-1);
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
 .reader .prose-root .katex-display {
   margin: 0;
 }

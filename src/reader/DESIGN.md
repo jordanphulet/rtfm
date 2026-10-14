@@ -443,9 +443,15 @@ reader's own, in `Prose.css`.
   the text edge, never centred, 24px above and below, each in a focusable, labelled `.scroll-x`
   region, so a formula wider than the measure scrolls sideways (the cut-off edge and the
   scrollbar show it scrolls, as a table's do), with 4px of padding above and below so tall
-  glyphs aren't clipped. A single `$` is always money, never math. A formula KaTeX can't
-  read shows its source in Plex Mono at 0.88em, ink-muted: no red. While writing, a formula
-  appears only once it is closed (see Streaming), so half-written LaTeX never shows.
+  glyphs aren't clipped. KaTeX breaks an inline formula only after its top-level relations and
+  operators, so a piece of one can be wider than the line (a long run of subscripts, a
+  parenthesized sum). That formula, and only that one, leaves the line: it is set on a line of
+  its own at the text edge, still in its inline size, in the same focusable, labelled `.scroll-x`
+  region with 4px above and below, and the sentence goes on below it. So the page is never wider
+  than the screen, and a formula that fits, or breaks across lines, keeps its place on the
+  baseline with no box or scrollbar. A single `$` is always money, never math. A formula KaTeX
+  can't read shows its source in Plex Mono at 0.88em, ink-muted: no red. While writing, a
+  formula appears only once it is closed (see Streaming), so half-written LaTeX never shows.
 - **Horizontal rule:** 1px `--rule-strong` across the measure, 40px above and below.
 - **Footnote references:** `sup` at 12px, 600, cue, tabular, `line-height: 0` with a relative
   offset (no line-gap bump), underline on hover.

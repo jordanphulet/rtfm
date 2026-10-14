@@ -116,7 +116,11 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `shot.ts`: `npm run shot`, with the Playwright capture helpers in `screenshots.ts` and the
   comparison in `compare.ts`.
 - `vite-server.ts`: `startViteServer`, Vite on a free port in front of a given API server, and
-  `localUrl`, for `shot.ts` and `serve-temp.ts`.
+  `localUrl`, for `shot.ts`, `serve-temp.ts` and `wide-formula.test.ts`.
+- `wide-formula.test.ts`: the reader in Playwright's Chromium at phone width, which checks that an
+  inline formula wider than the line scrolls in its own region and the page stays as wide as the
+  screen (`src/manual/README.md` › `<Markdown>`). It lives here, beside the other Playwright
+  code, since `src/`'s tests type-check without Node's types.
 - `serve-temp.ts`: `npm run serve-temp`, a throwaway API server and Vite server on free ports and
   a temporary data folder, for checks (`README.md` › A throwaway server). It loads no Playwright.
 - `audit/`: `npm run audit`, candidate rule breaks from this repo's Claude Code transcripts. See

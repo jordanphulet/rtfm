@@ -368,6 +368,11 @@ blocked DNS call with `ENOTFOUND`.
 A `worker_threads` worker loads it too, and the thread itself exits with code 1, but what it blocks
 fails neither the test nor the process's exit code. UDP (`node:dgram`) isn't covered.
 
+**Chromium**, which `scripts/wide-formula.test.ts` starts through Playwright, isn't a Node process
+either: it is launched with `--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE
+127.0.0.1`, so every host but those two, an address such as `192.0.2.1` among them, fails to
+resolve, and the page reaches only loopback.
+
 **DynamoDB Local** is the one other process the tests reach: Vitest's global setup starts it on
 `127.0.0.1` for the run, and the DynamoDB store's tests, the Web Function's and its package's use
 it, each on a table of its own (`server/storage/README.md` › DynamoDB Local, for the tests). It is

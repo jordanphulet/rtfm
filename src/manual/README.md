@@ -47,6 +47,7 @@ described in `DESIGN.md`, and the API in `server/api/README.md`. The sample manu
 - `reading-order.ts`: the navigation helpers.
 - `Markdown.tsx`: the renderer.
 - `Formula.tsx`: one formula, typeset by KaTeX, with KaTeX's stylesheet and fonts.
+- `useWiderThanLine.ts`: whether an inline formula has a piece wider than its line.
 
 ## Hooks and actions
 
@@ -186,8 +187,18 @@ LaTeX: `remark-math` finds them, and `Formula` typesets each with KaTeX.
   length inside an environment, which `maxSize` caps only when it is positive. A 40-row
   `aligned` block is about 60em. A test pins the `katex-strut` class, so a KaTeX upgrade that
   renames it fails.
-- Not covered: many `\!` in a row still pull the following glyphs left, over earlier words, and
-  a wide inline formula can still make the page scroll sideways.
+- **An inline formula with a piece wider than its line scrolls sideways.** KaTeX lets a line
+  break only between the pieces of an inline formula (`span.katex-base`, ending after a
+  top-level relation or operator), so one piece can be wider than the line: forty subscripts in
+  a row, or anything inside `\left(…\right)`. `useWiderThanLine` compares the widest piece with
+  the content width of the nearest block around the formula, before the first paint and again
+  whenever either changes size (a narrower window, KaTeX's fonts arriving). Only such a formula
+  becomes `span.formula.formula-wide.scroll-x[role=region]`, focusable and labelled `Formula`
+  like display math, which the reader sets on a line of its own (`src/reader/DESIGN.md` ›
+  Formulas). Every other inline formula stays a plain `span.formula`. A piece in a table cell
+  widens the cell instead, and the table scrolls. `scripts/wide-formula.test.ts` checks all of
+  this in Chromium at phone width, so a KaTeX upgrade that renames `katex-base` fails it.
+- Not covered: many `\!` in a row still pull the following glyphs left, over earlier words.
 - A formula KaTeX can't read, or one held back by either check, shows its source in a
   `span.katex-error`, colored `--ink-muted` instead of KaTeX's red. An empty formula renders
   nothing.

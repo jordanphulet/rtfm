@@ -37,7 +37,7 @@ Needs Node 22.18 or later (the server and scripts run as TypeScript directly).
 
 ```sh
 npm install
-npx playwright install chromium   # once, for the screenshot script
+npx playwright install chromium   # once, for the screenshot script and the tests
 npm run fetch-dynamodb-local      # once, for the tests: DynamoDB Local, which needs Java 17+
 npm run dev                       # then open http://localhost:5173/
 ```
@@ -65,7 +65,7 @@ the same caps and kill switch as a laptop's (Bedrock's spending, below).
 | ---------------------------- | ---------------------------------------------------------------------------- |
 | `npm run dev`                | Starts Vite (5173) and the API server (8787) together.                       |
 | `npm run server`             | Starts the API server alone, for `curl` or `npm run preview`.                |
-| `npm test`                   | Tests (Vitest; page and component tests in happy-dom). Loopback only.        |
+| `npm test`                   | Tests (Vitest; page and component tests in happy-dom, one reader layout test in Chromium). Loopback only. |
 | `npm run fetch-dynamodb-local` | DynamoDB Local for the tests, fetched once. See `server/storage/README.md`. |
 | `npm run build`              | Type-checks everything and builds the app.                                   |
 | `npm run preview`            | Serves the built app, passing `/api` to `npm run server` on 8787.            |
@@ -669,8 +669,9 @@ clearing that folder first and nothing else:
 
 - `reader/<state>-<desktop|phone|desktop-reduced>.png`, for the states `start`, `toc`,
   `written`, `dense`, `waiting`, `streaming`, `streaming-full`, `budget`, `error`, `appendix` and
-  `math`, a written section whose body the script serves, with inline and display formulas and
-  dollar amounts (`desktop-reduced`, with reduced motion, only for `start` and `streaming`);
+  `math`, a written section whose body the script serves, with inline and display formulas,
+  one inline formula too wide for a phone's line, and dollar amounts (`desktop-reduced`, with
+  reduced motion, only for `start` and `streaming`);
 - `home/<state>-<desktop|phone>.png`, for the landing page's states (listed in
   `src/home/DESIGN.md`, under "States");
 - `link/<state>-<desktop|phone>.png`, for the link page's `opening`, `failed` and `closed` (the
