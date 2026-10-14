@@ -66,14 +66,15 @@ each library isolated from the others, starting from the same starter manuals, l
 user revokes it, and with its activity visible to the user.
 
 ### LB.3 — Key the runs by library
-- **Status:** doing (agent a2567743a6f7534f6; done, in review by a2cd4162e2ddc366e)
+- **Status:** doing (agent a2567743a6f7534f6; review's fixes: forLibrary in place of a per-call scope)
 - **Depends on:** —
 - **Files:** `server/writer/**`, `server/logging/README.md`
 - **Do:** as `research/libraries.md` › How the server carries the library describes: one `Runs`
   for the server, its map keyed `<libraryId>/<manualId>/<sectionId>`, with `maxConcurrentRuns`
-  counted across libraries. Each method takes a library scope (id, store, leases and writer) that
-  defaults to the admin's, the one `createRuns` is given, so the routes keep working unchanged; a
-  run reads, takes its lease, writes and saves through its own scope. The `section.*` lines carry
+  counted across libraries. `forLibrary(scope)` (a scope is the library's id, store, leases and
+  writer) returns the runs' methods bound to that library, with no scope parameter, so no call can
+  leave it out; what `createRuns` returns acts as the admin's library, so the routes keep working
+  unchanged. A run reads, takes its lease, writes and saves through its own scope. The `section.*` lines carry
   `libraryId`. Extend the runs' shared suite (both kinds of leases) to two libraries.
 - **Done when:** the runs' tests write the same section id in two libraries at once, each saved in
   its own library and counted toward the one limit, and `npm run build` and `npm test` pass.
