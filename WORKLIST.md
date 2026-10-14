@@ -61,27 +61,6 @@ aren't RTFM's.
 - **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
-### IN.12 — One ledger for real spend
-- **Status:** doing (agent a820e5dcd6453a836; reviewed; on 2026-10-13 the user approved its `access-stack.ts` and `rtfm.ts` changes)
-- **Depends on:** IN.11
-- **Files:** `server/gateway/**`, `server/storage/**`, `server/app.ts` and its test, `server/config.ts`,
-  `server/usage.ts`, `server/README.md`, `README.md`, `ARCHITECTURE.md`, `infra/access-stack.ts`
-  and its test, `infra/app-stack.ts` and its test, `infra/README.md`, `server/testing.ts` (the
-  gateway's new dependencies), `infra/rtfm.ts` (the table's name, ARN and actions; user-approved)
-- **Do:**
-  - The ledger, spending totals and kill switch behind interfaces: the data folder's for `fake`,
-    the table `rtfm-usage`'s for `bedrock`, from a laptop too; reserving as one conditional
-    transaction.
-  - The adapter that issues their DynamoDB commands lives under `server/gateway/**`, listed in
-    `gateway/sdk-boundary.test.ts`'s SDK adapters, and builds its client with IN.11's
-    `dynamoDbClient` (`server/storage/`); only `gateway/credentials.ts` reads `rtfm-local`'s keys.
-  - `rtfm-local` gains read and write on `rtfm-usage` only (`RtfmAccess`, which the user approves
-    and deploys); the Web Function's role, the same.
-  - `ARCHITECTURE.md` and `README.md` say `RTFM_MODELS` chooses the ledger, and that with Bedrock
-    the data folder's lock no longer guards money.
-- **Done when:** both implementations pass one shared suite, two servers with Bedrock share the
-  caps in a test against DynamoDB Local, and the docs say so.
-
 ### IN.13 — One writer per section across environments
 - **Status:** doing (agent a6eb3ca69062c8998; review round 3: test headroom under load, renewals only extend the lease)
 - **Depends on:** IN.11
