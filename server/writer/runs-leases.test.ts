@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
-import type { SectionEvent } from "../api/types.ts";
+import { deleteManualRoute } from "../api/delete-manual.ts";
+import { manualRoute } from "../api/manual.ts";
+import type { JsonResponse, Route } from "../api/route.ts";
+import type { Manual, SectionEvent } from "../api/types.ts";
 import { silentLogger } from "../logging/logger.ts";
 import {
   createDynamoDbManualStore,
@@ -183,6 +186,27 @@ describe.each(setups)("runs in %s", (_name, newSetup) => {
     expect(await setup.store.getBody(GEESE_ID, sectionId)).toBeUndefined();
   });
 
+  it("shows a section one place is writing as writing in the other, which refuses to delete its manual", async () => {
+    const held = heldWriter();
+    const [one, other] = setup.environments(held.writer);
+    const reader = recorder();
+    const statusSeenByOther = async () => {
+      const response = await requestManual(manualRoute(setup.store, other));
+      const sections = (response.body as Manual).chapters.flatMap((chapter) => chapter.sections);
+      return sections.find((section) => section.id === UNWRITTEN_ID)?.status;
+    };
+
+    await one.join(manual, UNWRITTEN_ID, reader.listener);
+    await waitUntil(() => reader.events.length > 0);
+    expect(await statusSeenByOther()).toBe("writing");
+    expect((await requestManual(deleteManualRoute(setup.store, other))).status).toBe(409);
+
+    held.finish();
+    await waitUntil(() => reader.last() === "written", RUN_ENDS_WITHIN_MS);
+    expect(await statusSeenByOther()).toBe("written");
+    expect((await requestManual(deleteManualRoute(setup.store, other))).status).toBe(204);
+  });
+
   it("fails both readers when the writer fails, storing nothing", async () => {
     const [one, other] = setup.environments(failingWriter);
     const first = recorder();
@@ -310,6 +334,12 @@ describe("runs in two environments", () => {
     expect(await leaseWithin(table, 500)).toBeDefined();
   });
 });
+
+/** The sample manual's route answer. */
+async function requestManual(route: Route) {
+  const request = { params: { manualId: SAMPLE_ID }, query: new URLSearchParams(), body: undefined };
+  return (await route.handle({ ...request, signal: new AbortController().signal })) as JsonResponse;
+}
 
 /** A lease on the section from another environment, taken as soon as it is free, within `timeoutMs`. */
 async function leaseWithin(table: DynamoDbTable, timeoutMs: number) {
