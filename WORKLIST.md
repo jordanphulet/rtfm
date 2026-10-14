@@ -78,7 +78,7 @@ Small fixes that keep the repo healthy.
   build` and `npm test` pass.
 
 ### UP.13 — Bring in the UI design iteration
-- **Status:** doing (agent a254561e13310c51d; approved, small fixes)
+- **Status:** doing (agent a254561e13310c51d; done, being committed)
 - **Depends on:** —
 - **Files:** `src/home/**`, `src/reader/**`, `src/ui/**`, `index.html`, `package.json`,
   `package-lock.json`, `DESIGN.md`, `ARCHITECTURE.md`, `research/ui-references.md`
