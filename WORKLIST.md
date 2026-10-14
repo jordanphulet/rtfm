@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.11 — Report a librarian reply cut before its end
-- **Status:** doing (agent ac130cf4910101149)
+- **Status:** doing (agent ac130cf4910101149; done, in review by a7a3f4d85af9cb3b2)
 - **Depends on:** —
 - **Files:** `src/librarian/store.ts`, `src/librarian/store.test.tsx`, `src/librarian/README.md`
 - **Do:** a reply whose stream ends without `done`, `frozen` or `failed` shows "This reply failed."
