@@ -44,7 +44,7 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### IN.15 — The passcode as a digest
-- **Status:** doing (agent afd47823474f3e015)
+- **Status:** doing (agent afd47823474f3e015; done, in review by aca0bfbd3bda816a8)
 - **Depends on:** IN.11, IN.14
 - **Files:** `server/api/**`, `server/storage/**`, `server/config.ts`, `server/app.ts`,
   `infra/app-stack.ts` and its test, `infra/README.md`, `scripts/**`, `README.md`
@@ -119,20 +119,17 @@ aren't RTFM's.
 - **Done when:** Measured records whether Lambda sets the expiry and, if any environment was
   refused its keys, what followed; if none was, it says so with the date range read.
 
-## Upkeep
-
-Small fixes that keep the repo healthy.
-
-### UP.2 — One retry loop, and the kill switch's path with its ledger
-- **Status:** doing (agent a015ebd8e9ccc456e; done, being committed)
-- **Depends on:** IN.12, IN.13
-- **Files:** `server/storage/**`, `server/gateway/**`, `server/writer/section-writer.test.ts`,
-  `server/api/librarian.test.ts`, `server/usage.ts`, `server/app.test.ts`
-- **Do:** share the `TransactionConflict` retry loop that `storage/dynamodb-manual-store.ts` and
-  `gateway/dynamodb-spending-ledger.ts` each have (about 12 lines), and move `killSwitchPath` from
-  `gateway.ts` into `file-spending-ledger.ts`, updating its two test users.
-- **Done when:** one retry loop serves both, `killSwitchPath` lives with the data folder's ledger,
-  and `npm test` passes.
+### IN.25 — The Web Function can't write the passcode
+- **Status:** todo
+- **Depends on:** IN.15
+- **Files:** `infra/app-stack.ts` and its test, `infra/README.md`, `README.md`
+- **Do:** the Web Function's role may put, update and delete any item of `rtfm-app`, so it could
+  rewrite the passcode's item, which only `rtfm-ops` (the user's `passcode set`) should. Add a
+  `Deny` of `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` on `rtfm-app` where
+  `dynamodb:LeadingKeys` includes `PASSCODE` (`ForAnyValue:StringEquals`), and update what
+  `README.md` › A passcode says can write it.
+- **Done when:** the policy evaluator's tests show the role reading the passcode's item and every
+  other item as before, and refused each write to the `PASSCODE` partition.
 
 ## Waiting on AWS
 
