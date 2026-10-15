@@ -81,7 +81,7 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
   the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
 
 ### GH.2 — Undo the README split
-- **Status:** doing (agent a63eb071be701ec7c; the user approved reverting CLAUDE.md, PROCESS.md and the hook)
+- **Status:** doing (agent a63eb071be701ec7c; done, being committed; the user approved reverting CLAUDE.md, PROCESS.md and the hook)
 - **Depends on:** —
 - **Files:** `README.md`, `OPERATING.md`, `ARCHITECTURE.md`, `DESIGN.md`, `CLAUDE.md`, `PROCESS.md`,
   `.claude/skills/orchestrate/SKILL.md`, `.claude/skills/rule-audit/SKILL.md`, `scripts/**`,
