@@ -10,7 +10,7 @@ and these docs disagree, one of them is a bug.
 
 - A web app for reading hypothetical manuals. An LLM writes a manual's table of contents first,
   then each section when it is first opened.
-- Two pages (the routes are in `README.md` › Where things live):
+- Two pages (the routes are in `OPERATING.md` › Where things live):
   - **The landing page** (`/`, `src/home/`): your library of manuals, beside a librarian agent
     you talk to, which lists, finds, opens and proposes deleting manuals, and starts new ones.
   - **The reader** (`/read/<manual>`, `src/reader/`): one manual's start page and its sections.
@@ -114,7 +114,7 @@ page, with one line saying why.
 
 ## The link page
 
-A library's link, `/l#<secret>` (`README.md` › A library's link), is a door held open: the
+A library's link, `/l#<secret>` (`OPERATING.md` › A library's link), is a door held open: the
 recipient clicks once and is in their library, with no button and nothing to read on the way.
 
 - **Root** `<div class="ui library-link">`, its CSS in `src/link/LinkPage.css`, scoped under

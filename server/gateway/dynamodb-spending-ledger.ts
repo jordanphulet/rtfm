@@ -171,7 +171,7 @@ export function createDynamoDbSpendingLedger(table: DynamoDbTable): DynamoDbSpen
 
 /**
  * Turns the kill switch on or off: `npm run ops -- kill-switch`, as `rtfm-ops`, and the tests. The
- * server never calls it, and `rtfm-local` may not delete the item (`README.md` › Bedrock's
+ * server never calls it, and `rtfm-local` may not delete the item (`OPERATING.md` › Bedrock's
  * spending: the table `rtfm-usage`).
  */
 export async function setKillSwitch(table: DynamoDbTable, on: boolean): Promise<void> {

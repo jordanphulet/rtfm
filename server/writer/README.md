@@ -20,7 +20,7 @@ contract:
 
 **`writer/fake.ts`** sends the seed body through the gateway, as a `write-section` call whose
 user message is the body, and the fake model repeats it back (`server/agent/README.md` › The fake
-model): after a wait, in chunks of about 20 characters at a steady pace (`README.md` › The models
+model): after a wait, in chunks of about 20 characters at a steady pace (`OPERATING.md` › The models
 gives the timings), split at word boundaries, the same pace as the fake librarian's replies. The
 call is reserved, capped, refused by the kill switch, stopped by the idle timeout and recorded at
 $0 like any other.

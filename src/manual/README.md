@@ -108,7 +108,7 @@ The stream:
   `maxConcurrentRuns`, which also counts every manual). Sections opened beyond that wait as
   `writing` with `text` `""`, and their streams open in the order they were opened as others end.
 - A section streams once per page load and keeps streaming if the reader navigates away, at the
-  writer's pace (`README.md` › The models).
+  writer's pace (`OPERATING.md` › The models).
 
 ### `retrySection(manualId: string, id: string): void`
 

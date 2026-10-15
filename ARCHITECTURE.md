@@ -11,8 +11,8 @@ that it costs and records nothing (`server/agent/README.md` › Previews).
 
 This doc is a map: what each folder holds, which folders may import which, and the rules that cut
 across them. The detail sits next to the code, in each folder's README: `server/README.md`, each
-`server/*/README.md`, each `src/*/README.md` and `infra/README.md`. `README.md` covers running the
-app, its routes, the data folder, Bedrock's spending table and both kill switches, resetting the
+`server/*/README.md`, each `src/*/README.md` and `infra/README.md`. `OPERATING.md` covers running
+the app, its routes, the data folder, Bedrock's spending table and both kill switches, resetting the
 manuals, and what the models cost. `DESIGN.md` covers the design both pages share, and each page's
 own design is in its `src/<page>/DESIGN.md`: `src/home/DESIGN.md` and `src/reader/DESIGN.md`.
 
@@ -34,7 +34,7 @@ browser (Vite, :5173)                           server (node:http, :8787)
 
 ### The browser: `src/`
 
-- `main.tsx` starts `reportErrors.ts` and renders `App.tsx`, the routes (`README.md` › Where
+- `main.tsx` starts `reportErrors.ts` and renders `App.tsx`, the routes (`OPERATING.md` › Where
   things live). `testing.tsx` holds the component tests' `render`, `press` and `click`.
 - `home/`: the landing page at `/` (`index.tsx`): the library's ledger (`Ledger.tsx`) beside the
   librarian's panel (`LibrarianPanel.tsx`, `Conversation.tsx`, `Composer.tsx`), and the delete
@@ -122,20 +122,20 @@ browser (Vite, :5173)                           server (node:http, :8787)
   screen (`src/manual/README.md` › `<Markdown>`). It lives here, beside the other Playwright
   code, since `src/`'s tests type-check without Node's types.
 - `serve-temp.ts`: `npm run serve-temp`, a throwaway API server and Vite server on free ports and
-  a temporary data folder, for checks (`README.md` › A throwaway server). It loads no Playwright.
+  a temporary data folder, for checks (`OPERATING.md` › A throwaway server). It loads no Playwright.
 - `audit/`: `npm run audit`, candidate rule breaks from this repo's Claude Code transcripts. See
   `scripts/audit/README.md`.
 - `hooks/`: the Claude Code hooks `.claude/settings.json` runs, which tell a session when its
-  rules are out of date (`README.md` › Rule-change notices).
+  rules are out of date (`OPERATING.md` › Rule-change notices).
 - `commit-task.ts`: `npm run commit-task`, which commits a task's work with its body and its
   `Reviewed-by:` trailer. `.githooks/commit-msg` refuses, without one, a task commit or a commit
-  of Claude's that changes more than `WORKLIST.md` (`README.md` › Committing task work). It holds
+  of Claude's that changes more than `WORKLIST.md` (`OPERATING.md` › Committing task work). It holds
   the parsing of `WORKLIST.md` the other scripts share.
 - `commit-worklist.ts`: `npm run commit-worklist`, which commits `WORKLIST.md` alone with a body
   generated from its diff, using `commit-task.ts`'s check of where it runs and its parsing.
 - `orchestrator-check.ts`: `npm run orchestrator-check`, which checks the orchestrator runs in the
   main checkout on `main`, clean and with its hooks, and lists the `doing` tasks and task
-  worktrees an earlier run left (`README.md` › The orchestrator's preflight). It shares
+  worktrees an earlier run left (`OPERATING.md` › The orchestrator's preflight). It shares
   `commit-task.ts`'s check of where it runs, and its parsing of `WORKLIST.md`.
 - `task-prompt.ts`: `npm run task-prompt`, which prints the prompt that starts a task's agent or
   its reviewer, from the task's block in `WORKLIST.md`, using `commit-task.ts`'s parsing.
@@ -144,15 +144,15 @@ browser (Vite, :5173)                           server (node:http, :8787)
   spend (`usage.ts`), the logs (`logs.ts`) and the status (`status.ts`),
   each acting as an RTFM role through `infra/run-aws.ts`'s session (`context.ts`), and the
   deployed names they read (`deployed.ts`). `testing.ts` holds the tests' stand-in for the AWS CLI
-  (`README.md` › The ops tools).
+  (`OPERATING.md` › The ops tools).
 - `build-web-function.ts`: the Web Function's package: the built app, the server bundled into one
   file with Rolldown, and the seed. `RtfmApp` runs it when it synthesizes (`infra/README.md` ›
   The Web Function's package).
 - `third-party-notices.ts`: the Vite and Rolldown plugin that writes `THIRD-PARTY-NOTICES.txt`
   beside each bundle, the licenses and notices of the packages it bundles. `vite.config.ts` and
-  `build-web-function.ts` use it (`README.md` › License).
+  `build-web-function.ts` use it (`OPERATING.md` › License).
 - `licenses.ts`: the licenses a package that isn't dev-only may have, and `licenses.test.ts`, which
-  checks `package-lock.json` against them in `npm test` (`README.md` › License).
+  checks `package-lock.json` against them in `npm test` (`OPERATING.md` › License).
 - `dynamodb-local.ts`, `DynamoDbLocalOnLoopback.java`, `fetch-dynamodb-local.ts` and
   `test-global-setup.ts`: DynamoDB Local for the tests: the pinned release, `npm run
   fetch-dynamodb-local`, which fetches it once, and Vitest's global setup, which runs it on

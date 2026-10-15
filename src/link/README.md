@@ -1,6 +1,6 @@
 # src/link
 
-The two page routes for a recipient's library (`README.md` › A library's link): `/l#<secret>`
+The two page routes for a recipient's library (`OPERATING.md` › A library's link): `/l#<secret>`
 opens the library by its link, and `/admin` leaves it. The server's side is in
 `server/api/README.md` › A library's link, and the page's design in `DESIGN.md` › The link page.
 
