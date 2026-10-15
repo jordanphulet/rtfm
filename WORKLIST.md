@@ -103,6 +103,47 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
 - **Done when:** the public repository holds the scrubbed `main`, verified from a fresh clone;
   the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
 
+### GH.2 — A README for the people who visit the public repository
+- **Status:** todo (the user reads and approves the new `README.md` in chat before it's committed)
+- **Depends on:** —
+- **Files:** `README.md`, `OPERATING.md`, `docs/images/*.png`, `ARCHITECTURE.md`, `DESIGN.md`,
+  `src/home/DESIGN.md`, `.claude/skills/orchestrate/SKILL.md`, `scripts/licenses.ts`,
+  `server/gateway/dynamodb-spending-ledger.ts`, `scripts/doc-references.test.ts`,
+  `scripts/task-prompt.ts` and its test, `scripts/hooks/behind-main.ts` and its test,
+  `CLAUDE.md`, `PROCESS.md`
+- **Do:** proposed by the session "Resume project README strategy" for the user, who puts RTFM on
+  a résumé; recruiters land on the public repository.
+  - Move everything `README.md` holds about running and operating RTFM into a new `OPERATING.md`,
+    keeping its sections and their names (Running it and its subsections, The models, A passcode,
+    A library's link, Configuration, The data folder and spending, Logs, The ops tools,
+    Screenshots, Where things live, License), and update every `README.md` › <section> reference
+    to them (`git grep -n "README.md\` ›"`), in docs, the orchestrate skill and code comments.
+    Add `OPERATING.md` to `RULE_FILES` in `scripts/hooks/behind-main.ts`. `CLAUDE.md`,
+    `PROCESS.md` and the hook are the user's to approve: give their full diffs.
+  - Rewrite `README.md` as a front page read in under a minute:
+    - what RTFM is in one line; a screenshot of each page from `npm run shot`, copied into
+      `docs/images/`; that it runs at rtfm.moonfetus.com, where each visitor can be given a
+      library of their own by a private link (how to ask for one is the user's choice at review);
+      never a real link in any file;
+    - AI agents wrote every line of code; the user designed and runs the system that makes that
+      safe and reliable; commits name the user as author and Claude as co-author;
+    - how it's built: the roles and the loop (`PROCESS.md`), a worktree and an independent reviewer
+      per task, the rules enforced in code (`commit-task`, the commit-msg hook, the preflight, the
+      rule-change hooks, the rule audit), the steps kept for humans (passcode, links, kill switch,
+      Authority files), the least-privilege ops tools and `run-aws.ts`;
+    - engineering highlights, each linking to the doc that proves it: the spending gateway (one
+      conditional DynamoDB transaction, caps per day, month and library, a kill switch, a ledger
+      checked against the bill), section leases with fencing, the agent loop with deletes
+      confirmed in the app, fake models behind the real gateway, pixel-diffed screenshots and the
+      design bar, the CDK stacks under a permissions boundary;
+    - the stack in one line, the three commands to run it locally, and `## The docs` with
+      `OPERATING.md`.
+  - No counts or status that go stale, and no roadmap (`CLAUDE.md` › Code standards).
+- **Done when:** `README.md` is that front page; `OPERATING.md` holds the rest, word for word but
+  for references; every reference resolves and `npm test` passes; and the user has read the new
+  `README.md` in the agent's worktree and approved it in chat, with the `CLAUDE.md`, `PROCESS.md`
+  and hook diffs, before the orchestrator commits.
+
 ## Waiting on AWS
 
 Work that can't start until the user does something in AWS. Each task stays `blocked` until the
