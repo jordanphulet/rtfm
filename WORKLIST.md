@@ -35,13 +35,31 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.16 — Two tests that time out under a full run
+- **Status:** todo
+- **Depends on:** —
+- **Files:** `scripts/doc-references.test.ts`, `server/writer/runs-leases.test.ts`
+- **Do:** on `main`, a full `npm test` failed twice in a row with
+  `scripts/doc-references.test.ts` › "ARCHITECTURE.md names only what exists" timing out at
+  vitest's default 5s; alone it passes. `server/writer/runs-leases.test.ts` › "takes over a
+  recipient library's section whose lease expires unrenewed, leaving the admin's alone" timed out
+  once in a merge's run (UP.15's review saw a timeout in that file too). Find why each is slow
+  under load (for example, the doc check walking more files than it needs, such as
+  `.claude/worktrees/`), make it lighter where that's the cause, and give each a timeout that
+  follows `server/README.md` › Tests.
+- **Done when:** two full `npm test` suites run in parallel pass 5 rounds in a row (10 runs).
+
 ## A public repository
 
 RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
 
 ### GH.1 — Scrub the history and publish it
 - **Status:** doing (the orchestrator; rewrite verified in a clone; waits for GH.2, as the user chose)
-- **Depends on:** GH.2 (the README split is undone before publishing)
+- **Depends on:** UP.16 (`npm test` passes on `main` before publishing)
 - **Files:** `PROCESS.md`, `README.md`
 - **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
   while no task is running, every task branch is merged, and no worktree is mid-task.
@@ -79,23 +97,6 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
     repository is.
 - **Done when:** the public repository holds the scrubbed `main`, verified from a fresh clone;
   the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
-
-### GH.2 — Undo the README split
-- **Status:** doing (agent a63eb071be701ec7c; done, being committed; the user approved reverting CLAUDE.md, PROCESS.md and the hook)
-- **Depends on:** —
-- **Files:** `README.md`, `OPERATING.md`, `ARCHITECTURE.md`, `DESIGN.md`, `CLAUDE.md`, `PROCESS.md`,
-  `.claude/skills/orchestrate/SKILL.md`, `.claude/skills/rule-audit/SKILL.md`, `scripts/**`,
-  `server/**`, `src/**`, `infra/README.md`, `research/libraries.md`
-- **Do:** the user decided to keep `README.md` as the operating manual and drop the new front page.
-  Commit f879260 moved README's operating sections into `OPERATING.md` and pointed every reference
-  there. Undo it: delete `OPERATING.md` and return every file f879260 changed to its content before
-  it (`git show f879260^:<file>`), except for what landed since. AW.4 (c8994d7) added a sentence
-  to `OPERATING.md` › `npm run usage` about how aborted and failed calls are charged: carry it into
-  `README.md`'s same section. The user approved reverting `CLAUDE.md`, `PROCESS.md` and the
-  rule-change hook to their content before f879260: give their diffs, which must equal that.
-- **Done when:** no `OPERATING.md` and no reference to it remain; `README.md` holds the operating
-  sections with AW.4's sentence; `CLAUDE.md`, `PROCESS.md` and `scripts/hooks/behind-main.ts` equal
-  their f879260^ content; and `npm test` passes.
 
 ## Waiting on AWS
 
