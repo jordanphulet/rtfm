@@ -105,13 +105,16 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
   the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
 
 ### GH.2 — A README for the people who visit the public repository
-- **Status:** doing (agent a97ea6891d234032b; review's fixes; the user reads and approves the new `README.md` in chat before it's committed)
+- **Status:** doing (agent a97ea6891d234032b; committing OPERATING.md and the references, which the user approved; the user iterates on README.md before it's committed)
 - **Depends on:** —
 - **Files:** `README.md`, `OPERATING.md`, `docs/images/*.png`, `ARCHITECTURE.md`, `DESIGN.md`,
   `src/home/DESIGN.md`, `.claude/skills/orchestrate/SKILL.md`, `scripts/licenses.ts`,
   `server/gateway/dynamodb-spending-ledger.ts`, `scripts/doc-references.test.ts`,
   `scripts/task-prompt.ts` and its test, `scripts/hooks/behind-main.ts` and its test,
-  `CLAUDE.md`, `PROCESS.md`
+  `CLAUDE.md`, `PROCESS.md`, `.claude/skills/rule-audit/SKILL.md`, `infra/README.md`,
+  `research/libraries.md`, `server/agent/README.md`, `server/api/README.md`,
+  `server/gateway/README.md`, `server/logging/README.md`, `server/storage/README.md`,
+  `server/writer/README.md`, `src/link/README.md`, `src/manual/README.md`
 - **Do:** proposed by the session "Resume project README strategy" for the user, who puts RTFM on
   a résumé; recruiters land on the public repository.
   - Move everything `README.md` holds about running and operating RTFM into a new `OPERATING.md`,
