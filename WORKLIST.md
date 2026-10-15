@@ -115,7 +115,7 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
     --cached --ignore-unmatch` on the `docs/inspo` images; then delete `refs/original`, expire the
     reflog and `gc`.
   - **Verify:** `git log -p` holds no trace of the work address; every rewritten commit's tree equals its
-    original's; every commit that had no body has one; no commit names a `docs/inspo` image and no
+    original's but for the `docs/inspo` images; every commit that had no body has one; no commit names a `docs/inspo` image and no
     blob of one is left; the commit count is unchanged; `main^{tree}` equals the original's.
   - **Publish**, with the user's explicit OK in chat: `gh repo create jordanphulet/rtfm
     --public`, push `main` only; then clone it fresh from GitHub and re-run the checks.
