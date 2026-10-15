@@ -104,11 +104,18 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
   - **The license** is MIT (UP.15). The user chose not to change GitHub's email settings.
   - **Backup:** a full mirror clone is at `/Users/jordan/projects/rtfm-backup-2026-10-14.git`
     (`main` at 92c88c9). Make a fresh one of the `main` of the day before rewriting.
+  - **Descriptions** (the user's choice): the 375 non-merge commits with only a subject get a
+    body. The 122 work commits get 1–4 lines drafted from each diff; the 253 work-list commits
+    get the task lines `commit-worklist` writes. The drafts live in the orchestrator's
+    scratchpad (`history/bodies-*.json`, keyed by the original sha), and a review agent checks
+    them against the diffs. The rewrite puts each body between the subject and the trailers
+    (`--msg-filter` keyed on `$GIT_COMMIT`); subjects, trailers and merges stay as they are.
   - **Rewrite** in a fresh clone of `main` outside the repo, never in the repo: `git
     filter-branch` with an `--env-filter` for the email and an `--index-filter` running `git rm
     --cached --ignore-unmatch` on the `docs/inspo` images; then delete `refs/original`, expire the
     reflog and `gc`.
-  - **Verify:** `git log -p` holds no trace of the work address; no commit names a `docs/inspo` image and no
+  - **Verify:** `git log -p` holds no trace of the work address; every rewritten commit's tree equals its
+    original's; every commit that had no body has one; no commit names a `docs/inspo` image and no
     blob of one is left; the commit count is unchanged; `main^{tree}` equals the original's.
   - **Publish**, with the user's explicit OK in chat: `gh repo create jordanphulet/rtfm
     --public`, push `main` only; then clone it fresh from GitHub and re-run the checks.
