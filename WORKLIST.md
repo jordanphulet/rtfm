@@ -41,7 +41,7 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
 
 ### GH.1 — Scrub the history and publish it
 - **Status:** doing (the orchestrator; rewrite verified in a clone; waits for GH.2, as the user chose)
-- **Depends on:** GH.2 (the user publishes with the new README)
+- **Depends on:** GH.2 (the README split is undone before publishing)
 - **Files:** `PROCESS.md`, `README.md`
 - **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
   while no task is running, every task branch is merged, and no worktree is mid-task.
@@ -80,49 +80,22 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
 - **Done when:** the public repository holds the scrubbed `main`, verified from a fresh clone;
   the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
 
-### GH.2 — A README for the people who visit the public repository
-- **Status:** doing (agent a97ea6891d234032b; committing OPERATING.md and the references, which the user approved; the user iterates on README.md before it's committed)
+### GH.2 — Undo the README split
+- **Status:** todo
 - **Depends on:** —
-- **Files:** `README.md`, `OPERATING.md`, `docs/images/*.png`, `ARCHITECTURE.md`, `DESIGN.md`,
-  `src/home/DESIGN.md`, `.claude/skills/orchestrate/SKILL.md`, `scripts/licenses.ts`,
-  `server/gateway/dynamodb-spending-ledger.ts`, `scripts/doc-references.test.ts`,
-  `scripts/task-prompt.ts` and its test, `scripts/hooks/behind-main.ts` and its test,
-  `CLAUDE.md`, `PROCESS.md`, `.claude/skills/rule-audit/SKILL.md`, `infra/README.md`,
-  `research/libraries.md`, `server/agent/README.md`, `server/api/README.md`,
-  `server/gateway/README.md`, `server/logging/README.md`, `server/storage/README.md`,
-  `server/writer/README.md`, `src/link/README.md`, `src/manual/README.md`
-- **Do:** proposed by the session "Resume project README strategy" for the user, who puts RTFM on
-  a résumé; recruiters land on the public repository.
-  - Move everything `README.md` holds about running and operating RTFM into a new `OPERATING.md`,
-    keeping its sections and their names (Running it and its subsections, The models, A passcode,
-    A library's link, Configuration, The data folder and spending, Logs, The ops tools,
-    Screenshots, Where things live, License), and update every `README.md` › <section> reference
-    to them (`git grep -n "README.md\` ›"`), in docs, the orchestrate skill and code comments.
-    Add `OPERATING.md` to `RULE_FILES` in `scripts/hooks/behind-main.ts`. `CLAUDE.md`,
-    `PROCESS.md` and the hook are the user's to approve: give their full diffs.
-  - Rewrite `README.md` as a front page read in under a minute:
-    - what RTFM is in one line; a screenshot of each page from `npm run shot`, copied into
-      `docs/images/`; that it runs at rtfm.moonfetus.com, where each visitor can be given a
-      library of their own by a private link (how to ask for one is the user's choice at review);
-      never a real link in any file;
-    - AI agents wrote every line of code; the user designed and runs the system that makes that
-      safe and reliable; commits name the user as author and Claude as co-author;
-    - how it's built: the roles and the loop (`PROCESS.md`), a worktree and an independent reviewer
-      per task, the rules enforced in code (`commit-task`, the commit-msg hook, the preflight, the
-      rule-change hooks, the rule audit), the steps kept for humans (passcode, links, kill switch,
-      Authority files), the least-privilege ops tools and `run-aws.ts`;
-    - engineering highlights, each linking to the doc that proves it: the spending gateway (one
-      conditional DynamoDB transaction, caps per day, month and library, a kill switch, a ledger
-      checked against the bill), section leases with fencing, the agent loop with deletes
-      confirmed in the app, fake models behind the real gateway, pixel-diffed screenshots and the
-      design bar, the CDK stacks under a permissions boundary;
-    - the stack in one line, the three commands to run it locally, and `## The docs` with
-      `OPERATING.md`.
-  - No counts or status that go stale, and no roadmap (`CLAUDE.md` › Code standards).
-- **Done when:** `README.md` is that front page; `OPERATING.md` holds the rest, word for word but
-  for references; every reference resolves and `npm test` passes; and the user has read the new
-  `README.md` in the agent's worktree and approved it in chat, with the `CLAUDE.md`, `PROCESS.md`
-  and hook diffs, before the orchestrator commits.
+- **Files:** `README.md`, `OPERATING.md`, `ARCHITECTURE.md`, `DESIGN.md`, `CLAUDE.md`, `PROCESS.md`,
+  `.claude/skills/orchestrate/SKILL.md`, `.claude/skills/rule-audit/SKILL.md`, `scripts/**`,
+  `server/**`, `src/**`, `infra/README.md`, `research/libraries.md`
+- **Do:** the user decided to keep `README.md` as the operating manual and drop the new front page.
+  Commit f879260 moved README's operating sections into `OPERATING.md` and pointed every reference
+  there. Undo it: delete `OPERATING.md` and return every file f879260 changed to its content before
+  it (`git show f879260^:<file>`), except for what landed since. AW.4 (c8994d7) added a sentence
+  to `OPERATING.md` › `npm run usage` about how aborted and failed calls are charged: carry it into
+  `README.md`'s same section. The user approved reverting `CLAUDE.md`, `PROCESS.md` and the
+  rule-change hook to their content before f879260: give their diffs, which must equal that.
+- **Done when:** no `OPERATING.md` and no reference to it remain; `README.md` holds the operating
+  sections with AW.4's sentence; `CLAUDE.md`, `PROCESS.md` and `scripts/hooks/behind-main.ts` equal
+  their f879260^ content; and `npm test` passes.
 
 ## Waiting on AWS
 
