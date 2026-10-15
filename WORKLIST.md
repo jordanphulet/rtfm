@@ -64,7 +64,7 @@ aren't RTFM's.
 RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
 
 ### GH.1 — Scrub the history and publish it
-- **Status:** todo
+- **Status:** doing (the orchestrator; descriptions in review by a50258c535962020d)
 - **Depends on:** —
 - **Files:** `PROCESS.md`, `README.md`
 - **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
