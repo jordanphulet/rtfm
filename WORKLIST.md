@@ -34,8 +34,8 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.18 — Read the idle cost
-- **Status:** blocked (until 2026-10-15, two days after the Web Function's first deploy)
-- **Depends on:** IN.10
+- **Status:** doing (agent a590efed96a5c7de1)
+- **Depends on:** —
 - **Files:** `research/aws-design.md`
 - **Do:** the cost in Cost Explorer since the Web Function's first deploy (2026-10-13), by service
   (Lambda, CloudFront, DynamoDB, CloudWatch), not only by the `project` tag, until IN.5 settles
@@ -44,10 +44,10 @@ aren't RTFM's.
   to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### AW.4 — Charge an aborted call as AWS does
-- **Status:** blocked (until 2026-10-15, when Cost Explorer has 2026-10-13 complete)
-- **Depends on:** AW.1
+- **Status:** doing (agent a2b7bb8c23c5ebe58)
+- **Depends on:** —
 - **Files:** `server/gateway/gateway.ts` and its test, `server/gateway/README.md`, `server/README.md`,
-  `README.md`
+  `OPERATING.md`
 - **Do:** AW.1 found AWS bills an aborted call its full input and almost none of its output (on
   2026-10-11, two aborted sections were billed at most 6 output tokens between them), while the
   gateway charges every incomplete call its full `max_tokens` of output. Read 2026-10-13's
