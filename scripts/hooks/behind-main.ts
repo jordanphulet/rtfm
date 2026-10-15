@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { isRunDirectly, runHook } from "./run-hook.ts";
 
-const RULE_FILES = ["CLAUDE.md", "PROCESS.md", "WORKLIST.md", "README.md", "OPERATING.md"];
+const RULE_FILES = ["CLAUDE.md", "PROCESS.md", "WORKLIST.md", "README.md"];
 
 /**
  * In a worktree whose HEAD is behind the local `main`, says how far behind it is and which rule

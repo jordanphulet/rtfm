@@ -53,7 +53,7 @@ Before any other command, it runs `aws sts get-caller-identity` and refuses unle
 the chosen role, assumed in account `438180219169`. The tests cover the environment it builds,
 the identity check and the arguments passed through `npm run aws`, without calling AWS.
 
-`npm run ops` (`OPERATING.md` › The ops tools) reaches AWS through the same environment and identity
+`npm run ops` (`README.md` › The ops tools) reaches AWS through the same environment and identity
 check, as `rtfm-ops` or `rtfm-read`, with `openAwsSession` in `run-aws.ts`. A session runs the
 AWS CLI with no shell, its arguments chosen by the tool, never passed on from the caller; it gives
 an AWS SDK client the role's temporary keys from `aws configure export-credentials`, so the SDK
@@ -149,7 +149,7 @@ partition, and no other table, service or role, so it can't reach beyond what th
 - **`PASSCODE`** in `rtfm-app` (`PASSCODE_PARTITION`; `server/storage/README.md` › The table
   `rtfm-app`), which holds the passcode's item, its digest: `dynamodb:GetItem` and `PutItem`, so
   `npm run ops -- passcode set` stores a new digest and `passcode cookie` reads it. The digest
-  opens the app (`OPERATING.md` › A passcode).
+  opens the app (`README.md` › A passcode).
 - **`LINK`** in `rtfm-app` (`LINK_PARTITION`), which holds the libraries' links, one item each,
   keyed by its secret's digest: `dynamodb:GetItem`, `Query`, `PutItem` and `UpdateItem`, to make a
   link, list them, read one and revoke one. It has no `DeleteItem`: a revoked link's item stays.
@@ -209,7 +209,7 @@ qualifier `rtfm`. No such stack may be named `RtfmEdge…`, which the tests chec
     `AWS_LAMBDA_NODEJS_ENTRYPOINT`, `RTFM_MODELS=bedrock`, so it runs Claude Haiku 4.5, and
     `RTFM_APP_TABLE` and `RTFM_USAGE_TABLE`, the tables' names: `rtfm-read` can read a revision
     (`GetWebFunctionRevision`), so nothing secret goes there. The server reads the passcode's
-    digest from the table (`OPERATING.md` › A passcode).
+    digest from the table (`README.md` › A passcode).
   - **its endpoint `main`**: `HomeRegion`, `IamAuth`, at most 2 environments (`maxEnvironments`)
     and 100 requests a second (`rateLimit`). No role of RTFM's may invoke it; only the edge's
     distribution may, through the resource policy in `RtfmEdge`. The stack's output
@@ -302,7 +302,7 @@ with an asset or a custom resource, or a template over the inline limit.
 ### The Web Function's role, the passcode and the links
 
 Two partitions of `rtfm-app` decide who opens the app: `PASSCODE`, whose digest opens it
-(`OPERATING.md` › A passcode), and `LINK`, whose items say which library each link opens and whether
+(`README.md` › A passcode), and `LINK`, whose items say which library each link opens and whether
 it is revoked. Only `rtfm-ops` writes them, so the Web Function can never make, change or reopen a
 link, or change the passcode. The Web Function's role reads both with `GetItem`, and its policy on
 `rtfm-app` allows every item, so a statement beside it, `LeaveAccessToOps`, denies `PutItem`,
@@ -344,8 +344,8 @@ when the app synthesizes (`cdk synth`, `diff` and `deploy`), in about a second, 
 - `web-function.mjs`, in the package's `server/` folder: `server/web-function.ts` and all it
   imports, `node_modules` included, bundled into one file by Rolldown, so the package needs no
   `node_modules` and no TypeScript at run time. Its path is `AWS_LAMBDA_NODEJS_ENTRYPOINT`.
-  Beside it, `THIRD-PARTY-NOTICES.txt` holds the notices of the packages it bundles (`OPERATING.md`
-  › License);
+  Beside it, `THIRD-PARTY-NOTICES.txt` holds the notices of the packages it bundles (`README.md` ›
+  License);
 - `seed/`: the seed manuals. Every module in the bundle resolves a path against the bundle's own
   URL, so the storage's `../seed/` is this folder, and the config's `../dist` the built app.
 
@@ -416,8 +416,8 @@ show that it starts: Lambda doesn't check that a revision's server listens.
 With the edge stacks deployed (Your steps › The edge stacks), these requests go through the domain
 and the whole path to the server: CloudFront, the host check, the origin access control, the Web
 Function's resource policy and the server itself. The cookie is the passcode's digest, which
-`npm run ops -- passcode cookie` reads as `rtfm-ops` (`OPERATING.md` › The ops tools), kept in a
-shell variable and never printed; nothing here sees the passcode itself:
+`npm run ops -- passcode cookie` reads as `rtfm-ops` (`README.md` › The ops tools), kept in a shell
+variable and never printed; nothing here sees the passcode itself:
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' https://rtfm.moonfetus.com/
@@ -611,7 +611,7 @@ These set RTFM up in an account that holds none of it, up to the app answering a
 
 - **An admin sign-in** to the account, `438180219169` (`rtfm.ts`), for the AWS console and
   CloudShell.
-- **The repo, installed** as `OPERATING.md` › Running it says: `npm run cdk` runs the CDK CLI from
+- **The repo, installed** as `README.md` › Running it says: `npm run cdk` runs the CDK CLI from
   `node_modules`.
 - **The AWS CLI on the laptop**, 2.37.8 or later (`aws --version`), the first with `lambda-web`,
   which the smoke check uses (Deploying the app stack, above); `npm run aws` runs the CLI on the
@@ -620,7 +620,7 @@ These set RTFM up in an account that holds none of it, up to the app answering a
 - **A Route 53 public hosted zone for `moonfetus.com`** in the account. The app's domain,
   `rtfm.moonfetus.com` (`edge-certificate-stack.ts`), is in it, and the edge stacks write the
   certificate's validation record and the app's alias records into it.
-- **Amazon Bedrock access to Claude Haiku 4.5**, which step 6 calls (`OPERATING.md` › The models,
+- **Amazon Bedrock access to Claude Haiku 4.5**, which step 6 calls (`README.md` › The models,
   step 1).
 
 You deploy `RtfmToolkit` and `RtfmAccess` with plain CloudFormation, from AWS CloudShell: the
@@ -671,7 +671,7 @@ the laptop.
 
 5. **Put them on the laptop**, writing each in an editor, so its secret stays out of the shell's
    history. `rtfm-local`'s goes in `.env.local` at the main checkout's root, as
-   `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, with `AWS_REGION=us-west-2` (`OPERATING.md` ›
+   `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, with `AWS_REGION=us-west-2` (`README.md` ›
    The models, step 2). `rtfm-agent`'s goes in RTFM's own files, leaving `~/.aws/config` and
    `~/.aws/credentials` alone. These make RTFM's two AWS files and open them:
 
@@ -722,7 +722,7 @@ the laptop.
 
 7. **Set the deployed app's passcode**, once `RtfmApp` is deployed, in a terminal on the laptop
    outside the Claude app, never in its Terminal panel, whose screen a session can read:
-   `npm run ops -- passcode set` (`OPERATING.md` › A passcode). It shows four words once and waits
+   `npm run ops -- passcode set` (`README.md` › A passcode). It shows four words once and waits
    for Enter, then clears the screen and its scrollback; keep the words. Until then the app
    refuses every API request.
 

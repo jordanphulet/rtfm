@@ -207,7 +207,7 @@ files. A body is under 10 KB and a manual's item a few KB, far below the 400 KB 
   `PASSCODE_DIGEST_PATTERN` (64 lowercase hex characters): a write refuses anything else, and a
   read of an item holding anything else throws, naming the form. They aren't part of
   `ManualStore`: the Web Function's passcode gate reads the digest (`server/app.ts`), and
-  `npm run ops -- passcode` reads and writes it as `rtfm-ops` (`OPERATING.md` › The ops tools). Its
+  `npm run ops -- passcode` reads and writes it as `rtfm-ops` (`README.md` › The ops tools). Its
   partition, `PASSCODE` (`PASSCODE_PARTITION` in `infra/rtfm.ts`), is one of the two partitions
   of `rtfm-app` that `rtfm-ops` may read and write, with `LINK`, the libraries' links, limited to
   them with `dynamodb:LeadingKeys` (`infra/README.md` › The identities). The item never holds the
@@ -475,7 +475,7 @@ neither fails (`seed.test.ts`). One that read the record just before the other r
 manual, and then found it deleted in the moment before its own create, would seed it again;
 only a delete in the fraction of a second while both start could do that. A crash after the TOC
 is put but before every seed body is saved leaves that manual with fewer sections written; they
-are written on demand like any other. Resetting the manuals to the seed is in `OPERATING.md`; never
+are written on demand like any other. Resetting the manuals to the seed is in `README.md`; never
 delete `.data/ledger/`, because the caps are computed from it.
 
 **A recipient's starters.** `seedStarters` seeds only the seed manuals it is given, as tables of

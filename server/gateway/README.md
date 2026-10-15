@@ -247,7 +247,7 @@ Every read is strongly consistent.
   first reservation after the item is put is refused. `npm run usage` reads it with a strongly
   consistent `GetItem`. It has its own partition, which `rtfm-ops` is limited to with
   `dynamodb:LeadingKeys` (`infra/README.md` › The identities). How to turn it on and off is in
-  `OPERATING.md` › The data folder and spending.
+  `README.md` › The data folder and spending.
 - **A crash between reserve and settle** leaves the call's item without `settle`, and both totals
   hold its worst case, as the data folder's ledger does.
 - **Retries.** The SDK retries a request that fails on its way (up to 3 attempts), and fills in
@@ -269,7 +269,7 @@ Every read is strongly consistent.
   already spent. A call already there cancels the transaction and changes nothing, so an import
   can run any number of times.
 - **`setKillSwitch`** puts or deletes the kill-switch item: `npm run ops -- kill-switch`, as
-  `rtfm-ops` (`OPERATING.md` › The ops tools), and the tests, on DynamoDB Local. The server never
+  `rtfm-ops` (`README.md` › The ops tools), and the tests, on DynamoDB Local. The server never
   calls it.
 - **`readLibraryDayTotals(table, libraryId?)`** gives each recipient library's committed spend for
   each day it spent, or one library's, from one `Query` of `TOTAL` with
@@ -448,7 +448,7 @@ library's name.
 ## `npm run usage`
 
 `npm run usage` (`server/usage.ts`, with the formatting in `gateway/usage-report.ts`) prints
-today's and this month's spend (UTC) against the caps, as `OPERATING.md` describes, from the ledger
+today's and this month's spend (UTC) against the caps, as `README.md` describes, from the ledger
 `RTFM_MODELS` chooses: the data folder's with `fake` (the default), or `rtfm-usage` with `bedrock`,
 read with `rtfm-local`'s keys as the server reads it. The report is the same either way. It reads
 another data folder when given one, which the tests use; with `bedrock` it refuses one. Calls on

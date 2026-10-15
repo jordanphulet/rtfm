@@ -120,7 +120,7 @@ entered the passcode reports nothing):
 
 `npm run logs` (`server/logs.ts`, with `logging/log-reader.ts`) reads the daily files and
 prints the recent entries, oldest first, as `timestamp LEVEL event message key=value …` with an
-error's stack indented under it; `OPERATING.md` › Logs has its options.
+error's stack indented under it; `README.md` › Logs has its options.
 
 - **Nothing in a line can pass for another line.** Control characters (U+0000–U+001F and
   U+007F–U+009F) are shown as `\uXXXX`, in the line and in each line of a stack, so a browser's
@@ -132,8 +132,8 @@ error's stack indented under it; `OPERATING.md` › Logs has its options.
   UTC day changes it moves to the new day's file.
 - Lines that aren't log entries are skipped.
 
-`npm run ops -- logs` (`OPERATING.md` › The ops tools) reads the deployed app's entries from
-CloudWatch with the same options (`LOG_OPTIONS` and `logOptionsFrom`), filter and format.
+`npm run ops -- logs` (`README.md` › The ops tools) reads the deployed app's entries from CloudWatch
+with the same options (`LOG_OPTIONS` and `logOptionsFrom`), filter and format.
 
 ## Tests
 

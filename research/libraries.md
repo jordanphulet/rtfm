@@ -88,7 +88,7 @@ Which the cookie holds is a real choice:
 | Cookie | For | Against |
 | --- | --- | --- |
 | **The secret, hashed by the gate (recommended)** | Reading the table opens nothing: the link items hold digests, and a digest isn't a cookie. So `rtfm-read` can read the link items for `npm run ops -- library list`, and neither the Web Function's role nor any role an app stack makes can open a library | One SHA-256 per request, microseconds |
-| The digest, as the passcode's cookie is | The passcode gate's exact shape | Whatever reads the link items opens every library, as whatever reads `PASSCODE` opens the app (`OPERATING.md` › A passcode) |
+| The digest, as the passcode's cookie is | The passcode gate's exact shape | Whatever reads the link items opens every library, as whatever reads `PASSCODE` opens the app (`README.md` › A passcode) |
 
 The passcode keeps its cookie as it is: the smoke check builds its cookie from the stored digest
 (`npm run ops -- passcode cookie`), and nothing here changes the admin's way in.
@@ -378,8 +378,8 @@ asked for, and the sections written.
 
 ### What `npm run ops` gains
 
-`library`, under `OPERATING.md` › The ops tools' rules: non-interactive, plain text or `--json`,
-exit code 1 with the reason on failure.
+`library`, under `README.md` › The ops tools' rules: non-interactive, plain text or `--json`, exit
+code 1 with the reason on failure.
 
 **`create` and `revoke` are the user's**, as `passcode set` is: the user runs them in their own
 terminal, outside the Claude app, whose Terminal panel a session can read, and agents never run
@@ -638,7 +638,7 @@ library only once a link exists, and LB.10, which makes links, merges last.
   screen with "This link is closed." above the form, as does any API request answered
   `401 { error: "Link closed" }`. The page route `/admin` calls `DELETE /api/link` and opens `/`.
   Design the link page and the closed line in `DESIGN.md`, add their shots to `npm run shot`, and
-  name both routes in `OPERATING.md` › Where things live.
+  name both routes in `README.md` › Where things live.
 - **Done when:** component tests cover opening, a closed link, a closed library mid-visit and
   `/admin` from a library, the address keeps no secret after opening, `npm run shot` takes the new
   states, and `npm run build` and `npm test` pass.
@@ -651,7 +651,7 @@ library only once a link exists, and LB.10, which makes links, merges last.
   `README.md`, `CLAUDE.md`
 - **Do:** `npm run ops -- library create <libraryId> [--label <text>]`, `list`, `show <libraryId>`
   and `revoke <libraryId>`, as `research/libraries.md` › What `npm run ops` gains describes, under
-  `OPERATING.md` › The ops tools' rules, with `--json`; `create` prints the link once on standard
+  `README.md` › The ops tools' rules, with `--json`; `create` prints the link once on standard
   output and nowhere else, and keeps no secret; `show` lists the library's manuals with their titles
   and written sections, read as `rtfm-read`. `logs` and `npm run logs` gain `--library <libraryId>`.
   Add to `CLAUDE.md` › Shell that `library create` and `library revoke` are the user's, run in
@@ -673,6 +673,6 @@ library only once a link exists, and LB.10, which makes links, merges last.
   `server/storage/seed.ts`, `server/storage/types.ts`, `infra/access-stack.ts`,
   `infra/app-stack.ts` and `scripts/ops/ops.ts`; the seven manuals in `server/seed/`, counted from
   their `manual.json` files.
-- The prices per section, plan and librarian call are `OPERATING.md` › The models' measurements.
+- The prices per section, plan and librarian call are `README.md` › The models' measurements.
 - The 400-day limit on a cookie's life is from memory of RFC 6265bis (draft), which Chrome follows;
   it was not read again for this doc, and only sets how long a year-long cookie may be.

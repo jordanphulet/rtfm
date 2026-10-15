@@ -1,4 +1,4 @@
-/** The licenses a package that isn't dev-only may have (`OPERATING.md` › License). */
+/** The licenses a package that isn't dev-only may have (`README.md` › License). */
 export const ALLOWED_LICENSES = new Set([
   "MIT",
   "ISC",

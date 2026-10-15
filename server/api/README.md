@@ -108,7 +108,7 @@ comes from (`server/README.md` › Configuration):
   (`fixedPasscode`). Unset or empty, there is no gate and no `POST /api/passcode`.
 - **The stored digest**, on the Web Function: the passcode's item in the table `rtfm-app`
   (`server/storage/README.md` › The table `rtfm-app`), which the user sets with
-  `npm run ops -- passcode set` (`OPERATING.md` › A passcode). `cachedDigest` reads it again only
+  `npm run ops -- passcode set` (`README.md` › A passcode). `cachedDigest` reads it again only
   once the last read is a minute old (`STORED_DIGEST_MAX_AGE_MS`) by the server's clock, which
   tests replace (`startServer`'s `now`), so a new digest reaches every environment within a
   minute, with no deploy. A read that fails isn't kept: the request gets `500`, and the next one
@@ -140,8 +140,8 @@ The rules:
   `passcode set` and at most a minute. Every browser's cookie then holds the old one, so every
   browser gets the passcode screen again.
 - **The digest opens the app.** The cookie is the digest itself, so whoever can read the digest
-  can open the app without the passcode (`OPERATING.md` › A passcode). There is no signed session,
-  no expiry, no limit on attempts and no sign-out. Nothing slows guessing, which is why the passcode
+  can open the app without the passcode (`README.md` › A passcode). There is no signed session, no
+  expiry, no limit on attempts and no sign-out. Nothing slows guessing, which is why the passcode
   is a few random words.
 - **Logged** without the passcode, the digest or the cookie: a refused request as
   `request.refused` (`401`, `Passcode required`), and each passcode entered as `passcode.wrong`,
@@ -206,7 +206,7 @@ A recipient's library is opened by a secret link, `/l#<secret>`, whose page post
   `api/cookies.ts`). It holds the secret, never the digest, so reading the link items opens no
   library.
 - **The link is a bearer token**: whoever has it, or its cookie, opens the library until it is
-  revoked (`OPERATING.md` › A library's link).
+  revoked (`README.md` › A library's link).
 - **Logged** as `link.accepted` with the `libraryId`, `link.refused` with `reason`, `unknown` or
   `revoked` (and the `libraryId` of a revoked one), and `library.seeded` with the `manualIds`
   seeded, never with the secret, its digest or the cookie (`server/logging/README.md`).

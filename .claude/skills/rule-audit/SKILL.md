@@ -37,11 +37,11 @@ List every written rule, each with its text, where it lives, when it appeared (c
 what prompted it, and whether it later changed or was removed. Read every history from `main`,
 not from `HEAD`, which in a worktree may be behind it. Rules live in:
 
-- **The rule files and the docs:** `CLAUDE.md`, `PROCESS.md`, `OPERATING.md`, `ARCHITECTURE.md`
-  (its cross-cutting rules), the design docs and the folder READMEs. Their history, newest first:
+- **The rule files and the docs:** `CLAUDE.md`, `PROCESS.md`, `ARCHITECTURE.md` (its
+  cross-cutting rules), the design docs and the folder READMEs. Their history, newest first:
 
   ```sh
-  git log main -p --format='%n### %h %cI %s' -- CLAUDE.md PROCESS.md OPERATING.md ARCHITECTURE.md '*DESIGN.md' '*README.md'
+  git log main -p --format='%n### %h %cI %s' -- CLAUDE.md PROCESS.md ARCHITECTURE.md '*DESIGN.md' '*README.md'
   ```
 
   It is long: narrow it to one file (`-- <file>`), or to when a rule's words appeared

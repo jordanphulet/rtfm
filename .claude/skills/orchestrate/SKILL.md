@@ -15,7 +15,7 @@ npm run -s orchestrator-check
 ```
 
 If it fails, report its message to the user and stop. Otherwise read what it lists of an earlier
-run (`OPERATING.md` › The orchestrator's preflight).
+run (`README.md` › The orchestrator's preflight).
 
 ## 2. Ask about each `doing` task
 

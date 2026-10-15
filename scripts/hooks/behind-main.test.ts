@@ -20,7 +20,7 @@ beforeEach(() => {
   git(main, "config", "user.name", "Test User");
   git(main, "config", "user.email", "test@example.com");
   git(main, "config", "commit.gpgsign", "false");
-  for (const file of ["CLAUDE.md", "PROCESS.md", "WORKLIST.md", "README.md", "OPERATING.md", "app.ts"]) {
+  for (const file of ["CLAUDE.md", "PROCESS.md", "WORKLIST.md", "README.md", "app.ts"]) {
     writeFileSync(path.join(main, file), `# ${file}\n`);
   }
   commitAll(main, "Start");
@@ -77,12 +77,6 @@ describe("behindMainNotice", () => {
     expect(notice).not.toContain("app.ts");
   });
 
-  it("names README.md and OPERATING.md among the rule files", () => {
-    changeOnMain("README.md");
-    changeOnMain("OPERATING.md");
-    expect(behindMainNotice(worktree)).toContain("Changed on main: OPERATING.md, README.md.");
-  });
-
   it("leaves out a rule file only the worktree's branch changed", () => {
     writeFileSync(path.join(worktree, "README.md"), "# The task's own README\n");
     commitAll(worktree, "Task work");
@@ -94,7 +88,7 @@ describe("behindMainNotice", () => {
   it("says when main changed none of the rule files", () => {
     changeOnMain("app.ts");
     expect(behindMainNotice(worktree)).toContain(
-      "1 commit behind the local main branch.\nNone of CLAUDE.md, PROCESS.md, WORKLIST.md, README.md, OPERATING.md changed on main.",
+      "1 commit behind the local main branch.\nNone of CLAUDE.md, PROCESS.md, WORKLIST.md, README.md changed on main.",
     );
   });
 });

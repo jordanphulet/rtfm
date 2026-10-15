@@ -3,7 +3,7 @@
 A web app for reading hypothetical manuals: an LLM writes a manual's table of contents first, then
 writes each section only when a reader opens it.
 
-Start with `README.md` and its index of the docs; `OPERATING.md` says how to run RTFM.
+Start with `README.md`: how to run it, and where every other doc and folder is.
 
 ## How work happens here
 
@@ -30,18 +30,18 @@ runtime; checks may only confirm which variable names are set.
 
 Never read, print, copy or edit anything under `~/.aws`: it holds the user's work profiles and
 RTFM's keys. Reach AWS only through `npm run aws`, `npm run cdk` and `npm run ops`
-(`infra/README.md`, `OPERATING.md` › The ops tools), never by running `aws` or `cdk` directly.
+(`infra/README.md`, `README.md` › The ops tools), never by running `aws` or `cdk` directly.
 `npm run ops -- kill-switch on|off` changes the live app: run it only when the user asks in chat.
 `npm run ops -- passcode set` is the user's: agents never run it. `npm run ops -- library create`
 and `library revoke` are the user's, run in their own terminal outside the Claude app: agents never
 run them.
 
 To run the app for a check, start `npm run serve-temp` in the background and stop it with its handle
-or the PID it prints (`OPERATING.md` › A throwaway server). Only stop processes you started
-yourself, using the handle or PID you got when you started them. A PID looked up by port or name
-(`lsof`, `ps`, `pgrep`), or matched by a `pkill -f` pattern, never counts as one you started. Never
-kill a process because it holds a port: the Claude app and other tools listen on local ports too. If
-a port you need is taken by something that isn't yours, report it instead.
+or the PID it prints (`README.md` › A throwaway server). Only stop processes you started yourself,
+using the handle or PID you got when you started them. A PID looked up by port or name (`lsof`,
+`ps`, `pgrep`), or matched by a `pkill -f` pattern, never counts as one you started. Never kill a
+process because it holds a port: the Claude app and other tools listen on local ports too. If a port
+you need is taken by something that isn't yours, report it instead.
 
 ## Code standards
 

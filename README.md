@@ -522,7 +522,9 @@ any cap.
 library (`admin` for the admin's library: a reserve entry without `libraryId` is the admin's), with
 counts of aborted, failed and estimated calls, any unsettled reservations, and whether the kill
 switch is on. A call cut short (the reader closed the tab, the model stalled) is marked
-estimated; what it is charged is in `server/gateway/README.md` › Each call.
+estimated. An aborted call (the reader left) is charged the output it had received, counted in
+bytes, which AWS's bill never exceeded; a failed one (a stall, an error) its full `max_tokens`
+(`server/gateway/README.md` › Each call, `server/README.md` › Checked against AWS's bill).
 
 - It reads the ledger `RTFM_MODELS` chooses: `npm run usage` reads the data folder's, and
   `RTFM_MODELS=bedrock npm run usage` reads `rtfm-usage`, with `rtfm-local`'s keys.

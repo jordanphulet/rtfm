@@ -267,7 +267,7 @@ The fake model (`fakeModel` in `agent/fake-model.ts`) is the default (`config.mo
   pause. Asked twice for the same title, its id is taken both times, so the second request isn't
   saved.
 - It waits before each turn, plan and section, and streams text in the fake writer's chunks
-  (`chunkEnds`), at the pace `OPERATING.md` › The models gives (`FakeModelPace`). Its fixed replies
+  (`chunkEnds`), at the pace `README.md` › The models gives (`FakeModelPace`). Its fixed replies
   are `FAKE_REPLIES`, which the tests and the shot script match.
 - It stops on its signal: a signal that has already aborted is refused before any event, and
   once the signal aborts, the next read throws the abort, whichever event the caller holds.

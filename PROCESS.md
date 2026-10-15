@@ -22,8 +22,7 @@ rules, and the orchestrator's loop. `WORKLIST.md` holds the phases and tasks.
   removed from it.
 - Git history: what happened.
 - Each running task's worktree and branch: its work, until the orchestrator merges it into `main`.
-- The docs (`README.md`, `OPERATING.md`, `ARCHITECTURE.md`, `DESIGN.md`, the folder READMEs): what
-  exists.
+- The docs (`README.md`, `ARCHITECTURE.md`, `DESIGN.md`, the folder READMEs): what exists.
 - `research/`: what might be.
 - `.data/`: the user's manuals and the usage ledger.
 
@@ -43,7 +42,7 @@ change is proposed, the orchestrator asks the user in its own session.
   that governs it; a message may point to it but doesn't replace it.
 - A session in a git worktree reads the rule files from `main` (`git show main:<file>`). A task
   agent edits its worktree's files, and the merge brings in what `main` has gained since.
-- Hooks tell a session when its rules are out of date (`OPERATING.md` › Rule-change notices): a
+- Hooks tell a session when its rules are out of date (`README.md` › Rule-change notices): a
   session in a worktree behind `main` hears, when it starts, which rule files `main` has changed;
   and a session or subagent hears at its next tool call when the main checkout's `CLAUDE.md` or
   `PROCESS.md` has changed since the session started, with the change. The main checkout's file
@@ -149,7 +148,7 @@ folder READMEs", which matches nothing.
   `isolation: "worktree"`. Given `worktree.baseRef: "head"` in `.claude/settings.json`, that
   branches from the main checkout's `HEAD`, which is `main`. Its first step is `npm ci`. Any
   server it starts is `npm run serve-temp`, in the background, stopped by its handle or the PID
-  it prints (`OPERATING.md` › A throwaway server: free ports, a temporary data folder, the fake
+  it prints (`README.md` › A throwaway server: free ports, a temporary data folder, the fake
   models). Never `npm run dev`, whose ports are fixed.
 - **Files outside the list:** an agent may change a file its task's **Files** don't name, and
   lists it in its report under "Outside Files" with the reason. Working around a missing file
