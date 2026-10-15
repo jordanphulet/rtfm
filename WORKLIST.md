@@ -90,8 +90,8 @@ Small fixes that keep the repo healthy.
 RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
 
 ### GH.1 — Scrub the history and publish it
-- **Status:** blocked (the user gives the go-ahead; until then, planning only)
-- **Depends on:** —
+- **Status:** todo
+- **Depends on:** UP.15 (every task merged first; the rewrite runs with no agent mid-task)
 - **Files:** `PROCESS.md`, `README.md`
 - **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
   while no task is running, every task branch is merged, and no worktree is mid-task.
@@ -101,8 +101,7 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
     - The 16 images under `docs/inspo/` (`*.png`, `*.jpg`) leave every commit. They are already
       gone from `main` (08db542), so `main`'s final tree must come out identical.
     - The AWS account id stays, by the user's choice.
-  - **The user first:** turns on GitHub › Settings › Emails › "Keep my email addresses private"
-    and "Block command line pushes that expose my email". The license is MIT (UP.15).
+  - **The license** is MIT (UP.15). The user chose not to change GitHub's email settings.
   - **Backup:** a full mirror clone is at `/Users/jordan/projects/rtfm-backup-2026-10-14.git`
     (`main` at 92c88c9). Make a fresh one of the `main` of the day before rewriting.
   - **Rewrite** in a fresh clone of `main` outside the repo, never in the repo: `git
