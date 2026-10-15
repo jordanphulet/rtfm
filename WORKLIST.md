@@ -59,6 +59,32 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.15 — MIT, a dependency-license check, and third-party notices
+- **Status:** doing (agent a5ad9b6a98844cc8f)
+- **Depends on:** —
+- **Files:** `LICENSE`, `scripts/**`, `vite.config.ts`, `package.json`, `package-lock.json`,
+  `README.md`, `ARCHITECTURE.md`
+- **Do:** the user chose MIT for the public repository (GH.1).
+  - Add `LICENSE`: the MIT text, copyright 2026 Jordan Hulet, and `"license": "MIT"` in
+    `package.json`.
+  - A test in `npm test` reads `package-lock.json` and fails, naming each package and its
+    license, when a package that isn't dev-only has a license outside an allowlist: MIT, ISC,
+    BSD-2-Clause, BSD-3-Clause, 0BSD, Apache-2.0, OFL-1.1, Unlicense, CC0-1.0, BlueOak-1.0.0; an
+    SPDX `OR` passes when one side does; no license fails. Dev-only packages aren't checked.
+  - The build writes the licenses of every package bundled into `dist/` (name, version, license
+    and its text or notice) to a `THIRD-PARTY-NOTICES.txt` the app serves, since minifying can
+    drop notices that MIT and Apache ask to keep. Prefer the smallest way (a Rollup/Vite plugin
+    pinned exactly, or a short script reading the bundle's module ids), and make sure the Web
+    Function's package serves it too.
+  - `README.md` says the license, the allowlist test and the notices file.
+- **Done when:** `npm test` fails for a runtime dependency with a license outside the list and
+  passes as the repo is; `npm run build` writes the notices file listing the bundled packages; the
+  deployed app serves it; `npm run build` and `npm test` pass.
+
 ## A public repository
 
 RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
@@ -76,7 +102,7 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
       gone from `main` (08db542), so `main`'s final tree must come out identical.
     - The AWS account id stays, by the user's choice.
   - **The user first:** turns on GitHub › Settings › Emails › "Keep my email addresses private"
-    and "Block command line pushes that expose my email", and decides on a LICENSE.
+    and "Block command line pushes that expose my email". The license is MIT (UP.15).
   - **Backup:** a full mirror clone is at `/Users/jordan/projects/rtfm-backup-2026-10-14.git`
     (`main` at 92c88c9). Make a fresh one of the `main` of the day before rewriting.
   - **Rewrite** in a fresh clone of `main` outside the repo, never in the repo: `git
