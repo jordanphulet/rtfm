@@ -340,14 +340,16 @@ A revision's code is a zip in the staging bucket, which Lambda reads as its own 
 `app-stack.ts` makes it a CDK asset that `scripts/build-web-function.ts` builds on this machine
 when the app synthesizes (`cdk synth`, `diff` and `deploy`), in about a second, with no Docker:
 
-- `dist/`: the built app (`vite build`);
+- `dist/`: the built app (`vite build`), with its `THIRD-PARTY-NOTICES.txt`;
 - `web-function.mjs`, in the package's `server/` folder: `server/web-function.ts` and all it
   imports, `node_modules` included, bundled into one file by Rolldown, so the package needs no
-  `node_modules` and no TypeScript at run time. Its path is `AWS_LAMBDA_NODEJS_ENTRYPOINT`;
+  `node_modules` and no TypeScript at run time. Its path is `AWS_LAMBDA_NODEJS_ENTRYPOINT`.
+  Beside it, `THIRD-PARTY-NOTICES.txt` holds the notices of the packages it bundles (`README.md` ›
+  License);
 - `seed/`: the seed manuals. Every module in the bundle resolves a path against the bundle's own
   URL, so the storage's `../seed/` is this folder, and the config's `../dist` the built app.
 
-It comes to about 4 MB, 1.8 MB zipped. The asset is named by a hash of the package, so a deploy
+It comes to about 6.4 MB, 2.8 MB zipped. The asset is named by a hash of the package, so a deploy
 makes a new revision only when the package changes. The tests synthesize without building it:
 `vite.config.ts` gives them the CDK context `aws:cdk:bundling-stacks: []`.
 `scripts/build-web-function.test.ts` builds it and runs it on loopback.

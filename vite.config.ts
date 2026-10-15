@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import type { ProxyOptions } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
+import { thirdPartyNotices } from "./scripts/third-party-notices.ts";
 import { API_PORT } from "./server/ports.ts";
 
 const apiProxy: Record<string, ProxyOptions> = {
@@ -23,7 +24,7 @@ const testNodeOptions = [process.env.NODE_OPTIONS, preloadLoopbackOnly].filter(B
 const skipCdkBundling = JSON.stringify({ "aws:cdk:bundling-stacks": [] });
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), thirdPartyNotices()],
   envDir: false,
   server: { port: 5173, strictPort: true, proxy: apiProxy, watch: { ignored: ["**/.data/**"] } },
   preview: { proxy: apiProxy },

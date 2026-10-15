@@ -148,6 +148,11 @@ browser (Vite, :5173)                           server (node:http, :8787)
 - `build-web-function.ts`: the Web Function's package: the built app, the server bundled into one
   file with Rolldown, and the seed. `RtfmApp` runs it when it synthesizes (`infra/README.md` ›
   The Web Function's package).
+- `third-party-notices.ts`: the Vite and Rolldown plugin that writes `THIRD-PARTY-NOTICES.txt`
+  beside each bundle, the licenses and notices of the packages it bundles. `vite.config.ts` and
+  `build-web-function.ts` use it (`README.md` › License).
+- `licenses.ts`: the licenses a package that isn't dev-only may have, and `licenses.test.ts`, which
+  checks `package-lock.json` against them in `npm test` (`README.md` › License).
 - `dynamodb-local.ts`, `DynamoDbLocalOnLoopback.java`, `fetch-dynamodb-local.ts` and
   `test-global-setup.ts`: DynamoDB Local for the tests: the pinned release, `npm run
   fetch-dynamodb-local`, which fetches it once, and Vitest's global setup, which runs it on

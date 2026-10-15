@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +9,7 @@ import { passcodeDigest } from "../server/api/passcode.ts";
 import { writePasscodeDigest } from "../server/storage/dynamodb-manual-store.ts";
 import { DYNAMODB_LOCAL_CREDENTIALS, testAppTable } from "../server/storage/dynamodb-testing.ts";
 import { WEB_FUNCTION_ENTRYPOINT } from "./build-web-function.ts";
+import { NOTICES_FILE } from "./third-party-notices.ts";
 
 const SCRIPT = fileURLToPath(new URL("./build-web-function.ts", import.meta.url));
 const TEST_TIMEOUT_MS = 60_000;
@@ -67,26 +68,26 @@ async function runPackage(packageDir: string, tmp: string) {
 }
 
 function get(port: number, pathname: string, cookie?: string) {
-  return new Promise<{ status: number; text: string }>((resolve, reject) => {
+  return new Promise<{ status: number; contentType: string | undefined; text: string }>((resolve, reject) => {
     const headers = { host: ENDPOINT_HOST, ...(cookie ? { cookie } : {}) };
     const sent = httpRequest({ host: "127.0.0.1", port, path: pathname, headers, setHost: false });
     sent.on("error", reject);
     sent.on("response", async (response) => {
       let text = "";
       for await (const chunk of response.setEncoding("utf8")) text += chunk;
-      resolve({ status: response.statusCode!, text });
+      resolve({ status: response.statusCode!, contentType: response.headers["content-type"], text });
     });
     sent.end();
   });
 }
 
 describe("build-web-function.ts", () => {
-  it("builds a package that serves the built app and the seeded library", { timeout: TEST_TIMEOUT_MS }, async () => {
+  it("builds a package that serves the built app, its third-party notices and the seeded library", { timeout: TEST_TIMEOUT_MS }, async () => {
     const packageDir = await tempFolder();
     const built = build(packageDir);
     expect(built.status, built.stderr).toBe(0);
     expect((await readdir(packageDir)).sort()).toEqual(["dist", "seed", "server"]);
-    expect(await readdir(path.join(packageDir, "server"))).toEqual([path.basename(WEB_FUNCTION_ENTRYPOINT)]);
+    expect((await readdir(path.join(packageDir, "server"))).sort()).toEqual([NOTICES_FILE, path.basename(WEB_FUNCTION_ENTRYPOINT)]);
 
     const port = await runPackage(packageDir, await tempFolder());
     const page = await get(port, "/read/the-haunt-that-listens");
@@ -94,6 +95,17 @@ describe("build-web-function.ts", () => {
     expect(page.text).toContain('<div id="root">');
     const manuals = await get(port, "/api/manuals", `rtfm_passcode=${passcodeDigest(PASSCODE)}`);
     expect(JSON.parse(manuals.text)).toContainEqual(expect.objectContaining({ id: "the-haunt-that-listens", writtenCount: 7 }));
+
+    const notices = await get(port, `/${NOTICES_FILE}`);
+    expect(notices.status).toBe(200);
+    expect(notices.contentType).toBe("text/plain; charset=utf-8");
+    expect(notices.text).toMatch(/^react@\d[^ ]* \(MIT\)$/m);
+    expect(notices.text).toMatch(/^katex@\d[^ ]* \(MIT\)$/m);
+    expect(notices.text).not.toMatch(/^@aws-sdk\//m);
+
+    const serverNotices = await readFile(path.join(packageDir, "server", NOTICES_FILE), "utf8");
+    expect(serverNotices).toMatch(/^@aws-sdk\/client-dynamodb@\d[^ ]* \(Apache-2\.0\)$/m);
+    expect(serverNotices).toMatch(/^@anthropic-ai\/bedrock-sdk@\d[^ ]* \(MIT\)$/m);
   });
 
   it("refuses an output folder that isn't empty", async () => {

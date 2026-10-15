@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as bundle } from "rolldown";
 import { build as buildApp } from "vite";
+import { thirdPartyNotices } from "./third-party-notices.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const ENTRY = "server/web-function.ts";
@@ -24,6 +25,7 @@ export async function buildWebFunction(outDir: string): Promise<void> {
     input: path.join(ROOT, ENTRY),
     platform: "node",
     logLevel: "warn",
+    plugins: [thirdPartyNotices()],
     output: { file: path.join(outDir, WEB_FUNCTION_ENTRYPOINT), format: "esm", codeSplitting: false },
   });
   await cp(path.join(ROOT, "server/seed"), path.join(outDir, "seed"), { recursive: true });

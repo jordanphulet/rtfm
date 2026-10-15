@@ -67,7 +67,7 @@ the same caps and kill switch as a laptop's (Bedrock's spending, below).
 | `npm run server`             | Starts the API server alone, for `curl` or `npm run preview`.                |
 | `npm test`                   | Tests (Vitest; page and component tests in happy-dom, one reader layout test in Chromium). Loopback only. |
 | `npm run fetch-dynamodb-local` | DynamoDB Local for the tests, fetched once. See `server/storage/README.md`. |
-| `npm run build`              | Type-checks everything and builds the app.                                   |
+| `npm run build`              | Type-checks everything and builds the app, with its notices (License, below). |
 | `npm run preview`            | Serves the built app, passing `/api` to `npm run server` on 8787.            |
 | `npm run shot`               | Screenshots both pages in every state; `--compare` diffs against a baseline. |
 | `npm run serve-temp`         | A throwaway copy of the app, on free ports and a new data folder. See below. |
@@ -708,3 +708,30 @@ anything else, bare `/read` included, redirects to `/`. The settings are in `ser
 (Configuration, above), and everything the server keeps is in its data folder (above).
 
 What each folder of the code holds is in `ARCHITECTURE.md` › Codemap.
+
+## License
+
+RTFM is under the MIT license, in `LICENSE`.
+
+**The dependencies' licenses.** `npm test` reads `package-lock.json` and fails, naming each package
+and its license, when a package that isn't dev-only (`"dev": true`) has no license or one outside
+this list: MIT, ISC, BSD-2-Clause, BSD-3-Clause, 0BSD, Apache-2.0, OFL-1.1, Unlicense, CC0-1.0
+and BlueOak-1.0.0. An SPDX `OR` passes when either side does and an `AND` when both do; an
+exception (`WITH`), or anything else it can't read, fails. The list and the check are in
+`scripts/licenses.ts`.
+
+**Third-party notices.** Minifying drops the license comments in the packages' code, so each build
+writes their notices to a `THIRD-PARTY-NOTICES.txt` beside its bundle: every package from
+`node_modules` the bundle holds a module of, once per version, sorted, with its license and the
+text of its license and notice files (`scripts/third-party-notices.ts`, a plugin for Vite and
+Rolldown):
+
+- `npm run build` writes `dist/THIRD-PARTY-NOTICES.txt`, the browser's packages. Whatever serves
+  the built app serves it at `/THIRD-PARTY-NOTICES.txt`: the Web Function, and `npm run preview`.
+- The Web Function's package holds a second one beside the server's bundle, `web-function.mjs`:
+  the packages bundled into the server, such as the AWS SDK (`infra/README.md` › The Web
+  Function's package). They reach Lambda but never a reader's browser, so the app doesn't serve
+  it.
+
+A package with no license or notice file is listed with the license and author its
+`package.json` gives.
