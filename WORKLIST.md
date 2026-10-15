@@ -40,7 +40,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.16 — Two tests that time out under a full run
-- **Status:** todo
+- **Status:** doing (agent a7e1e203662e162c6)
 - **Depends on:** —
 - **Files:** `scripts/doc-references.test.ts`, `server/writer/runs-leases.test.ts`
 - **Do:** on `main`, a full `npm test` failed twice in a row with
