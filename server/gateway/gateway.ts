@@ -131,11 +131,19 @@ export async function createGateway({
     }
   }
 
-  async function settle(reservation: Reservation, outcome: Outcome, reported: Partial<TokenCounts>, failure: unknown) {
+  async function settle(
+    reservation: Reservation,
+    outcome: Outcome,
+    reported: Partial<TokenCounts>,
+    receivedOutputBytes: number,
+    failure: unknown,
+  ) {
     const outputKnown = outcome === "complete" && reported.outputTokens !== undefined;
     const tokens: TokenCounts = {
       inputTokens: reported.inputTokens ?? reservation.inputBound,
-      outputTokens: outputKnown ? reported.outputTokens! : reservation.maxTokens,
+      outputTokens: outputKnown
+        ? reported.outputTokens!
+        : chargedOutputTokens(outcome, receivedOutputBytes, reservation.maxTokens),
       cacheWriteTokens: reported.cacheWriteTokens ?? 0,
       cacheReadTokens: reported.cacheReadTokens ?? 0,
     };
@@ -169,6 +177,7 @@ export async function createGateway({
     const { model } = reservation.entry;
 
     const reported: Partial<TokenCounts> = {};
+    let receivedOutputBytes = 0;
     let stopped = false;
     let outcome: Outcome = "aborted";
     let failure: unknown;
@@ -182,6 +191,7 @@ export async function createGateway({
         idle.restart();
         if (event.type === "usage") recordUsage(reported, event);
         if (event.type === "stop") stopped = true;
+        receivedOutputBytes += outputBytes(event);
         yield event;
       }
       if (cutOff.signal.aborted) throw cutOff.signal.reason;
@@ -200,7 +210,7 @@ export async function createGateway({
     } finally {
       idle.stop();
       cutOff.abort();
-      await settle(reservation, outcome, reported, failure);
+      await settle(reservation, outcome, reported, receivedOutputBytes, failure);
     }
   }
 
@@ -225,6 +235,22 @@ function inputTokenBound({ system, tools = [], messages }: ModelPrompt, toolUseS
 
 function messageText({ content }: PromptMessage): string {
   return typeof content === "string" ? content : JSON.stringify(content);
+}
+
+/**
+ * An aborted call is charged the output it received, in UTF-8 bytes, since a token is at least
+ * one byte. That bounds the tokens received, not those generated (tool input held back until a
+ * parameter is whole, framing tokens), so it covers the bill only if AWS doesn't bill output it
+ * never delivered. Any other call that didn't report its output is charged its full `max_tokens`.
+ */
+function chargedOutputTokens(outcome: Outcome, receivedOutputBytes: number, maxTokens: number): number {
+  return outcome === "aborted" ? Math.min(receivedOutputBytes, maxTokens) : maxTokens;
+}
+
+function outputBytes(event: ModelEvent): number {
+  if (event.type === "text") return Buffer.byteLength(event.text, "utf8");
+  if (event.type === "tool-input") return Buffer.byteLength(event.json, "utf8");
+  return 0;
 }
 
 function recordUsage(reported: Partial<TokenCounts>, event: UsageEvent) {

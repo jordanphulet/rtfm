@@ -51,6 +51,7 @@ const COMPLETE_EVENTS: ModelEvent[] = [
   { type: "usage", outputTokens: 20 },
   { type: "stop", reason: "end_turn" },
 ];
+const FIRST_TEXT_BYTES = Buffer.byteLength("My dear builder, ", "utf8");
 
 function gatewayConfig(overrides: TestGatewayOverrides = {}): GatewayConfig {
   return testGatewayConfig({ jobs: JOBS, ...overrides });
@@ -451,7 +452,7 @@ describe("model gateway", () => {
 
     await expect(reading).rejects.toThrow();
     expect(await settleEntries()).toMatchObject([
-      { outcome: "aborted", inputTokens: 50, outputTokens: MAX_TOKENS, estimated: true },
+      { outcome: "aborted", inputTokens: 50, outputTokens: FIRST_TEXT_BYTES, estimated: true },
     ]);
   });
 
@@ -477,7 +478,7 @@ describe("model gateway", () => {
     expect(await collect(running.stream("write-section", EMPTY_PROMPT, signal()))).toEqual(COMPLETE_EVENTS);
   });
 
-  it("records a stream aborted partway at its full reserved output", async () => {
+  it("records a stream aborted partway at the output it received", async () => {
     const { client, requests } = fakeClient({ events: COMPLETE_EVENTS.slice(0, 2), ending: "hang" });
     const running = await gateway(client);
     const stream = running.stream("write-section", EMPTY_PROMPT, signal());
@@ -496,8 +497,8 @@ describe("model gateway", () => {
     expect(received.map((event) => event.type)).toEqual(["usage", "text"]);
     expect(requests[0]!.signal.aborted).toBe(true);
     const [settle] = await settleEntries();
-    expect(settle).toMatchObject({ outcome: "aborted", inputTokens: 50, outputTokens: MAX_TOKENS, estimated: true });
-    expect(settle!.usd).toBeCloseTo((50 * 1 + MAX_TOKENS * 5) / 1_000_000, 12);
+    expect(settle).toMatchObject({ outcome: "aborted", inputTokens: 50, outputTokens: FIRST_TEXT_BYTES, estimated: true });
+    expect(settle!.usd).toBeCloseTo((50 * 1 + FIRST_TEXT_BYTES * 5) / 1_000_000, 12);
   });
 
   it("aborts the model call and records it as aborted when the caller stops reading", async () => {
@@ -509,7 +510,34 @@ describe("model gateway", () => {
     }
 
     expect(requests[0]!.signal.aborted).toBe(true);
-    expect(await settleEntries()).toMatchObject([{ outcome: "aborted", estimated: true }]);
+    expect(await settleEntries()).toMatchObject([{ outcome: "aborted", outputTokens: FIRST_TEXT_BYTES, estimated: true }]);
+  });
+
+  it("charges an aborted call the UTF-8 bytes of the text and tool input it received", async () => {
+    const events: ModelEvent[] = [
+      { type: "text", text: "Café " },
+      { type: "tool-input", json: '{"query":' },
+      { type: "tool-input", json: '"naïve"}' },
+      { type: "tool-use", id: "toolu_1", name: "search", input: { query: "naïve" } },
+    ];
+    const running = await gateway(fakeClient({ events, ending: "hang" }).client);
+
+    for await (const event of running.stream("librarian", EMPTY_PROMPT, signal())) {
+      if (event.type === "tool-use") break;
+    }
+
+    expect(await settleEntries()).toMatchObject([{ outcome: "aborted", outputTokens: 6 + 9 + 9, estimated: true }]);
+  });
+
+  it("charges an aborted call at most its max_tokens of output", async () => {
+    const config = gatewayConfig({ jobs: { ...JOBS, "write-section": { model: TEST_MODEL, maxTokens: 10 } } });
+    const running = await gateway(fakeClient({ events: COMPLETE_EVENTS.slice(0, 2), ending: "hang" }).client, { config });
+
+    for await (const event of running.stream("write-section", EMPTY_PROMPT, signal())) {
+      if (event.type === "text") break;
+    }
+
+    expect(await settleEntries()).toMatchObject([{ outcome: "aborted", outputTokens: 10, estimated: true }]);
   });
 
   it("records a call the client fails as failed, charged at the input bound and full output", async () => {
@@ -563,7 +591,10 @@ describe("model gateway", () => {
 
     writeSettles();
     await waitUntil(() => idle);
-    expect(await settleEntries()).toMatchObject([{ outcome: "aborted" }, { outcome: "aborted" }]);
+    expect(await settleEntries()).toMatchObject([
+      { outcome: "aborted", outputTokens: 0 },
+      { outcome: "aborted", outputTokens: 0 },
+    ]);
   });
 
   it("refuses a call whose signal is already aborted, without reserving", async () => {

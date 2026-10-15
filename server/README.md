@@ -310,34 +310,61 @@ records them, not read from AWS's bill.
 | Call | Input tokens | Output tokens | Time | Cost | Reserved |
 | --- | --- | --- | --- | --- | --- |
 | A section (asked for 650 words; wrote 760–800 words, 4,200–5,000 characters) | 2,900–3,200 | 970–1,410 | 12–15s, about 400 `append` events | $0.007–0.010 | about $0.025 |
-| A section aborted mid-stream | as above | charged at 2,048 | — | about $0.013 | about $0.025 |
+| A section aborted mid-stream | as above | charged the bytes received, at most 2,048 (at least 1,788 bytes after 6s) | — | $0.003–0.013 | about $0.025 |
 | A librarian turn | 2,000–2,700 | up to a few hundred | — | $0.002–0.004 | $0.013–0.016 (about $0.014 for a first turn) |
 | A plan of 23 sections | 3,957 | 2,481 | 21.3s, the longest silence 11.2s (the chapters, about 116 tokens a second) | $0.0164 | about $0.036 |
 
 ## Checked against AWS's bill
 
-On 2026-10-14 (UTC), as `rtfm-read`, Cost Explorer's daily cost and usage by usage type for the
-service "Claude Haiku 4.5 (Amazon Bedrock Edition)" (`npm run aws -- ce get-cost-and-usage`), set
-against the calls in `rtfm-usage` by the day they were reserved (UTC). Both days are complete in
-Cost Explorer; the next day, 2026-10-13, was still arriving.
+On 2026-10-14 and 2026-10-15 (UTC), as `rtfm-read`, Cost Explorer's daily cost and usage by usage
+type for the service "Claude Haiku 4.5 (Amazon Bedrock Edition)" (`npm run aws -- ce
+get-cost-and-usage`), set against the calls in `rtfm-usage` by the day they were reserved (UTC),
+read with `npm run aws -- dynamodb query`. Every call reserved on the three days below is one the
+data folder's ledger recorded and `npm run usage -- --import --apply` copied: `rtfm-usage` has no
+other.
+The ledger's columns are what it charged when each call settled.
 
 | Day | Input, AWS / ledger | Output, AWS / ledger as reported / ledger as charged | Cost, AWS / ledger |
 | --- | --- | --- | --- |
 | 2026-10-11, 29 calls, 2 aborted | 74,473 / 74,459 | 19,751 / 19,745 / 23,841 | $0.1733 / $0.1937 |
 | 2026-10-12, 46 calls | 116,843 / 116,829 | 10,095 / 10,091 / 10,091 | $0.1673 / $0.1673 |
+| 2026-10-13, 75 calls, 2 aborted | 249,582 / 220,210 | 47,175 / 46,494 / 52,638 | $0.4855 / $0.4834 |
 
+- **When a day is complete.** Cost Explorer marks every day of a month `Estimated` until the
+  month's bill closes, 2026-10-11 and 2026-10-12 included, so the flag can't say. Usage arrives
+  hours late instead: on 2026-10-15, 2026-10-14's matched the ledger to the token for every call
+  reserved before 23:26 UTC (195,836 input and 61,184 output tokens) and had none of the ten after
+  it, so 2026-10-13's had all arrived.
 - **Prices.** Each usage type's cost over its quantity is $1.00 input and $5.00 output per million
   for `USW2-MP:USW2_InputTokenCount_Global-Units` and `…OutputTokenCount_Global-Units` (the
   `global.` profile), and $1.10 and $5.50 for `USW2-MP:USW2_InputTokenCount-Units` and
   `…OutputTokenCount-Units` (the `us.` profile), as `gateway/prices.ts` holds.
-- **Complete calls match to the token.** What AWS billed beyond the ledger each day is one call of
-  14 input and 4–6 output tokens on the `global.` profile, and on 2026-10-11 one more on the `us.`
-  profile, which RTFM never uses: calls made outside the server, worth $0.0001 in all.
-- **An aborted call is billed its input and almost none of its output.** The two sections aborted
-  mid-stream on 2026-10-11 were billed their full input (5,954 tokens) and at most 6 output tokens
-  between them, against the hundreds a section streams in its first 5 seconds (Measured, above).
-  The ledger charged each its full `max_tokens` of output (`server/gateway/README.md` › Each call),
-  2,048 tokens or about $0.01, which is the whole of the day's difference.
+- **Complete calls match to the token.** What AWS billed beyond the ledger on 2026-10-11 and
+  2026-10-12 is one call a day of 14 input and 4–6 output tokens on the `global.` profile, and on
+  2026-10-11 one more on the `us.` profile, which RTFM never uses: calls made outside the server,
+  worth $0.0001 in all.
+- **Calls outside the server on 2026-10-13.** AWS billed 29,372 input tokens (249,582 − 220,210)
+  and 681 output tokens (47,175 − 46,494) beyond what the ledger's calls reported, all on the
+  `global.` profile. No ledger holds those calls: the local server's last call that day was
+  reserved at 19:52 UTC, the Web Function was deployed on 2026-10-14, and the other ledgers
+  on this machine are throwaway servers' with only the fake model.
+- **An aborted call is billed its full input and, by the evidence, about no output.**
+  - On 2026-10-11 two sections were cut after about 4.7s each (`.data/ledger`), roughly 1,300
+    characters each at a section's pace (Measured, above). They were billed their full input
+    (5,954 tokens) and at most 6 output tokens between them. What they had received wasn't
+    logged.
+  - On 2026-10-13 a section aborted after 5.9s had sent 1,788 characters (400–500 tokens at a
+    section's 3.5–4.4 characters a token), and a plan was aborted after 6.2s. The two of them and
+    the calls outside the server were billed 681 output tokens together. That fits the aborted
+    calls billed nothing, the outside calls' 29,372 input tokens bringing all 681, and it fits
+    them billed what they sent, the outside calls writing at most about 280.
+  - So 2026-10-11 favours no output, but what those calls received wasn't logged, and 2026-10-13's
+    681 tokens leave room for billing what was sent. The gateway charges an aborted call the bytes
+    it received (`server/gateway/README.md` › Each call), the larger reading: 1,788 or more for
+    that section alone, above all 681. If aborted calls are billed nothing, the ledger overstates each by its whole
+    byte count, about 1,800 tokens or $0.009 for that section.
+  - The ledger charged each of these four aborted calls its full `max_tokens` of output, 2,048
+    tokens for a section and 4,096 for the plan.
 
 ## Tests
 

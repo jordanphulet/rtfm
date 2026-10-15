@@ -124,13 +124,25 @@ For each call, in order:
    - **Output tokens:**
      - On a complete call they come from the final `message_delta`. `message_start` also carries
        an `output_tokens`, but it is a placeholder (1), so the client doesn't map it.
-     - **Any call that doesn't complete (aborted, stalled or failed) is charged its full reserved
-       output (`max_tokens`)** and marked `estimated: true`. The stream doesn't tell us what
-       Bedrock billed after the cut, so the gateway assumes the most it can be. AWS's bill shows
-       an aborted call billed its input and almost none of its output (`server/README.md` ›
-       Checked against AWS's bill), so the ledger overstates each by nearly its full
-       `max_tokens` of output.
-     - `estimated` is also set if a complete call never reported its input or output tokens.
+     - **An `aborted` call is charged the output it received:** the UTF-8 bytes of its `text` and
+       `tool-input` events, at most `max_tokens`. The stream reports no output tokens before the
+       cut.
+       - **The premise.** A token is at least one byte, so the bytes bound the output tokens
+         received, not those generated: the API holds back a tool's input until each parameter
+         is whole, and framing tokens never reach the stream. The charge covers the bill only
+         as long as AWS doesn't bill output it never delivered.
+       - **The evidence** (`server/README.md` › Checked against AWS's bill) points to aborted
+         calls being billed about no output at all: on 2026-10-11 two sections cut after about
+         4.7s, roughly 1,300 characters each at a section's pace, were billed at most 6 output
+         tokens between them. What those two had received wasn't logged, and 2026-10-13's bill
+         can't tell the two readings apart, so the gateway charges the bytes, the larger.
+       - So the ledger may overstate an aborted call by its whole byte count: for a section cut
+         after 1,800 bytes, about 1,800 tokens or $0.009.
+     - **A `failed` call (stalled, a client error, no `stop`) is charged its full `max_tokens`**:
+       the stream gives no sign of how much Bedrock generated before the failure.
+     - Both are marked `estimated: true`, and so is a complete call that never reported its input
+       or output tokens. The reservation still holds `max_tokens` of output until the settle
+       (Worst case, above), so the caps don't depend on either estimate.
    - **The call stays running until its settle is written.** Only then does it free its
      concurrency slot, and its unused worst case is freed with the settle, so until then the
      totals hold the worst case, and `idle()` counts it as running. A settle that fails leaves
