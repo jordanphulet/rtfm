@@ -36,7 +36,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### AW.4 — Charge an aborted call as AWS does
-- **Status:** doing (agent a2b7bb8c23c5ebe58; approved, doc fixes)
+- **Status:** doing (agent a2b7bb8c23c5ebe58; done, being committed)
 - **Depends on:** —
 - **Files:** `server/gateway/gateway.ts` and its test, `server/gateway/README.md`, `server/README.md`,
   `OPERATING.md`
