@@ -24,6 +24,8 @@ aren't RTFM's.
   and the IAM principal one, a day after `rtfm-local` has called Bedrock)
 - **Depends on:** IN.2
 - **Files:** `infra/access-stack.ts` and its test, `infra/README.md`
+- **Note:** IN.18 found the `project` tag catches no cost at all on 2026-10-13 and 10-14:
+  every cost was untagged.
 - **Do:** with `npm run aws -- ce get-cost-and-usage`, group a day's Bedrock cost (the services
   "Claude Haiku 4.5 (Amazon Bedrock Edition)" and "Amazon Bedrock") by the `project` tag, and
   find whether `rtfm-local`'s calls carry `project=rtfm` and under which tag key. If the budget's
@@ -32,16 +34,6 @@ aren't RTFM's.
   `access-stack.ts` needs the user's approval and their redeploy from CloudShell.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
-
-### IN.18 — Read the idle cost
-- **Status:** doing (agent a590efed96a5c7de1; done, being committed)
-- **Depends on:** —
-- **Files:** `research/aws-design.md`
-- **Do:** the cost in Cost Explorer since the Web Function's first deploy (2026-10-13), by service
-  (Lambda, CloudFront, DynamoDB, CloudWatch), not only by the `project` tag, until IN.5 settles
-  what that tag catches; projected to a month.
-- **Done when:** the cost is in the doc, and it is under $10 a month or the orchestrator has a task
-  to move to the fallback (a streaming function URL through the AWS Lambda Web Adapter).
 
 ### AW.4 — Charge an aborted call as AWS does
 - **Status:** doing (agent a2b7bb8c23c5ebe58)
