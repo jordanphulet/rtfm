@@ -59,13 +59,39 @@ aren't RTFM's.
 - **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
   evidence, and `npm test` passes.
 
+## Upkeep
+
+Small fixes that keep the repo healthy.
+
+### UP.15 — MIT, a dependency-license check, and third-party notices
+- **Status:** doing (agent a5ad9b6a98844cc8f; done, being committed)
+- **Depends on:** —
+- **Files:** `LICENSE`, `scripts/**`, `vite.config.ts`, `package.json`, `package-lock.json`,
+  `README.md`, `ARCHITECTURE.md`, `infra/README.md`
+- **Do:** the user chose MIT for the public repository (GH.1).
+  - Add `LICENSE`: the MIT text, copyright 2026 Jordan Hulet, and `"license": "MIT"` in
+    `package.json`.
+  - A test in `npm test` reads `package-lock.json` and fails, naming each package and its
+    license, when a package that isn't dev-only has a license outside an allowlist: MIT, ISC,
+    BSD-2-Clause, BSD-3-Clause, 0BSD, Apache-2.0, OFL-1.1, Unlicense, CC0-1.0, BlueOak-1.0.0; an
+    SPDX `OR` passes when one side does; no license fails. Dev-only packages aren't checked.
+  - The build writes the licenses of every package bundled into `dist/` (name, version, license
+    and its text or notice) to a `THIRD-PARTY-NOTICES.txt` the app serves, since minifying can
+    drop notices that MIT and Apache ask to keep. Prefer the smallest way (a Rollup/Vite plugin
+    pinned exactly, or a short script reading the bundle's module ids), and make sure the Web
+    Function's package serves it too.
+  - `README.md` says the license, the allowlist test and the notices file.
+- **Done when:** `npm test` fails for a runtime dependency with a license outside the list and
+  passes as the repo is; `npm run build` writes the notices file listing the bundled packages; the
+  deployed app serves it; `npm run build` and `npm test` pass.
+
 ## A public repository
 
 RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
 
 ### GH.1 — Scrub the history and publish it
-- **Status:** blocked (the user gives the go-ahead; until then, planning only)
-- **Depends on:** —
+- **Status:** todo
+- **Depends on:** UP.15 (every task merged first; the rewrite runs with no agent mid-task)
 - **Files:** `PROCESS.md`, `README.md`
 - **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
   while no task is running, every task branch is merged, and no worktree is mid-task.
@@ -75,15 +101,21 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
     - The 16 images under `docs/inspo/` (`*.png`, `*.jpg`) leave every commit. They are already
       gone from `main` (08db542), so `main`'s final tree must come out identical.
     - The AWS account id stays, by the user's choice.
-  - **The user first:** turns on GitHub › Settings › Emails › "Keep my email addresses private"
-    and "Block command line pushes that expose my email", and decides on a LICENSE.
+  - **The license** is MIT (UP.15). The user chose not to change GitHub's email settings.
   - **Backup:** a full mirror clone is at `/Users/jordan/projects/rtfm-backup-2026-10-14.git`
     (`main` at 92c88c9). Make a fresh one of the `main` of the day before rewriting.
+  - **Descriptions** (the user's choice): the 375 non-merge commits with only a subject get a
+    body. The 122 work commits get 1–4 lines drafted from each diff; the 253 work-list commits
+    get the task lines `commit-worklist` writes. The drafts live in the orchestrator's
+    scratchpad (`history/bodies-*.json`, keyed by the original sha), and a review agent checks
+    them against the diffs. The rewrite puts each body between the subject and the trailers
+    (`--msg-filter` keyed on `$GIT_COMMIT`); subjects, trailers and merges stay as they are.
   - **Rewrite** in a fresh clone of `main` outside the repo, never in the repo: `git
     filter-branch` with an `--env-filter` for the email and an `--index-filter` running `git rm
     --cached --ignore-unmatch` on the `docs/inspo` images; then delete `refs/original`, expire the
     reflog and `gc`.
-  - **Verify:** `git log -p` holds no trace of the work address; no commit names a `docs/inspo` image and no
+  - **Verify:** `git log -p` holds no trace of the work address; every rewritten commit's tree equals its
+    original's but for the `docs/inspo` images; every commit that had no body has one; no commit names a `docs/inspo` image and no
     blob of one is left; the commit count is unchanged; `main^{tree}` equals the original's.
   - **Publish**, with the user's explicit OK in chat: `gh repo create jordanphulet/rtfm
     --public`, push `main` only; then clone it fresh from GitHub and re-run the checks.
