@@ -105,7 +105,7 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
   the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
 
 ### GH.2 — A README for the people who visit the public repository
-- **Status:** doing (agent a97ea6891d234032b; done, in review by a422be6bf7267d007; the user reads and approves the new `README.md` in chat before it's committed)
+- **Status:** doing (agent a97ea6891d234032b; review's fixes; the user reads and approves the new `README.md` in chat before it's committed)
 - **Depends on:** —
 - **Files:** `README.md`, `OPERATING.md`, `docs/images/*.png`, `ARCHITECTURE.md`, `DESIGN.md`,
   `src/home/DESIGN.md`, `.claude/skills/orchestrate/SKILL.md`, `scripts/licenses.ts`,
