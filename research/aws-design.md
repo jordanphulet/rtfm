@@ -361,6 +361,43 @@ The longest was 15m35s, or 16m22s if the 02:07 and 02:10 environments stopped th
 about IN.10's 15m49s. With no expiry given, the log bounds the keys' lifetime only from below: they
 outlasted every environment's life.
 
+**The idle cost.** Read 2026-10-15 (UTC) in Cost Explorer (`npm run aws -- ce get-cost-and-usage`,
+as `rtfm-read`), daily from 2026-10-10 to 2026-10-15, by service, by service and usage type, and by
+the `project` tag. The tag catches nothing: every cost falls under `project$`, untagged, so the
+figures below are by service and usage type, with RTFM's part told apart by the usage types that
+began with the first deploy and by the 2026-10-10 to 2026-10-12 baseline of the account's other
+projects. Cost Explorer marks every day of October `Estimated`, those before the deploy too, so the
+flag doesn't say which days are complete; the charges billed by the hour do. On 2026-10-13
+Secrets Manager, ECR and S3 storage in `us-east-1` match the days before: that day is complete. On
+2026-10-14 Secrets Manager and ECR are 11/12 of a day (22 hours) and S3's `us-east-1` storage is
+missing: that day is partial. 2026-10-15 has nothing. The Web Function started at 23:50 on
+2026-10-13, so 2026-10-14 is its only day, and a busy one: Bedrock sections, tests, smoke checks and
+deploys.
+
+| Service | 2026-10-13 | 2026-10-14 (22 h) | RTFM's part |
+| --- | --- | --- | --- |
+| Lambda | $0.0006 | $0.0250 | all: the Web Function's memory $0.0219 (5,970 GB-s), vCPU $0.0028 (101 s), requests $0.0003 (1,098) |
+| DynamoDB | $0.0001 | $0.0024 | all: on-demand reads and writes, and point-in-time recovery |
+| CloudFront | $0.0000 | $0.0000 | its requests and 1,185 CloudFront Function runs, inside the free tier |
+| CloudWatch | $0 | $0 | 1.3 MB of logs, inside the free tier |
+| Route 53 | $0.0017 | $0.0013 | about $0.0004 of queries above the baseline |
+| S3 | $0.1456 | $0.0917 | about $0.0008 of requests in `us-west-2`; the rest is other projects' storage |
+| Cost Explorer | $0.05 | $0.02 | all: $0.01 for each request, these checks' |
+| Bedrock (Claude Haiku 4.5) | $0.4855 | $0.5018 | use, not idle: split out |
+| Others (Secrets Manager, ECR, KMS, Glue) | $0.0447 | $0.0410 | none |
+
+- **Without Bedrock and Cost Explorer**, RTFM cost $0.0285 in 2026-10-14's 22 hours, about $0.031
+  for the whole day: **about $0.93 a month** if every day were as busy. At idle, with no request
+  and so no environment, what is left is storage inside the free tier: about $0.
+- **The Web Function's memory is billed below its 2 GB.** Its rate is $0.0000036667 a GB-second
+  ($0.0132 a GB-hour). The tables above put at least 6,440 environment-seconds on 2026-10-14 before
+  02:44 alone, which at 2 GB would be 12,880 GB-s, but the whole day bills 5,970. On 2026-10-13 its
+  two environments lived 759s before midnight and billed 141 GB-s: 0.19 GB a second, the memory
+  they use (up to 201 MB, above), as AWS's pricing examples bill it. So even an environment kept
+  alive around the clock would cost about $1.80 a month, not the $19 that The idle-cost risk
+  reckons at 2 GB.
+- **Cost Explorer's own requests cost $0.01 each**, more in a day than the idle app.
+
 ## Build tasks
 
 The work that puts this design into what it governs is planned as the tasks in `WORKLIST.md` ›
