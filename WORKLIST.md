@@ -64,8 +64,8 @@ aren't RTFM's.
 RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
 
 ### GH.1 — Scrub the history and publish it
-- **Status:** doing (the orchestrator; descriptions in review by a50258c535962020d)
-- **Depends on:** —
+- **Status:** doing (the orchestrator; rewrite verified in a clone; waits for GH.2, as the user chose)
+- **Depends on:** GH.2 (the user publishes with the new README)
 - **Files:** `PROCESS.md`, `README.md`
 - **Do:** the orchestrator does this itself, step by step, with the user's OK at each outward step,
   while no task is running, every task branch is merged, and no worktree is mid-task.
@@ -96,21 +96,25 @@ RTFM's history, scrubbed, published as the public GitHub repository `jordanphule
   - **Switch locally:** keep the current `main` as `pre-rewrite-main`; point `main` at the
     rewritten history; add GitHub as `origin`. Branches from the old history (`claude/*`,
     `worktree-agent-*`) are never pushed, and are removed once merged or no longer needed.
-  - **Push from then on:** add to `PROCESS.md` › Review loop › Approved, after the fast-forward,
-    the wording the user approves. The draft: "Then `git push origin main`. Push only `main`:
-    never `--all`, `--mirror`, a force-push, `pre-rewrite-main`, or a branch from before the
-    rewrite." Say in `README.md` where the public repository is.
+  - **Push from then on**, only when the user asks (the user's choice): add to `PROCESS.md` the
+    wording the user approves. The draft: "The orchestrator pushes `main` to `origin` only when
+    the user asks in chat: `git push origin main`, never `--all`, `--mirror`, a force-push,
+    `pre-rewrite-main`, or a branch from before the rewrite." Say in `README.md` where the public
+    repository is.
 - **Done when:** the public repository holds the scrubbed `main`, verified from a fresh clone;
   the local `main` tracks it; and `PROCESS.md` carries the push step the user approved.
 
 ### GH.2 — A README for the people who visit the public repository
-- **Status:** todo (the user reads and approves the new `README.md` in chat before it's committed)
+- **Status:** doing (agent a97ea6891d234032b; committing OPERATING.md and the references, which the user approved; the user iterates on README.md before it's committed)
 - **Depends on:** —
 - **Files:** `README.md`, `OPERATING.md`, `docs/images/*.png`, `ARCHITECTURE.md`, `DESIGN.md`,
   `src/home/DESIGN.md`, `.claude/skills/orchestrate/SKILL.md`, `scripts/licenses.ts`,
   `server/gateway/dynamodb-spending-ledger.ts`, `scripts/doc-references.test.ts`,
   `scripts/task-prompt.ts` and its test, `scripts/hooks/behind-main.ts` and its test,
-  `CLAUDE.md`, `PROCESS.md`
+  `CLAUDE.md`, `PROCESS.md`, `.claude/skills/rule-audit/SKILL.md`, `infra/README.md`,
+  `research/libraries.md`, `server/agent/README.md`, `server/api/README.md`,
+  `server/gateway/README.md`, `server/logging/README.md`, `server/storage/README.md`,
+  `server/writer/README.md`, `src/link/README.md`, `src/manual/README.md`
 - **Do:** proposed by the session "Resume project README strategy" for the user, who puts RTFM on
   a résumé; recruiters land on the public repository.
   - Move everything `README.md` holds about running and operating RTFM into a new `OPERATING.md`,
