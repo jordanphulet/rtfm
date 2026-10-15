@@ -34,7 +34,7 @@ aren't RTFM's.
   `infra/README.md` › The budget says how.
 
 ### IN.18 — Read the idle cost
-- **Status:** doing (agent a590efed96a5c7de1)
+- **Status:** doing (agent a590efed96a5c7de1; done, being committed)
 - **Depends on:** —
 - **Files:** `research/aws-design.md`
 - **Do:** the cost in Cost Explorer since the Web Function's first deploy (2026-10-13), by service
