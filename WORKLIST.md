@@ -64,7 +64,7 @@ aren't RTFM's.
 Small fixes that keep the repo healthy.
 
 ### UP.15 — MIT, a dependency-license check, and third-party notices
-- **Status:** doing (agent a5ad9b6a98844cc8f)
+- **Status:** doing (agent a5ad9b6a98844cc8f; done, in review)
 - **Depends on:** —
 - **Files:** `LICENSE`, `scripts/**`, `vite.config.ts`, `package.json`, `package-lock.json`,
   `README.md`, `ARCHITECTURE.md`
