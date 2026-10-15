@@ -35,22 +35,6 @@ aren't RTFM's.
 - **Done when:** Cost Explorer shows RTFM's Bedrock cost under the budget's filter, and
   `infra/README.md` › The budget says how.
 
-### AW.4 — Charge an aborted call as AWS does
-- **Status:** doing (agent a2b7bb8c23c5ebe58; done, being committed)
-- **Depends on:** —
-- **Files:** `server/gateway/gateway.ts` and its test, `server/gateway/README.md`, `server/README.md`,
-  `OPERATING.md`
-- **Do:** AW.1 found AWS bills an aborted call its full input and almost none of its output (on
-  2026-10-11, two aborted sections were billed at most 6 output tokens between them), while the
-  gateway charges every incomplete call its full `max_tokens` of output. Read 2026-10-13's
-  complete numbers (two aborts, one of which had sent 1,788 characters): if AWS's `global.` output
-  that day is about the ledger's reported 46,494 plus a few tokens, charge an `aborted` call 0
-  output tokens; if it's 400–1,000+ higher, charge what the stream delivered (UTF-8 bytes received,
-  capped at `max_tokens`). Either way it stays `estimated`; a `failed` call keeps its full
-  `max_tokens`; the reservation keeps the worst case, so the caps don't change.
-- **Done when:** the ledger's charge for an aborted call matches the bill, the docs say so with the
-  evidence, and `npm test` passes.
-
 ## A public repository
 
 RTFM's history, scrubbed, published as the public GitHub repository `jordanphulet/rtfm`.
